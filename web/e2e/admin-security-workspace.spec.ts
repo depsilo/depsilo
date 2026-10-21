@@ -348,6 +348,15 @@ test('Security reports an API scan already in progress as a busy disabled action
   await expect(scan).toBeVisible()
   await expect(scan).toHaveAttribute('aria-busy', 'true')
   await expect(scan).toBeDisabled()
+  const critical = page.getByRole('meter', { name: /critical$/ })
+  await expect(critical).toHaveAttribute('aria-valuenow', '1')
+  await expect(critical).toHaveAttribute('aria-valuemax', '1')
+  // Severity bars compare counts against the largest observed count; they
+  // must not expose these counts as vulnerability percentages.
+  await expect(critical).toHaveAttribute('aria-valuetext', '1')
+  const high = page.getByRole('meter', { name: /high$/ })
+  await expect(high).toHaveAttribute('aria-valuenow', '0')
+  await expect(high.locator('[data-slot="meter-indicator"]')).toHaveCSS('width', '0px')
 })
 
 test('Security suggestion rows do not create root overflow at 320px', async ({ page }) => {

@@ -1,3 +1,4 @@
+import Icon from '@/components/Icon'
 import { useId, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -13,10 +14,13 @@ import {
 import type { DotItemDotProps, TooltipContentProps, TooltipValueType } from 'recharts'
 
 import { Button } from '@/components/ui/button'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Card, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { DashboardRange, DashboardTrendPoint } from '@/lib/adminApi.types'
 import { formatBytes } from '@/lib/utils'
 
-import DashboardEmptyState from './DashboardEmptyState'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import DashboardMetricHelp from './DashboardMetricHelp'
 
 export type TrendTab = 'requests' | 'bandwidth' | 'latency' | 'errors'
@@ -174,7 +178,10 @@ export default function ActivityTrends({ raw, range, dataRange, isStale, onRetry
   const activeTab = tabs.find(item => item.value === tab) ?? tabs[0]
 
   return (
-    <section
+    <Tabs
+      value={tab}
+      onValueChange={value => setTab(value as TrendTab)}
+      render={<Card render={<section />} />}
       data-dashboard-trends
       data-query-key="dashboard-trends"
       data-trend-range={dataRange}
@@ -182,134 +189,126 @@ export default function ActivityTrends({ raw, range, dataRange, isStale, onRetry
       data-trend-pending={range !== dataRange ? 'true' : undefined}
       aria-labelledby="overview-trends-title"
       aria-busy={isStale || range !== dataRange || undefined}
-      className="dash-card flex h-full min-w-0 flex-1 flex-col"
+      className="h-full min-w-0 flex-1 gap-0 p-0"
     >
-      <header className="dashboard-panel-header flex flex-wrap justify-between gap-x-3 gap-y-2" style={{ borderColor: 'var(--dash-border)' }}>
+      <CardHeader className="min-h-[76px] gap-x-3 py-3">
         <div className="flex flex-wrap items-center gap-x-2">
-          <h2 id="overview-trends-title" className="text-[16px] font-semibold" style={{ color: 'var(--dash-ink)', paddingTop: 0 }}>
+          <CardTitle id="overview-trends-title">
             <DashboardMetricHelp label={t('overview.trendsTitle')} ariaLabel={t('overview.trendMeasurementInfo')}>
               <p>{t('overview.trendSummaryBasis')}</p>
               <p>{t(TREND_MEASUREMENT_KEY[tab], { range: t(`dashboard.range${dataRange}`) })}</p>
               <p>{t('overview.trendScaleHint')}</p>
             </DashboardMetricHelp>
-          </h2>
+          </CardTitle>
           <span className="text-[13px] text-[var(--dash-muted)]">{t(`dashboard.range${dataRange}`)}</span>
         </div>
         {/* Wraps rather than shrinking: four segments do not fit beside the
             heading on a phone, and the rail had been overflowing the card. */}
-        <div role="tablist" aria-label={t('overview.trendsTitle')} className="flex flex-wrap items-center gap-1">
-          {tabs.map(item => {
-            const active = tab === item.value
-            return (
-              <button
-                key={item.value}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setTab(item.value)}
-                className="dash-focus min-h-9 rounded-md px-3 text-[14px] font-medium transition-colors duration-150"
-                style={{
-                  background: active ? 'var(--dash-accent-soft)' : 'transparent',
-                  color: active ? 'var(--dash-accent)' : 'var(--dash-muted)',
-                }}
-              >
-                {t(`dashboard.${item.key}`)}
-              </button>
-            )
-          })}
-        </div>
-      </header>
+        <TabsList aria-label={t('overview.trendsTitle')} activateOnFocus>
+          {tabs.map(item => (
+            <TabsTrigger key={item.value} value={item.value}>
+              {t(`dashboard.${item.key}`)}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </CardHeader>
 
-      {range !== dataRange && <p role="status" className="px-5 pb-2 text-[13px] text-[var(--dash-muted)]">{t('overview.switchingRange')}</p>}
-      {isStale && (
-        <div
-          role="status"
-          className="mx-5 mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md px-3 py-2 text-[13px]"
-          style={{ background: 'var(--dash-warn-soft)', color: 'var(--dash-warn)' }}
-        >
-          <span>{t('overview.dataStale')}</span>
-          <Button type="button" variant="outline" size="sm" onClick={onRetry}>{t('now.refresh')}</Button>
-        </div>
-      )}
-
-      {allEmpty ? (
-        <DashboardEmptyState icon="show_chart" title={t('overview.emptyTrend')} description={t('overview.emptyTrendHint')} />
-      ) : (
-        <div className="dashboard-trend-content pb-3">
-          <dl aria-label={t('overview.trendSummary')} className="dashboard-trend-summary px-5 pb-3">
-            {series.map(item => (
-              <div key={item.key} data-trend-series={item.key} className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-                <dt className="flex items-center gap-2 text-[13px] text-[var(--dash-muted)]">
-                  <span aria-hidden className="w-3 shrink-0 border-t-2" style={{ borderColor: item.color, borderStyle: item.key === 'errorRatePct' ? 'dashed' : 'solid' }} />
-                  {item.name}
-                </dt>
-                <dd data-trend-value={item.key} className="font-mono text-[16px] font-semibold leading-tight tabular-nums text-[var(--dash-ink)]">
-                  {formatTrendValue(item.key, totals[item.key], locale, t)}
-                </dd>
-                {totals[item.key] == null && <dd className="mt-1 text-[12px] text-[var(--dash-muted)]">{t('overview.noSamples')}</dd>}
-              </div>
-            ))}
-          </dl>
-          <div data-trend-chart className="dashboard-trend-chart px-3">
-            <ResponsiveContainer width="100%" height={250}>
-              <ComposedChart data={points} margin={{ top: 12, right: 12, bottom: 4, left: 12 }} desc={t('dashboard.trendChartDescription', { metric: t(`dashboard.${activeTab.key}`), range: t(`dashboard.range${dataRange}`) })}>
-                <defs>
-                  {series.filter(item => item.key !== 'errorRatePct').map(item => (
-                    <linearGradient key={item.key} id={`${gradientId}-${item.key}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={item.color} stopOpacity={0.5} />
-                      <stop offset="100%" stopColor={item.color} stopOpacity={0.04} />
-                    </linearGradient>
-                  ))}
-                </defs>
-                <CartesianGrid yAxisId="value" vertical={false} stroke="var(--dash-border)" strokeOpacity={0.55} />
-                <XAxis
-                  dataKey="bucket"
-                  type="number"
-                  domain={['dataMin', 'dataMax']}
-                  interval="preserveStartEnd"
-                  minTickGap={40}
-                  tickMargin={10}
-                  tick={{ fill: 'var(--dash-muted)', fontSize: 12 }}
-                  tickFormatter={(value: number) => fmtRangeTime(value, dataRange, locale)}
-                  tickLine={false}
-                  axisLine={false}
-                  height={32}
-                />
-                <YAxis yAxisId="value" hide={tab !== 'errors'} width={30} domain={[0, 'auto']} tickCount={4} allowDecimals={tab === 'bandwidth' || tab === 'latency'} tick={{ fill: 'var(--dash-muted)', fontSize: 12 }} tickLine={false} axisLine={false} />
-                {tab === 'errors' && <YAxis yAxisId="rate" orientation="right" width={42} domain={[0, 100]} ticks={[0, 50, 100]} tickFormatter={(value: number) => `${value}%`} tick={{ fill: 'var(--dash-muted)', fontSize: 12 }} tickLine={false} axisLine={false} />}
-                <Tooltip
-                  filterNull={false}
-                  cursor={false}
-                  isAnimationActive={false}
-                  wrapperStyle={{ left: 'auto', right: 8, top: 8, transform: 'none' }}
-                  content={props => <ChartTooltip {...props} range={dataRange} />}
-                />
-                {series.map(item => {
-                  const props = {
-                    type: 'monotone' as const,
-                    dataKey: item.key,
-                    name: item.name,
-                    stroke: item.color,
-                    strokeWidth: 1.75,
-                    strokeLinecap: 'round' as const,
-                    strokeLinejoin: 'round' as const,
-                    connectNulls: false,
-                    dot: trendDot(points, item.key, item.color),
-                    activeDot: { r: 4, stroke: 'var(--dash-card)', strokeWidth: 2 },
-                    isAnimationActive: false,
-                  }
-                  // Overlay independent quantities; stacking would add origin
-                  // traffic to already-delivered traffic and invent a total.
-                  return item.key === 'errorRatePct'
-                    ? <Line key={item.key} {...props} yAxisId="rate" strokeDasharray="4 3" />
-                    : <Area key={item.key} {...props} yAxisId="value" baseValue={0} fill={`url(#${gradientId}-${item.key})`} fillOpacity={1} />
-                })}
-              </ComposedChart>
-            </ResponsiveContainer>
+      <TabsContent value={tab} keepMounted className="flex flex-col">
+        {range !== dataRange && <p role="status" className="px-5 pb-2 text-[13px] text-[var(--dash-muted)]">{t('overview.switchingRange')}</p>}
+        {isStale && (
+          <div className="px-5 pb-2">
+            <Alert variant="warning" role="status" className="flex flex-wrap items-center justify-between gap-2">
+              <AlertDescription>{t('overview.dataStale')}</AlertDescription>
+              <Button type="button" variant="outline" size="sm" onClick={onRetry}>{t('now.refresh')}</Button>
+            </Alert>
           </div>
-        </div>
-      )}
-    </section>
+        )}
+
+        {allEmpty ? (
+          <Empty className="min-h-[112px] gap-1.5 px-5 pb-5 pt-2">
+            <EmptyHeader className="gap-1.5">
+              <EmptyMedia variant="icon" className="mb-0 rounded-full"><Icon name="show_chart" size="sm" /></EmptyMedia>
+              <EmptyTitle>{t('overview.emptyTrend')}</EmptyTitle>
+              <EmptyDescription>{t('overview.emptyTrendHint')}</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : (
+          <div className="dashboard-trend-content pb-3">
+            <dl aria-label={t('overview.trendSummary')} className="dashboard-trend-summary px-5 pb-3">
+              {series.map(item => (
+                <div key={item.key} data-trend-series={item.key} className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <dt className="flex items-center gap-2 text-[13px] text-[var(--dash-muted)]">
+                    <span aria-hidden className="w-3 shrink-0 border-t-2" style={{ borderColor: item.color, borderStyle: item.key === 'errorRatePct' ? 'dashed' : 'solid' }} />
+                    {item.name}
+                  </dt>
+                  <dd data-trend-value={item.key} className="font-mono text-[16px] font-semibold leading-tight tabular-nums text-[var(--dash-ink)]">
+                    {formatTrendValue(item.key, totals[item.key], locale, t)}
+                  </dd>
+                  {totals[item.key] == null && <dd className="mt-1 text-[12px] text-[var(--dash-muted)]">{t('overview.noSamples')}</dd>}
+                </div>
+              ))}
+            </dl>
+            <div data-trend-chart className="dashboard-trend-chart px-3">
+              <ResponsiveContainer width="100%" height={250}>
+                <ComposedChart data={points} margin={{ top: 12, right: 12, bottom: 4, left: 12 }} desc={t('dashboard.trendChartDescription', { metric: t(`dashboard.${activeTab.key}`), range: t(`dashboard.range${dataRange}`) })}>
+                  <defs>
+                    {series.filter(item => item.key !== 'errorRatePct').map(item => (
+                      <linearGradient key={item.key} id={`${gradientId}-${item.key}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={item.color} stopOpacity={0.5} />
+                        <stop offset="100%" stopColor={item.color} stopOpacity={0.04} />
+                      </linearGradient>
+                    ))}
+                  </defs>
+                  <CartesianGrid yAxisId="value" vertical={false} stroke="var(--dash-border)" strokeOpacity={0.55} />
+                  <XAxis
+                    dataKey="bucket"
+                    type="number"
+                    domain={['dataMin', 'dataMax']}
+                    interval="preserveStartEnd"
+                    minTickGap={40}
+                    tickMargin={10}
+                    tick={{ fill: 'var(--dash-muted)', fontSize: 12 }}
+                    tickFormatter={(value: number) => fmtRangeTime(value, dataRange, locale)}
+                    tickLine={false}
+                    axisLine={false}
+                    height={32}
+                  />
+                  <YAxis yAxisId="value" hide={tab !== 'errors'} width={30} domain={[0, 'auto']} tickCount={4} allowDecimals={tab === 'bandwidth' || tab === 'latency'} tick={{ fill: 'var(--dash-muted)', fontSize: 12 }} tickLine={false} axisLine={false} />
+                  {tab === 'errors' && <YAxis yAxisId="rate" orientation="right" width={42} domain={[0, 100]} ticks={[0, 50, 100]} tickFormatter={(value: number) => `${value}%`} tick={{ fill: 'var(--dash-muted)', fontSize: 12 }} tickLine={false} axisLine={false} />}
+                  <Tooltip
+                    filterNull={false}
+                    cursor={false}
+                    isAnimationActive={false}
+                    wrapperStyle={{ left: 'auto', right: 8, top: 8, transform: 'none' }}
+                    content={props => <ChartTooltip {...props} range={dataRange} />}
+                  />
+                  {series.map(item => {
+                    const props = {
+                      type: 'monotone' as const,
+                      dataKey: item.key,
+                      name: item.name,
+                      stroke: item.color,
+                      strokeWidth: 1.75,
+                      strokeLinecap: 'round' as const,
+                      strokeLinejoin: 'round' as const,
+                      connectNulls: false,
+                      dot: trendDot(points, item.key, item.color),
+                      activeDot: { r: 4, stroke: 'var(--dash-card)', strokeWidth: 2 },
+                      isAnimationActive: false,
+                    }
+                    // Overlay independent quantities; stacking would add origin
+                    // traffic to already-delivered traffic and invent a total.
+                    return item.key === 'errorRatePct'
+                      ? <Line key={item.key} {...props} yAxisId="rate" strokeDasharray="4 3" />
+                      : <Area key={item.key} {...props} yAxisId="value" baseValue={0} fill={`url(#${gradientId}-${item.key})`} fillOpacity={1} />
+                  })}
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+      </TabsContent>
+    </Tabs>
   )
 }
 

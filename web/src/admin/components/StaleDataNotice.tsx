@@ -1,8 +1,8 @@
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
-import InlineNotice from '@/components/InlineNotice'
 
 interface StaleDataNoticeProps {
   onRefresh: () => unknown
@@ -19,7 +19,7 @@ export default function StaleDataNotice({
   const { t } = useTranslation()
 
   return (
-    <InlineNotice tone="warning">
+    <Alert variant={"warning"}><AlertDescription>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span>{message ?? t('now.staleData')}</span>
         <Button
@@ -33,6 +33,6 @@ export default function StaleDataNotice({
           {t('now.refresh')}
         </Button>
       </div>
-    </InlineNotice>
+    </AlertDescription></Alert>
   )
 }

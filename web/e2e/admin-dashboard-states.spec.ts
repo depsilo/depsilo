@@ -154,7 +154,8 @@ test('Overview with no usage evidence offers a real connection flow without inve
   await page.getByRole('button', { name: '刷新', exact: true }).click()
   const track = cache.locator('[data-progress-ratio="0"]')
   await expect(track).toBeVisible()
-  await expect(track.locator(':scope > *')).toHaveCount(0)
+  await expect(track).toHaveRole('meter')
+  await expect(track.locator('[data-slot="meter-indicator"]')).toHaveCSS('width', '0px')
   await connect.click()
   await expect(page).toHaveURL(/\/admin\/connect$/)
   await expect(page.getByRole('main')).toContainText(`python -m pip config --user set global.index-url '${new URL(page.url()).origin}/pypi/simple/'`)
@@ -440,10 +441,10 @@ test('Overview opens grouped upstream checks in one click without repeating bann
   expect(recentBox!.y).toBeGreaterThanOrEqual(chartBox!.y + chartBox!.height)
   const capacity = page.locator('[data-cache-capacity-group]')
   const amount = (await capacity.locator('.dash-metric-value').boundingBox())!
-  const bar = (await capacity.getByRole('progressbar').boundingBox())!
+  const bar = (await capacity.getByRole('meter').boundingBox())!
   expect(bar.x - amount.x - amount.width).toBeLessThan(120)
-  await expect(capacity.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0')
-  await expect(capacity.getByRole('progressbar').locator(':scope > *')).toHaveCount(0)
+  await expect(capacity.getByRole('meter')).toHaveAttribute('aria-valuenow', '0')
+  await expect(capacity.getByRole('meter').locator('[data-slot="meter-indicator"]')).toHaveCSS('width', '0px')
   await reviewViewport(page, 'refined-overview-dark', 1440, 900)
   await reviewViewport(page, 'refined-overview-wide', 1920, 1080)
   await reviewViewport(page, 'refined-overview-mobile', 320, 800)

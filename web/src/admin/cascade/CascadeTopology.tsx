@@ -1,8 +1,8 @@
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { Button } from '@/components/ui/button'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-
 import Icon, { type IconName } from '@/components/Icon'
-import IconButton from '@/components/IconButton'
 import { useTransientState } from '@/hooks/useTransientFlag'
 import { copyText } from '@/lib/clipboard'
 import type { AdminCascadeInfo } from '@/lib/adminApi.types'
@@ -84,14 +84,23 @@ export default function CascadeTopology({
       <span key="instance" className="inline-flex items-center gap-0.5">
         <span style={{ color: 'var(--text-subtle)' }}>{t('cascade.instanceId')}</span>
         <span className="font-mono" style={{ color: 'var(--text)' }}>{info.instance_id}</span>
-        <IconButton
-          icon={copied ? 'check' : 'content_copy'}
-          label={t('cascade.copyInstanceId')}
-          style={{ width: 26, height: 26, minWidth: 26, minHeight: 26 }}
-          onClick={() => {
-            void copyText(info.instance_id).then(ok => { if (ok) showCopied(true) })
-          }}
-        />
+        <Tooltip>
+          <TooltipTrigger render={
+            <Button
+              onClick={() => {
+                void copyText(info.instance_id).then(ok => { if (ok) showCopied(true) })
+              }}
+              variant="ghost"
+              size="icon"
+              data-icon-button
+              aria-label={t('cascade.copyInstanceId')}
+              className="text-muted-foreground"
+            />
+          }>
+            <Icon name={copied ? 'check' : 'content_copy'} size="sm" />
+          </TooltipTrigger>
+          <TooltipContent>{t('cascade.copyInstanceId')}</TooltipContent>
+        </Tooltip>
       </span>,
     )
     chips.push(

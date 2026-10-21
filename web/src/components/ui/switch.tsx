@@ -3,6 +3,9 @@ import { cn } from '@/lib/utils'
 
 // shadcn/ui Switch (base-nova). The `after:` box keeps a touch target around
 // the compact visual track.
+// An explicit accessible name can include context beyond the visible field
+// label (for example, the ecosystem). An empty labelledby prevents Base UI's
+// generated label from taking precedence over that explicit aria-label.
 function Switch({
   className,
   size = 'default',
@@ -17,6 +20,7 @@ function Switch({
         className,
       )}
       {...props}
+      {...(props['aria-label'] && !props['aria-labelledby'] ? { 'aria-labelledby': '' } : {})}
     >
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"

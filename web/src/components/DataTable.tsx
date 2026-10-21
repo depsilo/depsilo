@@ -1,13 +1,5 @@
 import { type Key, type ReactNode } from 'react'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import TableViewport from './TableViewport'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableContainer } from '@/components/ui/table'
 
 interface Column<T> {
   key: string
@@ -15,7 +7,7 @@ interface Column<T> {
   render?: (value: unknown, row: T, index: number) => ReactNode
 }
 
-interface DataTableV2Props<T> {
+interface DataTableProps<T> {
   columns: Column<T>[]
   data: T[]
   rowKey: (row: T, index: number) => Key
@@ -23,15 +15,15 @@ interface DataTableV2Props<T> {
   minWidth?: number
 }
 
-export default function DataTableV2<T extends Record<string, unknown>>({
+export default function DataTable<T extends Record<string, unknown>>({
   columns,
   data,
   rowKey,
   ariaLabel,
   minWidth,
-}: DataTableV2Props<T>) {
+}: DataTableProps<T>) {
   return (
-    <TableViewport label={ariaLabel} minWidth={minWidth}>
+    <TableContainer label={ariaLabel} minWidth={minWidth}>
       <Table>
         <TableHeader>
           <TableRow>
@@ -54,6 +46,6 @@ export default function DataTableV2<T extends Record<string, unknown>>({
           ))}
         </TableBody>
       </Table>
-    </TableViewport>
+    </TableContainer>
   )
 }

@@ -1,9 +1,11 @@
+import { Skeleton } from '@/components/ui/skeleton'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
 import Icon, { type IconName } from '@/components/Icon'
 import Logo from '@/components/Logo'
-import TooltipV2 from '@/components/Tooltip'
+
 import { getAdminRouteHref } from '@/admin/routes'
 import type { DashboardPeriod, NowResponse, OriginCoverage } from '@/lib/adminApi.types'
 import { buildRequestFlow, coverageDetail } from '@/lib/dashboardOverview'
@@ -137,10 +139,8 @@ export default function RequestFlow({
           value={flow.missRequests === null ? '—' : flow.missRequests.toLocaleString()}
           pending={totalsPending}
         />
-        <TooltipV2
-          content={<span className="block max-w-[260px] text-[14px] leading-[1.65]">{t('overview.flowBlockedHint')}</span>}
-        >
-          <Link
+        <Tooltip>
+          <TooltipTrigger render={<Link
             to={getAdminRouteHref('security')}
             aria-label={t('overview.flowBlockedLinkLabel')}
             className="dash-focus inline-flex min-h-[40px] min-w-0 items-center gap-2 rounded-md px-1.5 text-[13px] no-underline transition-colors duration-150 hover:bg-[var(--dash-soft)]"
@@ -148,8 +148,9 @@ export default function RequestFlow({
             <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: 'var(--dash-muted)' }} />
             <span style={{ color: 'var(--dash-muted)' }}>{t('overview.outcomeBlocked')}</span>
             <Icon name="chevron_right" size="sm" style={{ color: 'var(--dash-muted)' }} />
-          </Link>
-        </TooltipV2>
+          </Link>} />
+          <TooltipContent>{<span className="block max-w-[260px] text-[14px] leading-[1.65]">{t('overview.flowBlockedHint')}</span>}</TooltipContent>
+        </Tooltip>
       </div>
     </div>
   )
@@ -186,7 +187,7 @@ function FlowNode({
       </div>
       <div className="flex min-h-[28px] min-w-0 items-baseline">
         {value !== undefined ? (pending
-          ? <span aria-hidden className="block h-[26px] w-20 animate-pulse rounded bg-[var(--dash-soft)]" />
+          ? <Skeleton render={<span />} className="block h-[26px] w-20" />
           : <p className="font-mono text-[22px] font-semibold leading-tight tabular-nums" style={{ color: 'var(--dash-ink)' }}>{value}</p>)
           : <p className="pt-1 text-[13px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>}
       </div>
@@ -215,7 +216,7 @@ function FlowRail({ testId, label, badge, value, pending, direction, detail }: {
         <span className="dashboard-flow-rate-label flex items-center text-[13px] font-medium leading-snug" style={{ color: 'var(--dash-muted)' }}>{label}</span>
         <div className="flex min-h-[28px] items-baseline">
           {pending
-            ? <span aria-hidden className="block h-[23px] w-24 animate-pulse rounded bg-[var(--dash-soft)]" />
+            ? <Skeleton render={<span />} className="block h-[23px] w-24" />
             : <span className="font-mono text-[18px] font-semibold leading-tight tabular-nums" style={{ color: 'var(--dash-ink)' }}>{value}</span>}
         </div>
         <div data-flow-axis aria-hidden className="dashboard-flow-axis gap-1">
@@ -236,7 +237,7 @@ function OutcomeChip({ tone, label, value, pending }: { tone: MetricTone; label:
       <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: METRIC_TONE_PALETTE[tone].strong }} />
       <span style={{ color: 'var(--dash-muted)' }}>{label}</span>
       {pending
-        ? <span aria-hidden className="block h-5 w-10 animate-pulse rounded bg-[var(--dash-soft)]" />
+        ? <Skeleton render={<span />} className="block h-5 w-10" />
         : <span className="font-mono text-[15px] font-semibold tabular-nums" style={{ color: 'var(--dash-ink)' }}>{value}</span>}
     </p>
   )

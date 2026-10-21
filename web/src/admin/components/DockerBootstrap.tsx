@@ -1,8 +1,9 @@
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import Icon from '@/components/Icon'
-import InlineNotice from '@/components/InlineNotice'
+
 import QueryErrorState from '@/components/QueryErrorState'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { adminApi } from '@/lib/api'
@@ -31,13 +32,13 @@ export default function DockerBootstrap() {
       {query.data && (
         <div className="mt-3 space-y-3">
           {query.data.blocked_by_override ? (
-            <InlineNotice tone="warning">{t('onboarding.docker.override')}</InlineNotice>
+            <Alert variant={"warning"}><AlertDescription>{t('onboarding.docker.override')}</AlertDescription></Alert>
           ) : query.data.pending_restart ? (
-            <InlineNotice tone="warning">{t('onboarding.docker.restart')}</InlineNotice>
+            <Alert variant={"warning"}><AlertDescription>{t('onboarding.docker.restart')}</AlertDescription></Alert>
           ) : query.data.docker_hub ? (
-            <InlineNotice tone="success">{t('onboarding.docker.active')}</InlineNotice>
+            <Alert variant={"success"}><AlertDescription>{t('onboarding.docker.active')}</AlertDescription></Alert>
           ) : query.data.configured ? (
-            <InlineNotice tone="info">{t('onboarding.docker.custom')}</InlineNotice>
+            <Alert variant={"info"}><AlertDescription>{t('onboarding.docker.custom')}</AlertDescription></Alert>
           ) : (
             <>
               <p className="text-[13px] text-[var(--text-muted)]">{t('onboarding.docker.disabled')}</p>
@@ -46,7 +47,7 @@ export default function DockerBootstrap() {
                   <Icon name="add" size="sm" />{t('onboarding.docker.enable')}
                 </Button>
               )}
-              {!query.data.config_writable && <InlineNotice tone="warning">{t('onboarding.docker.readOnly')}</InlineNotice>}
+              {!query.data.config_writable && <Alert variant={"warning"}><AlertDescription>{t('onboarding.docker.readOnly')}</AlertDescription></Alert>}
               {!canWrite && <p className="text-[13px] text-[var(--text-muted)]">{t('common.permissionDenied')}</p>}
             </>
           )}

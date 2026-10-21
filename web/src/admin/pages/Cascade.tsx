@@ -1,3 +1,5 @@
+import { TableContainer, Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -12,11 +14,11 @@ import { getAdminRouteHref } from '@/admin/routes'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import Icon from '@/components/Icon'
-import InlineNotice from '@/components/InlineNotice'
+
 import QueryErrorState from '@/components/QueryErrorState'
 import SectionHeader from '@/components/SectionHeader'
-import SelectV2 from '@/components/Select'
-import TableViewport from '@/components/TableViewport'
+import { NativeSelect } from '@/components/ui/native-select'
+
 import { useAppToast } from '@/components/Toast'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { adminApi } from '@/lib/api'
@@ -148,12 +150,12 @@ export default function Cascade() {
           <>
             {(!canWrite || (config && !config.config_writable) || config?.pending_restart || showStale) && (
               <div className="space-y-2">
-                {!canWrite && <InlineNotice tone="info">{t('cascade.readonlyPrincipal')}</InlineNotice>}
+                {!canWrite && <Alert variant={"info"}><AlertDescription>{t('cascade.readonlyPrincipal')}</AlertDescription></Alert>}
                 {canWrite && config && !config.config_writable && (
-                  <InlineNotice tone="warning">{t('cascade.configReadOnly')}</InlineNotice>
+                  <Alert variant={"warning"}><AlertDescription>{t('cascade.configReadOnly')}</AlertDescription></Alert>
                 )}
                 {config?.pending_restart && (
-                  <InlineNotice tone="warning">{t('cascade.pendingRestart')}</InlineNotice>
+                  <Alert variant={"warning"}><AlertDescription>{t('cascade.pendingRestart')}</AlertDescription></Alert>
                 )}
                 {showStale && (
                   <StaleDataNotice
@@ -221,17 +223,17 @@ export default function Cascade() {
               />
               <span id="cascade-upstreams-heading" className="sr-only">{t('cascade.upstreamsTitle')}</span>
               {unresolved.length > 0 && (
-                <InlineNotice tone="warning">
+                <Alert variant={"warning"}><AlertDescription>
                   {t('cascade.unresolvedBody', { count: unresolved.length })}
-                </InlineNotice>
+                </AlertDescription></Alert>
               )}
               {canWrite && !info.enabled && (
-                <InlineNotice tone="info">{t('cascade.rebindRuntimeDisabled')}</InlineNotice>
+                <Alert variant={"info"}><AlertDescription>{t('cascade.rebindRuntimeDisabled')}</AlertDescription></Alert>
               )}
-              <TableViewport label={t('cascade.upstreamsTitle')} minWidth={760}>
-                  <table className="w-full text-[12px]">
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+              <TableContainer label={t('cascade.upstreamsTitle')} minWidth={760}>
+                  <Table className="w-full text-[12px]">
+                    <TableHeader>
+                      <TableRow style={{ borderBottom: '1px solid var(--border)' }}>
                         {[
                           t('cascade.upstreamEcosystem'),
                           t('cascade.upstreamName'),
@@ -239,36 +241,36 @@ export default function Cascade() {
                           t('cascade.upstreamVia'),
                           t('cascade.upstreamPriority'),
                         ].map(heading => (
-                          <th key={heading} scope="col" className={tableHeadClass} style={{ color: 'var(--text-subtle)' }}>
+                          <TableHead key={heading} scope="col" className={tableHeadClass} style={{ color: 'var(--text-subtle)' }}>
                             {heading}
-                          </th>
+                          </TableHead>
                         ))}
-                      </tr>
-                    </thead>
-                    <tbody>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {boundUpstreams.map(upstream => {
                         const via = upstream.via ?? ''
                         const missing = !peerNames.has(via)
                         return (
-                          <tr
+                          <TableRow
                             key={upstream.id}
                             data-cascade-upstream={upstream.id}
                             style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
                           >
-                            <td className={tableCellClass}>
+                            <TableCell className={tableCellClass}>
                               <span className="font-mono uppercase" style={{ color: 'var(--text-muted)' }}>
                                 {upstream.adapter_type}
                               </span>
-                            </td>
-                            <td className={`${tableCellClass} font-[500]`} style={{ color: 'var(--text)' }}>
+                            </TableCell>
+                            <TableCell className={`${tableCellClass} font-[500]`} style={{ color: 'var(--text)' }}>
                               {upstream.name}
-                            </td>
-                            <td className={`${tableCellClass} font-mono`} style={{ color: 'var(--text-muted)' }}>
+                            </TableCell>
+                            <TableCell className={`${tableCellClass} font-mono`} style={{ color: 'var(--text-muted)' }}>
                               <span title={upstream.url}>{truncateMiddle(upstream.url)}</span>
-                            </td>
-                            <td className={tableCellClass}>
+                            </TableCell>
+                            <TableCell className={tableCellClass}>
                               {canWrite && info.enabled ? (
-                                <SelectV2
+                                <NativeSelect
                                   aria-label={t('cascade.upstreamVia')}
                                   value={via}
                                   disabled={rebindMutation.isPending}
@@ -279,22 +281,22 @@ export default function Cascade() {
                                     <option key={peer.name} value={peer.name}>{peer.name}</option>
                                   ))}
                                   {missing && <option value={via}>{t('cascade.viaMissing', { peer: via })}</option>}
-                                </SelectV2>
+                                </NativeSelect>
                               ) : missing ? (
                                 <Badge variant="warning">{t('cascade.viaMissing', { peer: via })}</Badge>
                               ) : (
                                 <span className="font-mono" style={{ color: 'var(--text)' }}>{via}</span>
                               )}
-                            </td>
-                            <td className={`${tableCellClass} font-mono tabular-nums`} style={{ color: 'var(--text)' }}>
+                            </TableCell>
+                            <TableCell className={`${tableCellClass} font-mono tabular-nums`} style={{ color: 'var(--text)' }}>
                               {upstream.priority}
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         )
                       })}
-                    </tbody>
-                  </table>
-                </TableViewport>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
             </section>
             )}
           </>

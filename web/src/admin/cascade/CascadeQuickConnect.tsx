@@ -1,12 +1,14 @@
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Field, FieldLabel, FieldDescription } from '@/components/ui/field'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
 import { getAdminRouteHref } from '@/admin/routes'
-import InlineNotice from '@/components/InlineNotice'
-import InputV2 from '@/components/Input'
-import SelectV2 from '@/components/Select'
-import TabsV2 from '@/components/Tabs'
+
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import CodeBlock from '@/portal/components/CodeBlock'
 import type { AdminCascadeConfigState, AdminCascadeInfo } from '@/lib/adminApi.types'
 import { readLocalStorage, writeLocalStorage } from '@/lib/storage'
@@ -115,25 +117,28 @@ via  = "${parentName}"`
       content: (
         <div className="space-y-3 pt-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_160px]">
-            <InputV2
-              label={t('cascade.quick.baseURL')}
-              mono
-              value={publicBase}
-              hint={t('cascade.quick.baseURLHint')}
-              autoCapitalize="none"
-              spellCheck={false}
-              onChange={event => updatePublicBase(event.target.value)}
-              placeholder={browserOrigin()}
-            />
-            <SelectV2
-              label={t('cascade.quick.ecosystem')}
-              value={ecosystem}
-              onChange={event => setEcosystem(event.target.value as ClientEcosystem)}
-            >
-              <option value="npm">npm</option>
-              <option value="pip">pip</option>
-              <option value="go">go</option>
-            </SelectV2>
+            <Field>
+              <FieldLabel>{t('cascade.quick.baseURL')}</FieldLabel>
+              <Input className="font-mono"
+                value={publicBase}
+                autoCapitalize="none"
+                spellCheck={false}
+                onChange={event => updatePublicBase(event.target.value)}
+                placeholder={browserOrigin()}
+              />
+              {(t('cascade.quick.baseURLHint')) && <FieldDescription>{t('cascade.quick.baseURLHint')}</FieldDescription>}
+            </Field>
+            <Field>
+              <FieldLabel>{t('cascade.quick.ecosystem')}</FieldLabel>
+              <NativeSelect
+                value={ecosystem}
+                onChange={event => setEcosystem(event.target.value as ClientEcosystem)}
+              >
+                <option value="npm">npm</option>
+                <option value="pip">pip</option>
+                <option value="go">go</option>
+              </NativeSelect>
+            </Field>
           </div>
           <CodeBlock
             filename={ecosystem}
@@ -184,7 +189,7 @@ via  = "${parentName}"`
             copyName={t('cascade.quick.copyRelayCheck')}
             code={parentChecks}
           />
-          <InlineNotice tone="warning">{t('cascade.quick.loopWarning')}</InlineNotice>
+          <Alert variant={"warning"}><AlertDescription>{t('cascade.quick.loopWarning')}</AlertDescription></Alert>
         </div>
       ),
     },
@@ -195,12 +200,14 @@ via  = "${parentName}"`
       <h2 id="cascade-quick-heading" className="mb-1 text-[14px] font-[600]" style={{ color: 'var(--text)' }}>
         {t('cascade.quick.title')}
       </h2>
-      <TabsV2
-        ariaLabel={t('cascade.quick.title')}
-        value={tab}
-        onValueChange={value => setTab(value as QuickTab)}
-        items={tabs}
-      />
+      <Tabs value={tab} onValueChange={value => setTab(value as QuickTab)}>
+        <TabsList aria-label={t('cascade.quick.title')} activateOnFocus variant="line">
+          {tabs.map(item => <TabsTrigger key={item.key} value={item.key}>{item.label}</TabsTrigger>)}
+        </TabsList>
+        <div className="min-w-0">
+          {tabs.map(item => <TabsContent key={item.key} value={item.key}>{item.content}</TabsContent>)}
+        </div>
+      </Tabs>
     </section>
   )
 }

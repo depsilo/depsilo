@@ -151,7 +151,7 @@ test('Monitor exposes unified healthy, degraded, and failed status text and a se
   const search = page.getByRole('textbox', { name: 'Search ecosystems / upstreams' })
   await search.fill('missing')
   await expect(
-    page.getByRole('paragraph').filter({ hasText: 'No upstreams match "missing"' }),
+    page.locator('[data-slot="empty"]').getByText('No upstreams match "missing"', { exact: true }),
   ).toBeVisible()
   await expect(page.getByText('Try an ecosystem, mirror name, or host.')).toBeVisible()
   await expect(

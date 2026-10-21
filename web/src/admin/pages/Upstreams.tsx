@@ -1,16 +1,21 @@
+import { Toggle } from '@/components/ui/toggle'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Field, FieldLabel, FieldDescription, FieldError } from '@/components/ui/field'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
-import EmptyState from '@/components/EmptyState'
-import InputV2 from '@/components/Input'
-import SelectV2 from '@/components/Select'
+
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
 import Icon from '@/components/Icon'
-import ModalV2 from '@/components/Modal'
-import InlineNotice from '@/components/InlineNotice'
-import IconButton from '@/components/IconButton'
+
 import QueryErrorState from '@/components/QueryErrorState'
 import StatusDot from '@/components/StatusDot'
 import { useAppToast } from '@/components/Toast'
@@ -108,7 +113,7 @@ function utf8ByteLength(value: string): number {
   return new TextEncoder().encode(value).length
 }
 
-export default function UpstreamsV2() {
+export default function Upstreams() {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const toast = useAppToast()
@@ -509,9 +514,9 @@ export default function UpstreamsV2() {
             <span className="sr-only">{t('upstreams.loading')}</span>
             <div aria-hidden="true" className="contents">
               {[...Array(4)].map((_, index) => (
-                <div
+                <Skeleton
                   key={index}
-                  className="h-32 animate-pulse rounded-md"
+                  className="h-32 rounded-md"
                   style={{ background: 'var(--bg-soft)' }}
                 />
               ))}
@@ -538,24 +543,24 @@ export default function UpstreamsV2() {
                   {statusOptions.map((option) => {
                     const active = statusFilter === option.value
                     return (
-                      <button
+                      <Toggle
                         key={option.value}
                         type="button"
-                        aria-pressed={active}
+                        pressed={active}
                         className="stripe-focus-ring inline-flex min-h-[40px] min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm border px-2.5 text-[12px] transition-[background,color,border-color,transform] duration-150 active:scale-[0.96]"
                         style={{
                           background: active ? 'var(--bg-card)' : 'transparent',
                           borderColor: active ? 'var(--border-strong)' : 'transparent',
                           color: active ? 'var(--text)' : 'var(--text-muted)',
                         }}
-                        onClick={() => setStatusFilter(option.value)}
+                        onPressedChange={() => setStatusFilter(option.value)}
                       >
                         {option.dot && <StatusDot status={option.dot} />}
                         <span>{option.label}</span>
                         <span className="font-mono tabular-nums" style={{ color: 'var(--text)' }}>
                           {option.count}
                         </span>
-                      </button>
+                      </Toggle>
                     )
                   })}
                 </div>
@@ -566,32 +571,42 @@ export default function UpstreamsV2() {
                   style={{ background: 'var(--bg-card)' }}
                 >
                   <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
-                  <input
-                    ref={searchInputRef}
-                    type="text"
-                    value={search}
-                    aria-label={t('upstreams.searchLabel')}
-                    placeholder={t('upstreams.searchPlaceholder')}
-                    className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]"
-                    style={{ color: 'var(--text)' }}
-                    onChange={(event) => setSearch(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Escape') {
-                        setSearch('')
-                        event.currentTarget.blur()
-                      }
-                    }}
-                  />
+                      <Input
+                        ref={searchInputRef}
+                        type="text"
+                        value={search}
+                        aria-label={t('upstreams.searchLabel')}
+                        placeholder={t('upstreams.searchPlaceholder')}
+                        className={"min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]" + ' h-9 rounded-none border-0 px-0 shadow-none focus-visible:ring-0 dark:bg-transparent'}
+                        style={{ color: 'var(--text)' }}
+                        onChange={(event) => setSearch(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Escape') {
+                            setSearch('')
+                            event.currentTarget.blur()
+                          }
+                        }}
+                      />
                   {search ? (
-                    <IconButton
-                      icon="close"
-                      label={t('upstreams.clearSearch')}
-                      className="-mr-3"
-                      onClick={() => {
-                        setSearch('')
-                        searchInputRef.current?.focus()
-                      }}
-                    />
+                        <Tooltip>
+                          <TooltipTrigger render={
+                            <Button
+                              onClick={() => {
+                                setSearch('')
+                                searchInputRef.current?.focus()
+                              }}
+                              variant="ghost"
+                              size="icon"
+                              data-icon-button
+                              aria-label={t('upstreams.clearSearch')}
+                              className="-mr-3"
+                              style={{ color: 'var(--text-soft)' }}
+                            />
+                          }>
+                            <Icon name={"close"} size="sm" />
+                          </TooltipTrigger>
+                          <TooltipContent>{t('upstreams.clearSearch')}</TooltipContent>
+                        </Tooltip>
                   ) : (
                     <kbd
                       aria-hidden="true"
@@ -606,34 +621,22 @@ export default function UpstreamsV2() {
 
             {bulkCheckSummary && (
               <div data-upstream-check-summary role="status">
-                <InlineNotice
-                  tone={bulkCheckSummary.degraded > 0
+                <Alert variant={bulkCheckSummary.degraded > 0
                     || bulkCheckSummary.failed > 0
                     || bulkCheckSummary.requestFailed > 0
                     ? 'warning'
-                    : 'success'}
-                >
+                    : 'success'}><AlertDescription>
                   {bulkCheckMessage}
-                </InlineNotice>
+                </AlertDescription></Alert>
               </div>
             )}
 
             {upstreamItems.length === 0 ? (
-              <EmptyState
-                icon="hub"
-                title={t('upstreams.emptyTitle')}
-                hint={canWrite ? t('upstreams.emptyHint') : t('upstreams.emptyReadonlyHint')}
-                minHeight={160}
-              />
+              <Empty style={{ minHeight: 160 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"hub"} size="sm" /></EmptyMedia><EmptyTitle>{t('upstreams.emptyTitle')}</EmptyTitle>{canWrite ? t('upstreams.emptyHint') : t('upstreams.emptyReadonlyHint') && <EmptyDescription>{canWrite ? t('upstreams.emptyHint') : t('upstreams.emptyReadonlyHint')}</EmptyDescription>}</EmptyHeader></Empty>
             ) : visibleUpstreams.length === 0 ? (
-              <EmptyState
-                icon="search"
-                title={normalizedSearch
+              <Empty style={{ minHeight: 220 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"search"} size="sm" /></EmptyMedia><EmptyTitle>{normalizedSearch
                   ? t('upstreams.noMatch', { query: summarizedSearch })
-                  : t('upstreams.noStatusMatch')}
-                hint={t('upstreams.noMatchHint')}
-                minHeight={220}
-                action={(
+                  : t('upstreams.noStatusMatch')}</EmptyTitle>{t('upstreams.noMatchHint') && <EmptyDescription>{t('upstreams.noMatchHint')}</EmptyDescription>}</EmptyHeader><EmptyContent>{(
                   <Button
                     type="button"
                     variant="outline"
@@ -645,8 +648,7 @@ export default function UpstreamsV2() {
                   >
                     {t('upstreams.clearFilters')}
                   </Button>
-                )}
-              />
+                )}</EmptyContent></Empty>
             ) : (
               <UpstreamGroupedPanel
                 upstreams={visibleUpstreams}
@@ -703,26 +705,55 @@ export default function UpstreamsV2() {
                 renderActions={canWrite ? (upstream) => (
                   <div className="ml-1 flex gap-0.5">
                     {upstream.id && (
-                      <IconButton
-                        icon="refresh"
-                        label={t('upstreams.checkNamed', { name: upstream.name })}
-                        loading={checkingIds.has(upstream.id)}
-                        disabled={checking}
-                        onClick={() => { void checkOne(upstream.id!) }}
-                      />
+                      <Tooltip>
+                        <TooltipTrigger render={
+                          <Button
+                            onClick={() => { void checkOne(upstream.id!) }}
+                            variant="ghost"
+                            size="icon"
+                            data-icon-button
+                            aria-label={t('upstreams.checkNamed', { name: upstream.name })}
+                            aria-busy={checkingIds.has(upstream.id) || undefined}
+                            disabled={(checking) || (checkingIds.has(upstream.id))}
+                            style={{ color: 'var(--text-soft)' }}
+                          />
+                        }>
+                          <Icon name={checkingIds.has(upstream.id) ? 'progress_activity' : ("refresh")} size="sm" className={checkingIds.has(upstream.id) ? 'animate-spin' : ''} />
+                        </TooltipTrigger>
+                        <TooltipContent>{t('upstreams.checkNamed', { name: upstream.name })}</TooltipContent>
+                      </Tooltip>
                     )}
-                      <IconButton
-                        icon="edit"
-                        label={t('upstreams.editNamed', { name: upstream.name })}
-                        onClick={() => openEdit(upstream)}
-                      />
+                    <Tooltip>
+                      <TooltipTrigger render={
+                        <Button
+                          onClick={() => openEdit(upstream)}
+                          variant="ghost"
+                          size="icon"
+                          data-icon-button
+                          aria-label={t('upstreams.editNamed', { name: upstream.name })}
+                          style={{ color: 'var(--text-soft)' }}
+                        />
+                      }>
+                        <Icon name={"edit"} size="sm" />
+                      </TooltipTrigger>
+                      <TooltipContent>{t('upstreams.editNamed', { name: upstream.name })}</TooltipContent>
+                    </Tooltip>
                     {upstream.id && (
-                      <IconButton
-                        icon="delete"
-                        label={t('upstreams.deleteNamed', { name: upstream.name })}
-                        tone="danger"
-                        onClick={() => openDelete(upstream)}
-                      />
+                      <Tooltip>
+                        <TooltipTrigger render={
+                          <Button
+                            onClick={() => openDelete(upstream)}
+                            variant="ghost"
+                            size="icon"
+                            data-icon-button
+                            aria-label={t('upstreams.deleteNamed', { name: upstream.name })}
+                            style={{ color: 'var(--danger-text)' }}
+                          />
+                        }>
+                          <Icon name={"delete"} size="sm" />
+                        </TooltipTrigger>
+                        <TooltipContent>{t('upstreams.deleteNamed', { name: upstream.name })}</TooltipContent>
+                      </Tooltip>
                     )}
                   </div>
                 ) : undefined}
@@ -731,231 +762,239 @@ export default function UpstreamsV2() {
           </div>
         )}
 
-        <ModalV2
-          open={dialogOpen}
-          onClose={closeDialog}
-          title={editId ? t('upstreams.editUpstream') : t('upstreams.addUpstream')}
-          width={520}
-          closeDisabled={isSaving}
-        >
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <fieldset className="space-y-3" disabled={isSaving}>
-              <legend className="mb-3 text-[12px] font-[600]" style={{ color: 'var(--text)' }}>
-                {t('upstreams.connectionSection')}
-              </legend>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <SelectV2
-                  label={t('type')}
-                  hint={editId ? t('upstreams.ecosystemLockedHint') : undefined}
-                  value={form.adapter_type}
-                  onChange={(event) => setForm({ ...form, adapter_type: event.target.value })}
-                  disabled={editId !== null}
-                >
-                  {standardUpstreamEcosystems.map(ecosystem => (
-                    <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>
-                  ))}
-                </SelectV2>
-                <InputV2
-                  label={t('upstreams.priority')}
-                  hint={t('upstreams.priorityHint')}
-                  type="number"
-                  min={1}
-                  value={form.priority}
-                  onChange={(event) => setForm({
-                    ...form,
-                    priority: Number.parseInt(event.target.value, 10) || 1,
-                  })}
-                />
-              </div>
-              <InputV2
-                label={t('name')}
-                value={form.name}
-                error={fieldErrors.name}
-                maxLength={128}
-                autoComplete="off"
-                onChange={(event) => {
-                  setForm({ ...form, name: event.target.value })
-                  setFieldErrors((current) => ({ ...current, name: undefined }))
-                }}
-                placeholder={t('upstreams.namePlaceholder')}
-                required
-              />
-              <InputV2
-                label={t('upstreams.url')}
-                mono
-                value={form.url}
-                error={fieldErrors.url}
-                autoCapitalize="none"
-                autoComplete="url"
-                spellCheck={false}
-                onChange={(event) => {
-                  setForm({ ...form, url: event.target.value })
-                  setFieldErrors((current) => ({ ...current, url: undefined }))
-                }}
-                placeholder="https://pypi.example/simple"
-                required
-              />
-              <InputV2
-                label={t('upstreams.httpProxy')}
-                hint={t('upstreams.proxyHint')}
-                mono
-                value={form.proxy}
-                error={fieldErrors.proxy}
-                autoCapitalize="none"
-                spellCheck={false}
-                onChange={(event) => {
-                  setForm({ ...form, proxy: event.target.value })
-                  setFieldErrors((current) => ({ ...current, proxy: undefined }))
-                }}
-                placeholder="http://127.0.0.1:7890"
-              />
-              {cascadeInfo?.enabled && cascadeInfo.peers.length > 0 ? (
-                <SelectV2
-                  label={t('upstreams.via')}
-                  hint={t('upstreams.viaHint')}
-                  value={form.via ?? ''}
-                  onChange={(event) => setForm({ ...form, via: event.target.value })}
-                >
-                  <option value="">{t('upstreams.viaDirect')}</option>
-                  {cascadeInfo.peers.map(peer => (
-                    <option key={peer.name} value={peer.name}>
-                      {t('upstreams.viaPeerOption', { name: peer.name, url: peer.url })}
-                    </option>
-                  ))}
-                  {form.via && !cascadeInfo.peers.some(peer => peer.name === form.via) && (
-                    <option value={form.via}>{t('upstreams.viaMissing', { name: form.via })}</option>
+        <Dialog open={dialogOpen} onOpenChange={(nextOpen) => { if (!nextOpen && !isSaving) closeDialog() }} modal>
+          <DialogContent style={{ maxWidth: 520 }} finalFocus={true} closeDisabled={isSaving}>
+            <DialogTitle className="pr-10">{editId ? t('upstreams.editUpstream') : t('upstreams.addUpstream')}</DialogTitle>
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <fieldset className="space-y-3" disabled={isSaving}>
+                <legend className="mb-3 text-[12px] font-[600]" style={{ color: 'var(--text)' }}>
+                  {t('upstreams.connectionSection')}
+                </legend>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field disabled={editId !== null}>
+                    <FieldLabel>{t('type')}</FieldLabel>
+                    <NativeSelect
+                      value={form.adapter_type}
+                      onChange={(event) => setForm({ ...form, adapter_type: event.target.value })}
+                      disabled={editId !== null}
+                    >
+                      {standardUpstreamEcosystems.map(ecosystem => (
+                        <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>
+                      ))}
+                    </NativeSelect>
+                    {(editId ? t('upstreams.ecosystemLockedHint') : undefined) && <FieldDescription>{editId ? t('upstreams.ecosystemLockedHint') : undefined}</FieldDescription>}
+                  </Field>
+                  <Field>
+                    <FieldLabel>{t('upstreams.priority')}</FieldLabel>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={form.priority}
+                      onChange={(event) => setForm({
+                        ...form,
+                        priority: Number.parseInt(event.target.value, 10) || 1,
+                      })}
+                    />
+                    {(t('upstreams.priorityHint')) && <FieldDescription>{t('upstreams.priorityHint')}</FieldDescription>}
+                  </Field>
+                </div>
+                <Field invalid={Boolean(fieldErrors.name)}>
+                  <FieldLabel>{t('name')}</FieldLabel>
+                  <Input aria-invalid={Boolean(fieldErrors.name) || undefined}
+                    value={form.name}
+                    maxLength={128}
+                    autoComplete="off"
+                    onChange={(event) => {
+                      setForm({ ...form, name: event.target.value })
+                      setFieldErrors((current) => ({ ...current, name: undefined }))
+                    }}
+                    placeholder={t('upstreams.namePlaceholder')}
+                    required
+                  />
+                  {(fieldErrors.name) && <FieldError match>{fieldErrors.name}</FieldError>}
+                </Field>
+                <Field invalid={Boolean(fieldErrors.url)}>
+                  <FieldLabel>{t('upstreams.url')}</FieldLabel>
+                  <Input aria-invalid={Boolean(fieldErrors.url) || undefined} className="font-mono"
+                    value={form.url}
+                    autoCapitalize="none"
+                    autoComplete="url"
+                    spellCheck={false}
+                    onChange={(event) => {
+                      setForm({ ...form, url: event.target.value })
+                      setFieldErrors((current) => ({ ...current, url: undefined }))
+                    }}
+                    placeholder="https://pypi.example/simple"
+                    required
+                  />
+                  {(fieldErrors.url) && <FieldError match>{fieldErrors.url}</FieldError>}
+                </Field>
+                <Field invalid={Boolean(fieldErrors.proxy)}>
+                  <FieldLabel>{t('upstreams.httpProxy')}</FieldLabel>
+                  <Input aria-invalid={Boolean(fieldErrors.proxy) || undefined} className="font-mono"
+                    value={form.proxy}
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    onChange={(event) => {
+                      setForm({ ...form, proxy: event.target.value })
+                      setFieldErrors((current) => ({ ...current, proxy: undefined }))
+                    }}
+                    placeholder="http://127.0.0.1:7890"
+                  />
+                  {(fieldErrors.proxy) ? <FieldError match>{fieldErrors.proxy}</FieldError> : (t('upstreams.proxyHint')) ? <FieldDescription>{t('upstreams.proxyHint')}</FieldDescription> : null}
+                </Field>
+                {cascadeInfo?.enabled && cascadeInfo.peers.length > 0 ? (
+                  <Field>
+                    <FieldLabel>{t('upstreams.via')}</FieldLabel>
+                    <NativeSelect
+                      value={form.via ?? ''}
+                      onChange={(event) => setForm({ ...form, via: event.target.value })}
+                    >
+                      <option value="">{t('upstreams.viaDirect')}</option>
+                      {cascadeInfo.peers.map(peer => (
+                        <option key={peer.name} value={peer.name}>
+                          {t('upstreams.viaPeerOption', { name: peer.name, url: peer.url })}
+                        </option>
+                      ))}
+                      {form.via && !cascadeInfo.peers.some(peer => peer.name === form.via) && (
+                        <option value={form.via}>{t('upstreams.viaMissing', { name: form.via })}</option>
+                      )}
+                    </NativeSelect>
+                    {(t('upstreams.viaHint')) && <FieldDescription>{t('upstreams.viaHint')}</FieldDescription>}
+                  </Field>
+                ) : form.via ? (
+                  <Alert variant={"warning"}><AlertDescription>
+                    {t('upstreams.viaNotConfigured', { peer: form.via })}
+                  </AlertDescription></Alert>
+                ) : null}
+              </fieldset>
+
+              <fieldset className="space-y-3 border-t border-[var(--border)] pt-4" disabled={isSaving}>
+                <legend className="px-1 text-[12px] font-[600]" style={{ color: 'var(--text)' }}>
+                  {t('upstreams.healthSection')}
+                </legend>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field>
+                    <FieldLabel>{t('upstreams.probeMode')}</FieldLabel>
+                    <NativeSelect
+                      value={form.probe_mode}
+                      onChange={(event) => setForm({
+                        ...form,
+                        probe_mode: event.target.value as UpstreamMutationRequest['probe_mode'],
+                      })}
+                    >
+                      <option value="active">{t('upstreams.probeModeActive')}</option>
+                      <option value="passive">{t('upstreams.probeModePassive')}</option>
+                    </NativeSelect>
+                    {(t('upstreams.probeModeHint')) && <FieldDescription>{t('upstreams.probeModeHint')}</FieldDescription>}
+                  </Field>
+                  {form.probe_mode === 'active' && (
+                    <Field>
+                      <FieldLabel>{t('upstreams.probeInterval')}</FieldLabel>
+                      <NativeSelect
+                        value={form.probe_interval}
+                        onChange={(event) => setForm({ ...form, probe_interval: event.target.value })}
+                      >
+                        <option value="15s">15s</option>
+                        <option value="30s">30s</option>
+                        <option value="1m">1m</option>
+                        <option value="5m">5m</option>
+                        <option value="10m">10m</option>
+                        <option value="30m">30m</option>
+                        <option value="1h">1h</option>
+                      </NativeSelect>
+                    </Field>
                   )}
-                </SelectV2>
-              ) : form.via ? (
-                <InlineNotice tone="warning">
-                  {t('upstreams.viaNotConfigured', { peer: form.via })}
-                </InlineNotice>
-              ) : null}
-            </fieldset>
-
-            <fieldset className="space-y-3 border-t border-[var(--border)] pt-4" disabled={isSaving}>
-              <legend className="px-1 text-[12px] font-[600]" style={{ color: 'var(--text)' }}>
-                {t('upstreams.healthSection')}
-              </legend>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <SelectV2
-                  label={t('upstreams.probeMode')}
-                  hint={t('upstreams.probeModeHint')}
-                  value={form.probe_mode}
-                  onChange={(event) => setForm({
-                    ...form,
-                    probe_mode: event.target.value as UpstreamMutationRequest['probe_mode'],
-                  })}
-                >
-                  <option value="active">{t('upstreams.probeModeActive')}</option>
-                  <option value="passive">{t('upstreams.probeModePassive')}</option>
-                </SelectV2>
-                {form.probe_mode === 'active' && (
-                  <SelectV2
-                    label={t('upstreams.probeInterval')}
-                    value={form.probe_interval}
-                    onChange={(event) => setForm({ ...form, probe_interval: event.target.value })}
-                  >
-                    <option value="15s">15s</option>
-                    <option value="30s">30s</option>
-                    <option value="1m">1m</option>
-                    <option value="5m">5m</option>
-                    <option value="10m">10m</option>
-                    <option value="30m">30m</option>
-                    <option value="1h">1h</option>
-                  </SelectV2>
-                )}
-              </div>
-            </fieldset>
-
-            {saveError && (
-              <InlineNotice tone="danger">{upstreamErrorMessage(saveError, t)}</InlineNotice>
-            )}
-            <div className="flex justify-end gap-3 pt-1">
-              <Button
-                type="button"
-                variant="outline"
-                className="min-h-[40px]"
-                disabled={isSaving}
-                onClick={closeDialog}
-              >
-                {t('cancel')}
-              </Button>
-              <Button
-                type="submit"
-                className="min-h-[40px]"
-                aria-busy={isSaving || undefined}
-                disabled={isSaving || !canWrite}
-              >
-                {isSaving ? t('saving') : t('save')}
-              </Button>
-            </div>
-          </form>
-        </ModalV2>
-
-        <ModalV2
-          open={deleteTarget !== null}
-          onClose={closeDeleteDialog}
-          title={deleteTarget
-            ? t('upstreams.confirmDeleteNamed', { name: deleteTarget.name })
-            : t('upstreams.confirmDelete')}
-          closeDisabled={deleteMutation.isPending}
-        >
-          {deleteTarget && (
-            <div className="space-y-5">
-              <p className="text-[14px] leading-6" style={{ color: 'var(--text-soft)' }}>
-                {t('upstreams.confirmDeleteMsg', {
-                  name: deleteTarget.name,
-                  ecosystem: deleteTarget.adapter_type,
-                })}
-              </p>
-              <dl className="space-y-2 border-y border-[var(--border)] py-3 text-[12px]">
-                <div className="flex min-w-0 items-start justify-between gap-4">
-                  <dt style={{ color: 'var(--text-muted)' }}>{t('upstreams.url')}</dt>
-                  <dd
-                    className="min-w-0 max-w-[70%] truncate font-mono text-right"
-                    title={upstreamEndpointLabel(deleteTarget.url)}
-                    style={{ color: 'var(--text)' }}
-                  >
-                    {upstreamEndpointLabel(deleteTarget.url)}
-                  </dd>
                 </div>
-                <div className="flex items-center justify-between gap-4">
-                  <dt style={{ color: 'var(--text-muted)' }}>{t('upstreams.priority')}</dt>
-                  <dd className="font-mono tabular-nums" style={{ color: 'var(--text)' }}>
-                    {deleteTarget.priority}
-                  </dd>
-                </div>
-              </dl>
-              {deleteMutation.error && (
-                <InlineNotice tone="danger">
-                  {upstreamErrorMessage(deleteMutation.error, t)}
-                </InlineNotice>
+              </fieldset>
+
+              {saveError && (
+                <Alert variant={"destructive"}><AlertDescription>{upstreamErrorMessage(saveError, t)}</AlertDescription></Alert>
               )}
-              <div className="flex justify-end gap-3">
+              <div className="flex justify-end gap-3 pt-1">
                 <Button
                   type="button"
                   variant="outline"
                   className="min-h-[40px]"
-                  disabled={deleteMutation.isPending}
-                  onClick={closeDeleteDialog}
+                  disabled={isSaving}
+                  onClick={closeDialog}
                 >
                   {t('cancel')}
                 </Button>
                 <Button
-                  type="button"
-                  variant="destructive"
+                  type="submit"
                   className="min-h-[40px]"
-                  aria-busy={deleteMutation.isPending || undefined}
-                  disabled={deleteMutation.isPending}
-                  onClick={() => deleteMutation.mutate(deleteTarget.id)}
+                  aria-busy={isSaving || undefined}
+                  disabled={isSaving || !canWrite}
                 >
-                  {deleteMutation.isPending ? t('deleting') : t('delete')}
+                  {isSaving ? t('saving') : t('save')}
                 </Button>
               </div>
-            </div>
-          )}
-        </ModalV2>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={deleteTarget !== null} onOpenChange={(nextOpen) => { if (!nextOpen && !deleteMutation.isPending) closeDeleteDialog() }} modal>
+          <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={deleteMutation.isPending}>
+            <DialogTitle className="pr-10">{deleteTarget
+              ? t('upstreams.confirmDeleteNamed', { name: deleteTarget.name })
+              : t('upstreams.confirmDelete')}</DialogTitle>
+            {deleteTarget && (
+              <div className="space-y-5">
+                <p className="text-[14px] leading-6" style={{ color: 'var(--text-soft)' }}>
+                  {t('upstreams.confirmDeleteMsg', {
+                    name: deleteTarget.name,
+                    ecosystem: deleteTarget.adapter_type,
+                  })}
+                </p>
+                <dl className="space-y-2 border-y border-[var(--border)] py-3 text-[12px]">
+                  <div className="flex min-w-0 items-start justify-between gap-4">
+                    <dt style={{ color: 'var(--text-muted)' }}>{t('upstreams.url')}</dt>
+                    <dd
+                      className="min-w-0 max-w-[70%] truncate font-mono text-right"
+                      title={upstreamEndpointLabel(deleteTarget.url)}
+                      style={{ color: 'var(--text)' }}
+                    >
+                      {upstreamEndpointLabel(deleteTarget.url)}
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <dt style={{ color: 'var(--text-muted)' }}>{t('upstreams.priority')}</dt>
+                    <dd className="font-mono tabular-nums" style={{ color: 'var(--text)' }}>
+                      {deleteTarget.priority}
+                    </dd>
+                  </div>
+                </dl>
+                {deleteMutation.error && (
+                  <Alert variant={"destructive"}><AlertDescription>
+                    {upstreamErrorMessage(deleteMutation.error, t)}
+                  </AlertDescription></Alert>
+                )}
+                <div className="flex justify-end gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-h-[40px]"
+                    disabled={deleteMutation.isPending}
+                    onClick={closeDeleteDialog}
+                  >
+                    {t('cancel')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="min-h-[40px]"
+                    aria-busy={deleteMutation.isPending || undefined}
+                    disabled={deleteMutation.isPending}
+                    onClick={() => deleteMutation.mutate(deleteTarget.id)}
+                  >
+                    {deleteMutation.isPending ? t('deleting') : t('delete')}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </AdminPage>
   )

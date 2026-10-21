@@ -1,5 +1,24 @@
 import { test, expect, setUiPreferences } from './fixtures/admin-api'
 
+for (const width of [1440, 320]) {
+  test(`settings tabs retain directional keyboard navigation at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/admin/settings')
+    const tabs = page.getByRole('tablist').getByRole('tab')
+    await expect(tabs.first()).toHaveAttribute('aria-selected', 'true')
+    await tabs.first().focus()
+    await page.keyboard.press(width >= 768 ? 'ArrowDown' : 'ArrowRight')
+    await expect(tabs.nth(1)).toBeFocused()
+    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByRole('tabpanel')).toHaveCount(1)
+    await expect(page.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', await tabs.nth(1).getAttribute('id') ?? '')
+    await page.keyboard.press('Home')
+    await expect(tabs.first()).toBeFocused()
+    await expect(tabs.first()).toHaveAttribute('aria-selected', 'true')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width)
+  })
+}
+
 for (const theme of ['dark', 'light'] as const) {
   test(`native dropdown options remain readable in ${theme} mode with an opposite OS theme`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: theme === 'dark' ? 'light' : 'dark' })

@@ -1,23 +1,28 @@
+import { Input } from '@/components/ui/input'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { TableContainer, Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import { Field, FieldLabel } from '@/components/ui/field'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Treemap, ResponsiveContainer, Tooltip } from 'recharts'
+import { Treemap, ResponsiveContainer, Tooltip as ChartTooltip } from 'recharts'
 import type { TooltipContentProps, TooltipValueType, TreemapNode } from 'recharts'
 import { adminApi } from '@/lib/api'
 import { formatBytes, formatTime } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import SelectV2 from '@/components/Select'
-import TextareaV2 from '@/components/Textarea'
+import { Meter, MeterTrack } from '@/components/ui/meter'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Textarea } from '@/components/ui/textarea'
 import Icon from '@/components/Icon'
-import ModalV2 from '@/components/Modal'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import SectionHeader from '@/components/SectionHeader'
-import EmptyState from '@/components/EmptyState'
-import InlineNotice from '@/components/InlineNotice'
-import IconButton from '@/components/IconButton'
+
 import QueryErrorState from '@/components/QueryErrorState'
-import TableViewport from '@/components/TableViewport'
+
 import { useAppToast } from '@/components/Toast'
 import AdminPage from '@/admin/components/AdminPage'
 import AdminPagination from '@/admin/components/AdminPagination'
@@ -57,7 +62,7 @@ function isCacheTreemapItem(value: unknown): value is CacheTreemapItem {
     && typeof item.hits === 'number'
 }
 
-export default function CacheManageV2() {
+export default function CacheManage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const toast = useAppToast()
@@ -204,12 +209,14 @@ export default function CacheManageV2() {
             <SectionHeader title={t('cache.storageOverview')} />
             <p data-metric-value className="mb-2 whitespace-nowrap font-mono tabular-nums" style={{ fontSize: 32, fontWeight: 600, color: 'var(--text)', lineHeight: 1.05 }}>
               {formatBytes(distribution.total_size)}
-              <span className="text-[12px] font-[400] ml-2" style={{ color: 'var(--text-soft)' }}>
+              {distribution.max_size > 0 && <span className="text-[12px] font-[400] ml-2" style={{ color: 'var(--text-soft)' }}>
                 / {formatBytes(distribution.max_size)}
-              </span>
+              </span>}
             </p>
-            {/* Progress bar */}
-            <div className="h-2 rounded-full overflow-hidden flex mb-4" style={{ background: 'var(--bg-soft)' }}>
+            {/* The bounded meter shares its quota track with the actual
+                ecosystem segments; an unknown quota has no ratio. */}
+            {distribution.max_size > 0 && <Meter className="mb-4" value={distribution.total_size} max={distribution.max_size} aria-label={t('cache.storageOverview')} aria-valuetext={`${formatBytes(distribution.total_size)} / ${formatBytes(distribution.max_size)}`}>
+              <MeterTrack className="flex h-2">
               {distribution.by_type.map((bt) => {
                 const pct = distribution.max_size > 0 ? (bt.size / distribution.max_size) * 100 : 0
                 return (
@@ -221,7 +228,8 @@ export default function CacheManageV2() {
                   />
                 )
               })}
-            </div>
+              </MeterTrack>
+            </Meter>}
             {/* Ecosystem breakdown */}
             <div className="space-y-1.5">
               {distribution.by_type.map((bt) => {
@@ -276,7 +284,7 @@ export default function CacheManageV2() {
                     )
                   }}
                 >
-                  <Tooltip content={({ payload }: TooltipContentProps<TooltipValueType, string | number>) => {
+                  <ChartTooltip content={({ payload }: TooltipContentProps<TooltipValueType, string | number>) => {
                     if (!payload?.length) return null
                     const item: unknown = payload[0]?.payload
                     if (!isCacheTreemapItem(item)) return null
@@ -290,30 +298,30 @@ export default function CacheManageV2() {
                 </Treemap>
               </ResponsiveContainer>
             ) : (
-              <EmptyState icon="grid_view" title={t('noData')} minHeight={distribution.total_size === 0 ? 96 : 200} />
+              <Empty style={{ minHeight: distribution.total_size === 0 ? 96 : 200 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"grid_view"} size="sm" /></EmptyMedia><EmptyTitle>{t('noData')}</EmptyTitle></EmptyHeader></Empty>
             )}
           </section>
         </div>
-          ) : <EmptyState icon="grid_view" title={t('noData')} minHeight={200} />}
+          ) : <Empty style={{ minHeight: 200 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"grid_view"} size="sm" /></EmptyMedia><EmptyTitle>{t('noData')}</EmptyTitle></EmptyHeader></Empty>}
         </div>
       )}
 
       <div data-admin-filters className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-sm px-3 py-1.5" style={{ border: '1px solid var(--border)' }}>
           <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
-          <input
-            aria-label={t('cache.searchLabel')}
-            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]"
-            style={{ color: 'var(--text)' }}
-            placeholder={t('cache.searchPlaceholder')}
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-          />
+            <Input
+              aria-label={t('cache.searchLabel')}
+              className={"min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]" + ' h-9 rounded-none border-0 px-0 shadow-none focus-visible:ring-0 dark:bg-transparent'}
+              style={{ color: 'var(--text)' }}
+              placeholder={t('cache.searchPlaceholder')}
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+            />
         </div>
-        <SelectV2 className="min-h-10 sm:w-auto" aria-label={t('cache.ecosystemFilter')} value={adapterType} onChange={(e) => { setAdapterType(e.target.value); setPage(1) }}>
-          <option value="all">{t('all')}</option>
-          {operatorEcosystems.map(ecosystem => <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>)}
-        </SelectV2>
+          <NativeSelect className="min-h-10 sm:w-auto" aria-label={t('cache.ecosystemFilter')} value={adapterType} onChange={(e) => { setAdapterType(e.target.value); setPage(1) }}>
+            <option value="all">{t('all')}</option>
+            {operatorEcosystems.map(ecosystem => <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>)}
+          </NativeSelect>
       </div>
 
       <div data-cache-list>
@@ -327,55 +335,64 @@ export default function CacheManageV2() {
         <div className="space-y-3">
           {data && isRefetchError && <StaleDataNotice onRefresh={() => { void refetch() }} />}
           {items.length === 0 ? (
-            <EmptyState icon="inbox" title={t('cache.noCache')} minHeight={200} />
+            <Empty style={{ minHeight: 200 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"inbox"} size="sm" /></EmptyMedia><EmptyTitle>{t('cache.noCache')}</EmptyTitle></EmptyHeader></Empty>
           ) : (
-            <TableViewport label={t('cache.table')} minWidth={820}>
-            <table className="w-full text-[12px]">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+            <TableContainer label={t('cache.table')} minWidth={820}>
+            <Table className="w-full text-[12px]">
+            <TableHeader>
+              <TableRow style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Key', t('type'), t('cache.size'), t('cache.hitCount'), t('cache.lastAccessed'), t('actions')].map(h => (
-                  <th key={h} scope="col" className="text-left text-[10px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>{h}</th>
+                  <TableHead key={h} scope="col" className="text-left text-[10px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>{h}</TableHead>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {items.map((row) => (
-                <tr
+                <TableRow
                   key={row.id}
                   className="transition-colors duration-75 hover:bg-[var(--bg-soft)]"
                   style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
                 >
-                  <td className="py-2 px-3 pl-0 max-w-[260px]">
+                  <TableCell className="py-2 px-3 pl-0 max-w-[260px]">
                     <span className="font-mono truncate block" style={{ color: 'var(--text)' }}>{row.key}</span>
-                  </td>
-                  <td className="py-2 px-3">
+                  </TableCell>
+                  <TableCell className="py-2 px-3">
                     <div className="flex items-center gap-1.5">
                       {isAdminEcosystem(row.adapter_type) && <EcosystemIcon type={row.adapter_type} size={13} />}
                       <Badge variant="default">{row.adapter_type?.toUpperCase()}</Badge>
                     </div>
-                  </td>
-                  <td className="py-2 px-3">
+                  </TableCell>
+                  <TableCell className="py-2 px-3">
                     <span className="font-mono tabular-nums" style={{ color: 'var(--text)' }}>{formatBytes(row.size || 0)}</span>
-                  </td>
-                  <td className="py-2 px-3">
+                  </TableCell>
+                  <TableCell className="py-2 px-3">
                     <span className="font-mono tabular-nums" style={{ color: 'var(--text)' }}>{row.hit_count || 0}</span>
-                  </td>
-                  <td className="py-2 px-3">
+                  </TableCell>
+                  <TableCell className="py-2 px-3">
                     <span style={{ color: 'var(--text-soft)' }}>{formatTime(row.last_accessed)}</span>
-                  </td>
-                  <td className="py-2 px-3">
-                    {canWrite && <IconButton
-                      icon="delete"
-                      label={t('cache.deleteNamed', { key: row.key })}
-                      tone="danger"
-                      onClick={(e) => { e.stopPropagation(); deleteMutation.reset(); setDeleteTarget(row.id) }}
-                    />}
-                  </td>
-                </tr>
+                  </TableCell>
+                  <TableCell className="py-2 px-3">
+                    {canWrite && <Tooltip>
+                      <TooltipTrigger render={
+                        <Button
+                          onClick={(e) => { e.stopPropagation(); deleteMutation.reset(); setDeleteTarget(row.id) }}
+                          variant="ghost"
+                          size="icon"
+                          data-icon-button
+                          aria-label={t('cache.deleteNamed', { key: row.key })}
+                          style={{ color: 'var(--danger-text)' }}
+                        />
+                      }>
+                        <Icon name={"delete"} size="sm" />
+                      </TooltipTrigger>
+                      <TooltipContent>{t('cache.deleteNamed', { key: row.key })}</TooltipContent>
+                    </Tooltip>}
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-            </table>
-            </TableViewport>
+            </TableBody>
+            </Table>
+            </TableContainer>
           )}
         </div>
       )}
@@ -385,158 +402,176 @@ export default function CacheManageV2() {
       <AdminPagination page={page} pageSize={20} total={total} onPageChange={setPage} />
 
       {/* Delete Modal */}
-      <ModalV2 open={deleteTarget !== null} onClose={() => {
-        if (deleteMutation.isPending) return
-        deleteMutation.reset()
-        setDeleteTarget(null)
-      }} title={t('cache.confirmDelete')} closeDisabled={deleteMutation.isPending}>
-        <p className="text-[14px] mb-6" style={{ color: 'var(--text-soft)' }}>{t('cache.confirmDeleteMsg')}</p>
-        {deleteMutation.isError && <div className="mb-4"><InlineNotice tone="danger">{getApiError(deleteMutation.error).message}</InlineNotice></div>}
-        <div className="flex justify-end gap-3">
-          <Button variant="outline" disabled={deleteMutation.isPending} onClick={() => {
+        <Dialog open={deleteTarget !== null} onOpenChange={(nextOpen) => {
+          if (!nextOpen && !deleteMutation.isPending) (() => {
+            if (deleteMutation.isPending) return
             deleteMutation.reset()
             setDeleteTarget(null)
-          }}>{t('cancel')}</Button>
-          <Button variant="destructive" aria-busy={deleteMutation.isPending || undefined} disabled={deleteMutation.isPending || !canWrite} onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}>
-            {deleteMutation.isPending ? t('deleting') : t('delete')}
-          </Button>
-        </div>
-      </ModalV2>
+          })()
+        }} modal>
+          <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={deleteMutation.isPending}>
+            <DialogTitle className="pr-10">{t('cache.confirmDelete')}</DialogTitle>
+            <p className="text-[14px] mb-6" style={{ color: 'var(--text-soft)' }}>{t('cache.confirmDeleteMsg')}</p>
+            {deleteMutation.isError && <div className="mb-4"><Alert variant={"destructive"}><AlertDescription>{getApiError(deleteMutation.error).message}</AlertDescription></Alert></div>}
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" disabled={deleteMutation.isPending} onClick={() => {
+                deleteMutation.reset()
+                setDeleteTarget(null)
+              }}>{t('cancel')}</Button>
+              <Button variant="destructive" aria-busy={deleteMutation.isPending || undefined} disabled={deleteMutation.isPending || !canWrite} onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}>
+                {deleteMutation.isPending ? t('deleting') : t('delete')}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
       {/* Cleanup Modal */}
-      <ModalV2 open={cleanupOpen} onClose={() => {
-        if (cleanupMutation.isPending) return
-        cleanupMutation.reset()
-        setCleanupResult(null)
-        setCleanupOpen(false)
-      }} title={t('cache.cleanExpiredTitle')} closeDisabled={cleanupMutation.isPending}>
-        <p className="text-[14px] mb-6" style={{ color: 'var(--text-soft)' }}>{t('cache.cleanExpiredMsg')}</p>
-        {cleanupPreviewQuery.isPending ? (
-          <div aria-busy="true" className="mb-6 text-[13px] text-[var(--text-soft)]">{t('cache.previewLoading')}</div>
-        ) : cleanupPreviewQuery.isError ? (
-          <div className="mb-6"><InlineNotice tone="warning">{t('cache.previewUnavailable')}</InlineNotice></div>
-        ) : cleanupPreviewQuery.data?.data ? (
-          <div className="mb-6 space-y-3" data-testid="cache-cleanup-preview">
-            <p className="text-[13px] text-[var(--text-soft)]">
-              {t('cache.previewSummary', {
-                count: cleanupPreviewQuery.data.data.candidate_count,
-                bytes: formatBytes(cleanupPreviewQuery.data.data.logical_bytes),
-              })}
-            </p>
-            <p className="text-[13px] text-[var(--text-soft)]">
-              {t('cache.previewPlanned', {
-                count: cleanupPreviewQuery.data.data.planned_count,
-                bytes: formatBytes(cleanupPreviewQuery.data.data.planned_bytes),
-              })}
-            </p>
-            {cleanupPreviewQuery.data.data.items.length > 0 ? (
-              <ul className="max-h-40 overflow-auto space-y-1 text-[12px] font-mono" aria-label={t('cache.previewItems')}>
-                {cleanupPreviewQuery.data.data.items.map((item) => (
-                  <li key={item.id} className="flex justify-between gap-3">
-                    <span className="truncate">{item.package_name || item.key}</span>
-                    <span className="shrink-0 text-[var(--text-soft)]">{formatBytes(item.size)} · {item.reason}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : <p className="text-[12px] text-[var(--text-soft)]">{t('cache.previewEmpty')}</p>}
-            <p className="text-[12px] text-[var(--text-soft)]">{t('cache.previewSnapshot')}</p>
-          </div>
-        ) : null}
-        {cleanupResult && (
-          <div className="mb-4">
-            <InlineNotice tone={cleanupResult.outcome === 'failed' || cleanupResult.interrupted ? 'danger' : 'warning'}>
-              {t('cache.cleanupResult', {
-                message: cleanupResult.message,
-                deleted: cleanupResult.deleted,
-                failed: cleanupResult.failed,
-                skipped: cleanupResult.skipped || 0,
-                planned: cleanupResult.planned_count || cleanupResult.planned || 0,
-              })}
-            </InlineNotice>
-          </div>
-        )}
-        {cleanupMutation.isError && <div className="mb-4"><InlineNotice tone="danger">{getApiError(cleanupMutation.error).message}</InlineNotice></div>}
-        <div className="flex justify-end gap-3">
-          <Button variant="outline" disabled={cleanupMutation.isPending} onClick={() => {
+        <Dialog open={cleanupOpen} onOpenChange={(nextOpen) => {
+          if (!nextOpen && !cleanupMutation.isPending) (() => {
+            if (cleanupMutation.isPending) return
             cleanupMutation.reset()
             setCleanupResult(null)
             setCleanupOpen(false)
-          }}>{t('cancel')}</Button>
-          <Button variant="destructive" aria-busy={cleanupMutation.isPending || undefined} disabled={cleanupMutation.isPending || !!cleanupResult || !canWrite || !cleanupPreviewQuery.data?.data.plan_id} onClick={() => cleanupMutation.mutate()}>
-            {cleanupMutation.isPending ? t('cache.cleaning') : t('cache.confirmClean')}
-          </Button>
-        </div>
-      </ModalV2>
+          })()
+        }} modal>
+          <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={cleanupMutation.isPending}>
+            <DialogTitle className="pr-10">{t('cache.cleanExpiredTitle')}</DialogTitle>
+            <p className="text-[14px] mb-6" style={{ color: 'var(--text-soft)' }}>{t('cache.cleanExpiredMsg')}</p>
+            {cleanupPreviewQuery.isPending ? (
+              <div aria-busy="true" className="mb-6 text-[13px] text-[var(--text-soft)]">{t('cache.previewLoading')}</div>
+            ) : cleanupPreviewQuery.isError ? (
+              <div className="mb-6"><Alert variant={"warning"}><AlertDescription>{t('cache.previewUnavailable')}</AlertDescription></Alert></div>
+            ) : cleanupPreviewQuery.data?.data ? (
+              <div className="mb-6 space-y-3" data-testid="cache-cleanup-preview">
+                <p className="text-[13px] text-[var(--text-soft)]">
+                  {t('cache.previewSummary', {
+                    count: cleanupPreviewQuery.data.data.candidate_count,
+                    bytes: formatBytes(cleanupPreviewQuery.data.data.logical_bytes),
+                  })}
+                </p>
+                <p className="text-[13px] text-[var(--text-soft)]">
+                  {t('cache.previewPlanned', {
+                    count: cleanupPreviewQuery.data.data.planned_count,
+                    bytes: formatBytes(cleanupPreviewQuery.data.data.planned_bytes),
+                  })}
+                </p>
+                {cleanupPreviewQuery.data.data.items.length > 0 ? (
+                  <ul className="max-h-40 overflow-auto space-y-1 text-[12px] font-mono" aria-label={t('cache.previewItems')}>
+                    {cleanupPreviewQuery.data.data.items.map((item) => (
+                      <li key={item.id} className="flex justify-between gap-3">
+                        <span className="truncate">{item.package_name || item.key}</span>
+                        <span className="shrink-0 text-[var(--text-soft)]">{formatBytes(item.size)} · {item.reason}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className="text-[12px] text-[var(--text-soft)]">{t('cache.previewEmpty')}</p>}
+                <p className="text-[12px] text-[var(--text-soft)]">{t('cache.previewSnapshot')}</p>
+              </div>
+            ) : null}
+            {cleanupResult && (
+              <div className="mb-4">
+                <Alert variant={cleanupResult.outcome === 'failed' || cleanupResult.interrupted ? "destructive" : 'warning'}><AlertDescription>
+                  {t('cache.cleanupResult', {
+                    message: cleanupResult.message,
+                    deleted: cleanupResult.deleted,
+                    failed: cleanupResult.failed,
+                    skipped: cleanupResult.skipped || 0,
+                    planned: cleanupResult.planned_count || cleanupResult.planned || 0,
+                  })}
+                </AlertDescription></Alert>
+              </div>
+            )}
+            {cleanupMutation.isError && <div className="mb-4"><Alert variant={"destructive"}><AlertDescription>{getApiError(cleanupMutation.error).message}</AlertDescription></Alert></div>}
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" disabled={cleanupMutation.isPending} onClick={() => {
+                cleanupMutation.reset()
+                setCleanupResult(null)
+                setCleanupOpen(false)
+              }}>{t('cancel')}</Button>
+              <Button variant="destructive" aria-busy={cleanupMutation.isPending || undefined} disabled={cleanupMutation.isPending || !!cleanupResult || !canWrite || !cleanupPreviewQuery.data?.data.plan_id} onClick={() => cleanupMutation.mutate()}>
+                {cleanupMutation.isPending ? t('cache.cleaning') : t('cache.confirmClean')}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
       {/* Warmup Modal */}
-      <ModalV2 open={warmupOpen} onClose={() => setWarmupOpen(false)} title={t('cache.warmupTitle')} closeDisabled={warmupState.status === 'submitting'}>
-        <div className="space-y-4">
-          <SelectV2 label={t('cache.warmupEcosystem')} value={warmupEco} onChange={(e) => setWarmupEco(e.target.value)}>
-            {WARMUP_ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
-          </SelectV2>
-          <TextareaV2
-            label={t(warmupEco === 'npm' ? 'cache.warmupPackagesNpm' : 'cache.warmupPackages')}
-            className="resize-none font-mono"
-            style={{ height: 160 }}
-            placeholder={t(warmupEco === 'npm' ? 'cache.warmupPlaceholderNpm' : 'cache.warmupPlaceholder')}
-            value={warmupText}
-            onChange={(e) => setWarmupText(e.target.value)}
-          />
-          {warmupState.status === 'submitting' && <InlineNotice tone="warning">{t('cache.warmupSubmitting')}</InlineNotice>}
-          {warmupState.status === 'accepted' && <InlineNotice tone="info">{t('cache.warmupAccepted', { count: warmupState.count })}</InlineNotice>}
-          {warmupState.status === 'failed' && <InlineNotice tone="danger">{t('cache.warmupFailed', { reason: warmupState.message })}</InlineNotice>}
-          {warmupJobId && warmupJobQuery.isError && <InlineNotice tone="danger">{getApiError(warmupJobQuery.error).status === 403 ? t('common.permissionDenied') : getApiError(warmupJobQuery.error).status === 404 ? t('cache.warmupJobExpired') : t('cache.warmupJobLoadFailed')}</InlineNotice>}
-          {cancelWarmupMutation.isError && <InlineNotice tone="danger">{t('cache.warmupActionFailed')}</InlineNotice>}
-          {retryWarmupMutation.isError && <InlineNotice tone="danger">{t('cache.warmupActionFailed')}</InlineNotice>}
-          {warmupJobId && warmupJobQuery.data?.data && (
-            <div className="space-y-3 rounded-md border border-[var(--border)] p-3" data-testid="warmup-job-status">
-              <div className="flex justify-between gap-3 text-[12px]">
-                <span>{t('cache.warmupJobStatus', { status: t(WARMUP_STATUS_KEYS[warmupJobQuery.data.data.status] || 'cache.warmupStatus.unknown') })}</span>
-                <span className="font-mono text-[var(--text-soft)]">{warmupJobId}</span>
+        <Dialog open={warmupOpen} onOpenChange={(nextOpen) => { if (!nextOpen && !(warmupState.status === 'submitting')) setWarmupOpen(false) }} modal>
+          <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={warmupState.status === 'submitting'}>
+            <DialogTitle className="pr-10">{t('cache.warmupTitle')}</DialogTitle>
+            <div className="space-y-4">
+              <Field>
+                <FieldLabel>{t('cache.warmupEcosystem')}</FieldLabel>
+                <NativeSelect value={warmupEco} onChange={(e) => setWarmupEco(e.target.value)}>
+                  {WARMUP_ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
+                </NativeSelect>
+              </Field>
+              <Field>
+                <FieldLabel>{t(warmupEco === 'npm' ? 'cache.warmupPackagesNpm' : 'cache.warmupPackages')}</FieldLabel>
+                <Textarea
+                  className="resize-none font-mono"
+                  style={{ height: 160 }}
+                  placeholder={t(warmupEco === 'npm' ? 'cache.warmupPlaceholderNpm' : 'cache.warmupPlaceholder')}
+                  value={warmupText}
+                  onChange={(e) => setWarmupText(e.target.value)}
+                />
+              </Field>
+              {warmupState.status === 'submitting' && <Alert variant={"warning"}><AlertDescription>{t('cache.warmupSubmitting')}</AlertDescription></Alert>}
+              {warmupState.status === 'accepted' && <Alert variant={"info"}><AlertDescription>{t('cache.warmupAccepted', { count: warmupState.count })}</AlertDescription></Alert>}
+              {warmupState.status === 'failed' && <Alert variant={"destructive"}><AlertDescription>{t('cache.warmupFailed', { reason: warmupState.message })}</AlertDescription></Alert>}
+              {warmupJobId && warmupJobQuery.isError && <Alert variant={"destructive"}><AlertDescription>{getApiError(warmupJobQuery.error).status === 403 ? t('common.permissionDenied') : getApiError(warmupJobQuery.error).status === 404 ? t('cache.warmupJobExpired') : t('cache.warmupJobLoadFailed')}</AlertDescription></Alert>}
+              {cancelWarmupMutation.isError && <Alert variant={"destructive"}><AlertDescription>{t('cache.warmupActionFailed')}</AlertDescription></Alert>}
+              {retryWarmupMutation.isError && <Alert variant={"destructive"}><AlertDescription>{t('cache.warmupActionFailed')}</AlertDescription></Alert>}
+              {warmupJobId && warmupJobQuery.data?.data && (
+                <div className="space-y-3 rounded-md border border-[var(--border)] p-3" data-testid="warmup-job-status">
+                  <div className="flex justify-between gap-3 text-[12px]">
+                    <span>{t('cache.warmupJobStatus', { status: t(WARMUP_STATUS_KEYS[warmupJobQuery.data.data.status] || 'cache.warmupStatus.unknown') })}</span>
+                    <span className="font-mono text-[var(--text-soft)]">{warmupJobId}</span>
+                  </div>
+                  <ul className="max-h-40 overflow-auto space-y-1 text-[12px]" aria-label={t('cache.warmupResults')}>
+                    {warmupJobQuery.data.data.items.map(item => (
+                      <li key={item.package} className="flex justify-between gap-3">
+                        <span className="truncate font-mono">{item.package}</span>
+                        <span className="shrink-0 text-[var(--text-soft)]">{item.detail === 'metadata cached' ? t('cache.warmupItemMetadata') : item.detail === 'request failed' ? t('cache.warmupItemFailed') : item.detail === 'warmup stopped before this package completed' ? t('cache.warmupItemStopped') : t(WARMUP_STATUS_KEYS[item.status] || 'cache.warmupStatus.unknown')}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {['queued', 'running', 'cancelling'].includes(warmupJobQuery.data.data.status) && canWrite && (
+                    <Button type="button" variant="outline" size="sm" disabled={cancelWarmupMutation.isPending} onClick={() => { if (window.confirm(t('cache.warmupCancelConfirm'))) cancelWarmupMutation.mutate() }}>
+                      {t('cache.warmupCancel')}
+                    </Button>
+                  )}
+                  {['partial', 'failed', 'cancelled', 'interrupted'].includes(warmupJobQuery.data.data.status) && canWrite && warmupJobQuery.data.data.items.some(item => item.status === 'failed') && (
+                    <Button type="button" variant="outline" size="sm" disabled={retryWarmupMutation.isPending} onClick={() => retryWarmupMutation.mutate()}>
+                      {t('cache.warmupRetryFailed')}
+                    </Button>
+                  )}
+                </div>
+              )}
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" disabled={warmupState.status === 'submitting'} onClick={() => setWarmupOpen(false)}>{t('cancel')}</Button>
+                <Button
+                  disabled={warmupState.status === 'submitting' || warmupText.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#')).length === 0}
+                  onClick={async () => {
+                    setWarmupState({ status: 'submitting' })
+                    try {
+                      const packages = warmupText.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'))
+                      const res = await adminApi.warmupCache({ ecosystem: warmupEco, packages })
+                      setWarmupJobId(res.data?.job_id || null)
+                      if (res.data?.job_id) writeLocalStorage(warmupJobStorageKey, res.data.job_id)
+                      setWarmupState({ status: 'accepted', count: res.data?.packages || packages.length })
+                    } catch (error) {
+                      setWarmupState({ status: 'failed', message: getApiError(error).message })
+                    }
+                  }}
+                >
+                  <Icon name="download" size="sm" />
+                  {warmupState.status === 'submitting' ? t('cache.warmupLoading') : t('cache.warmupStart')}
+                </Button>
               </div>
-              <ul className="max-h-40 overflow-auto space-y-1 text-[12px]" aria-label={t('cache.warmupResults')}>
-                {warmupJobQuery.data.data.items.map(item => (
-                  <li key={item.package} className="flex justify-between gap-3">
-                    <span className="truncate font-mono">{item.package}</span>
-                    <span className="shrink-0 text-[var(--text-soft)]">{item.detail === 'metadata cached' ? t('cache.warmupItemMetadata') : item.detail === 'request failed' ? t('cache.warmupItemFailed') : item.detail === 'warmup stopped before this package completed' ? t('cache.warmupItemStopped') : t(WARMUP_STATUS_KEYS[item.status] || 'cache.warmupStatus.unknown')}</span>
-                  </li>
-                ))}
-              </ul>
-              {['queued', 'running', 'cancelling'].includes(warmupJobQuery.data.data.status) && canWrite && (
-                <Button type="button" variant="outline" size="sm" disabled={cancelWarmupMutation.isPending} onClick={() => { if (window.confirm(t('cache.warmupCancelConfirm'))) cancelWarmupMutation.mutate() }}>
-                  {t('cache.warmupCancel')}
-                </Button>
-              )}
-              {['partial', 'failed', 'cancelled', 'interrupted'].includes(warmupJobQuery.data.data.status) && canWrite && warmupJobQuery.data.data.items.some(item => item.status === 'failed') && (
-                <Button type="button" variant="outline" size="sm" disabled={retryWarmupMutation.isPending} onClick={() => retryWarmupMutation.mutate()}>
-                  {t('cache.warmupRetryFailed')}
-                </Button>
-              )}
             </div>
-          )}
-          <div className="flex justify-end gap-3">
-            <Button variant="outline" disabled={warmupState.status === 'submitting'} onClick={() => setWarmupOpen(false)}>{t('cancel')}</Button>
-            <Button
-              disabled={warmupState.status === 'submitting' || warmupText.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#')).length === 0}
-              onClick={async () => {
-                setWarmupState({ status: 'submitting' })
-                try {
-                  const packages = warmupText.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'))
-                  const res = await adminApi.warmupCache({ ecosystem: warmupEco, packages })
-                  setWarmupJobId(res.data?.job_id || null)
-                  if (res.data?.job_id) writeLocalStorage(warmupJobStorageKey, res.data.job_id)
-                  setWarmupState({ status: 'accepted', count: res.data?.packages || packages.length })
-                } catch (error) {
-                  setWarmupState({ status: 'failed', message: getApiError(error).message })
-                }
-              }}
-            >
-              <Icon name="download" size="sm" />
-              {warmupState.status === 'submitting' ? t('cache.warmupLoading') : t('cache.warmupStart')}
-            </Button>
-          </div>
-        </div>
-      </ModalV2>
+          </DialogContent>
+        </Dialog>
 
       <SnapshotSection />
       </div>

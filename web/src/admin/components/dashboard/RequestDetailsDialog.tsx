@@ -1,15 +1,16 @@
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
-
 import { Badge } from '@/components/ui/badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
-import ModalV2 from '@/components/Modal'
 import QueryErrorState from '@/components/QueryErrorState'
-import TabsV2 from '@/components/Tabs'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAppToast } from '@/components/Toast'
 import { getAdminRouteHref } from '@/admin/routes'
 import type { AccessLogDetail } from '@/lib/adminApi.types'
@@ -51,15 +52,15 @@ function CopyableField({ label, value }: { label: string; value: string }) {
       <dd className="flex min-w-0 items-center gap-1.5">
         <span className="min-w-0 break-all font-mono text-[13px]" style={{ color: 'var(--text)' }}>{value || '—'}</span>
         {available && (
-          <button
+          <Button variant="ghost" size="icon"
             type="button"
             onClick={handleCopy}
             aria-label={copied ? t('common.copied') : t('overview.copyValue', { label })}
-            className="dash-focus grid size-6 shrink-0 place-items-center rounded hover:bg-[var(--bg-hover)]"
+            className="text-muted-foreground"
             style={{ color: 'var(--text-soft)' }}
           >
             <Icon name={copied ? 'check' : 'content_copy'} size="sm" />
-          </button>
+          </Button>
         )}
       </dd>
     </div>
@@ -163,7 +164,7 @@ export default function RequestDetailsDialog({ logId, onClose }: RequestDetailsD
 
   let body: ReactNode
   if (query.isPending && !detail) {
-    body = <div className="h-40 animate-pulse rounded-md" style={{ background: 'var(--bg-soft)' }} />
+    body = <Skeleton className="h-40 rounded-md" style={{ background: 'var(--bg-soft)' }} />
   } else if (query.isError && !detail) {
     body = (
       <QueryErrorState
@@ -175,56 +176,61 @@ export default function RequestDetailsDialog({ logId, onClose }: RequestDetailsD
     body = <p className="text-[14px]" style={{ color: 'var(--text-soft)' }}>{t('overview.requestUnavailable')}</p>
   } else {
     body = (
-      <TabsV2
-        ariaLabel={t('overview.requestDetails')}
-        value={tab}
-        onValueChange={setTab}
-        items={[
-          { key: 'basic', label: t('overview.tabBasic'), content: <BasicTab detail={detail} t={t} /> },
-          { key: 'chain', label: t('overview.tabChain'), content: <ChainTab detail={detail} t={t} /> },
-          { key: 'logs', label: t('overview.tabLogs'), content: <LogTab detail={detail} t={t} /> },
-        ]}
-      />
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList aria-label={t('overview.requestDetails')} activateOnFocus variant="line">
+          <TabsTrigger value="basic">{t('overview.tabBasic')}</TabsTrigger>
+          <TabsTrigger value="chain">{t('overview.tabChain')}</TabsTrigger>
+          <TabsTrigger value="logs">{t('overview.tabLogs')}</TabsTrigger>
+        </TabsList>
+        <div className="min-w-0">
+          <TabsContent value="basic"><BasicTab detail={detail} t={t} /></TabsContent>
+          <TabsContent value="chain"><ChainTab detail={detail} t={t} /></TabsContent>
+          <TabsContent value="logs"><LogTab detail={detail} t={t} /></TabsContent>
+        </div>
+      </Tabs>
     )
   }
 
   return (
-    <ModalV2 open={logId !== null} onClose={onClose} title={t('overview.requestDetails')} width={880}>
-      <div className="flex min-w-0 flex-col gap-4">
-        {detail && (
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            {isAdminEcosystem(detail.adapter_type) && <EcosystemIcon type={detail.adapter_type} size={18} decorative />}
-            <span className="min-w-0 truncate font-mono text-[16px] font-semibold" style={{ color: 'var(--text)' }}>
-              {detail.package_name || t('recentDownloads.unknownPackage')}
-              {detail.version && <span style={{ color: 'var(--text-soft)' }}>@{detail.version}</span>}
-            </span>
-            <Badge variant="neutral">{detail.adapter_type || '—'}</Badge>
-            <Badge variant={outcomeMeta.variant}>{t(outcomeMeta.key)}</Badge>
-          </div>
-        )}
-        {body}
-        <div className="flex flex-wrap justify-end gap-2">
-          {detail?.upstream && (
+    <Dialog open={logId !== null} onOpenChange={(nextOpen) => { if (!nextOpen) onClose() }} modal>
+      <DialogContent style={{ maxWidth: 880 }} finalFocus={true}>
+        <DialogTitle className="pr-10">{t('overview.requestDetails')}</DialogTitle>
+        <div className="flex min-w-0 flex-col gap-4">
+          {detail && (
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              {isAdminEcosystem(detail.adapter_type) && <EcosystemIcon type={detail.adapter_type} size={18} decorative />}
+              <span className="min-w-0 truncate font-mono text-[16px] font-semibold" style={{ color: 'var(--text)' }}>
+                {detail.package_name || t('recentDownloads.unknownPackage')}
+                {detail.version && <span style={{ color: 'var(--text-soft)' }}>@{detail.version}</span>}
+              </span>
+              <Badge variant="neutral">{detail.adapter_type || '—'}</Badge>
+              <Badge variant={outcomeMeta.variant}>{t(outcomeMeta.key)}</Badge>
+            </div>
+          )}
+          {body}
+          <div className="flex flex-wrap justify-end gap-2">
+            {detail?.upstream && (
+              <Link
+                to={getAdminRouteHref('upstreams')}
+                onClick={onClose}
+                className="dash-focus inline-flex min-h-9 items-center gap-1.5 rounded-md border px-3 text-[14px] font-medium no-underline"
+                style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+              >
+                {t('overview.viewUpstreams')}
+              </Link>
+            )}
             <Link
-              to={getAdminRouteHref('upstreams')}
+              to={getAdminRouteHref('accessLogs')}
               onClick={onClose}
               className="dash-focus inline-flex min-h-9 items-center gap-1.5 rounded-md border px-3 text-[14px] font-medium no-underline"
               style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
             >
-              {t('overview.viewUpstreams')}
+              <Icon name="receipt_long" size="sm" />
+              {t('overview.openLogs')}
             </Link>
-          )}
-          <Link
-            to={getAdminRouteHref('accessLogs')}
-            onClick={onClose}
-            className="dash-focus inline-flex min-h-9 items-center gap-1.5 rounded-md border px-3 text-[14px] font-medium no-underline"
-            style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-          >
-            <Icon name="receipt_long" size="sm" />
-            {t('overview.openLogs')}
-          </Link>
+          </div>
         </div>
-      </div>
-    </ModalV2>
+      </DialogContent>
+    </Dialog>
   )
 }

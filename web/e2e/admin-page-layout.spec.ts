@@ -1,4 +1,5 @@
 import { expect, mockAdminApi, test } from './fixtures/admin-api'
+import type { CacheDistributionResponse } from '../src/lib/adminApi.types'
 
 test('AdminPage renders the route title once and wraps its actions on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 844 })
@@ -82,6 +83,33 @@ test('empty cache keeps the search controls close to the storage overview on mob
   const filters = await page.locator('[data-admin-filters]').boundingBox()
   expect(filters?.y).toBeLessThan(750)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
+})
+
+test('cache capacity uses its real quota and omits the meter when the quota is unknown', async ({ page }) => {
+  let distribution: CacheDistributionResponse = {
+    total_size: 0, max_size: 1024, usage_percent: 0,
+    by_type: [{ type: 'npm', size: 0, file_count: 0 }], top_packages: [],
+  }
+  await mockAdminApi(page, { 'GET /api/v1/admin/cache/distribution': () => distribution })
+  await page.goto('/admin/cache')
+  const meter = page.getByRole('meter', { name: '存储概览' })
+  await expect(meter).toHaveAttribute('aria-valuenow', '0')
+  await expect(meter).toHaveAttribute('aria-valuemax', '1024')
+  await expect(meter.locator('[data-slot="meter-track"] > div')).toHaveCSS('width', '0px')
+
+  distribution = { ...distribution, total_size: 512, usage_percent: 50, by_type: [{ type: 'npm', size: 512, file_count: 1 }] }
+  await page.reload()
+  await expect(meter).toHaveAttribute('aria-valuenow', '512')
+  await expect(meter).toHaveAttribute('aria-valuetext', '512 B / 1.0 KB')
+  const track = (await meter.locator('[data-slot="meter-track"]').boundingBox())!
+  const segment = (await meter.locator('[data-slot="meter-track"] > div').boundingBox())!
+  expect(segment.width / track.width).toBeCloseTo(0.5, 2)
+
+  distribution = { ...distribution, max_size: 0, usage_percent: 0 }
+  await page.reload()
+  await expect(page.locator('[data-metric-value]')).toContainText('512 B')
+  await expect(meter).toHaveCount(0)
+  await expect(page.locator('[data-metric-value]')).not.toContainText('/ 0 B')
 })
 
 test('warmed workspace destinations switch without a loading flash', async ({ page }) => {

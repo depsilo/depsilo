@@ -1,7 +1,7 @@
+import { Button } from '@/components/ui/button'
 import { useTranslation } from 'react-i18next'
 import { useThemePreference, type ThemePreference } from '@/lib/theme'
 import Icon, { type IconName } from './Icon'
-import IconButtonControl from './IconButtonControl'
 
 const CYCLE: ThemePreference[] = ['system', 'light', 'dark']
 
@@ -36,50 +36,42 @@ export default function ThemeToggle({ labeled = false, variant = 'default' }: Th
 
   if (variant === 'portal') {
     return (
-      <button
+      <Button variant="ghost"
         type="button"
         data-theme-toggle="portal"
         aria-label={label}
         title={label}
         onClick={cycle}
-        className="portal-header-control portal-theme-button stripe-focus-ring"
+        className="portal-header-control portal-theme-button"
       >
         <Icon name={ICONS[theme]} size="sm" />
         <span className="portal-theme-label">{LABELS[theme]}</span>
-      </button>
+      </Button>
     )
   }
 
   if (labeled) {
-    const labeledClassName = variant === 'admin'
-      ? 'stripe-focus-ring inline-flex h-[40px] min-w-[40px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border-0 bg-transparent px-2.5 text-[var(--text-soft)] transition-[background,color,transform] duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-[0.98]'
-      : 'stripe-focus-ring inline-flex h-[41px] min-w-[41px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-[var(--border-strong)] bg-[var(--bg-card)] px-2.5 text-[var(--text-soft)] transition-[background,color,border-color,transform] duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-[0.98]'
     return (
-      <button
+      <Button variant={variant === 'admin' ? 'ghost' : 'outline'}
         type="button"
         data-theme-toggle="labeled"
         aria-label={visibleLabel}
         title={label}
         onClick={cycle}
-        className={labeledClassName}
+        className="h-[40px] min-w-[40px] gap-1.5 px-2.5 text-muted-foreground"
       >
         <Icon name={ICONS[theme]} size="sm" />
         <span className="text-[11px] font-[600] sm:hidden">{LABELS[theme]}</span>
         <span className="hidden text-[11px] font-[600] sm:inline">
           {visibleLabel}
         </span>
-      </button>
+      </Button>
     )
   }
 
   return (
-    <IconButtonControl
-      data-theme-toggle="icon"
-      icon={ICONS[theme]}
-      label={label}
-      title={label}
-      onClick={cycle}
-      style={{ border: '1px solid var(--border)', background: 'var(--bg-soft)' }}
-    />
+    <Button type="button" data-theme-toggle="icon" title={label} onClick={cycle} variant="outline" size="icon" data-icon-button aria-label={label} className="text-muted-foreground">
+      <Icon name={ICONS[theme]} size="sm" />
+    </Button>
   )
 }

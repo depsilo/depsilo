@@ -1,3 +1,4 @@
+import { Toggle } from '@/components/ui/toggle'
 import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import CodeBlock from '@/portal/components/CodeBlock'
@@ -34,12 +35,12 @@ function ManagerChoice({
   onChange: (id: string) => void
 }) {
   return (
-    <button
+    <Toggle
       type="button"
-      aria-pressed={active}
+      pressed={active}
       data-active={active ? 'true' : undefined}
-      onClick={() => onChange(manager.id)}
-      className="manager-choice stripe-focus-ring active:scale-[0.97]"
+      onPressedChange={() => onChange(manager.id)}
+      className="manager-choice stripe-focus-ring active:scale-[0.97] min-h-[40px]"
       style={{
         display: 'flex',
         minWidth: 82,
@@ -68,7 +69,7 @@ function ManagerChoice({
       >
         {manager.name}
       </span>
-    </button>
+    </Toggle>
   )
 }
 

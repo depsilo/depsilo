@@ -53,7 +53,7 @@ test('cascade page shows peers, bindings, and dangling references', { tag: '@smo
   await expect(page.getByRole('tab', { name: '客户端接入' })).toBeVisible()
   await expect(page.getByRole('tab', { name: '作为父节点' })).toBeVisible()
   await expect(page.getByRole('tab', { name: '作为子节点' })).toBeVisible()
-  await expect(page.getByText('npm config set registry http://127.0.0.1:4173/npm').first()).toBeVisible()
+  await expect(page.getByText(`npm config set registry ${new URL(page.url()).origin}/npm`).first()).toBeVisible()
 
   // The generated commands follow the client-reachable address field.
   await page.getByLabel('本机访问地址').fill('http://10.0.0.9:23333')

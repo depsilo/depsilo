@@ -1,8 +1,9 @@
+import { Button } from '@/components/ui/button'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import Icon from '@/components/Icon'
-import Modal from '@/components/Modal'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import CopyButton from '@/portal/components/CopyButton'
 import { useTransientFlag } from '@/hooks/useTransientFlag'
 import { copyText } from '@/lib/clipboard'
@@ -86,7 +87,7 @@ export default function HeroAICTA() {
         </div>
 
         <div className="mt-auto flex flex-wrap items-center gap-2 pt-5">
-          <button
+          <Button variant="default"
             type="button"
             onClick={() => void handleCopy()}
             disabled={isFetching}
@@ -111,8 +112,8 @@ export default function HeroAICTA() {
               : copied
                 ? t('quickstart.copied')
                 : t('quickstart.heroCopyCta')}
-          </button>
-          <button
+          </Button>
+          <Button variant="outline"
             type="button"
             onClick={() => void handleReview()}
             disabled={isFetching}
@@ -125,7 +126,7 @@ export default function HeroAICTA() {
           >
             <Icon name="visibility" size="sm" />
             {t('quickstart.heroViewFull')}
-          </button>
+          </Button>
         </div>
 
         <span className="sr-only" aria-live="polite">
@@ -143,44 +144,42 @@ export default function HeroAICTA() {
         )}
       </article>
 
-      <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        title={t('quickstart.aiIntegrationTitle')}
-        width={720}
-      >
-        {/* min-w-0 lets the dialog's grid column shrink: the prompt is one very
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent style={{ maxWidth: 720 }} finalFocus>
+          <DialogTitle className="pr-10">{t('quickstart.aiIntegrationTitle')}</DialogTitle>
+          {/* min-w-0 lets the dialog's grid column shrink: the prompt is one very
             long pre line, and a grid item that keeps its automatic minimum
             width widened the modal to 1474px, pushed the title out of view, and
             scrolled the dialog sideways to reach the copy button. */}
-        <div className="flex min-w-0 flex-col gap-3">
-          <p className="m-0 text-[13px] leading-[1.55] text-[var(--text-muted)]">
-            {t('quickstart.aiIntegrationDesc')}
-          </p>
-          <div
-            className="flex flex-wrap items-center justify-between gap-3 rounded-md px-3 py-2"
-            style={{
-              background: 'var(--bg-soft)',
-              border: '1px solid var(--border)',
-            }}
-          >
-            <span className="min-w-0 flex-1 text-[12px] leading-[1.5] text-[var(--text-muted)]">
-              {t('quickstart.aiIntegrationHowto')}
-            </span>
-            {prompt && <CopyButton text={prompt} />}
+          <div className="flex min-w-0 flex-col gap-3">
+            <p className="m-0 text-[13px] leading-[1.55] text-[var(--text-muted)]">
+              {t('quickstart.aiIntegrationDesc')}
+            </p>
+            <div
+              className="flex flex-wrap items-center justify-between gap-3 rounded-md px-3 py-2"
+              style={{
+                background: 'var(--bg-soft)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              <span className="min-w-0 flex-1 text-[12px] leading-[1.5] text-[var(--text-muted)]">
+                {t('quickstart.aiIntegrationHowto')}
+              </span>
+              {prompt && <CopyButton text={prompt} />}
+            </div>
+            <pre
+              tabIndex={0}
+              className="code-scroll m-0 min-h-[120px] max-h-[60vh] overflow-auto whitespace-pre rounded-md p-4 font-[var(--font-mono)] text-[12px] leading-[1.55] text-[var(--text)]"
+              style={{
+                backgroundColor: 'var(--bg-soft)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              {prompt && <code>{prompt}</code>}
+            </pre>
           </div>
-          <pre
-            tabIndex={0}
-            className="code-scroll m-0 min-h-[120px] max-h-[60vh] overflow-auto whitespace-pre rounded-md p-4 font-[var(--font-mono)] text-[12px] leading-[1.55] text-[var(--text)]"
-            style={{
-              backgroundColor: 'var(--bg-soft)',
-              border: '1px solid var(--border)',
-            }}
-          >
-            {prompt && <code>{prompt}</code>}
-          </pre>
-        </div>
-      </Modal>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

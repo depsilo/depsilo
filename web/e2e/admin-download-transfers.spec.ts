@@ -47,6 +47,14 @@ test('unknown sizes remain indeterminate and long artifact names fit a mobile vi
   await page.goto('/admin/cache')
   const section = page.getByRole('region', { name: '下载任务' })
   await expect(section.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow')
+  await expect(section.getByRole('progressbar')).toHaveAttribute('data-indeterminate', '')
+  const indicator = section.locator('[data-slot="progress-indicator"]')
+  const track = section.locator('[data-slot="progress-track"]')
+  // An unknown size has no fractional completion. Its full-width pulse is
+  // visually distinct from a determinate bar, and reduced motion stays still.
+  expect((await indicator.boundingBox())!.width).toBe((await track.boundingBox())!.width)
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await expect(indicator).toHaveCSS('animation-name', 'none')
   await expect(section.getByText(/总大小未知/)).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
   const result = await new AxeBuilder({ page }).include('section[aria-label="下载任务"]').analyze()

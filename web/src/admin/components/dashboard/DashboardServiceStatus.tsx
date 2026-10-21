@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
@@ -76,7 +77,7 @@ export default function DashboardServiceStatus({
   const close = () => onOpenChange(false)
 
   return <>
-    <button
+    <Button variant="outline"
       type="button"
       data-dashboard-status
       data-query-key="now"
@@ -91,13 +92,13 @@ export default function DashboardServiceStatus({
       <Icon name={pending ? 'progress_activity' : status.health === 'healthy' ? 'check_circle' : status.health === 'unknown' ? 'help' : 'warning'} size="sm" style={{ color }} />
       <span className="min-w-0 text-left">{title}</span>
       <Icon name="expand_more" size="sm" className="shrink-0 text-[var(--text-soft)]" />
-    </button>
+    </Button>
     <DashboardInfoDialog
       open={open}
       onClose={close}
       title={t('overview.problemsTitle')}
       width={640}
-      footer={<button type="button" onClick={onRefresh} aria-busy={refreshing || undefined} className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-2 rounded-md border border-[var(--border)] px-3 text-[14px] hover:bg-[var(--bg-hover)]"><Icon name="refresh" size="sm" />{t('overview.refreshStatus')}</button>}
+      footer={<Button variant="outline" type="button" onClick={onRefresh} aria-busy={refreshing || undefined} className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-2 rounded-md border border-[var(--border)] px-3 text-[14px] hover:bg-[var(--bg-hover)]"><Icon name="refresh" size="sm" />{t('overview.refreshStatus')}</Button>}
     >
       <div role="status" className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[14px] font-semibold" style={{ color }}>{title}</p>

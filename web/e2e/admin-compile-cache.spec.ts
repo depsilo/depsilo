@@ -55,6 +55,10 @@ test('creates a scoped credential and clears both one-time client configurations
   await expect(page.getByText('64.0 MB', { exact: true }).first()).toBeVisible()
   await expect(page.getByText('42 / 500,000', { exact: true })).toBeVisible()
   await expect(page.getByText('314', { exact: true })).toBeVisible()
+  const capacity = page.getByRole('meter', { name: 'Capacity usage' })
+  await expect(capacity).toHaveAttribute('aria-valuenow', String(enabledStatus.stats.size_bytes))
+  await expect(capacity).toHaveAttribute('aria-valuemax', String(enabledStatus.stats.max_bytes))
+  await expect(capacity).toHaveAttribute('aria-valuetext', '64.0 MB / 1.0 GB')
 
   await page.getByRole('button', { name: 'Create credential' }).click()
   const createDialog = page.getByRole('dialog', { name: 'Create credential' })

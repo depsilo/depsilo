@@ -1,3 +1,8 @@
+import { Toggle } from '@/components/ui/toggle'
+import { Input } from '@/components/ui/input'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Skeleton } from '@/components/ui/skeleton'
 // Monitor — the portal's health page.
 //
 // Audience: an End User whose install is slow or failing, coming here
@@ -15,9 +20,9 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { statsApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
-import EmptyState from '@/components/EmptyState'
+
 import Icon from '@/components/Icon'
-import InlineNotice from '@/components/InlineNotice'
+
 import QueryErrorState from '@/components/QueryErrorState'
 import StatusDot from '@/components/StatusDot'
 import { UpstreamGroupedPanel, type UpstreamItem } from '@/components/UpstreamCard'
@@ -164,7 +169,7 @@ function SearchPill({
         <circle cx="11" cy="11" r="7" />
         <path d="M21 21l-4.3-4.3" />
       </svg>
-      <input
+      <Input className="h-9 rounded-none border-0 px-0 shadow-none focus-visible:ring-0 dark:bg-transparent"
         ref={ref}
         type="text"
         value={value}
@@ -185,13 +190,12 @@ function SearchPill({
           background: 'transparent',
           border: 'none',
           outline: 'none',
-          fontSize: 13,
           fontFamily: 'var(--font-mono)',
           color: 'var(--text)',
         }}
       />
       {value ? (
-        <button
+        <Button variant="ghost" size="icon"
           type="button"
           onClick={() => {
             onChange('')
@@ -220,7 +224,7 @@ function SearchPill({
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
             <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" />
           </svg>
-        </button>
+        </Button>
       ) : (
         <kbd
           aria-hidden
@@ -454,13 +458,13 @@ export default function MonitorPage() {
                   the page offers the reduction instead of re-sorting a
                   directory operators already learned the order of. */}
               {problemCount > 0 && (
-                <button
+                <Toggle
                   type="button"
-                  aria-pressed={problemsOnly}
+                  pressed={problemsOnly}
                   data-active={problemsOnly ? 'true' : undefined}
                   title={t('monitor.onlyProblemsHint')}
-                  onClick={() => setProblemsOnly(current => !current)}
-                  className="portal-monitor-filter stripe-focus-ring"
+                  onPressedChange={() => setProblemsOnly(current => !current)}
+                  className="portal-monitor-filter stripe-focus-ring min-h-[40px]"
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -480,7 +484,7 @@ export default function MonitorPage() {
                   <Icon name="tune" size="sm" />
                   {t('monitor.onlyProblems')}
                   <span className="num" aria-hidden="true">{problemCount}</span>
-                </button>
+                </Toggle>
               )}
             </div>
           </div>
@@ -526,9 +530,9 @@ export default function MonitorPage() {
             <span className="sr-only">{t('monitor.loading')}</span>
             <div aria-hidden="true" className="contents">
               {[...Array(4)].map((_, index) => (
-                <div
+                <Skeleton
                   key={index}
-                  className="h-32 animate-pulse rounded-lg"
+                  className="h-32 rounded-lg"
                   style={{ background: 'var(--bg-soft)' }}
                 />
               ))}
@@ -542,31 +546,27 @@ export default function MonitorPage() {
         ) : (
           <>
             {statsQuery.isRefetchError && statsQuery.data && (
-              <InlineNotice tone="warning">
+              <Alert variant={"warning"}><AlertDescription>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <span>{t('monitor.refreshUnavailable')}</span>
                   <Button type="button" variant="outline" size="sm" onClick={() => { void statsQuery.refetch() }}>
                     {t('common.retry')}
                   </Button>
                 </div>
-              </InlineNotice>
+              </AlertDescription></Alert>
             )}
             {upstreamItems.length > 0 && latencyQuery.isError && (
-              <InlineNotice tone="warning">
+              <Alert variant={"warning"}><AlertDescription>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <span>{t('monitor.historyUnavailable')}</span>
                   <Button type="button" variant="outline" size="sm" onClick={() => { void latencyQuery.refetch() }}>
                     {t('common.retry')}
                   </Button>
                 </div>
-              </InlineNotice>
+              </AlertDescription></Alert>
             )}
             {upstreamItems.length === 0 ? (
-              <EmptyState
-                icon="dns"
-                title={t('monitor.noUpstreams')}
-                hint={t('monitor.noUpstreamsHint')}
-                action={(
+              <Empty style={{ minHeight: 160 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"dns"} size="sm" /></EmptyMedia><EmptyTitle>{t('monitor.noUpstreams')}</EmptyTitle>{t('monitor.noUpstreamsHint') && <EmptyDescription>{t('monitor.noUpstreamsHint')}</EmptyDescription>}</EmptyHeader><EmptyContent>{(
                   <Link
                     to="/admin/upstreams"
                     className="app-button stripe-focus-ring inline-flex min-h-10 items-center justify-center rounded-sm px-3 text-[13px] font-[500] no-underline"
@@ -578,14 +578,9 @@ export default function MonitorPage() {
                   >
                     {t('monitor.configureUpstreams')}
                   </Link>
-                )}
-              />
+                )}</EmptyContent></Empty>
             ) : q !== '' && visibleItems.length === 0 ? (
-              <EmptyState
-                icon="search"
-                title={t('monitor.noMatch', { q: summarizedQuery })}
-                hint={t('monitor.noMatchHint')}
-              />
+              <Empty style={{ minHeight: 160 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"search"} size="sm" /></EmptyMedia><EmptyTitle>{t('monitor.noMatch', { q: summarizedQuery })}</EmptyTitle>{t('monitor.noMatchHint') && <EmptyDescription>{t('monitor.noMatchHint')}</EmptyDescription>}</EmptyHeader></Empty>
             ) : (
               <UpstreamGroupedPanel upstreams={visibleItems} variant="cards" minColumnWidth={380} />
             )}

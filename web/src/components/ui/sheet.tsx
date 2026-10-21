@@ -1,7 +1,9 @@
 import { Dialog as SheetPrimitive } from '@base-ui/react/dialog'
 import { X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 // shadcn/ui Sheet — the responsive edge panel.
 function Sheet(props: SheetPrimitive.Root.Props) {
@@ -55,6 +57,7 @@ function SheetContent({
   side?: keyof typeof sideClasses
   showCloseButton?: boolean
 }) {
+  const { t } = useTranslation()
   return (
     <SheetPortal>
       <SheetOverlay />
@@ -74,14 +77,20 @@ function SheetContent({
         >
           {children}
           {showCloseButton && (
-            <SheetPrimitive.Close
-              data-slot="sheet-close"
-              className="absolute top-3 right-3"
-              render={<Button variant="ghost" size="icon-sm" />}
-            >
-              <X aria-hidden="true" />
-              <span className="sr-only">Close</span>
-            </SheetPrimitive.Close>
+            <Tooltip>
+              <TooltipTrigger render={
+                <SheetPrimitive.Close
+                  data-slot="sheet-close"
+                  data-icon-button
+                  aria-label={t('common.close')}
+                  className="absolute top-2 right-2"
+                  render={<Button variant="ghost" size="icon" />}
+                />
+              }>
+                <X aria-hidden="true" />
+              </TooltipTrigger>
+              <TooltipContent>{t('common.close')}</TooltipContent>
+            </Tooltip>
           )}
         </SheetPrimitive.Popup>
       </SheetPrimitive.Viewport>

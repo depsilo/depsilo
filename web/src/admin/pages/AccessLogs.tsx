@@ -1,3 +1,9 @@
+import { Input } from '@/components/ui/input'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { TableContainer, Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery } from '@tanstack/react-query'
@@ -8,13 +14,10 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
-import EmptyState from '@/components/EmptyState'
+
 import QueryErrorState from '@/components/QueryErrorState'
-import SelectV2 from '@/components/Select'
-import TableViewport from '@/components/TableViewport'
-import DrawerV2 from '@/components/Drawer'
-import InlineNotice from '@/components/InlineNotice'
-import IconButton from '@/components/IconButton'
+import { NativeSelect } from '@/components/ui/native-select'
+
 import AdminPage from '@/admin/components/AdminPage'
 import AdminPagination from '@/admin/components/AdminPagination'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
@@ -67,7 +70,7 @@ function canonicalizeSearchParams(current: URLSearchParams): URLSearchParams {
   return next
 }
 
-export default function AccessLogsV2() {
+export default function AccessLogs() {
   const { t } = useTranslation()
   const toast = useAppToast()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -213,44 +216,44 @@ export default function AccessLogsV2() {
       >
         <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-sm px-3 py-1.5" style={{ border: '1px solid var(--border)' }}>
           <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
-          <input
-            aria-label={t('logs.searchLabel')}
-            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]"
-            style={{ color: 'var(--text)' }}
-            placeholder={t('logs.searchPlaceholder')}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+            <Input
+              aria-label={t('logs.searchLabel')}
+              className={"min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]" + ' h-9 rounded-none border-0 px-0 shadow-none focus-visible:ring-0 dark:bg-transparent'}
+              style={{ color: 'var(--text)' }}
+              placeholder={t('logs.searchPlaceholder')}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:contents">
-          <SelectV2
-            className="min-h-10 sm:w-auto"
-            aria-label={t('audit.ecosystem')}
-            value={adapterType}
-            onChange={(event) => updateParams((next) => {
-              if (event.target.value === 'all') next.delete('ecosystem')
-              else next.set('ecosystem', event.target.value)
-            })}
-          >
-            <option value="all">{t('all')}</option>
-            {operatorEcosystems.map(ecosystem => <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>)}
-          </SelectV2>
+            <NativeSelect
+              className="min-h-10 sm:w-auto"
+              aria-label={t('audit.ecosystem')}
+              value={adapterType}
+              onChange={(event) => updateParams((next) => {
+                if (event.target.value === 'all') next.delete('ecosystem')
+                else next.set('ecosystem', event.target.value)
+              })}
+            >
+              <option value="all">{t('all')}</option>
+              {operatorEcosystems.map(ecosystem => <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>)}
+            </NativeSelect>
 
-          <SelectV2
-            className="min-h-10 sm:w-auto"
-            aria-label={t('audit.result')}
-            value={hitFilter}
-            onChange={(event) => updateParams((next) => {
-              if (event.target.value === 'all') next.delete('result')
-              else next.set('result', event.target.value)
-            })}
-          >
-            <option value="all">{t('all')}</option>
-            <option value="hit">{t('logs.hit')}</option>
-            <option value="miss">{t('logs.miss')}</option>
-            <option value="unknown">{t('logs.unknown')}</option>
-          </SelectV2>
+            <NativeSelect
+              className="min-h-10 sm:w-auto"
+              aria-label={t('audit.result')}
+              value={hitFilter}
+              onChange={(event) => updateParams((next) => {
+                if (event.target.value === 'all') next.delete('result')
+                else next.set('result', event.target.value)
+              })}
+            >
+              <option value="all">{t('all')}</option>
+              <option value="hit">{t('logs.hit')}</option>
+              <option value="miss">{t('logs.miss')}</option>
+              <option value="unknown">{t('logs.unknown')}</option>
+            </NativeSelect>
         </div>
 
         <Button type="submit" variant="default" size="sm" className="min-h-10 self-start sm:min-h-0">
@@ -273,80 +276,94 @@ export default function AccessLogsV2() {
         <div className="space-y-3">
           {data && isRefetchError && <StaleDataNotice onRefresh={() => { void refetch() }} />}
           {items.length === 0 ? (
-            <EmptyState icon="receipt_long" title={t('logs.noLogs')} hint={t('logs.noLogsHint')} minHeight={240} />
+            <Empty style={{ minHeight: 240 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"receipt_long"} size="sm" /></EmptyMedia><EmptyTitle>{t('logs.noLogs')}</EmptyTitle>{t('logs.noLogsHint') && <EmptyDescription>{t('logs.noLogsHint')}</EmptyDescription>}</EmptyHeader></Empty>
           ) : (
-            <TableViewport label={t('logs.table')} minWidth={860}>
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+            <TableContainer label={t('logs.table')} minWidth={860}>
+          <Table className="w-full text-[12px]">
+            <TableHeader>
+              <TableRow style={{ borderBottom: '1px solid var(--border)' }}>
                 {[t('logs.time'), t('type'), t('logs.packageName'), t('logs.result'), t('logs.latency'), t('logs.upstream'), t('logs.clientIp'), t('actions')].map(h => (
-                  <th key={h} scope="col" className="text-left text-[11px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>
+                  <TableHead key={h} scope="col" className="text-left text-[11px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>
                     {h}
-                  </th>
+                  </TableHead>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {items.map((row: AccessLog) => (
-                <tr
+                <TableRow
                   key={row.id}
                   className="transition-colors duration-75 hover:bg-[var(--bg-soft)]"
                   style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
                 >
                   {/* Time */}
-                  <td className="py-2 px-3 pl-0 whitespace-nowrap">
+                  <TableCell className="py-2 px-3 pl-0 whitespace-nowrap">
                     <span className="font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{formatTime(row.created_at)}</span>
-                  </td>
+                  </TableCell>
 
                   {/* Ecosystem */}
-                  <td className="py-2 px-3">
+                  <TableCell className="py-2 px-3">
                     <div className="flex items-center gap-1.5">
                       {isAdminEcosystem(row.adapter_type) && <EcosystemIcon type={row.adapter_type} size={13} />}
                       <span className="text-[11px] uppercase" style={{ color: 'var(--text)' }}>{row.adapter_type}</span>
                     </div>
-                  </td>
+                  </TableCell>
 
                   {/* Package name + cache key */}
-                  <td className="py-2 px-3 max-w-[260px]">
+                  <TableCell className="py-2 px-3 max-w-[260px]">
                     <span className="font-mono truncate block" style={{ color: 'var(--text)' }}>{row.package_name || '-'}</span>
                     <span className="font-mono text-[10px] truncate block" style={{ color: 'var(--text-soft)' }} title={row.cache_key}>{row.cache_key}</span>
-                  </td>
+                  </TableCell>
 
                   {/* Result */}
-                  <td className="py-2 px-3">
+                  <TableCell className="py-2 px-3">
                     <span title={t(cacheResult(row) === 'hit' ? 'logs.hitHint' : cacheResult(row) === 'miss' ? 'logs.missHint' : 'logs.unknownHint')}>
                       <Badge variant={cacheResult(row) === 'hit' ? 'success' : 'neutral'}>
                         {cacheResult(row) === 'hit' ? 'HIT' : cacheResult(row) === 'miss' ? 'MISS' : 'UNKNOWN'}
                       </Badge>
                       <span className="sr-only">{t(cacheResult(row) === 'hit' ? 'logs.hitHint' : cacheResult(row) === 'miss' ? 'logs.missHint' : 'logs.unknownHint')}</span>
                     </span>
-                  </td>
+                  </TableCell>
 
                   {/* Latency */}
-                  <td className="py-2 px-3 whitespace-nowrap">
+                  <TableCell className="py-2 px-3 whitespace-nowrap">
                     <span className="font-mono tabular-nums" style={{ color: latencyColor(row.latency_ms) }}>
                       {row.latency_ms}ms
                     </span>
-                  </td>
+                  </TableCell>
 
                   {/* Upstream */}
-                  <td className="py-2 px-3">
+                  <TableCell className="py-2 px-3">
                     <span style={{ color: 'var(--text-soft)' }}>{row.upstream || '-'}</span>
-                  </td>
+                  </TableCell>
 
                   {/* Client IP */}
-                  <td className="py-2 px-3">
+                  <TableCell className="py-2 px-3">
                     <span className="font-mono" style={{ color: 'var(--text-soft)' }}>{row.client_ip}</span>
-                  </td>
+                  </TableCell>
 
-                  <td className="py-2 px-3 text-right">
-                    <IconButton icon="chevron_right" label={t('logs.viewDetails')} onClick={() => setDetailId(row.id)} />
-                  </td>
-                </tr>
+                  <TableCell className="py-2 px-3 text-right">
+                    <Tooltip>
+                      <TooltipTrigger render={
+                        <Button
+                          onClick={() => setDetailId(row.id)}
+                          variant="ghost"
+                          size="icon"
+                          data-icon-button
+                          aria-label={t('logs.viewDetails')}
+                          style={{ color: 'var(--text-soft)' }}
+                        />
+                      }>
+                        <Icon name={"chevron_right"} size="sm" />
+                      </TooltipTrigger>
+                      <TooltipContent>{t('logs.viewDetails')}</TooltipContent>
+                    </Tooltip>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-            </TableViewport>
+            </TableBody>
+          </Table>
+            </TableContainer>
           )}
         </div>
       )}
@@ -354,22 +371,35 @@ export default function AccessLogsV2() {
       <AdminPagination page={page} pageSize={50} total={total} onPageChange={setPage} />
       </div>
 
-      <DrawerV2
-        open={detailId !== null}
-        onOpenChange={(open) => { if (!open) setDetailId(null) }}
-        title={t('logs.detailTitle')}
-      >
-        <div className="flex h-full flex-col gap-5 overflow-y-auto p-5 sm:p-6">
-          <div className="flex items-start justify-between gap-4 pr-10">
-            <div>
-              <p className="font-mono text-[11px] uppercase" style={{ color: 'var(--text-subtle)' }}>{t('logs.detailTitle')}</p>
-              <h2 className="mt-1 break-words font-mono text-[16px]" style={{ color: 'var(--text)' }}>{detailQuery.data?.data.package_name || t('logs.loadingDetail')}</h2>
+      <Sheet open={detailId !== null} onOpenChange={(open) => { if (!open) setDetailId(null) }} modal>
+        <SheetContent side="left" finalFocus>
+          <SheetTitle className="sr-only">{t('logs.detailTitle')}</SheetTitle>
+          <div className="flex h-full flex-col gap-5 overflow-y-auto p-5 sm:p-6">
+            <div className="flex items-start justify-between gap-4 pr-10">
+              <div>
+                <p className="font-mono text-[11px] uppercase" style={{ color: 'var(--text-subtle)' }}>{t('logs.detailTitle')}</p>
+                <h2 className="mt-1 break-words font-mono text-[16px]" style={{ color: 'var(--text)' }}>{detailQuery.data?.data.package_name || t('logs.loadingDetail')}</h2>
+              </div>
+              {detailQuery.data?.data && <Tooltip>
+                <TooltipTrigger render={
+                  <Button
+                    onClick={() => { void copyDiagnosticSummary(detailQuery.data!.data) }}
+                    variant="ghost"
+                    size="icon"
+                    data-icon-button
+                    aria-label={t('logs.copySummary')}
+                    style={{ color: 'var(--text-soft)' }}
+                  />
+                }>
+                  <Icon name={"content_copy"} size="sm" />
+                </TooltipTrigger>
+                <TooltipContent>{t('logs.copySummary')}</TooltipContent>
+              </Tooltip>}
             </div>
-            {detailQuery.data?.data && <IconButton icon="content_copy" label={t('logs.copySummary')} onClick={() => { void copyDiagnosticSummary(detailQuery.data!.data) }} />}
+            {detailQuery.isPending ? <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div> : detailQuery.isError ? <Alert variant={"destructive"}><AlertDescription>{getApiError(detailQuery.error).message}</AlertDescription></Alert> : detailQuery.data?.data && <DiagnosticDetail detail={detailQuery.data.data} t={t} />}
           </div>
-          {detailQuery.isPending ? <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div> : detailQuery.isError ? <InlineNotice tone="danger">{getApiError(detailQuery.error).message}</InlineNotice> : detailQuery.data?.data && <DiagnosticDetail detail={detailQuery.data.data} t={t} />}
-        </div>
-      </DrawerV2>
+        </SheetContent>
+      </Sheet>
     </AdminPage>
   )
 }

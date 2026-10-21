@@ -87,6 +87,8 @@ test('a pending mutation locks every dialog close path until completion', async 
   await expect(dialog.locator('[data-icon-button]')).toBeDisabled()
   await page.keyboard.press('Escape')
   await expect(dialog).toBeVisible()
+  await page.mouse.click(2, 2)
+  await expect(dialog).toBeVisible()
 
   release({ id: 2, username: 'operator', role: 'readonly', enabled: true })
   await expect(dialog).toBeHidden()

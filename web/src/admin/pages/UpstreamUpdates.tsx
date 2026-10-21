@@ -1,3 +1,8 @@
+import { Input } from '@/components/ui/input'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { TableContainer, Table, TableCaption, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
@@ -9,12 +14,12 @@ import { standardUpstreamEcosystems } from '@/admin/operatorEcosystems'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import EcosystemIcon from '@/components/EcosystemIcon'
-import EmptyState from '@/components/EmptyState'
+
 import Icon from '@/components/Icon'
-import InlineNotice from '@/components/InlineNotice'
+
 import QueryErrorState from '@/components/QueryErrorState'
-import Select from '@/components/Select'
-import TableViewport from '@/components/TableViewport'
+import { NativeSelect } from '@/components/ui/native-select'
+
 import { adminApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
 import {
@@ -314,11 +319,11 @@ export default function UpstreamUpdates() {
             style={{ background: 'var(--bg-card)' }}
           >
             <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
-            <input
+            <Input
               type="text"
               aria-label={t('upstreamUpdates.searchLabel')}
               placeholder={t('upstreamUpdates.searchPlaceholder')}
-              className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]"
+              className={"min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]" + ' h-9 rounded-none border-0 px-0 shadow-none focus-visible:ring-0 dark:bg-transparent'}
               style={{ color: 'var(--text)' }}
               value={packageDraft}
               onChange={event => setPackageDraft(event.target.value)}
@@ -332,7 +337,7 @@ export default function UpstreamUpdates() {
           </div>
 
           <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center">
-            <Select
+            <NativeSelect
               aria-label={t('upstreamUpdates.filterEcosystem')}
               className="min-h-10 sm:w-[160px]"
               value={ecosystemFilter}
@@ -342,8 +347,8 @@ export default function UpstreamUpdates() {
               {standardUpstreamEcosystems.map(ecosystem => (
                 <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>
               ))}
-            </Select>
-            <Select
+            </NativeSelect>
+            <NativeSelect
               aria-label={t('upstreamUpdates.filterResult')}
               className="min-h-10 sm:w-[150px]"
               value={resultFilter}
@@ -353,7 +358,7 @@ export default function UpstreamUpdates() {
               {updateResults.map(result => (
                 <option key={result} value={result}>{resultLabels[result]}</option>
               ))}
-            </Select>
+            </NativeSelect>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -409,10 +414,10 @@ export default function UpstreamUpdates() {
           <div aria-busy="true" className="space-y-3 py-2">
             <span className="sr-only">{t('loading')}</span>
             {[...Array(5)].map((_, index) => (
-              <div
+              <Skeleton
                 key={index}
                 aria-hidden="true"
-                className="h-14 animate-pulse rounded-md"
+                className="h-14 rounded-md"
                 style={{ background: 'var(--bg-soft)' }}
               />
             ))}
@@ -423,21 +428,17 @@ export default function UpstreamUpdates() {
             onRetry={() => { void query.refetch() }}
           />
         ) : events.length === 0 ? (
-          <EmptyState
-            icon={hasFilters ? 'search' : 'history'}
-            title={hasFilters
+          <Empty style={{ minHeight: 240 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={hasFilters ? 'search' : 'history'} size="sm" /></EmptyMedia><EmptyTitle>{hasFilters
               ? t('upstreamUpdates.noMatches')
-              : t('upstreamUpdates.emptyTitle')}
-            hint={hasFilters
+              : t('upstreamUpdates.emptyTitle')}</EmptyTitle>{hasFilters
               ? t('upstreamUpdates.noMatchesHint')
-              : t('upstreamUpdates.emptyHint')}
-            minHeight={240}
-            action={hasFilters ? (
+              : t('upstreamUpdates.emptyHint') && <EmptyDescription>{hasFilters
+              ? t('upstreamUpdates.noMatchesHint')
+              : t('upstreamUpdates.emptyHint')}</EmptyDescription>}</EmptyHeader><EmptyContent>{hasFilters ? (
               <Button type="button" variant="outline" className="min-h-10" onClick={clearFilters}>
                 {t('upstreamUpdates.clearFilters')}
               </Button>
-            ) : undefined}
-          />
+            ) : undefined}</EmptyContent></Empty>
         ) : (
           <>
             <ul
@@ -478,11 +479,11 @@ export default function UpstreamUpdates() {
             </ul>
 
             <div className="hidden md:block">
-              <TableViewport label={t('upstreamUpdates.tableLabel')} minWidth={860}>
-                <table data-upstream-update-table className="w-full text-[12px]">
-                  <caption className="sr-only">{t('upstreamUpdates.tableLabel')}</caption>
-                  <thead>
-                    <tr className="border-b border-[var(--border)] text-left">
+              <TableContainer label={t('upstreamUpdates.tableLabel')} minWidth={860}>
+                <Table data-upstream-update-table className="w-full text-[12px]">
+                  <TableCaption className="sr-only">{t('upstreamUpdates.tableLabel')}</TableCaption>
+                  <TableHeader>
+                    <TableRow className="border-b border-[var(--border)] text-left">
                       {[
                         t('upstreamUpdates.time'),
                         t('upstreamUpdates.source'),
@@ -490,61 +491,61 @@ export default function UpstreamUpdates() {
                         t('upstreamUpdates.outcome'),
                         t('upstreamUpdates.latestLatency'),
                       ].map(heading => (
-                        <th
+                        <TableHead
                           key={heading}
                           scope="col"
                           className="px-3 py-2 text-[11px] font-[600] first:pl-0"
                           style={{ color: 'var(--text-muted)' }}
                         >
                           {heading}
-                        </th>
+                        </TableHead>
                       ))}
-                    </tr>
-                  </thead>
-                  <tbody>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {events.map(event => (
-                      <tr
+                      <TableRow
                         key={event.id}
                         className="border-b border-[var(--border)] transition-colors duration-75 hover:bg-[var(--bg-soft)]"
                       >
-                        <td className="w-[290px] px-3 py-3 pl-0 align-top">
+                        <TableCell className="w-[290px] px-3 py-3 pl-0 align-top">
                           {observation(event)}
-                        </td>
-                        <td className="max-w-[220px] px-3 py-3 align-top" style={{ color: 'var(--text-muted)' }}>
+                        </TableCell>
+                        <TableCell className="max-w-[220px] px-3 py-3 align-top" style={{ color: 'var(--text-muted)' }}>
                           {source(event)}
-                        </td>
-                        <td
+                        </TableCell>
+                        <TableCell
                           className="max-w-[260px] px-3 py-3 text-left align-top font-mono font-[500]"
                           style={{ color: 'var(--text)' }}
                         >
                           <span className="block break-words">{event.package}</span>
-                        </td>
-                        <td className="max-w-[360px] px-3 py-3 align-top">
+                        </TableCell>
+                        <TableCell className="max-w-[360px] px-3 py-3 align-top">
                           <div className="flex min-w-0 items-start gap-2">
                             {resultBadge(event.result)}
                             <span className="min-w-0 leading-[1.5]" style={{ color: 'var(--text-soft)' }}>
                               {detailLabels[event.detail] ?? event.detail}
                             </span>
                           </div>
-                        </td>
-                        <td
+                        </TableCell>
+                        <TableCell
                           className="whitespace-nowrap px-3 py-3 align-top font-mono tabular-nums"
                           style={{ color: latencyColor(event.latency_ms) }}
                         >
                           {event.latency_ms}ms
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
-              </TableViewport>
+                  </TableBody>
+                </Table>
+              </TableContainer>
             </div>
 
             <div className="space-y-3">
               {query.isFetchNextPageError && (
-                <InlineNotice tone="danger">
+                <Alert variant={"destructive"}><AlertDescription>
                   {t('upstreamUpdates.nextPageError')}
-                </InlineNotice>
+                </AlertDescription></Alert>
               )}
               {query.hasNextPage && (
                 <div className="flex justify-center">

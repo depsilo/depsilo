@@ -1,3 +1,5 @@
+import './PortalApp.css'
+import { Button } from '@/components/ui/button'
 import { useEffect } from 'react'
 import { Routes, Route, Link, NavLink } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
@@ -16,7 +18,7 @@ import { useTransientState } from '@/hooks/useTransientFlag'
 import { resolveServiceOrigin } from '@/lib/packageManagerConfig'
 
 const QuickStart = lazyRoute(() => import('@/portal/pages/QuickStart'))
-const MonitorV2 = lazyRoute(() => import('@/portal/pages/Monitor'))
+const Monitor = lazyRoute(() => import('@/portal/pages/Monitor'))
 
 interface PortalStats {
   service: { status: string; version: string }
@@ -46,7 +48,7 @@ function EndpointPill() {
 
   return (
     <>
-      <button
+      <Button variant="ghost"
         type="button"
         onClick={handleCopy}
         className="portal-header-control portal-endpoint-pill hit-extend stripe-focus-ring"
@@ -85,7 +87,7 @@ function EndpointPill() {
             <Icon name="check" size="sm" />
           </span>
         </span>
-      </button>
+      </Button>
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
         {copyState === 'copied'
           ? t('portal.endpointCopied')
@@ -156,7 +158,7 @@ function NavTab({ to, label, compactLabel }: NavTabProps) {
   )
 }
 
-export default function PortalAppV2() {
+export default function PortalApp() {
   const { t } = useTranslation()
 
   // Marks the document as the brand surface for index.css. Base UI dialogs and
@@ -329,7 +331,7 @@ export default function PortalAppV2() {
             <div className="portal-header-group portal-service-group" data-portal-control-group="service">
               <EndpointPill />
               {isError ? (
-                <button
+                <Button variant="ghost"
                   type="button"
                   className="portal-header-control portal-status-pill stripe-focus-ring"
                   data-status={statusTone}
@@ -339,7 +341,7 @@ export default function PortalAppV2() {
                   onClick={() => { void refetch() }}
                 >
                   {statusContent}
-                </button>
+                </Button>
               ) : (
                 <span
                   className="portal-header-control portal-status-pill"
@@ -383,7 +385,7 @@ export default function PortalAppV2() {
       <main style={{ maxWidth: 'var(--portal-width)', margin: '0 auto', padding: 'clamp(22px, 2.4vw, 40px) var(--portal-gutter) 48px' }}>
         <Routes>
           <Route index element={<QuickStart pytorchIndexPath={pytorchIndexPath} />} />
-          <Route path="monitor" element={<MonitorV2 />} />
+          <Route path="monitor" element={<Monitor />} />
           <Route path="*" element={<RouteNotFound area="portal" />} />
         </Routes>
       </main>

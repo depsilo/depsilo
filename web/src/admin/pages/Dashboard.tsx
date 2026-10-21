@@ -1,3 +1,7 @@
+import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -267,7 +271,7 @@ export default function Dashboard() {
             <Icon name="history" size="sm" />
             {t('overview.updatedAt', { time: lastUpdatedLabel })}
           </span>
-          <button
+          <Button variant="outline"
             type="button"
             onClick={refreshAll}
             aria-busy={overviewQuery.isFetching || nowQuery.isFetching || undefined}
@@ -276,7 +280,7 @@ export default function Dashboard() {
           >
             <Icon name="refresh" size="sm" />
             {t('overview.refresh')}
-          </button>
+          </Button>
         </div>
       )}
     >
@@ -290,7 +294,7 @@ export default function Dashboard() {
           {!showConnectionGuide && status.health === 'unavailable' && (
             <p role="alert" className="flex flex-wrap items-center gap-x-3 text-[13px] text-[var(--dash-danger)]">
               {t('overview.connectionBlocked')}
-              <button type="button" className="dash-focus min-h-[40px] rounded-md font-medium" onClick={() => setShowProblems(true)}>{t('overview.viewStatus')}</button>
+              <Button variant="ghost" type="button" className="dash-focus min-h-[40px] rounded-md font-medium" onClick={() => setShowProblems(true)}>{t('overview.viewStatus')}</Button>
             </p>
           )}
           {!showConnectionGuide && usage === 'active' && overview?.window?.hit_requests === 0 && (
@@ -303,8 +307,13 @@ export default function Dashboard() {
             <p className="min-w-0 text-[15px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
               {t('overview.periodTitle')} · {t(RANGE_KEY[overviewRange])}
             </p>
-            <div
-              role="group"
+            <ToggleGroup
+              value={[range]}
+              onValueChange={values => {
+                const next = DASHBOARD_RANGES.find(value => value === values[0])
+                if (next) handleRangeChange(next)
+              }}
+              spacing={0}
               aria-label={t('overview.rangeGroup')}
               className="flex shrink-0 items-center overflow-hidden rounded-md border"
               style={{ borderColor: 'var(--dash-border)' }}
@@ -312,12 +321,10 @@ export default function Dashboard() {
               {DASHBOARD_RANGES.map(value => {
                 const active = range === value
                 return (
-                  <button
+                  <ToggleGroupItem
                     key={value}
-                    type="button"
-                    onClick={() => handleRangeChange(value)}
-                    aria-pressed={active}
-                    className="dash-focus min-h-[40px] px-3 text-[13px] font-medium transition-colors duration-150"
+                    value={value}
+                    className="dash-focus min-h-[40px] rounded-none px-3 text-[13px] font-medium transition-colors duration-150"
                     style={{
                       background: active ? 'var(--dash-accent-soft)' : 'transparent',
                       color: active ? 'var(--dash-accent)' : 'var(--dash-muted)',
@@ -325,10 +332,10 @@ export default function Dashboard() {
                     }}
                   >
                     {t(RANGE_KEY[value])}
-                  </button>
+                  </ToggleGroupItem>
                 )
               })}
-            </div>
+            </ToggleGroup>
           </div>
 
           {overviewStale && <p role="status" className="rounded-md bg-[var(--dash-warn-soft)] px-3 py-2 text-[13px] text-[var(--dash-warn)]">{t('overview.overviewStale', { range: t(RANGE_KEY[overviewRange]) })}</p>}
@@ -336,10 +343,10 @@ export default function Dashboard() {
           {usage === 'empty-period' && !swapped && !overviewStale && (
             <div data-dashboard-empty-period className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-md bg-[var(--dash-soft)] px-4 py-2">
               <p className="text-[14px]">{t('overview.emptyPeriod')} <span className="text-[13px] text-[var(--dash-muted)]">{t('overview.emptyPeriodHint')}</span></p>
-              {range !== '30d' && <button className="dash-focus min-h-[40px] rounded-md text-[13px] font-medium text-[var(--dash-accent)]" onClick={() => handleRangeChange('30d')}>{t('overview.expandRange')}</button>}
+              {range !== '30d' && <Button variant="ghost" className="dash-focus min-h-[40px] rounded-md text-[13px] font-medium text-[var(--dash-accent)]" onClick={() => handleRangeChange('30d')}>{t('overview.expandRange')}</Button>}
             </div>
           )}
-          <div className="dashboard-cache-card dash-card min-w-0">
+          <Card className="dashboard-cache-card gap-0 p-0">
           {overviewInitialError ? (
             <div className="p-5" data-dashboard-statistics-error>
               <QueryErrorState message={overviewError?.status === 403 ? t('common.permissionDenied') : t('overview.statisticsUnavailable')} onRetry={() => { void overviewQuery.refetch() }} />
@@ -350,8 +357,8 @@ export default function Dashboard() {
             <CacheStorageOverview runtime={runtimeQuery.data} runtimePending={runtimePending} />
             <Link className="dash-focus ml-auto inline-flex min-h-[40px] shrink-0 items-center gap-1 rounded-md px-3 text-[13px] font-medium text-[var(--dash-accent)] no-underline" to={getAdminRouteHref('cache')}>{t('dashboard.manageCache')}<Icon name="chevron_right" size="sm" /></Link>
           </div>
-          {runtimeQuery.isError && <p role="status" className="px-5 pb-3 text-[13px] text-[var(--dash-warn)]">{t(runtimeQuery.data ? 'overview.resourcesStale' : 'overview.resourcesUnavailable')} <button className="dash-focus min-h-[40px] rounded-md px-2 font-medium" onClick={() => { void runtimeQuery.refetch() }}>{t('overview.refresh')}</button></p>}
-          </div>
+          {runtimeQuery.isError && <p role="status" className="px-5 pb-3 text-[13px] text-[var(--dash-warn)]">{t(runtimeQuery.data ? 'overview.resourcesStale' : 'overview.resourcesUnavailable')} <Button variant="ghost" className="dash-focus min-h-[40px] rounded-md px-2 font-medium" onClick={() => { void runtimeQuery.refetch() }}>{t('overview.refresh')}</Button></p>}
+          </Card>
           </div>
           {!overviewInitialError && <TrafficOverview now={now} nowPending={nowPending} nowError={nowInitialError} nowStale={nowStale} periodPending={overviewPending} period={overview?.window} rangeStart={overview?.range?.start} coverage={overview?.origin_coverage} />}
           {/* Trends and the recent-request tail are independent queries, so a
@@ -361,16 +368,16 @@ export default function Dashboard() {
           <div className="dashboard-lower-grid flex min-w-0 flex-col gap-4">
             <div data-dashboard-trends-column className="flex min-w-0">
               {trendsLoading ? (
-                <div className="dash-card w-full p-5" aria-busy="true" aria-label={t('overview.loadingStatistics')}>
-                  <div aria-hidden className="h-[272px] animate-pulse rounded-md" style={{ background: 'var(--dash-soft)' }} />
-                </div>
+                <Card className="w-full p-5" aria-busy="true" aria-label={t('overview.loadingStatistics')}>
+                  <Skeleton aria-hidden className="h-[272px] rounded-md" style={{ background: 'var(--dash-soft)' }} />
+                </Card>
               ) : trendsInitialError ? (
-                <div className="dash-card w-full p-5">
+                <Card className="w-full p-5">
                   <QueryErrorState
                     message={getApiError(trendsQuery.error).status === 403 ? t('common.permissionDenied') : t('overview.statisticsUnavailable')}
                     onRetry={() => { void trendsQuery.refetch() }}
                   />
-                </div>
+                </Card>
               ) : (
                 <ActivityTrends
                   raw={trendPoints}
@@ -390,7 +397,7 @@ export default function Dashboard() {
             <h2 id="overview-resources-heading" className="dashboard-resources-heading" style={{ color: 'var(--dash-ink)' }}>
               {t('overview.resourcesTitle')}
             </h2>
-            <button
+            <Button variant="ghost"
               type="button"
               className="dash-focus dashboard-resources-toggle"
               style={{ color: 'var(--dash-ink)' }}
@@ -400,8 +407,8 @@ export default function Dashboard() {
             >
               {t('overview.resourcesTitle')}
               <Icon name="expand_more" size="sm" className={mobileResourcesOpen ? 'rotate-180' : ''} />
-            </button>
-            <div id="overview-runtime-resources" className={`dash-card dashboard-resources-content ${mobileResourcesOpen ? '' : 'hidden sm:block'}`}>
+            </Button>
+            <div id="overview-runtime-resources" className={`dashboard-resources-content ${mobileResourcesOpen ? '' : 'hidden sm:block'}`}>
               <RuntimeResources
                 runtime={runtimeQuery.data}
                 runtimePending={runtimePending}

@@ -1,7 +1,9 @@
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog'
 import { X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 // shadcn/ui Dialog. Upstream centres the popup with fixed positioning; this
 // build keeps a scroll viewport and caps the popup height instead, so the tall
@@ -39,10 +41,13 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  closeDisabled = false,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
+  closeDisabled?: boolean
 }) {
+  const { t } = useTranslation()
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -57,14 +62,21 @@ function DialogContent({
         >
           {children}
           {showCloseButton && (
-            <DialogPrimitive.Close
-              data-slot="dialog-close"
-              className="absolute top-3 right-3"
-              render={<Button variant="ghost" size="icon-sm" />}
-            >
-              <X aria-hidden="true" />
-              <span className="sr-only">Close</span>
-            </DialogPrimitive.Close>
+            <Tooltip>
+              <TooltipTrigger render={
+                <DialogPrimitive.Close
+                  data-slot="dialog-close"
+                  data-icon-button
+                  disabled={closeDisabled}
+                  aria-label={t('common.close')}
+                  className="absolute top-3 right-3"
+                  render={<Button variant="ghost" size="icon" />}
+                />
+              }>
+                <X aria-hidden="true" />
+              </TooltipTrigger>
+              <TooltipContent>{t('common.close')}</TooltipContent>
+            </Tooltip>
           )}
         </DialogPrimitive.Popup>
       </DialogPrimitive.Viewport>

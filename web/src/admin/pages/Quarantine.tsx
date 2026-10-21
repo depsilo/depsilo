@@ -1,20 +1,22 @@
+import { TableContainer, Table, TableHeader, TableRow, TableBody, TableHead, TableCell } from '@/components/ui/table'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Field, FieldLabel } from '@/components/ui/field'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-
 import { adminApi } from '@/lib/api'
 import { formatTime } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
-import EmptyState from '@/components/EmptyState'
-import InlineNotice from '@/components/InlineNotice'
-import ModalV2 from '@/components/Modal'
-import InputV2 from '@/components/Input'
-import TableViewport from '@/components/TableViewport'
+
+import { Input } from '@/components/ui/input'
+
 import QueryErrorState from '@/components/QueryErrorState'
-import SelectV2 from '@/components/Select'
+import { NativeSelect } from '@/components/ui/native-select'
 import AdminPage from '@/admin/components/AdminPage'
 import AdminPagination from '@/admin/components/AdminPagination'
 import { useAppToast } from '@/components/Toast'
@@ -173,18 +175,20 @@ export default function Quarantine() {
     <AdminPage description={t('quarantine.subtitle')}>
     <div className="space-y-6">
       <div className="max-w-xs">
-        <SelectV2
-          label={t('quarantine.view')}
-          value={tab}
-          onChange={(event) => {
-            const value = event.target.value
-            if (value === 'events' || value === 'approvals' || value === 'blocklist') setTab(value)
-          }}
-        >
-          <option value="events">{t('quarantine.tab.events')}</option>
-          <option value="approvals">{t('quarantine.tab.approvals')}</option>
-          <option value="blocklist">{t('quarantine.tab.blocklist')}</option>
-        </SelectV2>
+          <Field>
+            <FieldLabel>{t('quarantine.view')}</FieldLabel>
+            <NativeSelect
+              value={tab}
+              onChange={(event) => {
+                const value = event.target.value
+                if (value === 'events' || value === 'approvals' || value === 'blocklist') setTab(value)
+              }}
+            >
+              <option value="events">{t('quarantine.tab.events')}</option>
+              <option value="approvals">{t('quarantine.tab.approvals')}</option>
+              <option value="blocklist">{t('quarantine.tab.blocklist')}</option>
+            </NativeSelect>
+          </Field>
       </div>
       {tab === 'events' && <EventsTab
         eventsQ={eventsQ}
@@ -206,42 +210,42 @@ export default function Quarantine() {
       {tab === 'blocklist' && <BlocklistTab />}
 
       {/* Revoke dialog */}
-      <ModalV2
-        open={revokeOpen}
-        onClose={() => setRevokeOpen(false)}
-        title={t('quarantine.revoke.title')}
-        closeDisabled={revokeM.isPending}
-      >
-        {revokeTarget && (
-          <div className="space-y-4">
-            <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>
-              {t('quarantine.revoke.body', { eco: revokeTarget.ecosystem, pkg: revokeTarget.package, ver: revokeTarget.version })}
-            </p>
-            <InputV2
-              label={t('quarantine.col.reason')}
-              placeholder={t('quarantine.reason_placeholder')}
-              value={revokeReason}
-              onChange={(e) => setRevokeReason(e.target.value)}
-              disabled={revokeM.isPending}
-              autoFocus
-            />
-            {revokeM.isError && <InlineNotice tone="danger">{getApiError(revokeM.error).message}</InlineNotice>}
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setRevokeOpen(false)} disabled={revokeM.isPending}>
-                {t('cancel')}
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => revokeM.mutate()}
-                aria-busy={revokeM.isPending || undefined}
-                disabled={revokeReason.trim().length < 3 || revokeM.isPending || !canWrite}
-              >
-                {revokeM.isPending ? t('quarantine.revoke.submitting') : t('quarantine.revoke.submit')}
-              </Button>
-            </div>
-          </div>
-        )}
-      </ModalV2>
+        <Dialog open={revokeOpen} onOpenChange={(nextOpen) => { if (!nextOpen && !revokeM.isPending) setRevokeOpen(false) }} modal>
+          <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={revokeM.isPending}>
+            <DialogTitle className="pr-10">{t('quarantine.revoke.title')}</DialogTitle>
+            {revokeTarget && (
+              <div className="space-y-4">
+                <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>
+                  {t('quarantine.revoke.body', { eco: revokeTarget.ecosystem, pkg: revokeTarget.package, ver: revokeTarget.version })}
+                </p>
+                <Field disabled={revokeM.isPending}>
+                  <FieldLabel>{t('quarantine.col.reason')}</FieldLabel>
+                  <Input
+                    placeholder={t('quarantine.reason_placeholder')}
+                    value={revokeReason}
+                    onChange={(e) => setRevokeReason(e.target.value)}
+                    disabled={revokeM.isPending}
+                    autoFocus
+                  />
+                </Field>
+                {revokeM.isError && <Alert variant={"destructive"}><AlertDescription>{getApiError(revokeM.error).message}</AlertDescription></Alert>}
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setRevokeOpen(false)} disabled={revokeM.isPending}>
+                    {t('cancel')}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => revokeM.mutate()}
+                    aria-busy={revokeM.isPending || undefined}
+                    disabled={revokeReason.trim().length < 3 || revokeM.isPending || !canWrite}
+                  >
+                    {revokeM.isPending ? t('quarantine.revoke.submitting') : t('quarantine.revoke.submit')}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
     </div>
     </AdminPage>
   )
@@ -264,31 +268,25 @@ function EventsTab(props: {
     <div className="space-y-4">
       {/* Filter bar */}
       <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-        <InputV2
+        <Input
           aria-label={t('quarantine.filter.package_placeholder')}
           placeholder={t('quarantine.filter.package_placeholder')}
           value={props.pkgSearch}
           onChange={(e) => props.setPkgSearch(e.target.value)}
           className="col-span-2 sm:w-[260px]"
         />
-        <FilterSelect
-          label={t('quarantine.col.ecosystem')}
-          value={props.ecoFilter}
-          onChange={props.setEcoFilter}
-          options={[
+        <NativeSelect className="min-h-10 sm:min-h-9 sm:w-auto" aria-label={t('quarantine.col.ecosystem')} value={props.ecoFilter} onChange={(event) => (props.setEcoFilter)(event.target.value)}>
+          {([
             { value: 'all', label: t('quarantine.filter.all_ecosystems') },
             ...ECOSYSTEMS.map((eco) => ({ value: eco, label: eco })),
-          ]}
-        />
-        <FilterSelect
-          label={t('quarantine.col.action')}
-          value={props.actionFilter}
-          onChange={props.setActionFilter}
-          options={[
+          ]).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </NativeSelect>
+        <NativeSelect className="min-h-10 sm:min-h-9 sm:w-auto" aria-label={t('quarantine.col.action')} value={props.actionFilter} onChange={(event) => (props.setActionFilter)(event.target.value)}>
+          {([
             { value: 'all', label: t('quarantine.filter.all_actions') },
             ...ACTIONS.map((a) => ({ value: a, label: t(`quarantine.action.${a}`) })),
-          ]}
-        />
+          ]).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </NativeSelect>
       </div>
 
       {/* Table */}
@@ -298,12 +296,8 @@ function EventsTab(props: {
         <QueryErrorState message={getApiError(props.eventsQ.error).status === 403 ? t('common.permissionDenied') : getApiError(props.eventsQ.error).message} onRetry={() => { void props.eventsQ.refetch() }} />
       ) : (
         <div className="space-y-3">
-        {Boolean(data) && props.eventsQ.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void props.eventsQ.refetch() }}>{t('now.refresh')}</Button></div></InlineNotice>}
-        {items.length === 0 ? <EmptyState
-          icon="policy"
-          title={t('quarantine.events.empty_title')}
-          hint={t('quarantine.events.empty_hint')}
-        /> : (
+        {Boolean(data) && props.eventsQ.isRefetchError && <Alert variant={"warning"}><AlertDescription><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void props.eventsQ.refetch() }}>{t('now.refresh')}</Button></div></AlertDescription></Alert>}
+        {items.length === 0 ? <Empty style={{ minHeight: 160 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"policy"} size="sm" /></EmptyMedia><EmptyTitle>{t('quarantine.events.empty_title')}</EmptyTitle>{t('quarantine.events.empty_hint') && <EmptyDescription>{t('quarantine.events.empty_hint')}</EmptyDescription>}</EmptyHeader></Empty> : (
         <>
         <ul
           aria-label={t('quarantine.events.table')}
@@ -330,22 +324,22 @@ function EventsTab(props: {
           ))}
         </ul>
         <div className="hidden sm:block">
-        <TableViewport label={t('quarantine.events.table')} minWidth={920}>
+        <TableContainer label={t('quarantine.events.table')} minWidth={920}>
           <div className="rounded-md border" style={{ borderColor: 'var(--border)' }}>
-            <table className="w-full" style={{ borderCollapse: 'collapse' }}>
-            <thead style={{ background: 'var(--bg-soft)' }}>
-              <tr>
+            <Table className="w-full" style={{ borderCollapse: 'collapse' }}>
+            <TableHeader style={{ background: 'var(--bg-soft)' }}>
+              <TableRow>
                 <Th>{t('quarantine.col.time')}</Th>
                 <Th>{t('quarantine.col.ecosystem')}</Th>
                 <Th>{t('quarantine.col.package')}</Th>
                 <Th>{t('quarantine.col.version')}</Th>
                 <Th>{t('quarantine.col.action')}</Th>
                 <Th>{t('quarantine.col.reason')}</Th>
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {items.map((ev) => (
-                <tr key={ev.id} style={{ borderTop: '1px solid var(--border)' }}>
+                <TableRow key={ev.id} style={{ borderTop: '1px solid var(--border)' }}>
                   <Td>
                     <span className="text-[12px] font-mono whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>
                       {formatTime(ev.created_at)}
@@ -363,12 +357,12 @@ function EventsTab(props: {
                   <Td>
                     <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>{ev.reason}</span>
                   </Td>
-                </tr>
+                </TableRow>
               ))}
-            </tbody>
-            </table>
+            </TableBody>
+            </Table>
           </div>
-        </TableViewport>
+        </TableContainer>
         </div>
         </>
         )}
@@ -431,17 +425,17 @@ function ApprovalsTab(props: {
   return (
     <div className="space-y-3">
     {props.canWrite && capabilityQ.isError && (
-      <InlineNotice tone="warning">
+      <Alert variant={"warning"}><AlertDescription>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <span>{t('quarantine.approvals.capabilityUnavailable')}</span>
           <Button type="button" variant="outline" size="sm" onClick={() => { void capabilityQ.refetch() }}>
             {t('common.retry')}
           </Button>
         </div>
-      </InlineNotice>
+      </AlertDescription></Alert>
     )}
     {props.canWrite && !capabilityQ.isPending && !capabilityQ.isError && activeEcosystems.length === 0 && (
-      <InlineNotice tone="info">{t('quarantine.approvals.noActiveGate')}</InlineNotice>
+      <Alert variant={"info"}><AlertDescription>{t('quarantine.approvals.noActiveGate')}</AlertDescription></Alert>
     )}
     {props.canWrite && activeEcosystems.length > 0 && !capabilityQ.isError && (
       <div className="flex justify-end">
@@ -454,13 +448,9 @@ function ApprovalsTab(props: {
         </Button>
       </div>
     )}
-    {Boolean(data) && props.approvalsQ.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void props.approvalsQ.refetch() }}>{t('now.refresh')}</Button></div></InlineNotice>}
+    {Boolean(data) && props.approvalsQ.isRefetchError && <Alert variant={"warning"}><AlertDescription><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void props.approvalsQ.refetch() }}>{t('now.refresh')}</Button></div></AlertDescription></Alert>}
     {items.length === 0 ? (
-      <EmptyState
-        icon="verified"
-        title={t('quarantine.approvals.empty_title')}
-        hint={t('quarantine.approvals.empty_hint')}
-      />
+      <Empty style={{ minHeight: 160 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"verified"} size="sm" /></EmptyMedia><EmptyTitle>{t('quarantine.approvals.empty_title')}</EmptyTitle>{t('quarantine.approvals.empty_hint') && <EmptyDescription>{t('quarantine.approvals.empty_hint')}</EmptyDescription>}</EmptyHeader></Empty>
     ) : (
     <>
     <ul
@@ -497,22 +487,22 @@ function ApprovalsTab(props: {
       ))}
     </ul>
     <div className="hidden sm:block">
-    <TableViewport label={t('quarantine.approvals.table')} minWidth={820}>
+    <TableContainer label={t('quarantine.approvals.table')} minWidth={820}>
       <div className="rounded-md border" style={{ borderColor: 'var(--border)' }}>
-        <table className="w-full" style={{ borderCollapse: 'collapse' }}>
-        <thead style={{ background: 'var(--bg-soft)' }}>
-          <tr>
+        <Table className="w-full" style={{ borderCollapse: 'collapse' }}>
+        <TableHeader style={{ background: 'var(--bg-soft)' }}>
+          <TableRow>
             <Th>{t('quarantine.col.created_at')}</Th>
             <Th>{t('quarantine.col.ecosystem')}</Th>
             <Th>{t('quarantine.col.package')}</Th>
             <Th>{t('quarantine.col.version')}</Th>
             <Th>{t('quarantine.col.reason')}</Th>
             <Th>{' '}</Th>
-          </tr>
-        </thead>
-        <tbody>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {items.map((row) => (
-            <tr key={row.id} style={{ borderTop: '1px solid var(--border)' }}>
+            <TableRow key={row.id} style={{ borderTop: '1px solid var(--border)' }}>
               <Td>
                 <span className="text-[12px] font-mono whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>
                   {formatTime(row.created_at)}
@@ -532,41 +522,51 @@ function ApprovalsTab(props: {
                   <Icon name="undo" size="sm" /> {t('quarantine.revoke.cta')}
                 </Button>}
               </Td>
-            </tr>
+            </TableRow>
           ))}
-        </tbody>
-        </table>
+        </TableBody>
+        </Table>
       </div>
-    </TableViewport>
+    </TableContainer>
     </div>
     </>
     )}
     <AdminPagination page={props.page} pageSize={PAGE_SIZE} total={data?.total ?? 0} onPageChange={props.setPage} />
-    <ModalV2
-      open={createOpen}
-      onClose={() => { if (!createM.isPending) setCreateOpen(false) }}
-      closeDisabled={createM.isPending}
-      title={t('quarantine.approvals.createTitle')}
-    >
-      <form className="space-y-4" onSubmit={event => {
-        event.preventDefault()
-        if (!props.canWrite || !activeEcosystems.includes(form.ecosystem) || !form.package.trim()
-          || !form.version.trim() || form.reason.trim().length < 3) return
-        createM.mutate()
-      }}>
-        <SelectV2 label={t('quarantine.col.ecosystem')} value={form.ecosystem} disabled={createM.isPending} onChange={event => setForm({ ...form, ecosystem: event.target.value })}>
-          {activeEcosystems.map(ecosystem => <option key={ecosystem} value={ecosystem}>{ecosystem.toUpperCase()}</option>)}
-        </SelectV2>
-        <InputV2 label={t('quarantine.col.package')} value={form.package} required disabled={createM.isPending} onChange={event => setForm({ ...form, package: event.target.value })} />
-        <InputV2 label={t('quarantine.col.version')} value={form.version} required disabled={createM.isPending} onChange={event => setForm({ ...form, version: event.target.value })} />
-        <InputV2 label={t('quarantine.col.reason')} value={form.reason} required minLength={3} disabled={createM.isPending} onChange={event => setForm({ ...form, reason: event.target.value })} />
-        {createM.isError && <InlineNotice tone="danger">{getApiError(createM.error).message}</InlineNotice>}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" disabled={createM.isPending} onClick={() => setCreateOpen(false)}>{t('cancel')}</Button>
-          <Button type="submit" aria-busy={createM.isPending || undefined} disabled={createM.isPending || !form.package.trim() || !form.version.trim() || form.reason.trim().length < 3}>{t('quarantine.approvals.create')}</Button>
-        </div>
-      </form>
-    </ModalV2>
+      <Dialog open={createOpen} onOpenChange={(nextOpen) => { if (!nextOpen && !createM.isPending) (() => { if (!createM.isPending) setCreateOpen(false) })() }} modal>
+        <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={createM.isPending}>
+          <DialogTitle className="pr-10">{t('quarantine.approvals.createTitle')}</DialogTitle>
+          <form className="space-y-4" onSubmit={event => {
+            event.preventDefault()
+            if (!props.canWrite || !activeEcosystems.includes(form.ecosystem) || !form.package.trim()
+              || !form.version.trim() || form.reason.trim().length < 3) return
+            createM.mutate()
+          }}>
+            <Field disabled={createM.isPending}>
+              <FieldLabel>{t('quarantine.col.ecosystem')}</FieldLabel>
+              <NativeSelect value={form.ecosystem} disabled={createM.isPending} onChange={event => setForm({ ...form, ecosystem: event.target.value })}>
+                {activeEcosystems.map(ecosystem => <option key={ecosystem} value={ecosystem}>{ecosystem.toUpperCase()}</option>)}
+              </NativeSelect>
+            </Field>
+            <Field disabled={createM.isPending}>
+              <FieldLabel>{t('quarantine.col.package')}</FieldLabel>
+              <Input value={form.package} required disabled={createM.isPending} onChange={event => setForm({ ...form, package: event.target.value })} />
+            </Field>
+            <Field disabled={createM.isPending}>
+              <FieldLabel>{t('quarantine.col.version')}</FieldLabel>
+              <Input value={form.version} required disabled={createM.isPending} onChange={event => setForm({ ...form, version: event.target.value })} />
+            </Field>
+            <Field disabled={createM.isPending}>
+              <FieldLabel>{t('quarantine.col.reason')}</FieldLabel>
+              <Input value={form.reason} required minLength={3} disabled={createM.isPending} onChange={event => setForm({ ...form, reason: event.target.value })} />
+            </Field>
+            {createM.isError && <Alert variant={"destructive"}><AlertDescription>{getApiError(createM.error).message}</AlertDescription></Alert>}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" disabled={createM.isPending} onClick={() => setCreateOpen(false)}>{t('cancel')}</Button>
+              <Button type="submit" aria-busy={createM.isPending || undefined} disabled={createM.isPending || !form.package.trim() || !form.version.trim() || form.reason.trim().length < 3}>{t('quarantine.approvals.create')}</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -647,17 +647,13 @@ function BlocklistTab() {
         <QueryErrorState message={getApiError(statusQ.error).status === 403 ? t('common.permissionDenied') : getApiError(statusQ.error).message} onRetry={() => { void statusQ.refetch() }} />
       ) : (
         <div className="space-y-3">
-          {statusQ.data && statusQ.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void statusQ.refetch() }}>{t('now.refresh')}</Button></div></InlineNotice>}
+          {statusQ.data && statusQ.isRefetchError && <Alert variant={"warning"}><AlertDescription><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void statusQ.refetch() }}>{t('now.refresh')}</Button></div></AlertDescription></Alert>}
           {st && !st.enabled ? (
-            <EmptyState
-              icon="gpp_bad"
-              title={t('quarantine.blocklist.disabled_title')}
-              hint={t('quarantine.blocklist.disabled_hint')}
-            />
+            <Empty style={{ minHeight: 160 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"gpp_bad"} size="sm" /></EmptyMedia><EmptyTitle>{t('quarantine.blocklist.disabled_title')}</EmptyTitle>{t('quarantine.blocklist.disabled_hint') && <EmptyDescription>{t('quarantine.blocklist.disabled_hint')}</EmptyDescription>}</EmptyHeader></Empty>
           ) : st ? (
       <>
       {st.mode === 'warn' && (
-        <InlineNotice tone="warning">{t('quarantine.blocklist.observe_warning')}</InlineNotice>
+        <Alert variant={"warning"}><AlertDescription>{t('quarantine.blocklist.observe_warning')}</AlertDescription></Alert>
       )}
       <div className="rounded-md border p-4 flex flex-wrap items-center gap-x-8 gap-y-3"
            style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}>
@@ -701,10 +697,10 @@ function BlocklistTab() {
             <Icon name="sync" size="sm" /> {syncM.isPending || st?.running ? t('quarantine.blocklist.syncing') : t('quarantine.blocklist.sync_now')}
           </Button>
         </div>}
-        {syncM.isError && <div className="basis-full"><InlineNotice tone="danger">{getApiError(syncM.error).message}</InlineNotice></div>}
+        {syncM.isError && <div className="basis-full"><Alert variant={"destructive"}><AlertDescription>{getApiError(syncM.error).message}</AlertDescription></Alert></div>}
       </div>
       </>
-          ) : <EmptyState icon="gpp_bad" title={t('noData')} />}
+          ) : <Empty style={{ minHeight: 160 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"gpp_bad"} size="sm" /></EmptyMedia><EmptyTitle>{t('noData')}</EmptyTitle></EmptyHeader></Empty>}
         </div>
       )}
 
@@ -720,13 +716,9 @@ function BlocklistTab() {
           <QueryErrorState message={getApiError(overridesQ.error).status === 403 ? t('common.permissionDenied') : getApiError(overridesQ.error).message} onRetry={() => { void overridesQ.refetch() }} />
         ) : (
           <div className="space-y-3">
-          {overridesQ.data && overridesQ.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void overridesQ.refetch() }}>{t('now.refresh')}</Button></div></InlineNotice>}
+          {overridesQ.data && overridesQ.isRefetchError && <Alert variant={"warning"}><AlertDescription><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void overridesQ.refetch() }}>{t('now.refresh')}</Button></div></AlertDescription></Alert>}
           {overrides.length === 0 ? (
-          <EmptyState
-            icon="verified_user"
-            title={t('quarantine.blocklist.no_overrides_title')}
-            hint={t('quarantine.blocklist.no_overrides_hint')}
-          />
+          <Empty style={{ minHeight: 160 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"verified_user"} size="sm" /></EmptyMedia><EmptyTitle>{t('quarantine.blocklist.no_overrides_title')}</EmptyTitle>{t('quarantine.blocklist.no_overrides_hint') && <EmptyDescription>{t('quarantine.blocklist.no_overrides_hint')}</EmptyDescription>}</EmptyHeader></Empty>
         ) : (
           <>
           <ul
@@ -777,25 +769,25 @@ function BlocklistTab() {
             })}
           </ul>
           <div className="hidden sm:block">
-          <TableViewport label={t('quarantine.blocklist.overrides_table')} minWidth={760}>
+          <TableContainer label={t('quarantine.blocklist.overrides_table')} minWidth={760}>
             <div className="rounded-md border" style={{ borderColor: 'var(--border)' }}>
-              <table className="w-full" style={{ borderCollapse: 'collapse' }}>
-              <thead style={{ background: 'var(--bg-soft)' }}>
-                <tr>
+              <Table className="w-full" style={{ borderCollapse: 'collapse' }}>
+              <TableHeader style={{ background: 'var(--bg-soft)' }}>
+                <TableRow>
                   <Th>{t('quarantine.col.ecosystem')}</Th>
                   <Th>{t('quarantine.col.package')}</Th>
                   <Th>{t('quarantine.col.version')}</Th>
                   <Th>{t('quarantine.col.reason')}</Th>
                   <Th>{t('quarantine.blocklist.col_expires')}</Th>
                   <Th>{' '}</Th>
-                </tr>
-              </thead>
-              <tbody>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {overrides.map((row) => {
                   const msLeft = new Date(row.expires_at).getTime() - now
                   const expired = msLeft <= 0
                   return (
-                    <tr key={row.id} style={{ borderTop: '1px solid var(--border)', opacity: expired ? 0.55 : 1 }}>
+                    <TableRow key={row.id} style={{ borderTop: '1px solid var(--border)', opacity: expired ? 0.55 : 1 }}>
                       <Td>
                         <div className="flex items-center gap-1.5">
                           {isAdminEcosystem(row.ecosystem) && <EcosystemIcon type={row.ecosystem} size={14} />}
@@ -825,13 +817,13 @@ function BlocklistTab() {
                           </Button>
                         )}
                       </Td>
-                    </tr>
+                    </TableRow>
                   )
                 })}
-              </tbody>
-              </table>
+              </TableBody>
+              </Table>
             </div>
-          </TableViewport>
+          </TableContainer>
           </div>
           </>
           )}
@@ -840,96 +832,95 @@ function BlocklistTab() {
       </div>
 
       {/* Create override dialog */}
-      <ModalV2
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        title={t('quarantine.blocklist.create_title')}
-        closeDisabled={createM.isPending}
-      >
-        <div className="space-y-4">
-          <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>
-            {t('quarantine.blocklist.create_body')}
-          </p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[auto_minmax(0,1fr)]">
-            <FilterSelect
-              label={t('quarantine.col.ecosystem')}
-              value={form.ecosystem}
-              onChange={(v) => setForm({ ...form, ecosystem: v })}
-              options={overrideEcosystems.map((ecosystem) => ({ value: ecosystem.id, label: ecosystem.label }))}
-              disabled={createM.isPending}
-            />
-            <InputV2
-              label={t('quarantine.col.package')}
-              placeholder={t('quarantine.blocklist.package_placeholder')}
-              value={form.package}
-              onChange={(e) => setForm({ ...form, package: e.target.value })}
-              disabled={createM.isPending}
-            />
-          </div>
-          <InputV2
-            label={t('quarantine.col.version')}
-            placeholder={t('quarantine.blocklist.version_placeholder')}
-            value={form.version}
-            onChange={(e) => setForm({ ...form, version: e.target.value })}
-            disabled={createM.isPending}
-            mono
-          />
-          <InputV2
-            label={t('quarantine.col.reason')}
-            placeholder={t('quarantine.reason_placeholder')}
-            value={form.reason}
-            onChange={(e) => setForm({ ...form, reason: e.target.value })}
-            disabled={createM.isPending}
-          />
-          {createM.isError && <InlineNotice tone="danger">{getApiError(createM.error).message}</InlineNotice>}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createM.isPending}>{t('cancel')}</Button>
-            <Button
-              onClick={() => createM.mutate()}
-              aria-busy={createM.isPending || undefined}
-              disabled={!form.package.trim() || form.reason.trim().length < 3 || createM.isPending || !canWrite}
-            >
-              {createM.isPending ? t('quarantine.blocklist.creating') : t('quarantine.blocklist.create_submit')}
-            </Button>
-          </div>
-        </div>
-      </ModalV2>
-
-      {/* Revoke override dialog */}
-      <ModalV2
-        open={!!revokeTarget}
-        onClose={() => setRevokeTarget(null)}
-        title={t('quarantine.revoke.title')}
-        closeDisabled={revokeM.isPending}
-      >
-        {revokeTarget && (
+      <Dialog open={createOpen} onOpenChange={(nextOpen) => { if (!nextOpen && !createM.isPending) setCreateOpen(false) }} modal>
+        <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={createM.isPending}>
+          <DialogTitle className="pr-10">{t('quarantine.blocklist.create_title')}</DialogTitle>
           <div className="space-y-4">
             <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>
-              {t('quarantine.revoke.body', { eco: revokeTarget.ecosystem, pkg: revokeTarget.package, ver: revokeTarget.version || t('quarantine.blocklist.all_versions') })}
+              {t('quarantine.blocklist.create_body')}
             </p>
-            <InputV2
-              label={t('quarantine.col.reason')}
-              placeholder={t('quarantine.reason_placeholder')}
-              value={revokeReason}
-              onChange={(e) => setRevokeReason(e.target.value)}
-              disabled={revokeM.isPending}
-              autoFocus
-            />
-            {revokeM.isError && <InlineNotice tone="danger">{getApiError(revokeM.error).message}</InlineNotice>}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[auto_minmax(0,1fr)]">
+              <NativeSelect className="min-h-10 sm:min-h-9 sm:w-auto" aria-label={t('quarantine.col.ecosystem')} value={form.ecosystem} onChange={(event) => ((v) => setForm({ ...form, ecosystem: v }))(event.target.value)} disabled={createM.isPending}>
+                {(overrideEcosystems.map((ecosystem) => ({ value: ecosystem.id, label: ecosystem.label }))).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </NativeSelect>
+              <Field disabled={createM.isPending}>
+                <FieldLabel>{t('quarantine.col.package')}</FieldLabel>
+                <Input
+                  placeholder={t('quarantine.blocklist.package_placeholder')}
+                  value={form.package}
+                  onChange={(e) => setForm({ ...form, package: e.target.value })}
+                  disabled={createM.isPending}
+                />
+              </Field>
+            </div>
+            <Field disabled={createM.isPending}>
+              <FieldLabel>{t('quarantine.col.version')}</FieldLabel>
+              <Input className="font-mono"
+                placeholder={t('quarantine.blocklist.version_placeholder')}
+                value={form.version}
+                onChange={(e) => setForm({ ...form, version: e.target.value })}
+                disabled={createM.isPending}
+              />
+            </Field>
+            <Field disabled={createM.isPending}>
+              <FieldLabel>{t('quarantine.col.reason')}</FieldLabel>
+              <Input
+                placeholder={t('quarantine.reason_placeholder')}
+                value={form.reason}
+                onChange={(e) => setForm({ ...form, reason: e.target.value })}
+                disabled={createM.isPending}
+              />
+            </Field>
+            {createM.isError && <Alert variant={"destructive"}><AlertDescription>{getApiError(createM.error).message}</AlertDescription></Alert>}
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setRevokeTarget(null)} disabled={revokeM.isPending}>{t('cancel')}</Button>
+              <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createM.isPending}>{t('cancel')}</Button>
               <Button
-                variant="destructive"
-                onClick={() => revokeM.mutate()}
-                aria-busy={revokeM.isPending || undefined}
-                disabled={revokeReason.trim().length < 3 || revokeM.isPending || !canWrite}
+                onClick={() => createM.mutate()}
+                aria-busy={createM.isPending || undefined}
+                disabled={!form.package.trim() || form.reason.trim().length < 3 || createM.isPending || !canWrite}
               >
-                {revokeM.isPending ? t('quarantine.revoke.submitting') : t('quarantine.revoke.submit')}
+                {createM.isPending ? t('quarantine.blocklist.creating') : t('quarantine.blocklist.create_submit')}
               </Button>
             </div>
           </div>
-        )}
-      </ModalV2>
+        </DialogContent>
+      </Dialog>
+
+      {/* Revoke override dialog */}
+      <Dialog open={!!revokeTarget} onOpenChange={(nextOpen) => { if (!nextOpen && !revokeM.isPending) setRevokeTarget(null) }} modal>
+        <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={revokeM.isPending}>
+          <DialogTitle className="pr-10">{t('quarantine.revoke.title')}</DialogTitle>
+          {revokeTarget && (
+            <div className="space-y-4">
+              <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>
+                {t('quarantine.revoke.body', { eco: revokeTarget.ecosystem, pkg: revokeTarget.package, ver: revokeTarget.version || t('quarantine.blocklist.all_versions') })}
+              </p>
+              <Field disabled={revokeM.isPending}>
+                <FieldLabel>{t('quarantine.col.reason')}</FieldLabel>
+                <Input
+                  placeholder={t('quarantine.reason_placeholder')}
+                  value={revokeReason}
+                  onChange={(e) => setRevokeReason(e.target.value)}
+                  disabled={revokeM.isPending}
+                  autoFocus
+                />
+              </Field>
+              {revokeM.isError && <Alert variant={"destructive"}><AlertDescription>{getApiError(revokeM.error).message}</AlertDescription></Alert>}
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setRevokeTarget(null)} disabled={revokeM.isPending}>{t('cancel')}</Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => revokeM.mutate()}
+                  aria-busy={revokeM.isPending || undefined}
+                  disabled={revokeReason.trim().length < 3 || revokeM.isPending || !canWrite}
+                >
+                  {revokeM.isPending ? t('quarantine.revoke.submitting') : t('quarantine.revoke.submit')}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -957,13 +948,13 @@ function formatRemaining(ms: number): string {
 
 function Th({ children }: { children: React.ReactNode }) {
   return (
-    <th className="text-left px-3 py-2.5 text-[11px] font-mono font-[600] uppercase"
-        style={{ color: 'var(--text-subtle)' }}>{children}</th>
+    <TableHead className="text-left px-3 py-2.5 text-[11px] font-mono font-[600] uppercase"
+        style={{ color: 'var(--text-subtle)' }}>{children}</TableHead>
   )
 }
 
 function Td({ children }: { children: React.ReactNode }) {
-  return <td className="px-3 py-2 align-middle">{children}</td>
+  return <TableCell className="px-3 py-2 align-middle">{children}</TableCell>
 }
 
 function MobilePackageIdentity(props: { ecosystem: string; packageName: string; version: string }) {
@@ -1007,30 +998,5 @@ function MobileMetadata({ entries }: {
         </div>
       ))}
     </dl>
-  )
-}
-
-function FilterSelect(props: {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  options: { value: string; label: string }[]
-  disabled?: boolean
-}) {
-  return (
-    <select
-      aria-label={props.label}
-      value={props.value}
-      onChange={(e) => props.onChange(e.target.value)}
-      disabled={props.disabled}
-      className="min-h-[40px] w-full cursor-pointer rounded-md px-3 text-[16px] disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:min-h-9 sm:w-auto sm:text-[12px]"
-      style={{
-        background: 'var(--bg-soft)',
-        color: 'var(--text)',
-        border: '1px solid var(--border)',
-      }}
-    >
-      {props.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
   )
 }

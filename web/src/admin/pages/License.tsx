@@ -1,3 +1,6 @@
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Field, FieldLabel } from '@/components/ui/field'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -5,10 +8,9 @@ import { licenseApi } from '@/lib/api'
 import type { EntitlementStatus } from '@/lib/api'
 import { proAccessUrl } from '@/lib/buy'
 import { Button } from '@/components/ui/button'
-import InputV2 from '@/components/Input'
+import { Input } from '@/components/ui/input'
 import Icon, { type IconName } from '@/components/Icon'
-import ModalV2 from '@/components/Modal'
-import InlineNotice from '@/components/InlineNotice'
+
 import QueryErrorState from '@/components/QueryErrorState'
 import SectionHeader from '@/components/SectionHeader'
 import AdminPage from '@/admin/components/AdminPage'
@@ -156,7 +158,7 @@ export default function License() {
     <AdminPage width="readable" description={t('license.subtitle')}>
     <div className="space-y-10">
       {statusQuery.isRefetchError && (
-        <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void statusQuery.refetch() }}>{t('now.refresh')}</Button></div></InlineNotice>
+        <Alert variant={"warning"}><AlertDescription><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void statusQuery.refetch() }}>{t('now.refresh')}</Button></div></AlertDescription></Alert>
       )}
       {/* ── State panel ────────────────────────────── */}
       {/* Commercial terms are intentionally absent until the product model
@@ -182,7 +184,7 @@ export default function License() {
           </div>
           {activateTrial.isError && (
             <div className="mt-3">
-              <InlineNotice tone="danger">{getApiError(activateTrial.error).message}</InlineNotice>
+              <Alert variant={"destructive"}><AlertDescription>{getApiError(activateTrial.error).message}</AlertDescription></Alert>
             </div>
           )}
         </StatePanel>
@@ -248,7 +250,7 @@ export default function License() {
           </Button>}
           {revalidate.isError && (
             <div className="mt-3">
-              <InlineNotice tone="danger">{getApiError(revalidate.error).message}</InlineNotice>
+              <Alert variant={"destructive"}><AlertDescription>{getApiError(revalidate.error).message}</AlertDescription></Alert>
             </div>
           )}
         </StatePanel>
@@ -256,7 +258,7 @@ export default function License() {
 
       {/* ── License key entry (collapsible) ────────── */}
       <section>
-        <button
+        <Button variant="ghost"
           type="button"
           className="w-full flex items-center justify-between bg-transparent cursor-pointer pb-2 disabled:cursor-not-allowed disabled:opacity-60 stripe-focus-ring"
           style={{ borderBottom: '1px solid var(--border)' }}
@@ -269,7 +271,7 @@ export default function License() {
             {t('license.key.title')}
           </span>
           <Icon name={keySectionOpen ? 'expand_less' : 'expand_more'} size="sm" style={{ color: 'var(--text-soft)' }} />
-        </button>
+        </Button>
 
         {keySectionOpen && (
           <div id="license-key-content" className="mt-4 space-y-3">
@@ -283,17 +285,18 @@ export default function License() {
                 }}
               >
                 <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-                  <InputV2
-                    label={t('license.key.title')}
-                    placeholder={t('license.key.placeholder')}
-                    value={keyInput}
-                    onChange={(event) => {
-                      setKeyInput(event.target.value)
-                      if (setKey.isError || setKey.data) setKey.reset()
-                    }}
-                    disabled={setKey.isPending}
-                    mono
-                  />
+                    <Field disabled={setKey.isPending}>
+                      <FieldLabel>{t('license.key.title')}</FieldLabel>
+                      <Input className="font-mono"
+                        placeholder={t('license.key.placeholder')}
+                        value={keyInput}
+                        onChange={(event) => {
+                          setKeyInput(event.target.value)
+                          if (setKey.isError || setKey.data) setKey.reset()
+                        }}
+                        disabled={setKey.isPending}
+                      />
+                    </Field>
                   <Button
                     type="submit"
                     aria-busy={setKey.isPending || undefined}
@@ -325,7 +328,7 @@ export default function License() {
                     </div>
                   </div>
                 )}
-                {setKey.isError && <InlineNotice tone="danger">{getApiError(setKey.error).message}</InlineNotice>}
+                {setKey.isError && <Alert variant={"destructive"}><AlertDescription>{getApiError(setKey.error).message}</AlertDescription></Alert>}
                 {replacingKey && (
                   <Button
                     type="button"
@@ -406,37 +409,38 @@ export default function License() {
       </section>
 
       {/* Remove key confirmation modal */}
-      <ModalV2
-        open={removeOpen}
-        onClose={() => {
-          if (!clearKey.isPending) setRemoveOpen(false)
-        }}
-        title={t('license.key.remove_confirm_title')}
-      >
-        <p className="text-[14px] mb-5" style={{ color: 'var(--text-soft)' }}>
-          {t('license.key.remove_confirm_body')}
-        </p>
-        {clearKey.isError && (
-          <div className="mb-4">
-            <InlineNotice tone="danger">{getApiError(clearKey.error).message}</InlineNotice>
-          </div>
-        )}
-        <div className="flex justify-end gap-3">
-          <Button variant="outline" onClick={() => setRemoveOpen(false)} disabled={clearKey.isPending}>
-            {t('license.paywall.dismiss')}
-          </Button>
-          <Button
-            variant="destructive"
-            aria-busy={clearKey.isPending || undefined}
-            onClick={() => {
-              clearKey.mutate()
-            }}
-            disabled={clearKey.isPending || !canWrite}
-          >
-            {t('license.key.remove_button')}
-          </Button>
-        </div>
-      </ModalV2>
+        <Dialog open={removeOpen} onOpenChange={(nextOpen) => {
+          if (!nextOpen) (() => {
+            if (!clearKey.isPending) setRemoveOpen(false)
+          })()
+        }} modal>
+          <DialogContent style={{ maxWidth: 440 }} finalFocus={true}>
+            <DialogTitle className="pr-10">{t('license.key.remove_confirm_title')}</DialogTitle>
+            <p className="text-[14px] mb-5" style={{ color: 'var(--text-soft)' }}>
+              {t('license.key.remove_confirm_body')}
+            </p>
+            {clearKey.isError && (
+              <div className="mb-4">
+                <Alert variant={"destructive"}><AlertDescription>{getApiError(clearKey.error).message}</AlertDescription></Alert>
+              </div>
+            )}
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setRemoveOpen(false)} disabled={clearKey.isPending}>
+                {t('license.paywall.dismiss')}
+              </Button>
+              <Button
+                variant="destructive"
+                aria-busy={clearKey.isPending || undefined}
+                onClick={() => {
+                  clearKey.mutate()
+                }}
+                disabled={clearKey.isPending || !canWrite}
+              >
+                {t('license.key.remove_button')}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
     </div>
     </AdminPage>
   )

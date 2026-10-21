@@ -1,3 +1,8 @@
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Field, FieldLabel, FieldDescription } from '@/components/ui/field'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useState } from 'react'
 import type { AxiosResponse } from 'axios'
 import { useTranslation } from 'react-i18next'
@@ -7,15 +12,12 @@ import { formatTime } from '@/lib/utils'
 import { copyText } from '@/lib/clipboard'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import InputV2 from '@/components/Input'
-import SelectV2 from '@/components/Select'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
 import Icon from '@/components/Icon'
-import DataTableV2 from '@/components/DataTable'
-import ModalV2 from '@/components/Modal'
+import DataTable from '@/components/DataTable'
 import SectionHeader from '@/components/SectionHeader'
-import EmptyState from '@/components/EmptyState'
-import InlineNotice from '@/components/InlineNotice'
-import IconButton from '@/components/IconButton'
+
 import QueryErrorState from '@/components/QueryErrorState'
 import AdminPage from '@/admin/components/AdminPage'
 import { usePrincipal } from '@/hooks/usePrincipal'
@@ -42,7 +44,7 @@ function upsertUser(current: AxiosResponse<AdminUser[]> | undefined, response: A
   }
 }
 
-export default function UsersV2() {
+export default function Users() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { principal, canWrite } = usePrincipal()
@@ -185,7 +187,38 @@ export default function UsersV2() {
     { key: 'enabled', label: t('status'), render: (v: unknown) => <Badge variant={v ? 'success' : "destructive"}>{v ? t('users.enabled') : t('users.disabled')}</Badge> },
     { key: 'last_login_at', label: t('users.lastLogin'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
     { key: 'created_at', label: t('users.createdAt'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
-    { key: 'id', label: t('actions'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><IconButton icon="edit" label={t('users.editNamed', { name: row.username })} onClick={(e) => { e.stopPropagation(); openEditUser(row) }} />{!isSelf(row) && <IconButton icon={row.enabled ? 'person_off' : 'person'} label={t(row.enabled ? 'users.disableNamed' : 'users.enableNamed', { name: row.username })} loading={togglingUserIds.has(row.id)} onClick={(e) => { e.stopPropagation(); if (row.enabled) openDisableDialog(row); else enableUser(row) }} />}</div>) : null },
+    {
+      key: 'id', label: t('actions'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><Tooltip>
+        <TooltipTrigger render={
+          <Button
+            onClick={(e) => { e.stopPropagation(); openEditUser(row) }}
+            variant="ghost"
+            size="icon"
+            data-icon-button
+            aria-label={t('users.editNamed', { name: row.username })}
+            style={{ color: 'var(--text-soft)' }}
+          />
+        }>
+          <Icon name={"edit"} size="sm" />
+        </TooltipTrigger>
+        <TooltipContent>{t('users.editNamed', { name: row.username })}</TooltipContent>
+      </Tooltip>{!isSelf(row) && <Tooltip>
+      <TooltipTrigger render={
+        <Button
+          onClick={(e) => { e.stopPropagation(); if (row.enabled) openDisableDialog(row); else enableUser(row) }}
+          variant="ghost"
+          size="icon"
+          data-icon-button
+          aria-label={t(row.enabled ? 'users.disableNamed' : 'users.enableNamed', { name: row.username })}
+          aria-busy={togglingUserIds.has(row.id) || undefined}
+          disabled={(togglingUserIds.has(row.id))}
+          style={{ color: 'var(--text-soft)' }}
+        />
+      }>
+        <Icon name={togglingUserIds.has(row.id) ? 'progress_activity' : (row.enabled ? 'person_off' : 'person')} size="sm" className={togglingUserIds.has(row.id) ? 'animate-spin' : ''} />
+      </TooltipTrigger>
+      <TooltipContent>{t(row.enabled ? 'users.disableNamed' : 'users.enableNamed', { name: row.username })}</TooltipContent>
+    </Tooltip>}</div>) : null },
   ]
 
   const tokenColumns = [
@@ -211,12 +244,9 @@ export default function UsersV2() {
           <QueryErrorState message={usersApiError.status === 403 ? t('common.permissionDenied') : usersApiError.message} onRetry={() => { void usersQuery.refetch() }} />
         ) : (
           <div className="space-y-3">
-            {usersData && usersQuery.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void usersQuery.refetch() }}>{t('now.refresh')}</Button></div></InlineNotice>}
+            {usersData && usersQuery.isRefetchError && <Alert variant={"warning"}><AlertDescription><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void usersQuery.refetch() }}>{t('now.refresh')}</Button></div></AlertDescription></Alert>}
             {enableFailure && (
-              <InlineNotice
-                tone="danger"
-                title={t('users.enableFailed', { name: enableFailure.user.username })}
-              >
+              <Alert variant={"destructive"}><AlertTitle>{t('users.enableFailed', { name: enableFailure.user.username })}</AlertTitle><AlertDescription>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <span>{getApiError(enableFailure.error).message}</span>
                   <div className="flex flex-wrap gap-2">
@@ -240,12 +270,12 @@ export default function UsersV2() {
                     </Button>
                   </div>
                 </div>
-              </InlineNotice>
+              </AlertDescription></Alert>
             )}
             {users.length === 0 ? (
-              <EmptyState icon="group" title={t('users.noUsers')} minHeight={180} />
+              <Empty style={{ minHeight: 180 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"group"} size="sm" /></EmptyMedia><EmptyTitle>{t('users.noUsers')}</EmptyTitle></EmptyHeader></Empty>
             ) : (
-              <DataTableV2
+              <DataTable
                 columns={userColumns}
                 data={users.map((user) => ({ ...user }))}
                 rowKey={(row) => row.id as number}
@@ -269,8 +299,8 @@ export default function UsersV2() {
           <QueryErrorState message={tokensApiError.status === 403 ? t('common.permissionDenied') : tokensApiError.message} onRetry={() => { void tokensQuery.refetch() }} />
         ) : (
           <div className="space-y-3">
-          {tokensData && tokensQuery.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void tokensQuery.refetch() }}>{t('now.refresh')}</Button></div></InlineNotice>}
-          {tokens.length === 0 ? <EmptyState icon="key" title={t('users.noTokens')} minHeight={180} /> : <DataTableV2
+          {tokensData && tokensQuery.isRefetchError && <Alert variant={"warning"}><AlertDescription><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void tokensQuery.refetch() }}>{t('now.refresh')}</Button></div></AlertDescription></Alert>}
+          {tokens.length === 0 ? <Empty style={{ minHeight: 180 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"key"} size="sm" /></EmptyMedia><EmptyTitle>{t('users.noTokens')}</EmptyTitle></EmptyHeader></Empty> : <DataTable
             columns={tokenColumns}
             data={tokens.map((token) => ({ ...token }))}
             rowKey={(row) => row.id as number}
@@ -281,41 +311,82 @@ export default function UsersV2() {
         )}
       </section>
 
-      <ModalV2 open={userDialogOpen} onClose={closeUserDialog} title={editUserId ? t('users.editUser') : t('users.addUser')} closeDisabled={isUserSaving}>
-        <form onSubmit={handleUserSubmit} className="space-y-4">
-          <InputV2 label={t('login.username')} value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} disabled={!!editUserId} required={!editUserId} />
-          <InputV2 label={editUserId ? t('users.newPasswordHint') : t('login.password')} hint={t('users.passwordPolicy')} type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required={!editUserId} />
-          <SelectV2 label={t('users.role')} value={userForm.role} disabled={editUserId === principal?.id} onChange={(e) => setUserForm({ ...userForm, role: e.target.value as UserRole })}><option value="admin">{t('users.admin')}</option><option value="readonly">{t('users.readonly')}</option></SelectV2>
-          {userSaveError && <InlineNotice tone="danger">{getApiError(userSaveError).message}</InlineNotice>}
-          <div className="flex justify-end gap-3 pt-2"><Button type="button" variant="outline" disabled={isUserSaving} onClick={closeUserDialog}>{t('cancel')}</Button><Button type="submit" aria-busy={isUserSaving || undefined} disabled={isUserSaving || !canWrite}>{isUserSaving ? t('saving') : t('save')}</Button></div>
-        </form>
-      </ModalV2>
+        <Dialog open={userDialogOpen} onOpenChange={(nextOpen) => { if (!nextOpen && !isUserSaving) closeUserDialog() }} modal>
+          <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={isUserSaving}>
+            <DialogTitle className="pr-10">{editUserId ? t('users.editUser') : t('users.addUser')}</DialogTitle>
+            <form onSubmit={handleUserSubmit} className="space-y-4">
+              <Field disabled={!!editUserId}>
+                <FieldLabel>{t('login.username')}</FieldLabel>
+                <Input value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} disabled={!!editUserId} required={!editUserId} />
+              </Field>
+              <Field>
+                <FieldLabel>{editUserId ? t('users.newPasswordHint') : t('login.password')}</FieldLabel>
+                <Input type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required={!editUserId} />
+                {(t('users.passwordPolicy')) && <FieldDescription>{t('users.passwordPolicy')}</FieldDescription>}
+              </Field>
+              <Field disabled={editUserId === principal?.id}>
+                <FieldLabel>{t('users.role')}</FieldLabel>
+                <NativeSelect value={userForm.role} disabled={editUserId === principal?.id} onChange={(e) => setUserForm({ ...userForm, role: e.target.value as UserRole })}><option value="admin">{t('users.admin')}</option><option value="readonly">{t('users.readonly')}</option></NativeSelect>
+              </Field>
+              {userSaveError && <Alert variant={"destructive"}><AlertDescription>{getApiError(userSaveError).message}</AlertDescription></Alert>}
+              <div className="flex justify-end gap-3 pt-2"><Button type="button" variant="outline" disabled={isUserSaving} onClick={closeUserDialog}>{t('cancel')}</Button><Button type="submit" aria-busy={isUserSaving || undefined} disabled={isUserSaving || !canWrite}>{isUserSaving ? t('saving') : t('save')}</Button></div>
+            </form>
+          </DialogContent>
+        </Dialog>
 
-      <ModalV2 open={tokenDialogOpen} onClose={closeTokenDialog} title={t('users.generateToken')} closeDisabled={createTokenMutation.isPending}>
-        <form onSubmit={handleTokenSubmit} className="space-y-4">
-          <InputV2
-            label={t('name')}
-            value={tokenForm.name}
-            onChange={(e) => setTokenForm({ ...tokenForm, name: e.target.value })}
-            placeholder={t('users.tokenNamePlaceholder')}
-            required
-          />
-          <SelectV2 label={t('users.permissions')} value={tokenForm.permissions} onChange={(e) => setTokenForm({ ...tokenForm, permissions: e.target.value as TokenPermissions })}><option value="readonly">{t('users.readonly')}</option><option value="readwrite">{t('users.readwrite')}</option></SelectV2>
-          <SelectV2 label={t('users.validity')} value={tokenForm.ttl} onChange={(e) => setTokenForm({ ...tokenForm, ttl: e.target.value as CreateAPITokenRequest['ttl'] })}><option value="7d">{t('users.days7')}</option><option value="30d">{t('users.days30')}</option><option value="90d">{t('users.days90')}</option><option value="never">{t('users.neverExpires')}</option></SelectV2>
-          {createTokenMutation.isError && <InlineNotice tone="danger">{getApiError(createTokenMutation.error).message}</InlineNotice>}
-          <div className="flex justify-end gap-3 pt-2"><Button type="button" variant="outline" disabled={createTokenMutation.isPending} onClick={closeTokenDialog}>{t('cancel')}</Button><Button type="submit" aria-busy={createTokenMutation.isPending || undefined} disabled={createTokenMutation.isPending || !canWrite}>{createTokenMutation.isPending ? t('users.generating') : t('users.generate')}</Button></div>
-        </form>
-      </ModalV2>
+        <Dialog open={tokenDialogOpen} onOpenChange={(nextOpen) => { if (!nextOpen && !createTokenMutation.isPending) closeTokenDialog() }} modal>
+          <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={createTokenMutation.isPending}>
+            <DialogTitle className="pr-10">{t('users.generateToken')}</DialogTitle>
+            <form onSubmit={handleTokenSubmit} className="space-y-4">
+              <Field>
+                <FieldLabel>{t('name')}</FieldLabel>
+                <Input
+                  value={tokenForm.name}
+                  onChange={(e) => setTokenForm({ ...tokenForm, name: e.target.value })}
+                  placeholder={t('users.tokenNamePlaceholder')}
+                  required
+                />
+              </Field>
+              <Field>
+                <FieldLabel>{t('users.permissions')}</FieldLabel>
+                <NativeSelect value={tokenForm.permissions} onChange={(e) => setTokenForm({ ...tokenForm, permissions: e.target.value as TokenPermissions })}><option value="readonly">{t('users.readonly')}</option><option value="readwrite">{t('users.readwrite')}</option></NativeSelect>
+              </Field>
+              <Field>
+                <FieldLabel>{t('users.validity')}</FieldLabel>
+                <NativeSelect value={tokenForm.ttl} onChange={(e) => setTokenForm({ ...tokenForm, ttl: e.target.value as CreateAPITokenRequest['ttl'] })}><option value="7d">{t('users.days7')}</option><option value="30d">{t('users.days30')}</option><option value="90d">{t('users.days90')}</option><option value="never">{t('users.neverExpires')}</option></NativeSelect>
+              </Field>
+              {createTokenMutation.isError && <Alert variant={"destructive"}><AlertDescription>{getApiError(createTokenMutation.error).message}</AlertDescription></Alert>}
+              <div className="flex justify-end gap-3 pt-2"><Button type="button" variant="outline" disabled={createTokenMutation.isPending} onClick={closeTokenDialog}>{t('cancel')}</Button><Button type="submit" aria-busy={createTokenMutation.isPending || undefined} disabled={createTokenMutation.isPending || !canWrite}>{createTokenMutation.isPending ? t('users.generating') : t('users.generate')}</Button></div>
+            </form>
+          </DialogContent>
+        </Dialog>
 
-      <ModalV2 open={tokenResultOpen} onClose={closeTokenResult} title={t('users.tokenGenerated')}>
-        <p className="text-[14px] mb-3" style={{ color: 'var(--text-soft)' }}>{t('users.tokenCopyWarning')}</p>
-        <div className="flex items-center gap-2 rounded-sm p-3" style={{ background: 'var(--bg-soft)', border: '1px solid var(--border)' }}>
-          <code className="flex-1 font-mono text-[13px] break-all" style={{ color: 'var(--text)' }}>{createdToken}</code>
-          <IconButton icon={copied ? 'check' : 'content_copy'} label={t('users.copyToken')} onClick={copyToken} />
-        </div>
-        <p className="text-[12px] mt-2" style={{ color: 'var(--danger-text)' }}>{t('users.tokenSaveWarning')}</p>
-        <div className="flex justify-end mt-4"><Button onClick={closeTokenResult}>{t('confirm')}</Button></div>
-      </ModalV2>
+        <Dialog open={tokenResultOpen} onOpenChange={(nextOpen) => { if (!nextOpen) closeTokenResult() }} modal>
+          <DialogContent style={{ maxWidth: 440 }} finalFocus={true}>
+            <DialogTitle className="pr-10">{t('users.tokenGenerated')}</DialogTitle>
+            <p className="text-[14px] mb-3" style={{ color: 'var(--text-soft)' }}>{t('users.tokenCopyWarning')}</p>
+            <div className="flex items-center gap-2 rounded-sm p-3" style={{ background: 'var(--bg-soft)', border: '1px solid var(--border)' }}>
+              <code className="flex-1 font-mono text-[13px] break-all" style={{ color: 'var(--text)' }}>{createdToken}</code>
+              <Tooltip>
+                <TooltipTrigger render={
+                  <Button
+                    onClick={copyToken}
+                    variant="ghost"
+                    size="icon"
+                    data-icon-button
+                    aria-label={t('users.copyToken')}
+                    style={{ color: 'var(--text-soft)' }}
+                  />
+                }>
+                  <Icon name={copied ? 'check' : 'content_copy'} size="sm" />
+                </TooltipTrigger>
+                <TooltipContent>{t('users.copyToken')}</TooltipContent>
+              </Tooltip>
+            </div>
+            <p className="text-[12px] mt-2" style={{ color: 'var(--danger-text)' }}>{t('users.tokenSaveWarning')}</p>
+            <div className="flex justify-end mt-4"><Button onClick={closeTokenResult}>{t('confirm')}</Button></div>
+          </DialogContent>
+        </Dialog>
 
       <ConfirmActionDialog
         open={disableTarget !== null}

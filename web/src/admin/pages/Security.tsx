@@ -1,3 +1,7 @@
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Field, FieldLabel } from '@/components/ui/field'
 import { useEffect, useState, useRef, type ComponentProps } from 'react'
 import type { AxiosResponse } from 'axios'
 import { useTranslation } from 'react-i18next'
@@ -6,16 +10,16 @@ import { Link, useSearchParams } from 'react-router'
 import { adminApi } from '@/lib/api'
 import { formatDate, formatTime } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import InputV2 from '@/components/Input'
-import SelectV2 from '@/components/Select'
-import SwitchV2 from '@/components/Switch'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Switch } from '@/components/ui/switch'
 import Icon from '@/components/Icon'
 import { Badge } from '@/components/ui/badge'
+import { Meter, MeterIndicator, MeterTrack } from '@/components/ui/meter'
 import Metric from '@/components/Metric'
 import SectionHeader from '@/components/SectionHeader'
-import EmptyState from '@/components/EmptyState'
-import InlineNotice from '@/components/InlineNotice'
-import DataTableV2 from '@/components/DataTable'
+
+import DataTable from '@/components/DataTable'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import QueryErrorState from '@/components/QueryErrorState'
 import AdminPage from '@/admin/components/AdminPage'
@@ -93,8 +97,8 @@ function CapabilityOverview() {
     <section aria-label={t('security.capabilityTitle')} className="space-y-3">
       <SectionHeader title={t('security.capabilityTitle')} />
       {query.isPending && <p className="text-[12px] text-[var(--text-soft)]" aria-busy="true">{t('security.capabilityLoading')}</p>}
-      {query.isError && <InlineNotice tone="warning">{t('security.capabilityUnavailable')}</InlineNotice>}
-      {!query.isPending && !query.isError && facts.length === 0 && <InlineNotice tone="warning">{t('security.capabilityNoData')}</InlineNotice>}
+      {query.isError && <Alert variant={"warning"}><AlertDescription>{t('security.capabilityUnavailable')}</AlertDescription></Alert>}
+      {!query.isPending && !query.isError && facts.length === 0 && <Alert variant={"warning"}><AlertDescription>{t('security.capabilityNoData')}</AlertDescription></Alert>}
       {facts.length > 0 && (
         <div className="space-y-3">
           {[...grouped.entries()].map(([name, rows]) => (
@@ -157,8 +161,8 @@ function OverviewTab() {
         <div className="grid grid-cols-2 gap-6 py-2 lg:grid-cols-4 lg:gap-8">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="flex flex-col items-center gap-3">
-              <div className="h-3 w-20 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
-              <div className="h-11 w-32 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+              <Skeleton className="h-3 w-20 rounded" style={{ background: 'var(--bg-soft)' }} />
+              <Skeleton className="h-11 w-32 rounded" style={{ background: 'var(--bg-soft)' }} />
             </div>
           ))}
         </div>
@@ -200,8 +204,8 @@ function OverviewTab() {
             </Button>
           : undefined}
         />
-        {scanMutation.isSuccess && <div className="mb-3"><InlineNotice tone="success">{t('security.scanStarted')}</InlineNotice></div>}
-        {scanMutation.isError && <div className="mb-3"><InlineNotice tone="danger">{getApiError(scanMutation.error).status === 409 ? t('security.scanConflict') : getApiError(scanMutation.error).message}</InlineNotice></div>}
+        {scanMutation.isSuccess && <div className="mb-3"><Alert variant={"success"}><AlertDescription>{t('security.scanStarted')}</AlertDescription></Alert></div>}
+        {scanMutation.isError && <div className="mb-3"><Alert variant={"destructive"}><AlertDescription>{getApiError(scanMutation.error).status === 409 ? t('security.scanConflict') : getApiError(scanMutation.error).message}</AlertDescription></Alert></div>}
         <p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
           {t('security.lastScan')}: {dashboard?.last_scan_at ? formatTime(dashboard.last_scan_at, 'relative') : t('security.never')}
         </p>
@@ -225,16 +229,11 @@ function OverviewTab() {
                   <div className="w-20 shrink-0">
                     <Badge variant={variant}>{item.severity.toUpperCase()}</Badge>
                   </div>
-                  <div className="flex-1 h-2 rounded-full" style={{ background: 'var(--bg-soft)' }}>
-                    <div
-                      className="h-full rounded-full transition-[width] duration-300 ease-out"
-                      style={{
-                        width: `${(item.count / maxCount) * 100}%`,
-                        background: barColors[item.severity] || 'var(--brand)',
-                        minWidth: item.count > 0 ? '4px' : '0',
-                      }}
-                    />
-                  </div>
+                  <Meter className="flex-1" value={item.count} max={maxCount} format={{ style: 'decimal' }} aria-label={`${t('security.totalVulnerabilities')} · ${item.severity}`}>
+                    <MeterTrack className="h-2">
+                      <MeterIndicator style={{ background: barColors[item.severity] || 'var(--brand)', minWidth: item.count > 0 ? '4px' : '0' }} />
+                    </MeterTrack>
+                  </Meter>
                   <span className="font-mono text-[12px] tabular-nums w-8 text-right shrink-0" style={{ color: 'var(--text)' }}>
                     {item.count}
                   </span>
@@ -243,7 +242,7 @@ function OverviewTab() {
             })}
           </div>
         ) : (
-          <EmptyState icon="verified" title={t('security.noVulnerabilities')} minHeight={140} />
+          <Empty style={{ minHeight: 140 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"verified"} size="sm" /></EmptyMedia><EmptyTitle>{t('security.noVulnerabilities')}</EmptyTitle></EmptyHeader></Empty>
         )}
       </section>
     </div>
@@ -339,29 +338,36 @@ function VulnerabilitiesTab() {
       {/* Filter bar */}
       <form data-security-vulnerability-filters className="flex flex-wrap items-end gap-3" onSubmit={applySearch}>
         <div className="w-40">
-          <SelectV2 label={t('security.ecosystem')} value={ecosystem} onChange={(e) => { setEcosystem(e.target.value); setPage(1) }}>
-            <option value="">{t('all')}</option>
-            {securityEcosystems.map((candidate) => (
-              <option key={candidate.id} value={candidate.id}>{candidate.label}</option>
-            ))}
-          </SelectV2>
+          <Field>
+            <FieldLabel>{t('security.ecosystem')}</FieldLabel>
+            <NativeSelect value={ecosystem} onChange={(e) => { setEcosystem(e.target.value); setPage(1) }}>
+              <option value="">{t('all')}</option>
+              {securityEcosystems.map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>{candidate.label}</option>
+              ))}
+            </NativeSelect>
+          </Field>
         </div>
         <div className="w-36">
-          <SelectV2 label={t('security.severity')} value={severity} onChange={(e) => { setSeverity(e.target.value); setPage(1) }}>
-            <option value="">{t('all')}</option>
-            {(['critical', 'high', 'medium', 'low', 'unknown'] satisfies SecuritySeverity[]).map((value) => (
-              <option key={value} value={value}>{t(`security.${value}`)}</option>
-            ))}
-          </SelectV2>
+          <Field>
+            <FieldLabel>{t('security.severity')}</FieldLabel>
+            <NativeSelect value={severity} onChange={(e) => { setSeverity(e.target.value); setPage(1) }}>
+              <option value="">{t('all')}</option>
+              {(['critical', 'high', 'medium', 'low', 'unknown'] satisfies SecuritySeverity[]).map((value) => (
+                <option key={value} value={value}>{t(`security.${value}`)}</option>
+              ))}
+            </NativeSelect>
+          </Field>
         </div>
         <div className="flex-1 min-w-[200px]">
-          <InputV2
-            label={t('security.packageSearch')}
-            value={draftSearch}
-            onChange={(e) => setDraftSearch(e.target.value)}
-            placeholder={t('security.searchPlaceholder')}
-            mono
-          />
+          <Field>
+            <FieldLabel>{t('security.packageSearch')}</FieldLabel>
+            <Input className="font-mono"
+              value={draftSearch}
+              onChange={(e) => setDraftSearch(e.target.value)}
+              placeholder={t('security.searchPlaceholder')}
+            />
+          </Field>
         </div>
         <Button type="submit" size="sm">
           <Icon name="search" size="sm" />
@@ -377,7 +383,7 @@ function VulnerabilitiesTab() {
       ) : (
         <div className="space-y-3">
         {data && query.isRefetchError && <StaleDataNotice refreshing={query.isFetching} onRefresh={() => query.refetch()} />}
-        {items.length === 0 ? <EmptyState icon="verified" title={t('security.noVulnerabilities')} minHeight={200} /> : <DataTableV2
+        {items.length === 0 ? <Empty style={{ minHeight: 200 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"verified"} size="sm" /></EmptyMedia><EmptyTitle>{t('security.noVulnerabilities')}</EmptyTitle></EmptyHeader></Empty> : <DataTable
           columns={columns}
           data={items.map((item) => ({ ...item }))}
           rowKey={(row) => row.id as number}
@@ -435,7 +441,7 @@ function SuggestionsTab() {
       <div aria-busy="true" className="space-y-4">
         <div aria-hidden="true" className="contents">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-20 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+          <Skeleton key={i} className="h-20 rounded" style={{ background: 'var(--bg-soft)' }} />
         ))}
         </div>
       </div>
@@ -450,7 +456,7 @@ function SuggestionsTab() {
   return (
     <div className="space-y-3">
       {data && query.isRefetchError && <StaleDataNotice refreshing={query.isFetching} onRefresh={() => query.refetch()} />}
-      {items.length > 0 && <InlineNotice tone="warning">
+      {items.length > 0 && <Alert variant={"warning"}><AlertDescription>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <span>{t('security.manualRuleRequired')}</span>
           <Link
@@ -460,8 +466,8 @@ function SuggestionsTab() {
             {t('security.openPackageRules')}
           </Link>
         </div>
-      </InlineNotice>}
-      {items.length === 0 ? <EmptyState icon="verified" title={t('security.noSuggestions')} minHeight={240} /> : <>
+      </AlertDescription></Alert>}
+      {items.length === 0 ? <Empty style={{ minHeight: 240 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"verified"} size="sm" /></EmptyMedia><EmptyTitle>{t('security.noSuggestions')}</EmptyTitle></EmptyHeader></Empty> : <>
       <div>
         {items.map((item: SecurityVulnerability, idx: number) => {
           const severityVariant = SEVERITY_BADGE_MAP[item.severity] || 'default'
@@ -747,7 +753,7 @@ function PoliciesTab() {
       <div aria-busy="true" className="space-y-2">
         <div aria-hidden="true" className="contents">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-12 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+          <Skeleton key={i} className="h-12 rounded" style={{ background: 'var(--bg-soft)' }} />
         ))}
         </div>
       </div>
@@ -774,33 +780,36 @@ function PoliciesTab() {
             className="mb-5 grid min-w-0 gap-4 border-b border-[var(--border)] pb-5 md:grid-cols-[minmax(0,1fr)_minmax(9rem,12rem)_auto] md:items-end"
           >
             <div className="min-w-0">
-              <SwitchV2
-                label={t('security.bulkAutoBlock')}
-                checked={bulkPolicy.auto_block_enabled}
-                disabled={!hasAutoBlockSupport || isBatchSaving || hasPolicyWrites}
-                onCheckedChange={(checked) => setBulkPolicy(current => ({
-                  ...current,
-                  auto_block_enabled: checked,
-                }))}
-              />
+              <Field orientation="horizontal" disabled={!hasAutoBlockSupport || isBatchSaving || hasPolicyWrites}>
+                <Switch
+                  checked={bulkPolicy.auto_block_enabled}
+                  disabled={!hasAutoBlockSupport || isBatchSaving || hasPolicyWrites}
+                  onCheckedChange={(checked) => setBulkPolicy(current => ({
+                    ...current,
+                    auto_block_enabled: checked,
+                  }))}
+                />
+                <FieldLabel>{t('security.bulkAutoBlock')}</FieldLabel>
+              </Field>
               <p className="mt-1 text-[12px] leading-5 text-[var(--text-soft)]">
                 {t('security.bulkPolicyHint')}
               </p>
             </div>
-            <InputV2
-              label={t('security.cvssThreshold')}
-              type="number"
-              min={0}
-              max={10}
-              step={0.1}
-              value={bulkPolicy.min_cvss_score}
-              disabled={!hasAutoBlockSupport || !bulkPolicy.auto_block_enabled || isBatchSaving || hasPolicyWrites}
-              onChange={(event) => setBulkPolicy(current => ({
-                ...current,
-                min_cvss_score: Number.parseFloat(event.target.value) || 0,
-              }))}
-              mono
-            />
+            <Field disabled={!hasAutoBlockSupport || !bulkPolicy.auto_block_enabled || isBatchSaving || hasPolicyWrites}>
+              <FieldLabel>{t('security.cvssThreshold')}</FieldLabel>
+              <Input className="font-mono"
+                type="number"
+                min={0}
+                max={10}
+                step={0.1}
+                value={bulkPolicy.min_cvss_score}
+                disabled={!hasAutoBlockSupport || !bulkPolicy.auto_block_enabled || isBatchSaving || hasPolicyWrites}
+                onChange={(event) => setBulkPolicy(current => ({
+                  ...current,
+                  min_cvss_score: Number.parseFloat(event.target.value) || 0,
+                }))}
+              />
+            </Field>
             <Button
               type="button"
               variant="outline"
@@ -816,11 +825,13 @@ function PoliciesTab() {
             <span className="text-[12px] text-[var(--text-soft)]" aria-live="polite">
               {t('security.unsavedCount', { count: dirtyEcosystems.length })}
             </span>
-            <SwitchV2
-              label={t('security.showChangedOnly')}
-              checked={showChangedOnly}
-              onCheckedChange={setShowChangedOnly}
-            />
+            <Field orientation="horizontal">
+              <Switch
+                checked={showChangedOnly}
+                onCheckedChange={setShowChangedOnly}
+              />
+              <FieldLabel>{t('security.showChangedOnly')}</FieldLabel>
+            </Field>
           </div>
           {canWrite && (
             <div className="flex flex-wrap items-center gap-2">
@@ -851,12 +862,7 @@ function PoliciesTab() {
         </div>
         <div>
           {visibleEcosystems.length === 0 ? (
-            <EmptyState
-              icon="task_alt"
-              title={t('security.noChangedPolicies')}
-              hint={t('security.noChangedPoliciesHint')}
-              minHeight={160}
-            />
+            <Empty style={{ minHeight: 160 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"task_alt"} size="sm" /></EmptyMedia><EmptyTitle>{t('security.noChangedPolicies')}</EmptyTitle>{t('security.noChangedPoliciesHint') && <EmptyDescription>{t('security.noChangedPoliciesHint')}</EmptyDescription>}</EmptyHeader></Empty>
           ) : visibleEcosystems.map((eco, idx) => {
             const policy = getPolicy(eco)
             const saveState = policySaveStates[eco]
@@ -892,30 +898,33 @@ function PoliciesTab() {
                   </div>
 
                   <div className="justify-self-end text-[var(--text-soft)] sm:justify-self-start">
-                    <SwitchV2
-                      label={t('security.autoBlock')}
-                      aria-label={`${eco.toUpperCase()} ${t('security.autoBlock')}`}
-                      checked={policy.auto_block_enabled}
-                      disabled={!canWrite || isSaving || isBatchSaving || (!autoBlockSupported && !policy.auto_block_enabled)}
-                      onCheckedChange={(checked) => setPolicy(eco, { auto_block_enabled: checked })}
-                    />
+                    <Field orientation="horizontal" disabled={!canWrite || isSaving || isBatchSaving || (!autoBlockSupported && !policy.auto_block_enabled)}>
+                      <Switch
+                        aria-label={`${eco.toUpperCase()} ${t('security.autoBlock')}`}
+                        checked={policy.auto_block_enabled}
+                        disabled={!canWrite || isSaving || isBatchSaving || (!autoBlockSupported && !policy.auto_block_enabled)}
+                        onCheckedChange={(checked) => setPolicy(eco, { auto_block_enabled: checked })}
+                      />
+                      <FieldLabel>{t('security.autoBlock')}</FieldLabel>
+                    </Field>
                   </div>
 
                   {/* CVSS threshold */}
                   <div data-security-policy-score className="min-w-0 sm:w-28">
-                    <InputV2
-                      label={t('security.cvssThreshold')}
-                      aria-label={`${eco.toUpperCase()} ${t('security.cvssThreshold')}`}
-                      type="number"
-                      min={0}
-                      max={10}
-                      step={0.1}
-                      value={policy.min_cvss_score}
-                      disabled={!canWrite || isSaving || isBatchSaving || !autoBlockSupported || !policy.auto_block_enabled}
-                      onChange={(e) => setPolicy(eco, { min_cvss_score: parseFloat(e.target.value) || 0 })}
-                      mono
-                      className="px-2 py-1 text-center"
-                    />
+                    <Field disabled={!canWrite || isSaving || isBatchSaving || !autoBlockSupported || !policy.auto_block_enabled}>
+                      <FieldLabel>{t('security.cvssThreshold')}</FieldLabel>
+                      <Input
+                        aria-label={`${eco.toUpperCase()} ${t('security.cvssThreshold')}`}
+                        type="number"
+                        min={0}
+                        max={10}
+                        step={0.1}
+                        value={policy.min_cvss_score}
+                        disabled={!canWrite || isSaving || isBatchSaving || !autoBlockSupported || !policy.auto_block_enabled}
+                        onChange={(e) => setPolicy(eco, { min_cvss_score: parseFloat(e.target.value) || 0 })}
+                        className={['font-mono', "px-2 py-1 text-center"].join(' ')}
+                      />
+                    </Field>
                   </div>
 
                   {canWrite && <div data-security-policy-save className="justify-self-end">
@@ -936,7 +945,7 @@ function PoliciesTab() {
                     {t(autoBlockUnavailableHint)}
                   </p>
                 )}
-                {saveState?.error ? <div className="mt-2"><InlineNotice tone="danger">{getApiError(saveState.error).message}</InlineNotice></div> : null}
+                {saveState?.error ? <div className="mt-2"><Alert variant={"destructive"}><AlertDescription>{getApiError(saveState.error).message}</AlertDescription></Alert></div> : null}
               </div>
             )
           })}
@@ -987,9 +996,9 @@ function PoliciesTab() {
           }}
           aria-busy={importMutation.isPending || undefined}
         >
-          <button
+          <Button variant="ghost"
             type="button"
-            className="inline-flex min-h-10 flex-col items-center justify-center rounded-sm bg-transparent px-4 py-2 text-[var(--text-soft)] stripe-focus-ring"
+            className="h-auto min-h-[40px] flex-col whitespace-normal px-4 py-2 text-muted-foreground"
             onClick={() => fileInputRef.current?.click()}
             disabled={importMutation.isPending}
           >
@@ -997,7 +1006,7 @@ function PoliciesTab() {
             <span className="mt-2 text-[13px]">
               {importMutation.isPending ? t('security.importing') : t('security.dropOrClick')}
             </span>
-          </button>
+          </Button>
           <label htmlFor="security-vulnerability-import" className="sr-only">
             {t('security.dropOrClick')}
           </label>
@@ -1012,7 +1021,7 @@ function PoliciesTab() {
           />
         </div>}
         {importMutation.isSuccess && (
-          <div className="mt-2"><InlineNotice tone="success">
+          <div className="mt-2"><Alert variant={"success"}><AlertDescription>
             <p>{t('security.importSuccess', { count: importMutation.data.data.imported })}</p>
             <p className="mt-1 text-[12px]">
               {t('security.importSummary', {
@@ -1022,10 +1031,10 @@ function PoliciesTab() {
                 skipped: importMutation.data.data.skipped,
               })}
             </p>
-          </InlineNotice></div>
+          </AlertDescription></Alert></div>
         )}
         {importMutation.isError && (
-          <div className="mt-2"><InlineNotice tone="danger">{getApiError(importMutation.error).message}</InlineNotice></div>
+          <div className="mt-2"><Alert variant={"destructive"}><AlertDescription>{getApiError(importMutation.error).message}</AlertDescription></Alert></div>
         )}
       </section>
     </div>
@@ -1072,21 +1081,23 @@ export default function Security() {
     <AdminPage description={t('security.subtitle')}>
     <div className="space-y-6">
       <div className="max-w-xs">
-        <SelectV2
-          label={t('security.view')}
-          value={tab}
-          onChange={(event) => {
-            const nextTab = event.target.value
-            if (nextTab === activeTabRef.current) return
-            activeTabRef.current = nextTab
-            const nextParams = new URLSearchParams(searchParams)
-            if (nextTab === 'overview') nextParams.delete('tab')
-            else nextParams.set('tab', nextTab)
-            setSearchParams(nextParams)
-          }}
-        >
-          {views.map(view => <option key={view.key} value={view.key}>{view.label}</option>)}
-        </SelectV2>
+          <Field>
+            <FieldLabel>{t('security.view')}</FieldLabel>
+            <NativeSelect
+              value={tab}
+              onChange={(event) => {
+                const nextTab = event.target.value
+                if (nextTab === activeTabRef.current) return
+                activeTabRef.current = nextTab
+                const nextParams = new URLSearchParams(searchParams)
+                if (nextTab === 'overview') nextParams.delete('tab')
+                else nextParams.set('tab', nextTab)
+                setSearchParams(nextParams)
+              }}
+            >
+              {views.map(view => <option key={view.key} value={view.key}>{view.label}</option>)}
+            </NativeSelect>
+          </Field>
       </div>
       {views.find(view => view.key === tab)?.content}
     </div>

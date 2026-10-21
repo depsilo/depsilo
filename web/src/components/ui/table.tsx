@@ -1,7 +1,17 @@
 import { cn } from '@/lib/utils'
 
+// A table has one named, keyboard-focusable scroll region. Kept separate from
+// Table so empty/error states never create an empty scroll target.
+function TableContainer({ label, minWidth = 720, children, className, ...props }: React.ComponentProps<'div'> & { label: string; minWidth?: number }) {
+  return (
+    <div data-table-viewport role="region" aria-label={label} tabIndex={0} className={cn('stripe-focus-ring w-full overflow-x-auto', className)} {...props}>
+      <div style={{ minWidth }}>{children}</div>
+    </div>
+  )
+}
+
 // shadcn/ui Table. The scroll container is deliberately not part of `Table`:
-// data tables in this app are wrapped in `TableViewport`, which owns the
+// data tables in this app are wrapped in `TableContainer`, which owns the
 // labelled, focusable region the accessibility contract depends on.
 function Table({ className, ...props }: React.ComponentProps<'table'>) {
   return (
@@ -37,7 +47,7 @@ function TableFooter({ className, ...props }: React.ComponentProps<'tfoot'>) {
   return (
     <tfoot
       data-slot="table-footer"
-      className={cn('border-t bg-muted/50 font-medium', className)}
+      className={cn('border-t border-border bg-muted/50 font-medium', className)}
       {...props}
     />
   )
@@ -48,7 +58,7 @@ function TableRow({ className, ...props }: React.ComponentProps<'tr'>) {
     <tr
       data-slot="table-row"
       className={cn(
-        'border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted',
+        'border-b border-border transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted',
         className,
       )}
       {...props}
@@ -90,6 +100,7 @@ function TableCaption({ className, ...props }: React.ComponentProps<'caption'>) 
 }
 
 export {
+  TableContainer,
   Table,
   TableBody,
   TableCaption,

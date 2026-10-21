@@ -1,3 +1,6 @@
+import { Skeleton } from '@/components/ui/skeleton'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Field, FieldLabel, FieldDescription, FieldError } from '@/components/ui/field'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -6,12 +9,12 @@ import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import WebhookTab from '@/admin/components/WebhookTab'
 import { Button } from '@/components/ui/button'
 import Icon from '@/components/Icon'
-import InlineNotice from '@/components/InlineNotice'
-import InputV2 from '@/components/Input'
+
+import { Input } from '@/components/ui/input'
 import QueryErrorState from '@/components/QueryErrorState'
 import SectionHeader from '@/components/SectionHeader'
-import SelectV2 from '@/components/Select'
-import TabsV2 from '@/components/Tabs'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAppToast } from '@/components/Toast'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { usePrincipal } from '@/hooks/usePrincipal'
@@ -136,7 +139,7 @@ function mutationErrorMessage(error: unknown, fallback: string): string {
   return message ?? fallback
 }
 
-export default function SettingsV2() {
+export default function Settings() {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const toast = useAppToast()
@@ -194,9 +197,9 @@ export default function SettingsV2() {
   if (settingsQuery.isPending) {
     return (
       <AdminPage description={t('settings.subtitle')}>
-        <div role="status" aria-busy="true" className="h-40 animate-pulse rounded-md bg-[var(--bg-soft)]">
+        <Skeleton role="status" aria-hidden={false} aria-busy="true" className="h-40">
           <span className="sr-only">{t('loading')}</span>
-        </div>
+        </Skeleton>
       </AdminPage>
     )
   }
@@ -212,9 +215,9 @@ export default function SettingsV2() {
   if (!settingsQuery.data || !draft) {
     return (
       <AdminPage description={t('settings.subtitle')}>
-        <div role="status" aria-busy="true" className="h-40 animate-pulse rounded-md bg-[var(--bg-soft)]">
+        <Skeleton role="status" aria-hidden={false} aria-busy="true" className="h-40">
           <span className="sr-only">{t('loading')}</span>
-        </div>
+        </Skeleton>
       </AdminPage>
     )
   }
@@ -244,9 +247,9 @@ export default function SettingsV2() {
     return parts.join(' · ')
   }
   const resultList = (title: string, paths: EditableSettingPath[], tone: 'success' | 'warning') => paths.length ? (
-    <InlineNotice tone={tone} title={title}>
+    <Alert variant={tone}><AlertTitle>{title}</AlertTitle><AlertDescription>
       {formatFieldList(paths)}
-    </InlineNotice>
+    </AlertDescription></Alert>
   ) : null
   const section = (title: string, children: ReactNode) => (
     <section className="min-w-0 max-w-[720px] [&_input]:h-10 [&_select]:h-10">
@@ -315,20 +318,30 @@ export default function SettingsV2() {
       label: t('settings.basic'),
       icon: <Icon name="tune" size="sm" />,
       content: settingsForm('basic', section(t('settings.basic'), fields(<>
-        <InputV2 label={fieldLabel('server.host')} value={data.configured.server.host} readOnly hint={fieldHint('server.host')} />
-        <InputV2 label={fieldLabel('server.port')} value={String(data.configured.server.port)} readOnly hint={fieldHint('server.port')} />
-        <SelectV2
-          label={fieldLabel('server.log_level')}
-          value={draft.logLevel}
-          onChange={event => updateDraft('logLevel', event.target.value as SettingsDraft['logLevel'])}
-          disabled={isDisabled('server.log_level')}
-          hint={fieldHint('server.log_level')}
-        >
-          <option value="debug">debug</option>
-          <option value="info">info</option>
-          <option value="warn">warn</option>
-          <option value="error">error</option>
-        </SelectV2>
+        <Field>
+          <FieldLabel>{fieldLabel('server.host')}</FieldLabel>
+          <Input value={data.configured.server.host} readOnly />
+          {(fieldHint('server.host')) && <FieldDescription>{fieldHint('server.host')}</FieldDescription>}
+        </Field>
+        <Field>
+          <FieldLabel>{fieldLabel('server.port')}</FieldLabel>
+          <Input value={String(data.configured.server.port)} readOnly />
+          {(fieldHint('server.port')) && <FieldDescription>{fieldHint('server.port')}</FieldDescription>}
+        </Field>
+        <Field disabled={isDisabled('server.log_level')}>
+          <FieldLabel>{fieldLabel('server.log_level')}</FieldLabel>
+          <NativeSelect
+            value={draft.logLevel}
+            onChange={event => updateDraft('logLevel', event.target.value as SettingsDraft['logLevel'])}
+            disabled={isDisabled('server.log_level')}
+          >
+            <option value="debug">debug</option>
+            <option value="info">info</option>
+            <option value="warn">warn</option>
+            <option value="error">error</option>
+          </NativeSelect>
+          {(fieldHint('server.log_level')) && <FieldDescription>{fieldHint('server.log_level')}</FieldDescription>}
+        </Field>
       </>))),
     },
     {
@@ -336,10 +349,26 @@ export default function SettingsV2() {
       label: t('settings.cachePolicy'),
       icon: <Icon name="cached" size="sm" />,
       content: settingsForm('cache', section(t('settings.cachePolicy'), fields(<>
-        <InputV2 id="setting-cache-max-size" label={fieldLabel('cache.max_size_gb')} type="number" min={1} step={1} required value={draft.maxSizeGB} onChange={event => updateDraft('maxSizeGB', event.target.value)} disabled={isDisabled('cache.max_size_gb')} hint={fieldHint('cache.max_size_gb')} error={fieldError('maxSizeGB')} />
-        <InputV2 id="setting-cache-lru-threshold" label={fieldLabel('cache.lru_threshold')} type="number" min={1} max={100} step={1} required value={draft.lruThreshold} onChange={event => updateDraft('lruThreshold', event.target.value)} disabled={isDisabled('cache.lru_threshold')} hint={fieldHint('cache.lru_threshold')} error={fieldError('lruThreshold')} />
-        <InputV2 id="setting-cache-ttl-index" label={fieldLabel('cache.ttl_index')} mono required value={draft.ttlIndex} onChange={event => updateDraft('ttlIndex', event.target.value)} disabled={isDisabled('cache.ttl_index')} hint={fieldHint('cache.ttl_index', t('settings.durationHint'))} error={fieldError('ttlIndex')} />
-        <InputV2 id="setting-cache-ttl-blob" label={fieldLabel('cache.ttl_blob')} mono required value={draft.ttlBlob} onChange={event => updateDraft('ttlBlob', event.target.value)} disabled={isDisabled('cache.ttl_blob')} hint={fieldHint('cache.ttl_blob', t('settings.durationHint'))} error={fieldError('ttlBlob')} />
+        <Field invalid={Boolean(fieldError('maxSizeGB'))} disabled={isDisabled('cache.max_size_gb')}>
+          <FieldLabel>{fieldLabel('cache.max_size_gb')}</FieldLabel>
+          <Input aria-invalid={Boolean(fieldError('maxSizeGB')) || undefined} id="setting-cache-max-size" type="number" min={1} step={1} required value={draft.maxSizeGB} onChange={event => updateDraft('maxSizeGB', event.target.value)} disabled={isDisabled('cache.max_size_gb')} />
+          {(fieldError('maxSizeGB')) ? <FieldError match>{fieldError('maxSizeGB')}</FieldError> : (fieldHint('cache.max_size_gb')) ? <FieldDescription>{fieldHint('cache.max_size_gb')}</FieldDescription> : null}
+        </Field>
+        <Field invalid={Boolean(fieldError('lruThreshold'))} disabled={isDisabled('cache.lru_threshold')}>
+          <FieldLabel>{fieldLabel('cache.lru_threshold')}</FieldLabel>
+          <Input aria-invalid={Boolean(fieldError('lruThreshold')) || undefined} id="setting-cache-lru-threshold" type="number" min={1} max={100} step={1} required value={draft.lruThreshold} onChange={event => updateDraft('lruThreshold', event.target.value)} disabled={isDisabled('cache.lru_threshold')} />
+          {(fieldError('lruThreshold')) ? <FieldError match>{fieldError('lruThreshold')}</FieldError> : (fieldHint('cache.lru_threshold')) ? <FieldDescription>{fieldHint('cache.lru_threshold')}</FieldDescription> : null}
+        </Field>
+        <Field invalid={Boolean(fieldError('ttlIndex'))} disabled={isDisabled('cache.ttl_index')}>
+          <FieldLabel>{fieldLabel('cache.ttl_index')}</FieldLabel>
+          <Input aria-invalid={Boolean(fieldError('ttlIndex')) || undefined} className="font-mono" id="setting-cache-ttl-index" required value={draft.ttlIndex} onChange={event => updateDraft('ttlIndex', event.target.value)} disabled={isDisabled('cache.ttl_index')} />
+          {(fieldError('ttlIndex')) ? <FieldError match>{fieldError('ttlIndex')}</FieldError> : (fieldHint('cache.ttl_index', t('settings.durationHint'))) ? <FieldDescription>{fieldHint('cache.ttl_index', t('settings.durationHint'))}</FieldDescription> : null}
+        </Field>
+        <Field invalid={Boolean(fieldError('ttlBlob'))} disabled={isDisabled('cache.ttl_blob')}>
+          <FieldLabel>{fieldLabel('cache.ttl_blob')}</FieldLabel>
+          <Input aria-invalid={Boolean(fieldError('ttlBlob')) || undefined} className="font-mono" id="setting-cache-ttl-blob" required value={draft.ttlBlob} onChange={event => updateDraft('ttlBlob', event.target.value)} disabled={isDisabled('cache.ttl_blob')} />
+          {(fieldError('ttlBlob')) ? <FieldError match>{fieldError('ttlBlob')}</FieldError> : (fieldHint('cache.ttl_blob', t('settings.durationHint'))) ? <FieldDescription>{fieldHint('cache.ttl_blob', t('settings.durationHint'))}</FieldDescription> : null}
+        </Field>
       </>))),
     },
     {
@@ -347,9 +376,21 @@ export default function SettingsV2() {
       label: t('settings.storageBackend'),
       icon: <Icon name="database" size="sm" />,
       content: settingsForm('storage', section(t('settings.storageBackend'), fields(<>
-        <InputV2 label={fieldLabel('storage.type')} value={data.configured.storage.type} readOnly hint={fieldHint('storage.type')} />
-        <InputV2 label={fieldLabel('storage.path')} value={data.configured.storage.path} readOnly mono hint={fieldHint('storage.path')} />
-        <InputV2 label={fieldLabel('database.driver')} value={data.configured.database.driver} readOnly hint={fieldHint('database.driver')} />
+        <Field>
+          <FieldLabel>{fieldLabel('storage.type')}</FieldLabel>
+          <Input value={data.configured.storage.type} readOnly />
+          {(fieldHint('storage.type')) && <FieldDescription>{fieldHint('storage.type')}</FieldDescription>}
+        </Field>
+        <Field>
+          <FieldLabel>{fieldLabel('storage.path')}</FieldLabel>
+          <Input className="font-mono" value={data.configured.storage.path} readOnly />
+          {(fieldHint('storage.path')) && <FieldDescription>{fieldHint('storage.path')}</FieldDescription>}
+        </Field>
+        <Field>
+          <FieldLabel>{fieldLabel('database.driver')}</FieldLabel>
+          <Input value={data.configured.database.driver} readOnly />
+          {(fieldHint('database.driver')) && <FieldDescription>{fieldHint('database.driver')}</FieldDescription>}
+        </Field>
       </>))),
     },
     {
@@ -357,7 +398,11 @@ export default function SettingsV2() {
       label: t('settings.authSecurity'),
       icon: <Icon name="shield" size="sm" />,
       content: settingsForm('auth', section(t('settings.authSecurity'), fields(
-        <InputV2 id="setting-auth-token-ttl" label={fieldLabel('auth.token_ttl')} mono required value={draft.tokenTTL} onChange={event => updateDraft('tokenTTL', event.target.value)} disabled={isDisabled('auth.token_ttl')} hint={fieldHint('auth.token_ttl', t('settings.durationHint'))} error={fieldError('tokenTTL')} />
+        <Field invalid={Boolean(fieldError('tokenTTL'))} disabled={isDisabled('auth.token_ttl')}>
+          <FieldLabel>{fieldLabel('auth.token_ttl')}</FieldLabel>
+          <Input aria-invalid={Boolean(fieldError('tokenTTL')) || undefined} className="font-mono" id="setting-auth-token-ttl" required value={draft.tokenTTL} onChange={event => updateDraft('tokenTTL', event.target.value)} disabled={isDisabled('auth.token_ttl')} />
+          {(fieldError('tokenTTL')) ? <FieldError match>{fieldError('tokenTTL')}</FieldError> : (fieldHint('auth.token_ttl', t('settings.durationHint'))) ? <FieldDescription>{fieldHint('auth.token_ttl', t('settings.durationHint'))}</FieldDescription> : null}
+        </Field>
       ))),
     },
     {
@@ -388,7 +433,7 @@ export default function SettingsV2() {
           onRefresh={() => settingsQuery.refetch()}
         />
       )}
-      {configurationTab && inlineError && <InlineNotice tone="danger" title={t('settings.saveError')}>{inlineError}</InlineNotice>}
+      {configurationTab && inlineError && <Alert variant={"destructive"}><AlertTitle>{t('settings.saveError')}</AlertTitle><AlertDescription>{inlineError}</AlertDescription></Alert>}
       {configurationTab && lastResult && (
         <div className="space-y-2">
           {resultList(t('settings.appliedNowTitle'), lastResult.applied_now, 'success')}
@@ -396,18 +441,15 @@ export default function SettingsV2() {
         </div>
       )}
       {data.pending_restart.length > 0 && (
-        <InlineNotice
-          tone="warning"
-          title={lastResult?.restart_required.length ? t('settings.restartRequiredTitle') : t('settings.pendingRestartTitle')}
-        >
+        <Alert variant={"warning"}><AlertTitle>{lastResult?.restart_required.length ? t('settings.restartRequiredTitle') : t('settings.pendingRestartTitle')}</AlertTitle><AlertDescription>
           {t('settings.pendingRestartField', { fields: formatFieldList(data.pending_restart) })}
-        </InlineNotice>
+        </AlertDescription></Alert>
       )}
-      {!canWrite && <InlineNotice tone="warning">{t('settings.readOnlyPrincipal')}</InlineNotice>}
+      {!canWrite && <Alert variant={"warning"}><AlertDescription>{t('settings.readOnlyPrincipal')}</AlertDescription></Alert>}
       {configurationTab && !data.config_writable && (
-        <InlineNotice tone="warning" title={t('settings.configReadOnlyTitle')}>
+        <Alert variant={"warning"}><AlertTitle>{t('settings.configReadOnlyTitle')}</AlertTitle><AlertDescription>
           {t('settings.configReadOnlyBody')}
-        </InlineNotice>
+        </AlertDescription></Alert>
       )}
       {configurationTab && (
         <div className="flex min-w-0 items-start gap-2 border-b border-[var(--border)] pb-3 text-[12px] text-[var(--text-soft)]">
@@ -415,14 +457,14 @@ export default function SettingsV2() {
           <span>{t('settings.hotReloadNote')}</span>
         </div>
       )}
-      <TabsV2
-        items={tabs}
-        value={activeTab}
-        onValueChange={value => setActiveTab(value as TabKey)}
-        ariaLabel={t('settings.tabsLabel')}
-        orientation={desktopTabs ? 'vertical' : 'horizontal'}
-        appearance="directory"
-      />
+        <Tabs value={activeTab} onValueChange={value => setActiveTab(value as TabKey)} orientation={desktopTabs ? 'vertical' : 'horizontal'} className="data-[orientation=vertical]:grid data-[orientation=vertical]:grid-cols-[180px_minmax(0,1fr)] data-[orientation=vertical]:items-start data-[orientation=vertical]:gap-6">
+          <TabsList aria-label={t('settings.tabsLabel')} activateOnFocus variant="default" className="data-[orientation=vertical]:w-full">
+            {tabs.map(item => <TabsTrigger key={item.key} value={item.key}>{item.icon}{item.label}</TabsTrigger>)}
+          </TabsList>
+          <div className="min-w-0">
+            {tabs.map(item => <TabsContent key={item.key} value={item.key}>{item.content}</TabsContent>)}
+          </div>
+        </Tabs>
     </div>
     </AdminPage>
   )

@@ -1,8 +1,10 @@
+import { Toggle } from '@/components/ui/toggle'
+import { Field, FieldLabel, FieldDescription, FieldError } from '@/components/ui/field'
 import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import Icon from '@/components/Icon'
-import Input from '@/components/Input'
+import { Input } from '@/components/ui/input'
 import CodeBlock from '@/portal/components/CodeBlock'
 
 interface Props {
@@ -39,11 +41,11 @@ function ChannelButton({
   onSelect: () => void
 }) {
   return (
-    <button
+    <Toggle
       type="button"
       aria-label={choice.label}
-      aria-pressed={active}
-      onClick={onSelect}
+      pressed={active}
+      onPressedChange={onSelect}
       className="stripe-focus-ring flex min-h-12 min-w-0 cursor-pointer flex-col items-start justify-center rounded-md border px-3 py-2 text-left transition-[background,border-color,color,transform] duration-150 hover:bg-[var(--bg-hover)] active:scale-[0.98]"
       style={{
         background: active ? 'var(--brand-soft)' : 'transparent',
@@ -64,7 +66,7 @@ function ChannelButton({
       <code className="mt-0.5 font-[var(--font-mono)] text-[11.5px] leading-[1.3] text-[var(--text-subtle)]">
         {choice.channel}
       </code>
-    </button>
+    </Toggle>
   )
 }
 
@@ -174,26 +176,30 @@ export default function PyTorchIndexNotice({ endpoint, path, client }: Props) {
 
           {customMode && (
             <div className="mb-3 mt-3 max-w-[420px]">
-              <Input
-                label={t('quickstart.pytorchIndexCustomChannelLabel')}
-                value={customChannel}
-                onChange={event => setCustomChannel(event.target.value)}
-                maxLength={64}
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                mono
-                hint={
-                  !channelHasValue || channelIsValid
-                    ? t('quickstart.pytorchIndexCustomChannelHint')
-                    : undefined
-                }
-                error={
-                  channelHasValue && !channelIsValid
+              <Field invalid={Boolean(channelHasValue && !channelIsValid
+                ? t('quickstart.pytorchIndexChannelError')
+                : undefined)}>
+                <FieldLabel>{t('quickstart.pytorchIndexCustomChannelLabel')}</FieldLabel>
+                <Input aria-invalid={Boolean(channelHasValue && !channelIsValid
+                  ? t('quickstart.pytorchIndexChannelError')
+                  : undefined) || undefined} className="font-mono"
+                  value={customChannel}
+                  onChange={event => setCustomChannel(event.target.value)}
+                  maxLength={64}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+                {(channelHasValue && !channelIsValid
+                  ? t('quickstart.pytorchIndexChannelError')
+                  : undefined) ? <FieldError match>{channelHasValue && !channelIsValid
                     ? t('quickstart.pytorchIndexChannelError')
-                    : undefined
-                }
-              />
+                    : undefined}</FieldError> : (!channelHasValue || channelIsValid
+                      ? t('quickstart.pytorchIndexCustomChannelHint')
+                      : undefined) ? <FieldDescription>{!channelHasValue || channelIsValid
+                        ? t('quickstart.pytorchIndexCustomChannelHint')
+                        : undefined}</FieldDescription> : null}
+              </Field>
             </div>
           )}
           {channelIsValid && (

@@ -1,20 +1,23 @@
+import { Checkbox } from '@/components/ui/checkbox'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
+import { Field, FieldLabel } from '@/components/ui/field'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
 import { copyText } from '@/lib/clipboard'
 import { Button } from '@/components/ui/button'
-import InputV2 from '@/components/Input'
+import { Input } from '@/components/ui/input'
 import Icon from '@/components/Icon'
 import { Badge } from '@/components/ui/badge'
-import ModalV2 from '@/components/Modal'
-import DataTableV2 from '@/components/DataTable'
-import SelectV2 from '@/components/Select'
+import DataTable from '@/components/DataTable'
+import { NativeSelect } from '@/components/ui/native-select'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import SectionHeader from '@/components/SectionHeader'
-import EmptyState from '@/components/EmptyState'
-import InlineNotice from '@/components/InlineNotice'
-import IconButton from '@/components/IconButton'
+
 import QueryErrorState from '@/components/QueryErrorState'
 import ProRequiredCallout from '@/admin/components/ProRequiredCallout'
 import AdminPage from '@/admin/components/AdminPage'
@@ -36,16 +39,25 @@ function CopyButton({ text, label }: { text: string; label: string }) {
     }
   }
   return (
-    <IconButton
-      icon={copied ? 'check' : 'content_copy'}
-      label={label}
-      onClick={handleClick}
-      style={{ color: copied ? 'var(--ok-text)' : 'var(--text-soft)' }}
-    />
+    <Tooltip>
+      <TooltipTrigger render={
+        <Button
+          onClick={handleClick}
+          variant="ghost"
+          size="icon"
+          data-icon-button
+          aria-label={label}
+          style={{ color: copied ? 'var(--ok-text)' : 'var(--text-soft)' }}
+        />
+      }>
+        <Icon name={copied ? 'check' : 'content_copy'} size="sm" />
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   )
 }
 
-export default function ProjectsV2() {
+export default function Projects() {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const { canWrite } = usePrincipal()
@@ -271,11 +283,21 @@ export default function ProjectsV2() {
       <div className="space-y-12">
         {/* Detail header */}
         <div className="flex min-w-0 items-center gap-3">
-          <IconButton
-            icon="arrow_back"
-            label={t('projects.backToList')}
-            onClick={() => { setSelectedProject(null); setPkgPage(1); setPkgEcosystem('') }}
-          />
+            <Tooltip>
+              <TooltipTrigger render={
+                <Button
+                  onClick={() => { setSelectedProject(null); setPkgPage(1); setPkgEcosystem('') }}
+                  variant="ghost"
+                  size="icon"
+                  data-icon-button
+                  aria-label={t('projects.backToList')}
+                  style={{ color: 'var(--text-soft)' }}
+                />
+              }>
+                <Icon name={"arrow_back"} size="sm" />
+              </TooltipTrigger>
+              <TooltipContent>{t('projects.backToList')}</TooltipContent>
+            </Tooltip>
           <h2 className="min-w-0 break-words text-[20px] font-[600] [overflow-wrap:anywhere]" style={{ color: 'var(--text)' }}>{projectDetail?.name}</h2>
         </div>
 
@@ -329,23 +351,29 @@ export default function ProjectsV2() {
               </div>
             )}
           </div>
-          ) : <EmptyState icon="folder_managed" title={t('noData')} minHeight={180} />}
+          ) : <Empty style={{ minHeight: 180 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"folder_managed"} size="sm" /></EmptyMedia><EmptyTitle>{t('noData')}</EmptyTitle></EmptyHeader></Empty>}
         </section>
 
         {/* SBOM export */}
         <section>
           <SectionHeader title={t('sbom.export')} />
           <div data-project-sbom-controls className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,14rem)_auto] sm:items-end">
-            <SelectV2 label={t('sbom.format')} value={sbomFormat} onChange={(event) => setSbomFormat(event.target.value as ProjectSBOMFormat)}>
-              <option value="spdx">{t('sbom.spdx')}</option>
-              <option value="cyclonedx">{t('sbom.cyclonedx')}</option>
-            </SelectV2>
-            <SelectV2 label={t('sbom.filterEcosystem')} value={sbomEcosystem} onChange={(e) => setSbomEcosystem(e.target.value)}>
-              <option value="">{t('sbom.allEcosystems')}</option>
-              {operatorEcosystems.map(ecosystem => (
-                <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>
-              ))}
-            </SelectV2>
+              <Field>
+                <FieldLabel>{t('sbom.format')}</FieldLabel>
+                <NativeSelect value={sbomFormat} onChange={(event) => setSbomFormat(event.target.value as ProjectSBOMFormat)}>
+                  <option value="spdx">{t('sbom.spdx')}</option>
+                  <option value="cyclonedx">{t('sbom.cyclonedx')}</option>
+                </NativeSelect>
+              </Field>
+              <Field>
+                <FieldLabel>{t('sbom.filterEcosystem')}</FieldLabel>
+                <NativeSelect value={sbomEcosystem} onChange={(e) => setSbomEcosystem(e.target.value)}>
+                  <option value="">{t('sbom.allEcosystems')}</option>
+                  {operatorEcosystems.map(ecosystem => (
+                    <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>
+                  ))}
+                </NativeSelect>
+              </Field>
             <Button className="w-full sm:w-auto" onClick={handleSbomDownload} disabled={sbomLoading}>
               <Icon name="download" size="sm" />
               {sbomLoading ? t('sbom.generating') : t('sbom.download')}
@@ -353,24 +381,22 @@ export default function ProjectsV2() {
           </div>
           <div className="mt-3 grid gap-2">
             <label className="flex cursor-pointer items-start gap-2 text-[14px] text-[var(--text-soft)]">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 accent-[var(--brand)] stripe-focus-ring"
-                checked={sbomTechnicalFile}
-                onChange={(event) => setSbomTechnicalFile(event.target.checked)}
-              />
+                <Checkbox
+                  className="mt-0.5"
+                  checked={sbomTechnicalFile}
+                  onCheckedChange={setSbomTechnicalFile}
+                />
               <span>
                 {t('sbom.technicalFile')}
                 <span className="block text-[13px] text-[var(--text-soft)]">{t('sbom.technicalFileHint')}</span>
               </span>
             </label>
             <label className="flex cursor-pointer items-start gap-2 text-[14px] text-[var(--text-soft)]">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 accent-[var(--brand)] stripe-focus-ring"
-                checked={sbomSign}
-                onChange={(event) => setSbomSign(event.target.checked)}
-              />
+                <Checkbox
+                  className="mt-0.5"
+                  checked={sbomSign}
+                  onCheckedChange={setSbomSign}
+                />
               <span>
                 {t('sbom.sign')}
                 <span className="block text-[13px] text-[var(--text-soft)]">
@@ -381,7 +407,7 @@ export default function ProjectsV2() {
             {sbomTechnicalFile && !compliance?.organization && (
               <p className="text-[13px] text-[var(--text-soft)]">{t('sbom.organizationMissing')}</p>
             )}
-            {sbomError && <InlineNotice tone="danger">{sbomError}</InlineNotice>}
+            {sbomError && <Alert variant={"destructive"}><AlertDescription>{sbomError}</AlertDescription></Alert>}
           </div>
         </section>
 
@@ -390,12 +416,12 @@ export default function ProjectsV2() {
           <SectionHeader
             title={t('projects.packages')}
             action={
-              <SelectV2 aria-label={t('sbom.filterEcosystem')} value={pkgEcosystem} onChange={(e) => { setPkgEcosystem(e.target.value); setPkgPage(1) }}>
+              <NativeSelect aria-label={t('sbom.filterEcosystem')} value={pkgEcosystem} onChange={(e) => { setPkgEcosystem(e.target.value); setPkgPage(1) }}>
                 <option value="">{t('all')}</option>
                 {operatorEcosystems.map(ecosystem => (
                   <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>
                 ))}
-              </SelectV2>
+              </NativeSelect>
             }
           />
           {packagesQuery.isPending ? (
@@ -409,9 +435,9 @@ export default function ProjectsV2() {
             <div className="space-y-3">
               {pkgData && packagesQuery.isRefetchError && <StaleDataNotice refreshing={packagesQuery.isFetching} onRefresh={() => packagesQuery.refetch()} />}
               {packages.length === 0 ? (
-                <EmptyState icon="inventory_2" title={t('projects.noPackages')} minHeight={200} />
+                <Empty style={{ minHeight: 200 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"inventory_2"} size="sm" /></EmptyMedia><EmptyTitle>{t('projects.noPackages')}</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <DataTableV2
+                <DataTable
                   columns={pkgColumns}
                   data={packages.map((pkg) => ({ ...pkg }))}
                   rowKey={(row) => `${row.ecosystem}:${row.package_name}:${row.version}`}
@@ -450,7 +476,21 @@ export default function ProjectsV2() {
             <Icon name="visibility" size="sm" />
             {t('projects.view')}
           </Button>
-          {canWrite && <IconButton icon="delete" label={t('projects.deleteNamed', { name: row.name })} tone="danger" onClick={(e) => { e.stopPropagation(); openDeleteDialog(row) }} />}
+          {canWrite && <Tooltip>
+            <TooltipTrigger render={
+              <Button
+                onClick={(e) => { e.stopPropagation(); openDeleteDialog(row) }}
+                variant="ghost"
+                size="icon"
+                data-icon-button
+                aria-label={t('projects.deleteNamed', { name: row.name })}
+                style={{ color: 'var(--danger-text)' }}
+              />
+            }>
+              <Icon name={"delete"} size="sm" />
+            </TooltipTrigger>
+            <TooltipContent>{t('projects.deleteNamed', { name: row.name })}</TooltipContent>
+          </Tooltip>}
         </div>
       ),
     },
@@ -471,14 +511,9 @@ export default function ProjectsV2() {
       )}
 
       {projects.length === 0 ? (
-        <EmptyState
-          icon="folder_managed"
-          title={t('projects.noProjects')}
-          hint={t('projects.noProjectsHint')}
-          minHeight={240}
-        />
+        <Empty style={{ minHeight: 240 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"folder_managed"} size="sm" /></EmptyMedia><EmptyTitle>{t('projects.noProjects')}</EmptyTitle>{t('projects.noProjectsHint') && <EmptyDescription>{t('projects.noProjectsHint')}</EmptyDescription>}</EmptyHeader></Empty>
       ) : (
-        <DataTableV2
+        <DataTable
           columns={columns}
           data={projects.map((project) => ({ ...project }))}
           rowKey={(row) => row.id as number}
@@ -488,65 +523,75 @@ export default function ProjectsV2() {
       )}
 
       {/* Create modal */}
-      <ModalV2 open={createOpen} onClose={() => setCreateOpen(false)} title={t('projects.create')} closeDisabled={createMutation.isPending}>
-        <form onSubmit={handleCreate} className="space-y-4">
-          <InputV2
-            label={t('projects.name')}
-            value={createForm.name}
-            onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-            placeholder={t('projects.namePlaceholder')}
-            required
-          />
-          <InputV2
-            label={t('projects.description')}
-            value={createForm.description}
-            onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
-            placeholder={t('projects.descPlaceholder')}
-          />
-          {createMutation.isError && <InlineNotice tone="danger">{getApiError(createMutation.error).message}</InlineNotice>}
-          <div className="flex justify-end gap-3 pt-2">
-            <Button type="button" variant="outline" disabled={createMutation.isPending} onClick={() => setCreateOpen(false)}>{t('cancel')}</Button>
-            <Button type="submit" aria-busy={createMutation.isPending || undefined} disabled={createMutation.isPending || !canWrite}>
-              {createMutation.isPending ? t('saving') : t('save')}
-            </Button>
-          </div>
-        </form>
-      </ModalV2>
+        <Dialog open={createOpen} onOpenChange={(nextOpen) => { if (!nextOpen && !createMutation.isPending) setCreateOpen(false) }} modal>
+          <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={createMutation.isPending}>
+            <DialogTitle className="pr-10">{t('projects.create')}</DialogTitle>
+            <form onSubmit={handleCreate} className="space-y-4">
+              <Field>
+                <FieldLabel>{t('projects.name')}</FieldLabel>
+                <Input
+                  value={createForm.name}
+                  onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                  placeholder={t('projects.namePlaceholder')}
+                  required
+                />
+              </Field>
+              <Field>
+                <FieldLabel>{t('projects.description')}</FieldLabel>
+                <Input
+                  value={createForm.description}
+                  onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
+                  placeholder={t('projects.descPlaceholder')}
+                />
+              </Field>
+              {createMutation.isError && <Alert variant={"destructive"}><AlertDescription>{getApiError(createMutation.error).message}</AlertDescription></Alert>}
+              <div className="flex justify-end gap-3 pt-2">
+                <Button type="button" variant="outline" disabled={createMutation.isPending} onClick={() => setCreateOpen(false)}>{t('cancel')}</Button>
+                <Button type="submit" aria-busy={createMutation.isPending || undefined} disabled={createMutation.isPending || !canWrite}>
+                  {createMutation.isPending ? t('saving') : t('save')}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
 
       {/* Token reveal modal */}
-      <ModalV2 open={tokenData !== null} onClose={() => setTokenData(null)} title={t('projects.token')}>
-        {tokenData && (
-          <div className="space-y-4">
-            <div className="rounded-md p-3" style={{ background: 'var(--warn-fill)', border: '1px solid var(--warn-border)' }}>
-              <div className="flex items-center gap-2 mb-1">
-                <Icon name="warning" size="sm" style={{ color: 'var(--warn-text)' }} />
-                <span className="text-[13px] font-[500]" style={{ color: 'var(--warn-text)' }}>{t('projects.tokenWarning')}</span>
+        <Dialog open={tokenData !== null} onOpenChange={(nextOpen) => { if (!nextOpen) setTokenData(null) }} modal>
+          <DialogContent style={{ maxWidth: 440 }} finalFocus={true}>
+            <DialogTitle className="pr-10">{t('projects.token')}</DialogTitle>
+            {tokenData && (
+              <div className="space-y-4">
+                <div className="rounded-md p-3" style={{ background: 'var(--warn-fill)', border: '1px solid var(--warn-border)' }}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Icon name="warning" size="sm" style={{ color: 'var(--warn-text)' }} />
+                    <span className="text-[13px] font-[500]" style={{ color: 'var(--warn-text)' }}>{t('projects.tokenWarning')}</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[13px] font-[500] mb-1" style={{ color: 'var(--text-muted)' }}>{t('projects.token')}</label>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-sm break-all" style={{ background: 'var(--bg-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}>
+                      {tokenData.token}
+                    </code>
+                    <CopyButton text={tokenData.token} label={t('projects.copyToken')} />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[13px] font-[500] mb-1" style={{ color: 'var(--text-muted)' }}>{t('projects.proxyUrl')}</label>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-sm break-all" style={{ background: 'var(--bg-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}>
+                      {tokenData.proxy_url}
+                    </code>
+                    <CopyButton text={tokenData.proxy_url} label={t('projects.copyProxyUrl')} />
+                  </div>
+                </div>
+                <div className="flex justify-end pt-2">
+                  <Button onClick={() => setTokenData(null)}>{t('confirm')}</Button>
+                </div>
               </div>
-            </div>
-            <div>
-              <label className="block text-[13px] font-[500] mb-1" style={{ color: 'var(--text-muted)' }}>{t('projects.token')}</label>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-sm break-all" style={{ background: 'var(--bg-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}>
-                  {tokenData.token}
-                </code>
-                <CopyButton text={tokenData.token} label={t('projects.copyToken')} />
-              </div>
-            </div>
-            <div>
-              <label className="block text-[13px] font-[500] mb-1" style={{ color: 'var(--text-muted)' }}>{t('projects.proxyUrl')}</label>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-sm break-all" style={{ background: 'var(--bg-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}>
-                  {tokenData.proxy_url}
-                </code>
-                <CopyButton text={tokenData.proxy_url} label={t('projects.copyProxyUrl')} />
-              </div>
-            </div>
-            <div className="flex justify-end pt-2">
-              <Button onClick={() => setTokenData(null)}>{t('confirm')}</Button>
-            </div>
-          </div>
-        )}
-      </ModalV2>
+            )}
+          </DialogContent>
+        </Dialog>
 
       <ConfirmActionDialog
         open={deleteTarget !== null}

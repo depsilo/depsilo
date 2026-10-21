@@ -1,3 +1,5 @@
+import { Toggle } from '@/components/ui/toggle'
+import { Field, FieldLabel, FieldError, FieldDescription } from '@/components/ui/field'
 import axios from 'axios'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -5,7 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import EcosystemIcon, { type EcosystemType } from '../components/EcosystemIcon'
 import Icon from '../components/Icon'
-import Input from '../components/Input'
+import { Input } from '@/components/ui/input'
 import LangToggle from '../components/LangToggle'
 import Logo from '../components/Logo'
 import ThemeToggle from '../components/ThemeToggle'
@@ -449,24 +451,27 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
               {t('setup.runtime_settings')}
             </h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Input
-                label={t('setup.port')}
-                error={portError}
-                type="number"
-                value={port}
-                min={1}
-                max={65535}
-                disabled={submitting}
-                onChange={(event) => setPort(Number(event.target.value))}
-              />
-              <Input
-                label={t('setup.storage_path')}
-                error={storageError}
-                value={storagePath}
-                disabled={submitting}
-                mono
-                onChange={(event) => setStoragePath(event.target.value)}
-              />
+              <Field invalid={Boolean(portError)} disabled={submitting}>
+                <FieldLabel>{t('setup.port')}</FieldLabel>
+                <Input aria-invalid={Boolean(portError) || undefined}
+                  type="number"
+                  value={port}
+                  min={1}
+                  max={65535}
+                  disabled={submitting}
+                  onChange={(event) => setPort(Number(event.target.value))}
+                />
+                {(portError) && <FieldError match>{portError}</FieldError>}
+              </Field>
+              <Field invalid={Boolean(storageError)} disabled={submitting}>
+                <FieldLabel>{t('setup.storage_path')}</FieldLabel>
+                <Input aria-invalid={Boolean(storageError) || undefined} className="font-mono"
+                  value={storagePath}
+                  disabled={submitting}
+                  onChange={(event) => setStoragePath(event.target.value)}
+                />
+                {(storageError) && <FieldError match>{storageError}</FieldError>}
+              </Field>
             </div>
           </section>
 
@@ -486,10 +491,10 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
               {ecosystemDefaults.map((ecosystem) => {
                 const selected = selectedEcosystems.has(ecosystem.key)
                 return (
-                  <button
+                  <Toggle
                     key={ecosystem.key}
                     type="button"
-                    aria-pressed={selected}
+                    pressed={selected}
                     disabled={submitting}
                     className="stripe-focus-ring flex min-h-[48px] items-center gap-2 rounded-md border px-2.5 text-left transition-[background,border-color,color,transform] duration-150 active:scale-[0.98]"
                     style={{
@@ -497,12 +502,12 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                       background: selected ? 'var(--brand-soft)' : 'var(--bg-card)',
                       color: selected ? 'var(--brand-text)' : 'var(--text)',
                     }}
-                    onClick={() => toggleEcosystem(ecosystem.key)}
+                    onPressedChange={() => toggleEcosystem(ecosystem.key)}
                   >
                     <EcosystemIcon type={ecosystem.key as EcosystemType} size={17} decorative />
                     <span className="min-w-0 flex-1 text-[12px] font-[500] leading-4">{ecosystem.label}</span>
                     <Icon name={selected ? 'check' : 'add'} size="sm" />
-                  </button>
+                  </Toggle>
                 )
               })}
             </div>
@@ -527,7 +532,8 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                 const panelId = `setup-${ecosystem.key}-upstreams`
                 return (
                   <div key={ecosystem.key} className="overflow-hidden rounded-md border border-[var(--border)]">
-                    <button
+                    <Button
+                      variant="ghost"
                       type="button"
                       aria-expanded={expanded}
                       aria-controls={panelId}
@@ -541,7 +547,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                         {t('setup.upstreams_count_value', { count: ecosystemUpstreams.length })}
                       </span>
                       <Icon name="expand_more" size="sm" className={`transition-transform duration-150 ${expanded ? 'rotate-180' : ''}`} />
-                    </button>
+                    </Button>
                     {expanded && (
                       <div id={panelId} className="space-y-4 border-t border-[var(--border)] bg-[var(--bg-soft)] p-3 sm:p-4">
                         {ecosystemUpstreams.map((upstream, index) => (
@@ -549,27 +555,32 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                             key={`${ecosystem.key}-${index}`}
                             className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.5fr)_80px_40px] sm:items-end"
                           >
-                            <Input
-                              label={t('setup.upstream_name')}
-                              value={upstream.name}
-                              disabled={submitting}
-                              onChange={(event) => updateUpstream(ecosystem.key, index, 'name', event.target.value)}
-                            />
-                            <Input
-                              label={t('setup.upstream_url')}
-                              value={upstream.url}
-                              disabled={submitting}
-                              mono
-                              onChange={(event) => updateUpstream(ecosystem.key, index, 'url', event.target.value)}
-                            />
-                            <Input
-                              label={t('setup.priority')}
-                              type="number"
-                              value={upstream.priority}
-                              min={1}
-                              disabled={submitting}
-                              onChange={(event) => updateUpstream(ecosystem.key, index, 'priority', Number(event.target.value))}
-                            />
+                            <Field disabled={submitting}>
+                              <FieldLabel>{t('setup.upstream_name')}</FieldLabel>
+                              <Input
+                                value={upstream.name}
+                                disabled={submitting}
+                                onChange={(event) => updateUpstream(ecosystem.key, index, 'name', event.target.value)}
+                              />
+                            </Field>
+                            <Field disabled={submitting}>
+                              <FieldLabel>{t('setup.upstream_url')}</FieldLabel>
+                              <Input className="font-mono"
+                                value={upstream.url}
+                                disabled={submitting}
+                                onChange={(event) => updateUpstream(ecosystem.key, index, 'url', event.target.value)}
+                              />
+                            </Field>
+                            <Field disabled={submitting}>
+                              <FieldLabel>{t('setup.priority')}</FieldLabel>
+                              <Input
+                                type="number"
+                                value={upstream.priority}
+                                min={1}
+                                disabled={submitting}
+                                onChange={(event) => updateUpstream(ecosystem.key, index, 'priority', Number(event.target.value))}
+                              />
+                            </Field>
                             <Button
                               type="button"
                               variant="destructive"
@@ -647,46 +658,51 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                     {t('setup.admin_account_hint')}
                   </p>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <Input
-                      label={t('setup.admin_username')}
-                      error={usernameError}
-                      autoComplete="username"
-                      value={adminUsername}
-                      disabled={submitting}
-                      onChange={(event) => setAdminUsername(event.target.value)}
-                    />
-                    {tokenRequired && (
-                      <Input
-                        label={t('setup.bootstrap_token')}
-                        hint={bootstrapTokenError ? undefined : t('setup.bootstrap_token_hint')}
-                        error={bootstrapTokenError}
-                        type="password"
-                        autoComplete="off"
-                        mono
-                        value={bootstrapToken}
+                    <Field invalid={Boolean(usernameError)} disabled={submitting}>
+                      <FieldLabel>{t('setup.admin_username')}</FieldLabel>
+                      <Input aria-invalid={Boolean(usernameError) || undefined}
+                        autoComplete="username"
+                        value={adminUsername}
                         disabled={submitting}
-                        onChange={(event) => setBootstrapToken(event.target.value)}
+                        onChange={(event) => setAdminUsername(event.target.value)}
                       />
+                      {(usernameError) && <FieldError match>{usernameError}</FieldError>}
+                    </Field>
+                    {tokenRequired && (
+                      <Field invalid={Boolean(bootstrapTokenError)} disabled={submitting}>
+                        <FieldLabel>{t('setup.bootstrap_token')}</FieldLabel>
+                        <Input aria-invalid={Boolean(bootstrapTokenError) || undefined} className="font-mono"
+                          type="password"
+                          autoComplete="off"
+                          value={bootstrapToken}
+                          disabled={submitting}
+                          onChange={(event) => setBootstrapToken(event.target.value)}
+                        />
+                        {(bootstrapTokenError) ? <FieldError match>{bootstrapTokenError}</FieldError> : (bootstrapTokenError ? undefined : t('setup.bootstrap_token_hint')) ? <FieldDescription>{bootstrapTokenError ? undefined : t('setup.bootstrap_token_hint')}</FieldDescription> : null}
+                      </Field>
                     )}
-                    <Input
-                      label={t('setup.admin_password')}
-                      hint={passwordError ? undefined : t('setup.admin_password_hint')}
-                      error={passwordError}
-                      type="password"
-                      autoComplete="new-password"
-                      value={adminPassword}
-                      disabled={submitting}
-                      onChange={(event) => setAdminPassword(event.target.value)}
-                    />
-                    <Input
-                      label={t('setup.confirm_password')}
-                      error={confirmPasswordError}
-                      type="password"
-                      autoComplete="new-password"
-                      value={confirmPassword}
-                      disabled={submitting}
-                      onChange={(event) => setConfirmPassword(event.target.value)}
-                    />
+                    <Field invalid={Boolean(passwordError)} disabled={submitting}>
+                      <FieldLabel>{t('setup.admin_password')}</FieldLabel>
+                      <Input aria-invalid={Boolean(passwordError) || undefined}
+                        type="password"
+                        autoComplete="new-password"
+                        value={adminPassword}
+                        disabled={submitting}
+                        onChange={(event) => setAdminPassword(event.target.value)}
+                      />
+                      {(passwordError) ? <FieldError match>{passwordError}</FieldError> : (passwordError ? undefined : t('setup.admin_password_hint')) ? <FieldDescription>{passwordError ? undefined : t('setup.admin_password_hint')}</FieldDescription> : null}
+                    </Field>
+                    <Field invalid={Boolean(confirmPasswordError)} disabled={submitting}>
+                      <FieldLabel>{t('setup.confirm_password')}</FieldLabel>
+                      <Input aria-invalid={Boolean(confirmPasswordError) || undefined}
+                        type="password"
+                        autoComplete="new-password"
+                        value={confirmPassword}
+                        disabled={submitting}
+                        onChange={(event) => setConfirmPassword(event.target.value)}
+                      />
+                      {(confirmPasswordError) && <FieldError match>{confirmPasswordError}</FieldError>}
+                    </Field>
                   </div>
                   {tokenRequired && (
                     <section aria-labelledby="setup-token-help-heading" className="mt-5 min-w-0">

@@ -1,0 +1,244 @@
+/* Portal shell geometry loads with the anonymous route. Theme tokens stay
+ * in index.css so portaled controls resolve the same semantic colors. */
+.portal-header-actions {
+  display: flex;
+  min-width: 0;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+}
+.portal-header-brand {
+  min-width: 40px;
+  min-height: 40px;
+}
+.portal-nav-compact-label {
+  display: none;
+}
+.portal-header-group {
+  display: inline-flex;
+  height: 40px;
+  flex-shrink: 0;
+  align-items: center;
+  border-radius: var(--r-md);
+  background: var(--bg-card);
+  outline: 1px solid var(--border);
+  outline-offset: -1px;
+}
+.portal-header-control {
+  display: inline-flex;
+  height: 40px;
+  min-height: 40px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background 120ms ease, color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1);
+}
+button.portal-header-control {
+  cursor: pointer;
+}
+.portal-header-group > .portal-header-control:first-child {
+  border-radius: var(--r-md) 0 0 var(--r-md);
+}
+.portal-header-group > .portal-header-control:last-child {
+  border-radius: 0 var(--r-md) var(--r-md) 0;
+}
+.portal-header-group > .portal-header-control + .portal-header-control {
+  border-left: 1px solid var(--border);
+}
+.portal-header-group button.portal-header-control:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.portal-header-group button.portal-header-control:active {
+  transform: scale(0.97);
+}
+.portal-endpoint-pill {
+  padding: 0 10px 0 11px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+.portal-endpoint-pill[data-copy-state='failed'] {
+  color: var(--danger-text);
+}
+.portal-endpoint-label {
+  font-variant-numeric: tabular-nums;
+}
+.portal-endpoint-icon {
+  position: relative;
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+}
+.portal-endpoint-icon > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.portal-status-pill {
+  min-width: 68px;
+  padding: 0 10px;
+  border-radius: 0 var(--r-md) var(--r-md) 0;
+}
+.portal-status-pill[data-status='healthy'] { color: var(--ok-text); }
+/* No 'degraded' state here on purpose: the Portal header reports Depsilo's own
+   availability, and upstream mirror health lives on /monitor. */
+.portal-status-pill[data-status='failed'] { color: var(--danger-text); }
+.portal-status-pill[data-status='unknown'] { color: var(--text-muted); }
+.portal-status-pill[data-status='loading'] { color: var(--text-muted); }
+.portal-status-pill[data-status='unavailable'] { color: var(--danger-text); }
+.portal-status-compact-icon,
+.portal-admin-mobile-label,
+.portal-language-compact-label {
+  display: none;
+}
+.portal-language-control,
+.portal-theme-button {
+  padding: 0 10px;
+}
+.portal-admin-link {
+  padding: 0 11px;
+  border: 1px solid var(--primary);
+  border-radius: var(--r-md);
+  color: var(--primary-foreground);
+  background: var(--primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+.portal-admin-link:hover {
+  background: var(--btn-primary-press);
+}
+.portal-admin-link:active {
+  transform: scale(0.97);
+}
+
+/* Keep the copy action available at intermediate widths while collapsing its
+   volatile endpoint text. The full value remains in the accessible name. */
+@media (max-width: 960px) {
+  .portal-endpoint-pill {
+    width: 40px;
+    padding-inline: 0;
+  }
+  .portal-endpoint-label {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .portal-version,
+  .portal-language-label,
+  .portal-theme-label {
+    display: none !important;
+  }
+  .portal-language-compact-label {
+    display: inline;
+  }
+  .portal-language-control,
+  .portal-theme-button {
+    width: 40px;
+    padding-inline: 0;
+  }
+  .portal-language-control .icon {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .portal-endpoint-pill,
+  .portal-admin-label,
+  .portal-status-label {
+    display: none !important;
+  }
+  .portal-header-inner {
+    gap: 4px !important;
+    padding-left: max(10px, env(safe-area-inset-left)) !important;
+    padding-right: max(10px, env(safe-area-inset-right)) !important;
+  }
+  .portal-header-actions {
+    gap: 4px;
+  }
+  .portal-header-nav > a {
+    min-width: 40px;
+    height: 40px;
+    justify-content: center;
+    padding-inline: 4px !important;
+  }
+  .portal-nav-label {
+    display: none;
+  }
+  .portal-nav-compact-label {
+    display: inline;
+  }
+  .portal-nav-active-indicator {
+    right: 8px !important;
+    bottom: -6px !important;
+    left: 8px !important;
+  }
+  .portal-service-group {
+    width: 40px;
+  }
+  .portal-tools-group {
+    width: 80px;
+  }
+  .portal-status-pill {
+    width: 40px;
+    min-width: 40px;
+    padding-inline: 0;
+    border-left: 0 !important;
+    border-radius: var(--r-md) !important;
+  }
+  .portal-language-control {
+    border-radius: var(--r-md) 0 0 var(--r-md) !important;
+  }
+  .portal-theme-button {
+    border-radius: 0 var(--r-md) var(--r-md) 0 !important;
+  }
+  .portal-status-dot {
+    display: none !important;
+  }
+  .portal-status-compact-icon {
+    display: inline-flex;
+  }
+  .portal-admin-link {
+    width: 40px;
+    min-width: 40px;
+    padding: 0;
+  }
+  .portal-admin-link .icon {
+    display: inline-flex;
+  }
+  .portal-admin-mobile-label {
+    display: none;
+  }
+  .portal-monitor-search {
+    width: 100% !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .portal-brand-name {
+    display: none !important;
+  }
+}
+
+@media (max-width: 340px) {
+  .portal-header-inner {
+    gap: 2px !important;
+    padding-left: max(4px, env(safe-area-inset-left)) !important;
+    padding-right: max(4px, env(safe-area-inset-right)) !important;
+  }
+  .portal-header-actions {
+    gap: 2px;
+  }
+  .portal-header-nav > a {
+    padding-inline: 4px !important;
+  }
+}

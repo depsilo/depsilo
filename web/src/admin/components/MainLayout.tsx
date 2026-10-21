@@ -1,3 +1,5 @@
+import { Button } from '@/components/ui/button'
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 /**
  * THESIS: Dependency Flowline organizes Admin around operational workspaces, not a flat inventory of pages.
  * OWN-WORLD: Instrument neutrals, precise keylines, signal green, compact task links, and one calm white or matte-dark canvas.
@@ -11,7 +13,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 
-import DrawerV2 from '@/components/Drawer'
+
 import Icon, { type IconName } from '@/components/Icon'
 import LangToggle from '@/components/LangToggle'
 import Logo from '@/components/Logo'
@@ -157,21 +159,21 @@ function SidebarContent({
               {canWrite ? t('nav.admin') : t('nav.readonly')}
             </p>
           </div>
-          <button
+          <Button variant="ghost" size="icon"
             type="button"
             onClick={onLogout}
-            className="stripe-focus-ring inline-flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-sm bg-transparent p-1.5 text-[var(--text-soft)] opacity-100 transition-[opacity,color,transform] duration-150 hover:text-[var(--text)] focus-visible:opacity-100 active:scale-[0.96] lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
+            className="text-muted-foreground opacity-100 focus-visible:opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
             aria-label={t('nav.logout')}
           >
             <Icon name="logout" size="sm" />
-          </button>
+          </Button>
         </div>
       </div>
     </>
   )
 }
 
-export default function MainLayoutV2() {
+export default function MainLayout() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
@@ -224,23 +226,21 @@ export default function MainLayoutV2() {
         <SidebarContent {...sidebarProps} surface="sidebar" onLogout={() => { void handleLogout() }} />
       </aside>
 
-      <DrawerV2
-        open={mobileNavOpen}
-        onOpenChange={setMobileNavOpen}
-        title={t('nav.adminNavigation')}
-        initialFocus={firstMobileNavigationRef}
-      >
-        <div id="admin-mobile-navigation" className="flex h-full min-h-0 flex-col overflow-hidden">
-          <SidebarContent
-            {...sidebarProps}
-            surface="drawer"
-            firstNavigationRef={firstMobileNavigationRef}
-            reserveCloseSpace
-            onNavigate={() => setMobileNavOpen(false)}
-            onLogout={() => { void handleLogout() }}
-          />
-        </div>
-      </DrawerV2>
+      <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen} modal>
+        <SheetContent side="left" initialFocus={firstMobileNavigationRef} finalFocus>
+          <SheetTitle className="sr-only">{t('nav.adminNavigation')}</SheetTitle>
+          <div id="admin-mobile-navigation" className="flex h-full min-h-0 flex-col overflow-hidden">
+            <SidebarContent
+              {...sidebarProps}
+              surface="drawer"
+              firstNavigationRef={firstMobileNavigationRef}
+              reserveCloseSpace
+              onNavigate={() => setMobileNavOpen(false)}
+              onLogout={() => { void handleLogout() }}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <div data-admin-main className="min-w-0 flex-1 lg:ml-[232px]" style={{ background: 'var(--admin-canvas)' }}>
         <main className="min-h-screen pb-8 pt-4 lg:pt-6" style={{ background: 'var(--admin-canvas)' }}>
@@ -248,17 +248,17 @@ export default function MainLayoutV2() {
             {/* The Admin shell has no utility bar. On narrow screens the
                 workspace rail is off-canvas, so the drawer trigger sits at the
                 top of the content instead of occupying a header row. */}
-            <button
+            <Button variant="ghost" size="icon"
               type="button"
               data-admin-nav-trigger
-              className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-md bg-transparent text-[var(--text-soft)] transition-[background,color,transform] duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-[0.96] lg:hidden"
+              className="mb-3 text-muted-foreground lg:hidden"
               onClick={() => setMobileNavOpen(true)}
               aria-label={t('nav.openNavigation')}
               aria-expanded={mobileNavOpen}
               aria-controls="admin-mobile-navigation"
             >
               <Icon name="menu" size="sm" />
-            </button>
+            </Button>
             <Outlet />
           </div>
         </main>

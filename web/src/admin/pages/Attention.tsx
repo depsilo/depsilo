@@ -1,3 +1,6 @@
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
@@ -7,9 +10,9 @@ import { getAdminRouteHref } from '@/admin/routes'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import EcosystemIcon from '@/components/EcosystemIcon'
-import EmptyState from '@/components/EmptyState'
+
 import Icon, { type IconName } from '@/components/Icon'
-import InlineNotice from '@/components/InlineNotice'
+
 import SectionHeader from '@/components/SectionHeader'
 import { adminApi } from '@/lib/api'
 import type { DashboardResponse, SecuritySuggestionPage } from '@/lib/adminApi.types'
@@ -80,7 +83,7 @@ function AttentionSkeleton() {
   return (
     <div aria-busy="true" className="space-y-3">
       {[0, 1, 2].map(index => (
-        <div key={index} aria-hidden className="h-16 animate-pulse rounded-md bg-[var(--bg-soft)]" />
+        <Skeleton key={index} aria-hidden className="h-16 rounded-md bg-[var(--bg-soft)]" />
       ))}
     </div>
   )
@@ -147,7 +150,7 @@ export default function Attention() {
           ) : (
             <div className="space-y-3">
               {queueInitialFailure && (
-                <InlineNotice tone="danger">
+                <Alert variant={"destructive"}><AlertDescription>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <span>{t('attention.queueUnavailable')}</span>
                     <Button
@@ -161,10 +164,10 @@ export default function Attention() {
                       {t('attention.retry')}
                     </Button>
                   </div>
-                </InlineNotice>
+                </AlertDescription></Alert>
               )}
               {queueRefreshFailure && !queueInitialFailure && (
-                <InlineNotice tone="warning">
+                <Alert variant={"warning"}><AlertDescription>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <span>{t('attention.queueStale')}</span>
                     <Button
@@ -178,15 +181,10 @@ export default function Attention() {
                       {t('attention.retry')}
                     </Button>
                   </div>
-                </InlineNotice>
+                </AlertDescription></Alert>
               )}
               {!queueInitialFailure && queueIsEmpty ? (
-                <EmptyState
-                  icon="task_alt"
-                  title={t('attention.allClearTitle')}
-                  hint={t('attention.allClearHint')}
-                  minHeight={180}
-                />
+                <Empty style={{ minHeight: 180 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"task_alt"} size="sm" /></EmptyMedia><EmptyTitle>{t('attention.allClearTitle')}</EmptyTitle>{t('attention.allClearHint') && <EmptyDescription>{t('attention.allClearHint')}</EmptyDescription>}</EmptyHeader></Empty>
               ) : !queueIsEmpty ? (
                 <ul className="divide-y divide-[var(--border)]">
                   {unhealthyUpstreams.length > 0 && (
@@ -248,7 +246,7 @@ export default function Attention() {
           ) : (
             <div className="space-y-3">
               {quarantineInitialFailure && (
-                <InlineNotice tone="danger">
+                <Alert variant={"destructive"}><AlertDescription>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <span>{t('attention.recentUnavailable')}</span>
                     <Button
@@ -262,10 +260,10 @@ export default function Attention() {
                       {t('attention.retryRecent')}
                     </Button>
                   </div>
-                </InlineNotice>
+                </AlertDescription></Alert>
               )}
               {quarantineRefreshFailure && !quarantineInitialFailure && (
-                <InlineNotice tone="warning">
+                <Alert variant={"warning"}><AlertDescription>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <span>{t('attention.recentStale')}</span>
                     <Button
@@ -279,15 +277,10 @@ export default function Attention() {
                       {t('attention.retryRecent')}
                     </Button>
                   </div>
-                </InlineNotice>
+                </AlertDescription></Alert>
               )}
               {!quarantineInitialFailure && quarantineEvents.length === 0 ? (
-                <EmptyState
-                  icon="shield"
-                  title={t('attention.noRecentTitle')}
-                  hint={t('attention.noRecentHint')}
-                  minHeight={160}
-                />
+                <Empty style={{ minHeight: 160 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"shield"} size="sm" /></EmptyMedia><EmptyTitle>{t('attention.noRecentTitle')}</EmptyTitle>{t('attention.noRecentHint') && <EmptyDescription>{t('attention.noRecentHint')}</EmptyDescription>}</EmptyHeader></Empty>
               ) : quarantineEvents.length > 0 ? (
                 <ol>
                   {quarantineEvents.map((event, index) => (

@@ -14,48 +14,48 @@ import RouteNotFound from '@/routing/RouteNotFound'
 import { adminRouteComponents } from './lazyRoutes'
 import { adminRouteManifest, type AdminRouteId } from './routes'
 
-const LoginV2 = lazyRoute(() => import('./pages/Login'), { surface: 'page' })
+const Login = lazyRoute(() => import('./pages/Login'), { surface: 'page' })
 const AdminShell = lazyRoute(() => import('./AdminShell'), { surface: 'page' })
 const {
-  dashboard: DashboardV2,
+  dashboard: Dashboard,
   connect: ConnectProject,
   attention: Attention,
-  cache: CacheManageV2,
+  cache: CacheManage,
   cacheIndexes: CacheIndexes,
   compileCache: CompileCache,
-  upstreams: UpstreamsV2,
+  upstreams: Upstreams,
   cascade: Cascade,
   upstreamUpdates: UpstreamUpdates,
-  accessLogs: AccessLogsV2,
-  auditLogs: AuditLogsV2,
+  accessLogs: AccessLogs,
+  auditLogs: AuditLogs,
   quarantine: Quarantine,
-  rules: RulesV2,
+  rules: Rules,
   security: Security,
   projects: Projects,
-  users: UsersV2,
+  users: Users,
   license: License,
-  settings: SettingsV2,
+  settings: Settings,
 } = adminRouteComponents
 
 const routeElements = {
-  dashboard: <DashboardV2 />,
+  dashboard: <Dashboard />,
   connect: <ConnectProject />,
   attention: <Attention />,
-  cache: <CacheManageV2 />,
+  cache: <CacheManage />,
   cacheIndexes: <CacheIndexes />,
   compileCache: <CompileCache />,
-  upstreams: <UpstreamsV2 />,
+  upstreams: <Upstreams />,
   cascade: <Cascade />,
   upstreamUpdates: <UpstreamUpdates />,
-  accessLogs: <AccessLogsV2 />,
-  auditLogs: <AuditLogsV2 />,
+  accessLogs: <AccessLogs />,
+  auditLogs: <AuditLogs />,
   quarantine: <Quarantine />,
-  rules: <RulesV2 />,
+  rules: <Rules />,
   security: <Security />,
   projects: <Projects />,
-  users: <UsersV2 />,
+  users: <Users />,
   license: <License />,
-  settings: <SettingsV2 />,
+  settings: <Settings />,
 } satisfies Readonly<Record<AdminRouteId, ReactElement>>
 
 function AdminAuthPending() {
@@ -131,10 +131,10 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-export default function AdminAppV2() {
+export default function AdminApp() {
   return (
     <Routes>
-      <Route path="login" element={<LoginV2 />} />
+      <Route path="login" element={<Login />} />
       <Route
         element={
           <RequireAuth>

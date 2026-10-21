@@ -40,8 +40,9 @@ test('trend range exposes its selected state', async ({ page }) => {
   await expect(group.getByRole('button', { name: '1 小时' })).toHaveAttribute('aria-pressed', 'false')
 })
 
-test('trend metric selector exposes tab and selected semantics', async ({ page }) => {
+test('trend metric tabs support roving keyboard focus and keep the chart mounted', async ({ page }) => {
   await setUiPreferences(page, 'light', 'en')
+  await mockAdminApi(page, { 'GET /api/v1/admin/dashboard/trends': { points: populatedTrendPoints } })
   await page.goto('/admin')
   const tablist = page.getByRole('tablist', { name: 'Activity trend' })
   // "Traffic" is a bucket byte total, not a bandwidth rate.
@@ -51,9 +52,25 @@ test('trend metric selector exposes tab and selected semantics', async ({ page }
   await expect(tablist).toBeVisible()
   await expect(metrics[0]).toHaveAttribute('aria-selected', 'true')
   await expect(metrics[2]).toHaveAttribute('aria-selected', 'false')
+  const chart = page.locator('[data-trend-chart] .recharts-wrapper')
+  await expect(chart).toBeVisible()
+  const chartElement = await chart.elementHandle()
+  await metrics[0].focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(metrics[1]).toBeFocused()
+  await expect(metrics[1]).toHaveAttribute('aria-selected', 'true')
+  await expect(metrics[0]).toHaveAttribute('tabindex', '-1')
+  const panel = page.getByRole('tabpanel', { name: 'Traffic', exact: true })
+  await expect(panel).toBeVisible()
+  expect(await metrics[1].getAttribute('aria-controls')).toBe(await panel.getAttribute('id'))
   await metrics[2].click()
   await expect(metrics[0]).toHaveAttribute('aria-selected', 'false')
   await expect(metrics[2]).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('tabpanel', { name: 'Latency', exact: true })).toBeVisible()
+  expect(await chartElement!.evaluate(element => element.isConnected)).toBe(true)
+  await page.keyboard.press('ArrowLeft')
+  await expect(metrics[1]).toBeFocused()
+  await expect(metrics[1]).toHaveAttribute('aria-selected', 'true')
 })
 
 test('trend chart exposes the selected metric and range to assistive technology', async ({ page }) => {

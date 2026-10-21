@@ -6,7 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
-import TableViewport from '@/components/TableViewport'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { getAdminRouteHref } from '@/admin/routes'
 import { adminApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
@@ -14,7 +17,7 @@ import { isAdminEcosystem } from '@/lib/adminApi.types'
 import { REQUEST_OUTCOME_META, requestOutcome } from '@/lib/dashboardOverview'
 import { formatBytes, formatLatency, formatTime } from '@/lib/utils'
 
-import DashboardEmptyState from './DashboardEmptyState'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 
 interface RecentRequestsProps {
   query: UseQueryResult<Awaited<ReturnType<typeof adminApi.listLogs>>>
@@ -34,116 +37,127 @@ export default function RecentRequests({ query, limit = 5, onOpenDetails }: Rece
   const initialError = query.isError && query.data === undefined
 
   return (
-    <section
+    <Card
+      render={<section />}
       data-dashboard-recent-requests
       data-dashboard-recent-empty={!query.isPending && !initialError && items.length === 0 ? 'true' : undefined}
       aria-labelledby="overview-recent-title"
       aria-busy={query.isPending || undefined}
-      className="dash-card flex h-full min-w-0 flex-1 flex-col"
+      className="h-full min-w-0 flex-1 gap-0 p-0"
     >
-      <header className="dashboard-panel-header flex flex-wrap justify-between gap-x-3 gap-y-2" style={{ borderColor: 'var(--dash-border)' }}>
+      <CardHeader className="min-h-[76px] gap-x-3 py-3">
         <div className="min-w-0">
-          <h2 id="overview-recent-title" className="text-[16px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
+          <CardTitle id="overview-recent-title" className="pt-2">
             {t('overview.recentRequestsTitle')}
-          </h2>
-          <p className="mt-0.5 text-[13px]" style={{ color: 'var(--dash-muted)' }}>
+          </CardTitle>
+          <CardDescription className="mt-0.5">
             {t('overview.recentRequestsCaption')}
-          </p>
+          </CardDescription>
         </div>
-        <Link
-          to={getAdminRouteHref('accessLogs')}
-          className="dash-focus inline-flex min-h-9 items-center gap-1 rounded-md px-2 text-[14px] font-medium no-underline"
-          style={{ color: 'var(--dash-accent)' }}
+        <Button
+          variant="link"
+          nativeButton={false}
+          role="link"
+          render={<Link to={getAdminRouteHref('accessLogs')} />}
+          className="px-2 text-[14px]"
         >
           {t('dashboard.viewAll')}
           <Icon name="chevron_right" size="sm" />
-        </Link>
-      </header>
+        </Button>
+      </CardHeader>
 
       {isStale && (
-        <p role="status" className="mx-5 mb-2 rounded-md px-3 py-1.5 text-[13px]" style={{ background: 'var(--dash-warn-soft)', color: 'var(--dash-warn)' }}>
-          {t('overview.dataStale')}
-        </p>
+        <div className="px-5 pb-2"><Alert role="status" variant="warning"><AlertDescription>{t('overview.dataStale')}</AlertDescription></Alert></div>
       )}
 
       {query.isPending ? (
         <div aria-hidden className="flex flex-col gap-px px-5 pb-5">
           {/* Match the real table's header + row heights so the populated
               state does not shift when the first response lands. */}
-          <div className="h-9 animate-pulse rounded" style={{ background: 'var(--dash-soft)' }} />
+          <Skeleton className="h-9" />
           {Array.from({ length: limit }, (_, index) => (
-            <div key={index} className="h-[55px] animate-pulse" style={{ background: 'var(--dash-soft)' }} />
+            <Skeleton key={index} className="h-[55px]" />
           ))}
         </div>
       ) : initialError ? (
-        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 px-5 pb-5 text-[14px]" style={{ color: 'var(--dash-warn)' }}>
-          <span>{getApiError(query.error).status === 403 ? t('common.permissionDenied') : t('overview.recentRequestsUnavailable')}</span><Button variant="outline" size="sm" onClick={() => { void query.refetch() }}>{t('overview.refresh')}</Button>
+        <div className="px-5 pb-5">
+          <Alert variant="warning" role="alert" className="flex flex-wrap items-center justify-between gap-2">
+            <AlertDescription>{getApiError(query.error).status === 403 ? t('common.permissionDenied') : t('overview.recentRequestsUnavailable')}</AlertDescription>
+            <Button variant="outline" size="sm" onClick={() => { void query.refetch() }}>{t('overview.refresh')}</Button>
+          </Alert>
         </div>
       ) : items.length === 0 ? (
-        <DashboardEmptyState icon="download" title={t('overview.recentEmpty')} description={t('overview.recentEmptyHint')} />
+        <Empty className="min-h-[112px] gap-1.5 px-5 pb-5 pt-2">
+          <EmptyHeader className="gap-1.5">
+            <EmptyMedia variant="icon" className="mb-0 rounded-full"><Icon name="download" size="sm" /></EmptyMedia>
+            <EmptyTitle>{t('overview.recentEmpty')}</EmptyTitle>
+            <EmptyDescription>{t('overview.recentEmptyHint')}</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
-        <TableViewport label={t('overview.recentRequestsTitle')} minWidth={600}>
-          <table className="w-full border-collapse text-left">
-            <thead>
-              <tr style={{ color: 'var(--dash-muted)' }}>
-                <th className="px-4 py-2.5 text-[13px] font-medium">{t('overview.colPackage')}</th>
-                <th className="px-3 py-2.5 text-[13px] font-medium whitespace-nowrap">{t('overview.colEcosystem')}</th>
-                <th className="px-3 py-2.5 text-[13px] font-medium whitespace-nowrap">{t('overview.colOutcome')}</th>
-                <th className="px-3 py-2.5 text-right text-[13px] font-medium whitespace-nowrap">{t('overview.colSize')}</th>
-                <th className="px-3 py-2.5 text-right text-[13px] font-medium whitespace-nowrap">{t('overview.colLatency')}</th>
-                <th className="px-4 py-2.5 text-right text-[13px] font-medium whitespace-nowrap">{t('overview.colTime')}</th>
-              </tr>
-            </thead>
-            <tbody>
+        <TableContainer label={t('overview.recentRequestsTitle')} minWidth={600}>
+          <Table className="w-full border-collapse text-left">
+            <TableHeader>
+              <TableRow style={{ color: 'var(--dash-muted)' }}>
+                <TableHead className="px-4 py-2.5 text-[13px] font-medium">{t('overview.colPackage')}</TableHead>
+                <TableHead className="px-3 py-2.5 text-[13px] font-medium whitespace-nowrap">{t('overview.colEcosystem')}</TableHead>
+                <TableHead className="px-3 py-2.5 text-[13px] font-medium whitespace-nowrap">{t('overview.colOutcome')}</TableHead>
+                <TableHead className="px-3 py-2.5 text-right text-[13px] font-medium whitespace-nowrap">{t('overview.colSize')}</TableHead>
+                <TableHead className="px-3 py-2.5 text-right text-[13px] font-medium whitespace-nowrap">{t('overview.colLatency')}</TableHead>
+                <TableHead className="px-4 py-2.5 text-right text-[13px] font-medium whitespace-nowrap">{t('overview.colTime')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {items.map(item => {
                 const outcome = requestOutcome(item)
                 const meta = REQUEST_OUTCOME_META[outcome]
                 const name = item.package_name || t('recentDownloads.unknownPackage')
                 return (
-                  <tr
+                  <TableRow
                     key={item.id}
                     data-recent-request-id={item.id}
                     className="cursor-pointer border-t transition-colors duration-150 hover:bg-[var(--dash-soft)]"
                     style={{ borderColor: 'var(--dash-border)' }}
                     onClick={() => onOpenDetails(item.id)}
                   >
-                    <td className="max-w-[180px] px-4 py-4">
-                      <button
+                    <TableCell className="max-w-[180px] px-4 py-4">
+                      <Button
+                        variant="ghost"
                         type="button"
                         onClick={event => { event.stopPropagation(); onOpenDetails(item.id) }}
-                        className="dash-focus block min-w-0 max-w-full truncate text-left font-mono text-[14px] font-medium"
+                        className="block h-auto min-w-0 max-w-full truncate p-0 text-left font-mono text-[14px] font-medium"
                         style={{ color: 'var(--dash-ink)' }}
                         title={item.version ? `${name}@${item.version}` : name}
                       >
                         {name}
                         {item.version && <span style={{ color: 'var(--dash-muted)' }}>@{item.version}</span>}
-                      </button>
-                    </td>
-                    <td className="px-3 py-4">
+                      </Button>
+                    </TableCell>
+                    <TableCell className="px-3 py-4">
                       <span className="inline-flex items-center gap-1.5 text-[13px]" style={{ color: 'var(--dash-muted)' }}>
                         {isAdminEcosystem(item.adapter_type) && <EcosystemIcon type={item.adapter_type} size={14} decorative />}
                         {item.adapter_type || '—'}
                       </span>
-                    </td>
-                    <td className="px-3 py-4">
+                    </TableCell>
+                    <TableCell className="px-3 py-4">
                       <Badge variant={meta.variant}>{t(meta.key)}</Badge>
-                    </td>
-                    <td className="px-3 py-4 text-right font-mono text-[13px] tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-ink)' }}>
+                    </TableCell>
+                    <TableCell className="px-3 py-4 text-right font-mono text-[13px] tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-ink)' }}>
                       {formatBytes(item.bytes_sent)}
-                    </td>
-                    <td className="px-3 py-4 text-right font-mono text-[13px] tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-muted)' }}>
+                    </TableCell>
+                    <TableCell className="px-3 py-4 text-right font-mono text-[13px] tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-muted)' }}>
                       {formatLatency(item.latency_ms)}
-                    </td>
-                    <td className="px-4 py-4 text-right font-mono text-[13px] tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-muted)' }}>
+                    </TableCell>
+                    <TableCell className="px-4 py-4 text-right font-mono text-[13px] tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-muted)' }}>
                       <time dateTime={item.created_at}>{formatTime(item.created_at, 'auto')}</time>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 )
               })}
-            </tbody>
-          </table>
-        </TableViewport>
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
-    </section>
+    </Card>
   )
 }

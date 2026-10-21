@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button'
 import { useTranslation } from 'react-i18next'
 import Icon from './Icon'
 
@@ -17,30 +18,16 @@ export default function LangToggle({ variant = 'default' }: LangToggleProps) {
   }
 
   return (
-    <button
+    <Button variant={portal || admin ? 'ghost' : 'outline'}
       type="button"
       onClick={toggle}
       data-language-toggle={portal ? 'portal' : admin ? 'admin' : 'default'}
       className={portal
-        ? 'portal-header-control portal-language-control stripe-focus-ring'
-        : admin
-          ? 'stripe-focus-ring inline-flex min-h-[40px] min-w-[40px] cursor-pointer items-center justify-center rounded-md border-0 bg-transparent px-2 font-mono text-[11px] font-[500] text-[var(--text-muted)] transition-[background,color,transform] duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-[0.98]'
-          : 'inline-flex items-center justify-center stripe-focus-ring'}
+        ? 'portal-header-control portal-language-control'
+        : 'min-h-[40px] min-w-[40px] px-2 font-mono text-[11px] font-medium text-muted-foreground'}
       aria-label={t(isZh ? 'language.switchToEnglish' : 'language.switchToChinese')}
       title={t(isZh ? 'language.switchToEnglish' : 'language.switchToChinese')}
-      style={portal || admin ? undefined : {
-        fontSize: 11,
-        fontWeight: 500,
-        minWidth: 40,
-        minHeight: 40,
-        padding: '8px',
-        color: 'var(--text-muted)',
-        border: '1px solid var(--border)',
-        borderRadius: 6,
-        fontFamily: 'var(--font-mono)',
-        background: 'none',
-        cursor: 'pointer',
-      }}
+
     >
       {portal ? (
         <>
@@ -51,6 +38,6 @@ export default function LangToggle({ variant = 'default' }: LangToggleProps) {
           </span>
         </>
       ) : (isZh ? 'EN' : '中')}
-    </button>
+    </Button>
   )
 }

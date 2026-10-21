@@ -1,6 +1,9 @@
 import { useId, type ReactNode } from 'react'
 
 import Icon, { type IconName } from '@/components/Icon'
+import { Card } from '@/components/ui/card'
+import { Meter, MeterIndicator, MeterTrack } from '@/components/ui/meter'
+import { Skeleton } from '@/components/ui/skeleton'
 import { sparklineGeometry, sparklineHasVariance } from '@/lib/dashboardOverview'
 
 import { METRIC_TONE_PALETTE, type MetricTone } from './metricTone'
@@ -115,13 +118,14 @@ export default function MetricTile({
   const progressTone = progress?.tone ?? tone
   const palette = METRIC_TONE_PALETTE[tone]
   const sparkTone = seriesTone ?? tone
+  const Container = framed ? Card : 'div'
 
   return (
-    <div
+    <Container
       data-dashboard-metric
       data-testid={testId}
       aria-busy={loading}
-      className={`dash-metric flex min-w-0 items-start px-5 py-4 ${compact ? 'gap-3' : 'gap-4'}${framed ? ' dash-card' : ''}`}
+      className={`dash-metric flex min-w-0 flex-row items-start px-5 py-4 ${compact ? 'gap-3' : 'gap-4'}`}
     >
       {icon && (
         <span
@@ -154,7 +158,7 @@ export default function MetricTile({
           {value !== undefined && (
             <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
               {loading ? (
-                <span aria-hidden="true" className="block h-9 w-24 animate-pulse rounded bg-[var(--dash-soft)]" />
+                <Skeleton className="h-9 w-24" />
               ) : (
                 <>
                   <span
@@ -183,7 +187,7 @@ export default function MetricTile({
                     <span>{row.label}</span>
                   </dt>
                   <dd className="shrink-0 font-mono text-[16px] font-semibold leading-none tabular-nums" style={{ color: 'var(--dash-ink)' }}>
-                    {loading ? <span aria-hidden className="block h-5 w-12 animate-pulse rounded bg-[var(--dash-soft)]" /> : row.value}
+                    {loading ? <Skeleton className="h-5 w-12" /> : row.value}
                     {!loading && row.unit && row.value !== '—' && <span className="ml-1 text-[13px] font-medium" style={{ color: 'var(--dash-muted)' }}>{row.unit}</span>}
                   </dd>
                 </div>
@@ -199,17 +203,13 @@ export default function MetricTile({
         )}
 
         {ratio !== null && (
-          <div
-            className="h-1.5 w-full overflow-hidden rounded-full"
-            style={{ background: 'var(--dash-soft)' }}
-            aria-hidden="true"
+          <Meter
+            aria-label={progress?.label ?? label}
+            value={ratio * 100}
             data-progress-label={progress?.label}
           >
-            {ratio > 0 && <div
-              className="h-full rounded-full transition-[width] duration-300"
-              style={{ width: `${ratio * 100}%`, background: METRIC_TONE_PALETTE[progressTone].strong }}
-            />}
-          </div>
+            <MeterTrack><MeterIndicator style={{ background: METRIC_TONE_PALETTE[progressTone].strong }} /></MeterTrack>
+          </Meter>
         )}
 
         {detail && (
@@ -218,9 +218,9 @@ export default function MetricTile({
         {/* Reserve the measurement-basis line while loading so the card does
             not grow when the payload arrives. */}
         {loading && !detail && (
-          <span aria-hidden="true" className="block h-[21px] w-32 animate-pulse rounded bg-[var(--dash-soft)]" />
+          <Skeleton className="h-[21px] w-32" />
         )}
       </div>
-    </div>
+    </Container>
   )
 }

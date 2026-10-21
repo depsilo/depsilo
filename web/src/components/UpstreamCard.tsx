@@ -1,6 +1,7 @@
+import { Button } from '@/components/ui/button'
 /**
  * Shared upstream display component with heartbeat bars.
- * Used by: MonitorV2, DashboardV2, UpstreamsV2
+ * Used by: Monitor, Dashboard, Upstreams
  */
 import { useId, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -437,14 +438,14 @@ export function UpstreamGroupedPanel({
           style={{ borderColor: 'var(--warn-border)', color: 'var(--warn-text)', background: 'var(--warn-fill)' }}
         >
           <span>{t('monitor.historyUnavailable')}</span>
-          <button
+          <Button variant="link"
             type="button"
-            className="shrink-0 font-[600] underline underline-offset-2"
+            className="min-h-[40px] px-0 font-semibold"
             style={{ color: 'var(--text)' }}
             onClick={() => { void refetchLatencies() }}
           >
             {t('common.retry')}
-          </button>
+          </Button>
         </div>
       )}
       <div

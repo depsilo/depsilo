@@ -1,15 +1,20 @@
+import { Checkbox } from '@/components/ui/checkbox'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Field, FieldLabel } from '@/components/ui/field'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import Icon from '@/components/Icon'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import EmptyState from '@/components/EmptyState'
-import IconButton from '@/components/IconButton'
-import InputV2 from '@/components/Input'
-import ModalV2 from '@/components/Modal'
+
+import { Input } from '@/components/ui/input'
 import QueryErrorState from '@/components/QueryErrorState'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
-import SelectV2 from '@/components/Select'
+import { NativeSelect } from '@/components/ui/native-select'
 import { useAppToast } from '@/components/Toast'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { webhookApi, type WebhookConfig } from '@/lib/api'
@@ -184,7 +189,7 @@ export default function WebhookTab() {
 
       <div aria-busy={query.isPending || undefined} className="min-w-0">
         {query.isPending ? (
-          <div className="h-40 animate-pulse rounded-md bg-[var(--bg-soft)]" />
+          <Skeleton className="h-40 rounded-md bg-[var(--bg-soft)]" />
         ) : query.isError && !query.data ? (
           <QueryErrorState message={getApiError(query.error).status === 403 ? t('common.permissionDenied') : getApiError(query.error).message} onRetry={() => { void query.refetch() }} />
         ) : (
@@ -194,7 +199,7 @@ export default function WebhookTab() {
               <StaleDataNotice refreshing={query.isFetching} onRefresh={() => query.refetch()} />
             </div>
           )}
-          {!query.data?.length ? <EmptyState icon="notifications_off" title={t('webhook.noWebhooks')} minHeight={180} /> : <div className="divide-y divide-[var(--border)]">
+          {!query.data?.length ? <Empty style={{ minHeight: 180 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"notifications_off"} size="sm" /></EmptyMedia><EmptyTitle>{t('webhook.noWebhooks')}</EmptyTitle></EmptyHeader></Empty> : <div className="divide-y divide-[var(--border)]">
             {query.data.map(webhook => (
               <article key={webhook.id} className="flex min-w-0 flex-col gap-3 py-4 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0 flex-1">
@@ -224,16 +229,39 @@ export default function WebhookTab() {
                     >
                       {t('webhook.test')}
                     </Button>
-                    <IconButton icon="edit" label={t('webhook.editNamed', { name: webhook.name })} onClick={() => openEdit(webhook)} />
-                    <IconButton
-                      icon="delete"
-                      label={t('webhook.deleteNamed', { name: webhook.name })}
-                      tone="danger"
-                      onClick={event => {
-                        deleteTriggerRef.current = event.currentTarget
-                        setDeleteId(webhook.id)
-                      }}
-                    />
+                    <Tooltip>
+                      <TooltipTrigger render={
+                        <Button
+                          onClick={() => openEdit(webhook)}
+                          variant="ghost"
+                          size="icon"
+                          data-icon-button
+                          aria-label={t('webhook.editNamed', { name: webhook.name })}
+                          style={{ color: 'var(--text-soft)' }}
+                        />
+                      }>
+                        <Icon name={"edit"} size="sm" />
+                      </TooltipTrigger>
+                      <TooltipContent>{t('webhook.editNamed', { name: webhook.name })}</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger render={
+                        <Button
+                          onClick={event => {
+                            deleteTriggerRef.current = event.currentTarget
+                            setDeleteId(webhook.id)
+                          }}
+                          variant="ghost"
+                          size="icon"
+                          data-icon-button
+                          aria-label={t('webhook.deleteNamed', { name: webhook.name })}
+                          style={{ color: 'var(--danger-text)' }}
+                        />
+                      }>
+                        <Icon name={"delete"} size="sm" />
+                      </TooltipTrigger>
+                      <TooltipContent>{t('webhook.deleteNamed', { name: webhook.name })}</TooltipContent>
+                    </Tooltip>
                   </div>
                 )}
               </article>
@@ -243,65 +271,75 @@ export default function WebhookTab() {
         )}
       </div>
 
-      <ModalV2 open={formOpen} title={editingId === null ? t('webhook.addWebhook') : t('webhook.editWebhook')} onClose={closeForm} closeDisabled={saving}>
-        <div className="flex flex-col gap-4">
-          <InputV2 label={t('webhook.name')} value={form.name} onChange={event => setForm(current => ({ ...current, name: event.target.value }))} placeholder={t('webhook.namePlaceholder')} />
-          <SelectV2 label={t('webhook.platform')} value={form.platform} onChange={event => setForm(current => ({ ...current, platform: event.target.value as WebhookConfig['platform'] }))}>
-            {PLATFORM_OPTIONS.map(platform => <option key={platform} value={platform}>{t(`webhook.platforms.${platform}`)}</option>)}
-          </SelectV2>
-          {guide && <p className="text-[12px] leading-5 text-[var(--text-muted)]">{t('webhook.guideTitle')}: {guide}</p>}
-          <InputV2 label={t('webhook.url')} value={form.url} onChange={event => setForm(current => ({ ...current, url: event.target.value }))} placeholder={t('webhook.urlPlaceholder')} />
-          <fieldset aria-invalid={!hasEvents || undefined} aria-describedby={!hasEvents ? 'webhook-events-error' : undefined}>
-            <legend className="mb-2 text-[14px] text-[var(--text-muted)]">{t('webhook.events')}</legend>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {WEBHOOK_EVENTS.map(eventName => {
-                const current = eventValues(form.events)
-                const selected = current.includes(eventName)
-                return (
-                  <label key={eventName} className="flex min-h-10 cursor-pointer items-center gap-2 text-[13px] text-[var(--text-soft)]">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-[var(--brand)] stripe-focus-ring"
-                      checked={selected}
-                      onChange={() => {
-                        const next = selected ? current.filter(value => value !== eventName) : [...current, eventName]
-                        setForm(value => ({ ...value, events: next.join(',') }))
-                      }}
-                    />
-                    {t(`webhook.events_list.${eventName}`)}
-                  </label>
-                )
-              })}
+      <Dialog open={formOpen} onOpenChange={(nextOpen) => { if (!nextOpen && !saving) closeForm() }} modal>
+        <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={saving}>
+          <DialogTitle className="pr-10">{editingId === null ? t('webhook.addWebhook') : t('webhook.editWebhook')}</DialogTitle>
+          <div className="flex flex-col gap-4">
+            <Field>
+              <FieldLabel>{t('webhook.name')}</FieldLabel>
+              <Input value={form.name} onChange={event => setForm(current => ({ ...current, name: event.target.value }))} placeholder={t('webhook.namePlaceholder')} />
+            </Field>
+            <Field>
+              <FieldLabel>{t('webhook.platform')}</FieldLabel>
+              <NativeSelect value={form.platform} onChange={event => setForm(current => ({ ...current, platform: event.target.value as WebhookConfig['platform'] }))}>
+                {PLATFORM_OPTIONS.map(platform => <option key={platform} value={platform}>{t(`webhook.platforms.${platform}`)}</option>)}
+              </NativeSelect>
+            </Field>
+            {guide && <p className="text-[12px] leading-5 text-[var(--text-muted)]">{t('webhook.guideTitle')}: {guide}</p>}
+            <Field>
+              <FieldLabel>{t('webhook.url')}</FieldLabel>
+              <Input value={form.url} onChange={event => setForm(current => ({ ...current, url: event.target.value }))} placeholder={t('webhook.urlPlaceholder')} />
+            </Field>
+            <fieldset aria-invalid={!hasEvents || undefined} aria-describedby={!hasEvents ? 'webhook-events-error' : undefined}>
+              <legend className="mb-2 text-[14px] text-[var(--text-muted)]">{t('webhook.events')}</legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {WEBHOOK_EVENTS.map(eventName => {
+                  const current = eventValues(form.events)
+                  const selected = current.includes(eventName)
+                  return (
+                    <label key={eventName} className="flex min-h-10 cursor-pointer items-center gap-2 text-[13px] text-[var(--text-soft)]">
+                      <Checkbox
+                        checked={selected}
+                        onCheckedChange={() => {
+                          const next = selected ? current.filter(value => value !== eventName) : [...current, eventName]
+                          setForm(value => ({ ...value, events: next.join(',') }))
+                        }}
+                      />
+                      {t(`webhook.events_list.${eventName}`)}
+                    </label>
+                  )
+                })}
+              </div>
+              {!hasEvents && (
+                <p id="webhook-events-error" role="alert" className="mt-2 text-[12px] text-[var(--danger-text)]">
+                  {t('webhook.eventRequired')}
+                </p>
+              )}
+            </fieldset>
+            <Field>
+              <FieldLabel>{t('webhook.cooldown')}</FieldLabel>
+              <Input type="number" value={form.cooldown_minutes} min={5} max={1440} onChange={event => setForm(current => ({ ...current, cooldown_minutes: Number(event.target.value) || 30 }))} />
+            </Field>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="outline" disabled={saving} onClick={closeForm}>{t('cancel')}</Button>
+              <Button type="button" aria-busy={saving || undefined} disabled={saving || !form.name.trim() || !form.url.trim() || !hasEvents} onClick={save}>{saving ? t('saving') : t('save')}</Button>
             </div>
-            {!hasEvents && (
-              <p id="webhook-events-error" role="alert" className="mt-2 text-[12px] text-[var(--danger-text)]">
-                {t('webhook.eventRequired')}
-              </p>
-            )}
-          </fieldset>
-          <InputV2 label={t('webhook.cooldown')} type="number" value={form.cooldown_minutes} min={5} max={1440} onChange={event => setForm(current => ({ ...current, cooldown_minutes: Number(event.target.value) || 30 }))} />
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="outline" disabled={saving} onClick={closeForm}>{t('cancel')}</Button>
-            <Button type="button" aria-busy={saving || undefined} disabled={saving || !form.name.trim() || !form.url.trim() || !hasEvents} onClick={save}>{saving ? t('saving') : t('save')}</Button>
           </div>
-        </div>
-      </ModalV2>
+        </DialogContent>
+      </Dialog>
 
-      <ModalV2
-        open={deleteId !== null}
-        title={t('webhook.deleteConfirmNamed', { name: deletingWebhook?.name ?? '' })}
-        onClose={() => setDeleteId(null)}
-        finalFocus={deleteTriggerRef}
-        closeDisabled={deleteMutation.isPending}
-      >
-        <p className="mb-5 text-[13px] leading-5 text-[var(--text-soft)]">{t('webhook.deleteWarning')}</p>
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" disabled={deleteMutation.isPending} onClick={() => setDeleteId(null)}>{t('cancel')}</Button>
-          <Button type="button" variant="destructive" aria-busy={deleteMutation.isPending || undefined} disabled={deleteMutation.isPending} onClick={() => { if (deleteId !== null) deleteMutation.mutate(deleteId) }}>
-            {deleteMutation.isPending ? t('deleting') : t('delete')}
-          </Button>
-        </div>
-      </ModalV2>
+      <Dialog open={deleteId !== null} onOpenChange={(nextOpen) => { if (!nextOpen && !deleteMutation.isPending) setDeleteId(null) }} modal>
+        <DialogContent style={{ maxWidth: 440 }} finalFocus={deleteTriggerRef} closeDisabled={deleteMutation.isPending}>
+          <DialogTitle className="pr-10">{t('webhook.deleteConfirmNamed', { name: deletingWebhook?.name ?? '' })}</DialogTitle>
+          <p className="mb-5 text-[13px] leading-5 text-[var(--text-soft)]">{t('webhook.deleteWarning')}</p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" disabled={deleteMutation.isPending} onClick={() => setDeleteId(null)}>{t('cancel')}</Button>
+            <Button type="button" variant="destructive" aria-busy={deleteMutation.isPending || undefined} disabled={deleteMutation.isPending} onClick={() => { if (deleteId !== null) deleteMutation.mutate(deleteId) }}>
+              {deleteMutation.isPending ? t('deleting') : t('delete')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -1,3 +1,7 @@
+import { Toggle } from '@/components/ui/toggle'
+import { Input } from '@/components/ui/input'
+import { TableContainer, Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery } from '@tanstack/react-query'
@@ -8,10 +12,10 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
-import EmptyState from '@/components/EmptyState'
+
 import QueryErrorState from '@/components/QueryErrorState'
-import SelectV2 from '@/components/Select'
-import TableViewport from '@/components/TableViewport'
+import { NativeSelect } from '@/components/ui/native-select'
+
 import AdminPage from '@/admin/components/AdminPage'
 import SiemExportersSection from '@/admin/components/SiemExportersSection'
 import AuditIntegrityNotice from '@/admin/components/AuditIntegrityNotice'
@@ -77,7 +81,7 @@ function canonicalizeSearchParams(current: URLSearchParams): URLSearchParams {
   return next
 }
 
-export default function AuditLogsV2() {
+export default function AuditLogs() {
   const { t } = useTranslation()
   const toast = useAppToast()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -213,61 +217,61 @@ export default function AuditLogsV2() {
       >
         <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-sm px-3 py-1.5" style={{ border: '1px solid var(--border)' }}>
           <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
-          <input
-            aria-label={t('audit.searchLabel')}
-            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]"
-            style={{ color: 'var(--text)' }}
-            placeholder={t('audit.searchPlaceholder')}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+            <Input
+              aria-label={t('audit.searchLabel')}
+              className={"min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]" + ' h-9 rounded-none border-0 px-0 shadow-none focus-visible:ring-0 dark:bg-transparent'}
+              style={{ color: 'var(--text)' }}
+              placeholder={t('audit.searchPlaceholder')}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:contents">
-          <SelectV2
-            className="min-h-10 sm:w-auto"
-            aria-label={t('audit.ecosystem')}
-            value={ecosystem}
-            onChange={(event) => updateParams((next) => {
-              if (event.target.value === 'all') next.delete('ecosystem')
-              else next.set('ecosystem', event.target.value)
-            })}
-          >
-            <option value="all">{t('all')}</option>
-            <option value="admin">{t('audit.management')}</option>
-            {operatorEcosystems.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
-          </SelectV2>
+            <NativeSelect
+              className="min-h-10 sm:w-auto"
+              aria-label={t('audit.ecosystem')}
+              value={ecosystem}
+              onChange={(event) => updateParams((next) => {
+                if (event.target.value === 'all') next.delete('ecosystem')
+                else next.set('ecosystem', event.target.value)
+              })}
+            >
+              <option value="all">{t('all')}</option>
+              <option value="admin">{t('audit.management')}</option>
+              {operatorEcosystems.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+            </NativeSelect>
 
-          <SelectV2
-            className="min-h-10 sm:w-auto"
-            aria-label={t('audit.result')}
-            value={resultFilter}
-            onChange={(event) => updateParams((next) => {
-              if (event.target.value === 'all') next.delete('result')
-              else next.set('result', event.target.value)
-            })}
-          >
-            <option value="all">{t('all')}</option>
-            <option value="hit">{t('audit.hit')}</option>
-            <option value="miss">{t('audit.miss')}</option>
-            <option value="success">{t('audit.success')}</option>
-            <option value="error">{t('audit.error')}</option>
-            <option value="blocked">{t('audit.blocked')}</option>
-          </SelectV2>
+            <NativeSelect
+              className="min-h-10 sm:w-auto"
+              aria-label={t('audit.result')}
+              value={resultFilter}
+              onChange={(event) => updateParams((next) => {
+                if (event.target.value === 'all') next.delete('result')
+                else next.set('result', event.target.value)
+              })}
+            >
+              <option value="all">{t('all')}</option>
+              <option value="hit">{t('audit.hit')}</option>
+              <option value="miss">{t('audit.miss')}</option>
+              <option value="success">{t('audit.success')}</option>
+              <option value="error">{t('audit.error')}</option>
+              <option value="blocked">{t('audit.blocked')}</option>
+            </NativeSelect>
         </div>
 
         <fieldset className="flex min-h-10 items-center gap-1" aria-label={t('audit.timeRange')}>
           <legend className="sr-only">{t('audit.timeRange')}</legend>
           {(['today', '7d', '30d'] as const).map(r => (
-            <button
+            <Toggle
               type="button"
               key={r}
-              onClick={() => updateParams((next) => {
+              onPressedChange={() => updateParams((next) => {
                 if (r === 'today') next.delete('range')
                 else next.set('range', r)
               })}
-              aria-pressed={timeRange === r}
-              className="px-2.5 py-1 text-[11px] rounded-sm transition-[background,color,border-color,transform] duration-150 cursor-pointer active:scale-[0.96]"
+              pressed={timeRange === r}
+              className="px-2.5 py-1 text-[11px] rounded-sm transition-[background,color,border-color,transform] duration-150 cursor-pointer active:scale-[0.96] min-h-[40px]"
               style={{
                 background: timeRange === r ? 'var(--btn)' : 'transparent',
                 color: timeRange === r ? 'var(--btn-fg)' : 'var(--text-soft)',
@@ -275,7 +279,7 @@ export default function AuditLogsV2() {
               }}
             >
               {r === 'today' ? t('audit.today') : r === '7d' ? t('audit.days7') : t('audit.days30')}
-            </button>
+            </Toggle>
           ))}
         </fieldset>
 
@@ -299,64 +303,64 @@ export default function AuditLogsV2() {
         <div className="space-y-3">
           {data && isRefetchError && <StaleDataNotice onRefresh={() => { void refetch() }} />}
           {items.length === 0 ? (
-            <EmptyState icon="receipt_long" title={t('audit.noLogs')} hint={t('audit.noLogsHint')} minHeight={240} />
+            <Empty style={{ minHeight: 240 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"receipt_long"} size="sm" /></EmptyMedia><EmptyTitle>{t('audit.noLogs')}</EmptyTitle>{t('audit.noLogsHint') && <EmptyDescription>{t('audit.noLogsHint')}</EmptyDescription>}</EmptyHeader></Empty>
           ) : (
-            <TableViewport label={t('audit.table')} minWidth={1180}>
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+            <TableContainer label={t('audit.table')} minWidth={1180}>
+          <Table className="w-full text-[12px]">
+            <TableHeader>
+              <TableRow style={{ borderBottom: '1px solid var(--border)' }}>
                 {headers.map(h => (
-                  <th key={h} scope="col" className="text-left text-[11px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>
+                  <TableHead key={h} scope="col" className="text-left text-[11px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>
                     {h}
-                  </th>
+                  </TableHead>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {items.map((row: AuditLog) => (
-                <tr
+                <TableRow
                   key={row.id}
                   className="transition-colors duration-75 hover:bg-[var(--bg-soft)]"
                   style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
                 >
-                  <td className="py-2 px-3 pl-0 whitespace-nowrap">
+                  <TableCell className="py-2 px-3 pl-0 whitespace-nowrap">
                     <span className="font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{formatTime(row.created_at)}</span>
-                  </td>
-                  <td className="py-2 px-3">
+                  </TableCell>
+                  <TableCell className="py-2 px-3">
                     <div className="flex items-center gap-1.5">
                       {isAdminEcosystem(row.ecosystem) && <EcosystemIcon type={row.ecosystem} size={13} />}
                       <span className="text-[11px] uppercase" style={{ color: 'var(--text)' }}>{row.ecosystem}</span>
                     </div>
-                  </td>
-                  <td className="py-2 px-3 max-w-[220px]">
+                  </TableCell>
+                  <TableCell className="py-2 px-3 max-w-[220px]">
                     <span className="font-mono truncate block" style={{ color: 'var(--text)' }}>{row.package_name || '-'}</span>
-                  </td>
-                  <td className="py-2 px-3">
+                  </TableCell>
+                  <TableCell className="py-2 px-3">
                     <span className="font-mono" style={{ color: 'var(--text-soft)' }}>{row.version || '-'}</span>
-                  </td>
-                  <td className="py-2 px-3">
+                  </TableCell>
+                  <TableCell className="py-2 px-3">
                     <span className="font-mono whitespace-nowrap" style={{ color: 'var(--text)' }}>{row.action || '-'}</span>
-                  </td>
-                  <td className="py-2 px-3">
+                  </TableCell>
+                  <TableCell className="py-2 px-3">
                     {resultBadge(row.cache_result, t)}
-                  </td>
-                  <td className="py-2 px-3 whitespace-nowrap">
+                  </TableCell>
+                  <TableCell className="py-2 px-3 whitespace-nowrap">
                     <span className="font-mono tabular-nums" style={{ color: latencyColor(row.latency_ms) }}>{row.latency_ms}ms</span>
-                  </td>
-                  <td className="py-2 px-3 whitespace-nowrap">
+                  </TableCell>
+                  <TableCell className="py-2 px-3 whitespace-nowrap">
                     <span className="font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{formatBytes(row.bytes_sent)}</span>
-                  </td>
-                  <td className="py-2 px-3 max-w-[180px]">
+                  </TableCell>
+                  <TableCell className="py-2 px-3 max-w-[180px]">
                     <span className="font-mono truncate block" title={row.user_agent || undefined} style={{ color: 'var(--text-soft)' }}>{row.user_agent || '-'}</span>
-                  </td>
-                  <td className="py-2 px-3">
+                  </TableCell>
+                  <TableCell className="py-2 px-3">
                     <span className="font-mono" style={{ color: 'var(--text-soft)' }}>{row.client_ip || '-'}</span>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-            </TableViewport>
+            </TableBody>
+          </Table>
+            </TableContainer>
           )}
         </div>
       )}

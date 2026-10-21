@@ -1,3 +1,4 @@
+import { Field as FieldPrimitive } from '@base-ui/react/field'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -12,7 +13,7 @@ import { cn } from '@/lib/utils'
 // Pair the popup's foreground with an opaque background on every option,
 // including plain <option> children. Native menus can otherwise combine our
 // light text with a platform-provided white surface despite color-scheme.
-function NativeSelect({ className, ...props }: React.ComponentProps<'select'>) {
+function NativeSelect({ className, id, name, value, defaultValue, disabled, 'aria-describedby': describedBy, 'aria-invalid': invalid, ...props }: React.ComponentProps<'select'>) {
   return (
     <div
       className={cn(
@@ -20,10 +21,18 @@ function NativeSelect({ className, ...props }: React.ComponentProps<'select'>) {
         className,
       )}
     >
-      <select
+      <FieldPrimitive.Control
+        id={id}
+        name={name}
+        value={value}
+        defaultValue={defaultValue}
+        disabled={disabled}
+        aria-describedby={describedBy}
+        aria-invalid={invalid}
+        {...(props['aria-label'] && !props['aria-labelledby'] ? { 'aria-labelledby': '' } : {})}
+        render={<select {...props} />}
         data-slot="native-select"
         className="col-start-1 row-start-1 h-9 w-full min-w-0 cursor-pointer appearance-none rounded-md border border-input bg-transparent py-1 pr-8 pl-3 text-base text-foreground transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50 [&_option]:bg-popover [&_option:enabled]:text-popover-foreground [&_optgroup]:bg-popover [&_optgroup:enabled]:text-popover-foreground"
-        {...props}
       />
       <ChevronDown
         aria-hidden="true"

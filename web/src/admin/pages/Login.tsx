@@ -1,3 +1,4 @@
+import { Field, FieldLabel } from '@/components/ui/field'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
@@ -5,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import Icon from '@/components/Icon'
-import Input from '@/components/Input'
+import { Input } from '@/components/ui/input'
 import Logo from '@/components/Logo'
 import { authApi } from '@/lib/api'
 import { loginDestination } from '@/lib/adminLoginDestination'
@@ -109,24 +110,28 @@ export default function Login() {
         </header>
 
         <form onSubmit={handleSubmit} className="space-y-5" aria-busy={loading || undefined}>
-          <Input
-            label={t('login.username')}
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            placeholder={t('login.usernamePlaceholder')}
-            autoComplete="username"
-            autoFocus
-            required
-          />
-          <Input
-            label={t('login.password')}
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder={t('login.passwordPlaceholder')}
-            autoComplete="current-password"
-            required
-          />
+          <Field>
+            <FieldLabel>{t('login.username')}</FieldLabel>
+            <Input
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              placeholder={t('login.usernamePlaceholder')}
+              autoComplete="username"
+              autoFocus
+              required
+            />
+          </Field>
+          <Field>
+            <FieldLabel>{t('login.password')}</FieldLabel>
+            <Input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder={t('login.passwordPlaceholder')}
+              autoComplete="current-password"
+              required
+            />
+          </Field>
 
           {error && (
             <p

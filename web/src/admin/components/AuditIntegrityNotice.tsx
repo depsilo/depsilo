@@ -1,9 +1,9 @@
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
 import { Button } from '@/components/ui/button'
-import InlineNotice from '@/components/InlineNotice'
 
 function shortHash(hash: string) {
   return hash.length > 12 ? `${hash.slice(0, 12)}…` : hash
@@ -46,12 +46,12 @@ export default function AuditIntegrityNotice() {
   }
   if (query.isError && !report) {
     return (
-      <InlineNotice tone="warning">
+      <Alert variant={"warning"}><AlertDescription>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <span>{t('auditIntegrity.unavailable', { message: getApiError(query.error).message })}</span>
           {verifyButton}
         </div>
-      </InlineNotice>
+      </AlertDescription></Alert>
     )
   }
   if (!report) return null
@@ -62,20 +62,20 @@ export default function AuditIntegrityNotice() {
     return (
       <div className="space-y-2">
         {chainBroken && (
-          <InlineNotice tone="danger">
+          <Alert variant={"destructive"}><AlertDescription>
             {t('auditIntegrity.broken', { id: report.broken_at_id ?? 0, reason: report.reason ?? '' })}
-          </InlineNotice>
+          </AlertDescription></Alert>
         )}
         {anchorBroken && (
-          <InlineNotice tone="danger">
+          <Alert variant={"destructive"}><AlertDescription>
             {t('auditIntegrity.anchorBroken', { id: anchors.broken_at_id ?? 0, reason: anchors.reason ?? '' })}
-          </InlineNotice>
+          </AlertDescription></Alert>
         )}
         {query.isRefetchError && (
-          <InlineNotice tone="warning">{t('auditIntegrity.stale')}</InlineNotice>
+          <Alert variant={"warning"}><AlertDescription>{t('auditIntegrity.stale')}</AlertDescription></Alert>
         )}
         {remoteError && (
-          <InlineNotice tone="warning">{t('auditIntegrity.remoteError', { message: feed.remote_last_error })}</InlineNotice>
+          <Alert variant={"warning"}><AlertDescription>{t('auditIntegrity.remoteError', { message: feed.remote_last_error })}</AlertDescription></Alert>
         )}
         <div className="flex justify-end">
           {verifyButton}
@@ -84,7 +84,7 @@ export default function AuditIntegrityNotice() {
     )
   }
   return (
-    <InlineNotice tone="success">
+    <Alert variant={"success"}><AlertDescription>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span>
           {t('auditIntegrity.verified', {
@@ -109,6 +109,6 @@ export default function AuditIntegrityNotice() {
         </span>
         {verifyButton}
       </div>
-    </InlineNotice>
+    </AlertDescription></Alert>
   )
 }

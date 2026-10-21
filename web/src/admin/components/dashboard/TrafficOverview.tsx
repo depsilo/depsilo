@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { Card, CardHeader, CardTitle } from '@/components/ui/card'
 
 import type { DashboardPeriod, NowResponse, OriginCoverage } from '@/lib/adminApi.types'
 
@@ -19,20 +20,20 @@ export default function TrafficOverview(props: TrafficOverviewProps) {
   const { t } = useTranslation()
 
   return (
-    <section
+    <Card render={<section />}
       data-dashboard-traffic
       aria-labelledby="overview-traffic-title"
-      className="dash-card flex min-w-0 flex-col"
+      className="gap-0 p-0"
     >
-      <header className="dashboard-traffic-header flex min-w-0 flex-wrap items-baseline justify-between gap-x-5 gap-y-1 px-5">
-        <h2 id="overview-traffic-title" className="text-[16px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
+      <CardHeader className="min-w-0 items-baseline gap-x-5 gap-y-1 py-2">
+        <CardTitle id="overview-traffic-title" style={{ color: 'var(--dash-ink)' }}>
           {t('overview.trafficTitle')}
-        </h2>
+        </CardTitle>
         <p className="text-[12px] leading-relaxed" style={{ color: 'var(--dash-muted)' }}>{t('overview.flowScope')}</p>
-      </header>
+      </CardHeader>
       <div className="min-w-0 px-5 pb-2">
         <RequestFlow {...props} />
       </div>
-    </section>
+    </Card>
   )
 }

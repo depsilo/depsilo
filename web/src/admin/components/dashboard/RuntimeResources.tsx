@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next'
 
 import Icon from '@/components/Icon'
+import { Meter, MeterIndicator, MeterTrack } from '@/components/ui/meter'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { NowResponse, RuntimeResponse } from '@/lib/adminApi.types'
 import { useSampleSeries } from '@/hooks/useSampleSeries'
 import { formatBytes } from '@/lib/utils'
@@ -62,30 +64,27 @@ export function CacheStorageOverview({ runtime, runtimePending }: Pick<RuntimeRe
           </h2>
           <div data-cache-capacity-group className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
             {loading
-              ? <span aria-hidden className="block h-[26px] w-40 animate-pulse rounded bg-[var(--dash-soft)]" />
+              ? <Skeleton className="h-[26px] w-40" />
               : <p className="flex flex-wrap items-baseline gap-1.5 tabular-nums">
                 <span className="dash-metric-value whitespace-nowrap font-semibold leading-tight text-[var(--dash-ink)]" style={{ fontSize: '20px' }}>{inventoryKnown ? formatBytes(cache.logical_bytes) : '—'}</span>
                 {quota != null && quota > 0 && <span className="whitespace-nowrap text-[13px] text-[var(--dash-muted)]" aria-label={t('overview.cacheQuota', { value: formatBytes(quota) })}>/ {formatBytes(quota)}</span>}
               </p>}
             {ratio !== null && <div className="flex items-center gap-2">
-              <div
-                role="progressbar"
+              <Meter
                 aria-label={t('overview.cacheLabel')}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={Math.round(ratio * 1000) / 10}
+                value={ratio * 100}
                 aria-valuetext={t('overview.cacheUsagePercentage', { percent: (cacheRatio! * 100).toFixed(1) })}
                 data-progress-ratio={ratio}
-                className="h-1.5 w-24 overflow-hidden rounded-full bg-[var(--dash-soft)]"
+                className="w-24"
               >
-                {ratio > 0 && <div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${ratio * 100}%`, background: 'var(--dash-accent)' }} />}
-              </div>
+                <MeterTrack><MeterIndicator /></MeterTrack>
+              </Meter>
               <span className="text-[12px] tabular-nums text-[var(--dash-muted)]">{(cacheRatio! * 100).toFixed(1)}%</span>
             </div>}
           </div>
         </div>
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] leading-relaxed text-[var(--dash-muted)]">
-          {loading ? <><span className="sr-only">{t('loading')}</span><span aria-hidden className="block h-4 w-40 max-w-full animate-pulse rounded bg-[var(--dash-soft)]" /></> : <>
+          {loading ? <><span className="sr-only">{t('loading')}</span><Skeleton className="h-4 w-40 max-w-full" /></> : <>
             {inventoryDetail && <p>{inventoryDetail}</p>}
             {(quota == null || quota <= 0) && quotaDetail && <p>{quotaDetail}</p>}
           </>}

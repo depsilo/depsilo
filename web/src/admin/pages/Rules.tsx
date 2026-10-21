@@ -1,3 +1,9 @@
+import { Toggle } from '@/components/ui/toggle'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Field, FieldLabel } from '@/components/ui/field'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useState } from 'react'
 import type { AxiosResponse } from 'axios'
 import { useTranslation } from 'react-i18next'
@@ -5,17 +11,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
 import { formatTime } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import InputV2 from '@/components/Input'
-import TextareaV2 from '@/components/Textarea'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import Icon from '@/components/Icon'
 import { Badge } from '@/components/ui/badge'
-import ModalV2 from '@/components/Modal'
-import DataTableV2 from '@/components/DataTable'
-import SelectV2 from '@/components/Select'
+import DataTable from '@/components/DataTable'
+import { NativeSelect } from '@/components/ui/native-select'
 import EcosystemIcon from '@/components/EcosystemIcon'
-import EmptyState from '@/components/EmptyState'
-import InlineNotice from '@/components/InlineNotice'
-import IconButton from '@/components/IconButton'
+
 import QueryErrorState from '@/components/QueryErrorState'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
@@ -152,13 +155,13 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
       </div>
 
       {(usingStaleSnapshot || degradedPolicy) && (
-        <InlineNotice tone="warning" title={t('rules.policySnapshotNotice')}>
+        <Alert variant={"warning"}><AlertTitle>{t('rules.policySnapshotNotice')}</AlertTitle><AlertDescription>
           {usingStaleSnapshot && result.policy_status?.snapshot_age_seconds
             ? t('rules.policySnapshotAge', { seconds: Math.round(result.policy_status.snapshot_age_seconds) })
             : usingStaleSnapshot
               ? t('rules.policySnapshotUsingStale')
               : t('rules.policySnapshotDegraded')}
-        </InlineNotice>
+        </AlertDescription></Alert>
       )}
 
       {!hasCandidateData ? null : candidates.length > 0 ? (
@@ -240,7 +243,7 @@ function upsertRule(current: AxiosResponse<RuleListPayload> | undefined, respons
   return { ...current, data: Array.isArray(current.data) ? next : { ...current.data, items: next } }
 }
 
-export default function RulesV2() {
+export default function Rules() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { canWrite } = usePrincipal()
@@ -306,7 +309,36 @@ export default function RulesV2() {
     { key: 'action', label: t('rules.action'), render: (v: unknown) => (v as string) === 'allow' ? <Badge variant="success">{t('rules.allow')}</Badge> : <Badge variant="destructive">{t('rules.deny')}</Badge> },
     { key: 'reason', label: t('rules.reason'), render: (v: unknown) => <span className="text-[12px] truncate block max-w-[200px]" style={{ color: 'var(--text-soft)' }} title={v as string}>{(v as string) || '-'}</span> },
     { key: 'created_at', label: t('users.createdAt'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string, 'relative')}</span> },
-    { key: 'id', label: t('actions'), render: (_v: unknown, row: RuleRecord & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><IconButton icon="edit" label={t('rules.editNamed', { name: row.package_name })} onClick={() => openEdit(row)} /><IconButton icon="delete" label={t('rules.deleteNamed', { name: row.package_name })} tone="danger" onClick={() => openDeleteDialog(row)} /></div>) : null },
+    {
+      key: 'id', label: t('actions'), render: (_v: unknown, row: RuleRecord & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><Tooltip>
+        <TooltipTrigger render={
+          <Button
+            onClick={() => openEdit(row)}
+            variant="ghost"
+            size="icon"
+            data-icon-button
+            aria-label={t('rules.editNamed', { name: row.package_name })}
+            style={{ color: 'var(--text-soft)' }}
+          />
+        }>
+          <Icon name={"edit"} size="sm" />
+        </TooltipTrigger>
+        <TooltipContent>{t('rules.editNamed', { name: row.package_name })}</TooltipContent>
+      </Tooltip><Tooltip>
+        <TooltipTrigger render={
+          <Button
+            onClick={() => openDeleteDialog(row)}
+            variant="ghost"
+            size="icon"
+            data-icon-button
+            aria-label={t('rules.deleteNamed', { name: row.package_name })}
+            style={{ color: 'var(--danger-text)' }}
+          />
+        }>
+          <Icon name={"delete"} size="sm" />
+        </TooltipTrigger>
+        <TooltipContent>{t('rules.deleteNamed', { name: row.package_name })}</TooltipContent>
+      </Tooltip></div>) : null },
   ]
 
   return (
@@ -326,8 +358,8 @@ export default function RulesV2() {
         <QueryErrorState message={apiError.status === 403 ? t('common.permissionDenied') : apiError.message} onRetry={() => { void query.refetch() }} />
       ) : (
         <div className="space-y-3">
-        {data && query.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void query.refetch() }}>{t('now.refresh')}</Button></div></InlineNotice>}
-        {items.length === 0 ? <EmptyState icon="rule" title={t('rules.noRules')} minHeight={200} /> : <DataTableV2
+        {data && query.isRefetchError && <Alert variant={"warning"}><AlertDescription><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void query.refetch() }}>{t('now.refresh')}</Button></div></AlertDescription></Alert>}
+        {items.length === 0 ? <Empty style={{ minHeight: 200 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"rule"} size="sm" /></EmptyMedia><EmptyTitle>{t('rules.noRules')}</EmptyTitle></EmptyHeader></Empty> : <DataTable
           columns={columns}
           data={items.map((rule) => ({ ...rule }))}
           rowKey={(row) => row.id as number}
@@ -337,44 +369,59 @@ export default function RulesV2() {
         </div>
       )}
 
-      <ModalV2 open={dialogOpen} onClose={closeDialog} title={editId ? t('rules.editRule') : t('rules.addRule')} closeDisabled={isSaving}>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <SelectV2 label={t('rules.ecosystem')} value={form.ecosystem} onChange={(e) => { const ecosystem = e.target.value; setForm({ ...form, ecosystem, ...(ecosystem === '*' ? { package_name: '*', version: '*' } : !supportsPackageRuleVersions(ecosystem) ? { version: '*' } : {}) }) }}><option value="*">{t('rules.allEcosystems')} (*)</option>{ECOSYSTEM_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</SelectV2>
-          <InputV2 label={t('rules.packageName')} mono value={form.package_name} onChange={(e) => setForm({ ...form, package_name: e.target.value })} placeholder={packagePlaceholder} required disabled={globalRule} />
-          <InputV2 label={t('rules.version')} mono value={form.version} onChange={(e) => setForm({ ...form, version: e.target.value })} placeholder={rangesSupported ? t('rules.versionPlaceholder') : t('rules.exactVersionPlaceholder')} disabled={globalRule || !versionsSupported} />
-          {globalRule && <InlineNotice tone="warning">{t('rules.globalRuleHint')}</InlineNotice>}
-          {!globalRule && versionsSupported && !rangesSupported && <InlineNotice tone="warning">{t('rules.exactOnlyHint')}</InlineNotice>}
-          {form.ecosystem === 'apt' && <InlineNotice tone="warning">{t('rules.aptVersionHint')}</InlineNotice>}
-          {form.ecosystem === 'npm' && <InlineNotice tone="warning">{t('rules.npmVersionHint')}</InlineNotice>}
-          {form.ecosystem === 'composer' && <InlineNotice tone="warning">{t('rules.composerVersionHint')}</InlineNotice>}
-          <fieldset>
-            <legend className="mb-1 block text-[14px] font-[400] text-[var(--text-muted)]">{t('rules.action')}</legend>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                aria-pressed={form.action === 'allow'}
-                onClick={() => setForm({ ...form, action: 'allow' })}
-                className="stripe-focus-ring flex-1 cursor-pointer rounded-sm py-2 text-[14px] font-[400] transition-colors"
-                style={{ background: form.action === 'allow' ? 'var(--ok-fill)' : 'var(--bg-soft)', color: form.action === 'allow' ? 'var(--ok-text)' : 'var(--text-soft)', border: form.action === 'allow' ? '1px solid var(--ok-border)' : '1px solid var(--border)' }}
-              >
-                {t('rules.allow')}
-              </button>
-              <button
-                type="button"
-                aria-pressed={form.action === 'deny'}
-                onClick={() => setForm({ ...form, action: 'deny' })}
-                className="stripe-focus-ring flex-1 cursor-pointer rounded-sm py-2 text-[14px] font-[400] transition-colors"
-                style={{ background: form.action === 'deny' ? 'var(--danger-fill)' : 'var(--bg-soft)', color: form.action === 'deny' ? 'var(--danger)' : 'var(--text-soft)', border: form.action === 'deny' ? '1px solid var(--danger)' : '1px solid var(--border)' }}
-              >
-                {t('rules.deny')}
-              </button>
-            </div>
-          </fieldset>
-          <TextareaV2 label={t('rules.reason')} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder={t('rules.reasonPlaceholder')} rows={2} className="resize-none" />
-          {saveError && <InlineNotice tone="danger">{getApiError(saveError).message}</InlineNotice>}
-          <div className="flex justify-end gap-3 pt-2"><Button type="button" variant="outline" disabled={isSaving} onClick={closeDialog}>{t('cancel')}</Button><Button type="submit" aria-busy={isSaving || undefined} disabled={isSaving || !canWrite}>{isSaving ? t('saving') : t('save')}</Button></div>
-        </form>
-      </ModalV2>
+        <Dialog open={dialogOpen} onOpenChange={(nextOpen) => { if (!nextOpen && !isSaving) closeDialog() }} modal>
+          <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={isSaving}>
+            <DialogTitle className="pr-10">{editId ? t('rules.editRule') : t('rules.addRule')}</DialogTitle>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <Field>
+                <FieldLabel>{t('rules.ecosystem')}</FieldLabel>
+                <NativeSelect value={form.ecosystem} onChange={(e) => { const ecosystem = e.target.value; setForm({ ...form, ecosystem, ...(ecosystem === '*' ? { package_name: '*', version: '*' } : !supportsPackageRuleVersions(ecosystem) ? { version: '*' } : {}) }) }}><option value="*">{t('rules.allEcosystems')} (*)</option>{ECOSYSTEM_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</NativeSelect>
+              </Field>
+              <Field disabled={globalRule}>
+                <FieldLabel>{t('rules.packageName')}</FieldLabel>
+                <Input className="font-mono" value={form.package_name} onChange={(e) => setForm({ ...form, package_name: e.target.value })} placeholder={packagePlaceholder} required disabled={globalRule} />
+              </Field>
+              <Field disabled={globalRule || !versionsSupported}>
+                <FieldLabel>{t('rules.version')}</FieldLabel>
+                <Input className="font-mono" value={form.version} onChange={(e) => setForm({ ...form, version: e.target.value })} placeholder={rangesSupported ? t('rules.versionPlaceholder') : t('rules.exactVersionPlaceholder')} disabled={globalRule || !versionsSupported} />
+              </Field>
+              {globalRule && <Alert variant={"warning"}><AlertDescription>{t('rules.globalRuleHint')}</AlertDescription></Alert>}
+              {!globalRule && versionsSupported && !rangesSupported && <Alert variant={"warning"}><AlertDescription>{t('rules.exactOnlyHint')}</AlertDescription></Alert>}
+              {form.ecosystem === 'apt' && <Alert variant={"warning"}><AlertDescription>{t('rules.aptVersionHint')}</AlertDescription></Alert>}
+              {form.ecosystem === 'npm' && <Alert variant={"warning"}><AlertDescription>{t('rules.npmVersionHint')}</AlertDescription></Alert>}
+              {form.ecosystem === 'composer' && <Alert variant={"warning"}><AlertDescription>{t('rules.composerVersionHint')}</AlertDescription></Alert>}
+              <fieldset>
+                <legend className="mb-1 block text-[14px] font-[400] text-[var(--text-muted)]">{t('rules.action')}</legend>
+                <div className="flex gap-2">
+                  <Toggle
+                    type="button"
+                    pressed={form.action === 'allow'}
+                    onPressedChange={() => setForm({ ...form, action: 'allow' })}
+                    className="stripe-focus-ring flex-1 cursor-pointer rounded-sm py-2 text-[14px] font-[400] transition-colors min-h-[40px]"
+                    style={{ background: form.action === 'allow' ? 'var(--ok-fill)' : 'var(--bg-soft)', color: form.action === 'allow' ? 'var(--ok-text)' : 'var(--text-soft)', border: form.action === 'allow' ? '1px solid var(--ok-border)' : '1px solid var(--border)' }}
+                  >
+                    {t('rules.allow')}
+                  </Toggle>
+                  <Toggle
+                    type="button"
+                    pressed={form.action === 'deny'}
+                    onPressedChange={() => setForm({ ...form, action: 'deny' })}
+                    className="stripe-focus-ring flex-1 cursor-pointer rounded-sm py-2 text-[14px] font-[400] transition-colors min-h-[40px]"
+                    style={{ background: form.action === 'deny' ? 'var(--danger-fill)' : 'var(--bg-soft)', color: form.action === 'deny' ? 'var(--danger)' : 'var(--text-soft)', border: form.action === 'deny' ? '1px solid var(--danger)' : '1px solid var(--border)' }}
+                  >
+                    {t('rules.deny')}
+                  </Toggle>
+                </div>
+              </fieldset>
+              <Field>
+                <FieldLabel>{t('rules.reason')}</FieldLabel>
+                <Textarea value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder={t('rules.reasonPlaceholder')} rows={2} className="resize-none" />
+              </Field>
+              {saveError && <Alert variant={"destructive"}><AlertDescription>{getApiError(saveError).message}</AlertDescription></Alert>}
+              <div className="flex justify-end gap-3 pt-2"><Button type="button" variant="outline" disabled={isSaving} onClick={closeDialog}>{t('cancel')}</Button><Button type="submit" aria-busy={isSaving || undefined} disabled={isSaving || !canWrite}>{isSaving ? t('saving') : t('save')}</Button></div>
+            </form>
+          </DialogContent>
+        </Dialog>
 
       <ConfirmActionDialog
         open={deleteTarget !== null}
@@ -396,16 +443,28 @@ export default function RulesV2() {
         }}
       />
 
-      <ModalV2 open={testOpen} onClose={() => setTestOpen(false)} title={t('rules.testTitle')} closeDisabled={testLoading}>
-        <div className="space-y-4">
-          <SelectV2 label={t('rules.ecosystem')} value={testForm.ecosystem} disabled={testLoading} onChange={(e) => updateTestField('ecosystem', e.target.value)}>{ECOSYSTEM_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</SelectV2>
-          <InputV2 label={t('rules.packageName')} mono value={testForm.package} disabled={testLoading} onChange={(e) => updateTestField('package', e.target.value)} placeholder={testPackagePlaceholder} />
-          <InputV2 label={t('rules.version')} mono value={testForm.version} disabled={testLoading} onChange={(e) => updateTestField('version', e.target.value)} placeholder={t('rules.testVersionPlaceholder')} />
-          <Button type="button" onClick={handleTest} aria-busy={testLoading || undefined} disabled={testLoading || !testForm.package} className="w-full">{testLoading ? t('rules.testing') : t('rules.testBtn')}</Button>
-          {testResult && !('error' in testResult) && <RuleTestResultView result={testResult} />}
-          {testResult && 'error' in testResult && <div role="alert" className="rounded-sm p-4" style={{ background: 'var(--danger-fill)', border: '1px solid var(--danger)' }}><p className="text-[14px]" style={{ color: 'var(--danger)' }}>{testResult.error}</p></div>}
-        </div>
-      </ModalV2>
+        <Dialog open={testOpen} onOpenChange={(nextOpen) => { if (!nextOpen && !testLoading) setTestOpen(false) }} modal>
+          <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={testLoading}>
+            <DialogTitle className="pr-10">{t('rules.testTitle')}</DialogTitle>
+            <div className="space-y-4">
+              <Field disabled={testLoading}>
+                <FieldLabel>{t('rules.ecosystem')}</FieldLabel>
+                <NativeSelect value={testForm.ecosystem} disabled={testLoading} onChange={(e) => updateTestField('ecosystem', e.target.value)}>{ECOSYSTEM_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</NativeSelect>
+              </Field>
+              <Field disabled={testLoading}>
+                <FieldLabel>{t('rules.packageName')}</FieldLabel>
+                <Input className="font-mono" value={testForm.package} disabled={testLoading} onChange={(e) => updateTestField('package', e.target.value)} placeholder={testPackagePlaceholder} />
+              </Field>
+              <Field disabled={testLoading}>
+                <FieldLabel>{t('rules.version')}</FieldLabel>
+                <Input className="font-mono" value={testForm.version} disabled={testLoading} onChange={(e) => updateTestField('version', e.target.value)} placeholder={t('rules.testVersionPlaceholder')} />
+              </Field>
+              <Button type="button" onClick={handleTest} aria-busy={testLoading || undefined} disabled={testLoading || !testForm.package} className="w-full">{testLoading ? t('rules.testing') : t('rules.testBtn')}</Button>
+              {testResult && !('error' in testResult) && <RuleTestResultView result={testResult} />}
+              {testResult && 'error' in testResult && <div role="alert" className="rounded-sm p-4" style={{ background: 'var(--danger-fill)', border: '1px solid var(--danger)' }}><p className="text-[14px]" style={{ color: 'var(--danger)' }}>{testResult.error}</p></div>}
+            </div>
+          </DialogContent>
+        </Dialog>
     </div>
     </AdminPage>
   )

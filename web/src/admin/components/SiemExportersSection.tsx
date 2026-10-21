@@ -1,3 +1,7 @@
+import { TableContainer, Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Field, FieldLabel } from '@/components/ui/field'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -5,15 +9,14 @@ import { adminApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
 import { Button } from '@/components/ui/button'
 import Icon from '@/components/Icon'
-import InputV2 from '@/components/Input'
+import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import SelectV2 from '@/components/Select'
+import { NativeSelect } from '@/components/ui/native-select'
 import SectionHeader from '@/components/SectionHeader'
-import EmptyState from '@/components/EmptyState'
-import InlineNotice from '@/components/InlineNotice'
+
 import QueryErrorState from '@/components/QueryErrorState'
 import ConfirmActionDialog from '@/admin/components/ConfirmActionDialog'
-import TableViewport from '@/components/TableViewport'
+
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { formatTime } from '@/lib/utils'
 import type { AuditExporter, AuditExporterKind } from '@/lib/adminApi.types'
@@ -101,24 +104,38 @@ export default function SiemExportersSection() {
   return (
     <section data-siem-exporters>
       <SectionHeader title={t('siem.title')} hint={t('siem.description')} />
-      {error && <InlineNotice tone="danger">{error}</InlineNotice>}
-      {notice && <InlineNotice tone="success">{notice}</InlineNotice>}
+      {error && <Alert variant={"destructive"}><AlertDescription>{error}</AlertDescription></Alert>}
+      {notice && <Alert variant={"success"}><AlertDescription>{notice}</AlertDescription></Alert>}
 
       {canWrite && (
         <div className="mt-3 grid min-w-0 items-end gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <InputV2 label={t('siem.name')} value={form.name} onChange={event => setForm(value => ({ ...value, name: event.target.value }))} placeholder={t('siem.namePlaceholder')} />
-          <SelectV2 label={t('siem.kind')} value={form.kind} onChange={event => setForm(value => ({ ...value, kind: event.target.value as AuditExporterKind }))}>
-            <option value="ndjson">{t('siem.kindNdjson')}</option>
-            <option value="splunk_hec">{t('siem.kindSplunk')}</option>
-          </SelectV2>
-          <InputV2
-            label={t('siem.url')}
-            value={form.url}
-            onChange={event => setForm(value => ({ ...value, url: event.target.value }))}
-            placeholder={form.kind === 'splunk_hec' ? t('siem.urlSplunkPlaceholder') : t('siem.urlPlaceholder')}
-          />
-          <InputV2 label={t('siem.token')} type="password" value={form.token} onChange={event => setForm(value => ({ ...value, token: event.target.value }))} placeholder={t('siem.tokenOptional')} />
-          <InputV2 label={t('siem.events')} value={form.events} onChange={event => setForm(value => ({ ...value, events: event.target.value }))} placeholder="*" />
+          <Field>
+            <FieldLabel>{t('siem.name')}</FieldLabel>
+            <Input value={form.name} onChange={event => setForm(value => ({ ...value, name: event.target.value }))} placeholder={t('siem.namePlaceholder')} />
+          </Field>
+          <Field>
+            <FieldLabel>{t('siem.kind')}</FieldLabel>
+            <NativeSelect value={form.kind} onChange={event => setForm(value => ({ ...value, kind: event.target.value as AuditExporterKind }))}>
+              <option value="ndjson">{t('siem.kindNdjson')}</option>
+              <option value="splunk_hec">{t('siem.kindSplunk')}</option>
+            </NativeSelect>
+          </Field>
+          <Field>
+            <FieldLabel>{t('siem.url')}</FieldLabel>
+            <Input
+              value={form.url}
+              onChange={event => setForm(value => ({ ...value, url: event.target.value }))}
+              placeholder={form.kind === 'splunk_hec' ? t('siem.urlSplunkPlaceholder') : t('siem.urlPlaceholder')}
+            />
+          </Field>
+          <Field>
+            <FieldLabel>{t('siem.token')}</FieldLabel>
+            <Input type="password" value={form.token} onChange={event => setForm(value => ({ ...value, token: event.target.value }))} placeholder={t('siem.tokenOptional')} />
+          </Field>
+          <Field>
+            <FieldLabel>{t('siem.events')}</FieldLabel>
+            <Input value={form.events} onChange={event => setForm(value => ({ ...value, events: event.target.value }))} placeholder="*" />
+          </Field>
           <Button
             className="w-full"
             onClick={() => createMutation.mutate()}
@@ -139,48 +156,48 @@ export default function SiemExportersSection() {
         ) : query.isError && !data ? (
           <QueryErrorState message={getApiError(query.error).message} onRetry={() => { void query.refetch() }} />
         ) : exporters.length === 0 ? (
-          <EmptyState icon="receipt_long" title={t('siem.empty')} minHeight={140} />
+          <Empty style={{ minHeight: 140 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"receipt_long"} size="sm" /></EmptyMedia><EmptyTitle>{t('siem.empty')}</EmptyTitle></EmptyHeader></Empty>
         ) : (
-          <TableViewport label={t('siem.table')} minWidth={860}>
-            <table className="w-full text-[12px]">
-              <thead>
-                <tr style={{ color: 'var(--text-soft)' }}>
-                  <th className="px-2 py-2 text-left font-[500]">{t('siem.name')}</th>
-                  <th className="px-2 py-2 text-left font-[500]">{t('siem.kind')}</th>
-                  <th className="px-2 py-2 text-left font-[500]">{t('siem.status')}</th>
-                  <th className="px-2 py-2 text-left font-[500]">{t('siem.events')}</th>
-                  <th className="px-2 py-2 text-right font-[500]">{t('siem.delivered')}</th>
-                  <th className="px-2 py-2 text-right font-[500]">{t('siem.lag')}</th>
-                  <th className="px-2 py-2 text-left font-[500]">{t('siem.lastDelivery')}</th>
-                  <th className="px-2 py-2 text-right font-[500]">{t('siem.actions')}</th>
-                </tr>
-              </thead>
-              <tbody>
+          <TableContainer label={t('siem.table')} minWidth={860}>
+            <Table className="w-full text-[12px]">
+              <TableHeader>
+                <TableRow style={{ color: 'var(--text-soft)' }}>
+                  <TableHead className="px-2 py-2 text-left font-[500]">{t('siem.name')}</TableHead>
+                  <TableHead className="px-2 py-2 text-left font-[500]">{t('siem.kind')}</TableHead>
+                  <TableHead className="px-2 py-2 text-left font-[500]">{t('siem.status')}</TableHead>
+                  <TableHead className="px-2 py-2 text-left font-[500]">{t('siem.events')}</TableHead>
+                  <TableHead className="px-2 py-2 text-right font-[500]">{t('siem.delivered')}</TableHead>
+                  <TableHead className="px-2 py-2 text-right font-[500]">{t('siem.lag')}</TableHead>
+                  <TableHead className="px-2 py-2 text-left font-[500]">{t('siem.lastDelivery')}</TableHead>
+                  <TableHead className="px-2 py-2 text-right font-[500]">{t('siem.actions')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {exporters.map(exporter => (
-                  <tr key={exporter.id} style={{ borderTop: '1px solid var(--border)' }}>
-                    <td className="px-2 py-3">
+                  <TableRow key={exporter.id} style={{ borderTop: '1px solid var(--border)' }}>
+                    <TableCell className="px-2 py-3">
                       <div className="flex min-w-0 flex-col">
                         <span className="min-w-0 truncate" style={{ color: 'var(--text)' }}>{exporter.name}</span>
                         <span className="min-w-0 truncate font-mono text-[12px] text-[var(--text-soft)]" title={exporter.url}>{exporter.url}</span>
                       </div>
-                    </td>
-                    <td className="px-2 py-3" style={{ color: 'var(--text-soft)' }}>
+                    </TableCell>
+                    <TableCell className="px-2 py-3" style={{ color: 'var(--text-soft)' }}>
                       {exporter.kind === 'splunk_hec' ? 'Splunk HEC' : 'NDJSON'}
                       {exporter.token_set && <span className="ml-1"><Icon name="key" size="sm" /></span>}
-                    </td>
-                    <td className="px-2 py-3">
+                    </TableCell>
+                    <TableCell className="px-2 py-3">
                       <Badge variant={exporter.enabled ? 'success' : 'neutral'}>
                         {exporter.enabled ? t('siem.enabled') : t('siem.disabled')}
                       </Badge>
-                    </td>
-                    <td className="px-2 py-3 font-mono" style={{ color: 'var(--text-soft)' }}>{exporter.events}</td>
-                    <td className="px-2 py-3 text-right font-mono tabular-nums" style={{ color: 'var(--text)' }}>
+                    </TableCell>
+                    <TableCell className="px-2 py-3 font-mono" style={{ color: 'var(--text-soft)' }}>{exporter.events}</TableCell>
+                    <TableCell className="px-2 py-3 text-right font-mono tabular-nums" style={{ color: 'var(--text)' }}>
                       {exporter.delivered_count.toLocaleString()}
-                    </td>
-                    <td className="px-2 py-3 text-right font-mono tabular-nums" style={{ color: exporter.lag > 0 ? 'var(--dash-warn)' : 'var(--text-soft)' }}>
+                    </TableCell>
+                    <TableCell className="px-2 py-3 text-right font-mono tabular-nums" style={{ color: exporter.lag > 0 ? 'var(--dash-warn)' : 'var(--text-soft)' }}>
                       {exporter.lag.toLocaleString()}
-                    </td>
-                    <td className="max-w-[220px] px-2 py-3">
+                    </TableCell>
+                    <TableCell className="max-w-[220px] px-2 py-3">
                       {exporter.last_error ? (
                         <span className="block truncate text-[12px]" style={{ color: 'var(--danger)' }} title={exporter.last_error}>{exporter.last_error}</span>
                       ) : (
@@ -188,8 +205,8 @@ export default function SiemExportersSection() {
                           {exporter.last_success_at ? formatTime(exporter.last_success_at, 'auto') : t('siem.never')}
                         </span>
                       )}
-                    </td>
-                    <td className="px-2 py-3">
+                    </TableCell>
+                    <TableCell className="px-2 py-3">
                       <div className="flex justify-end gap-1.5">
                         <Button variant="outline" size="sm" onClick={() => testMutation.mutate(exporter.id)} disabled={testMutation.isPending}>
                           {t('siem.test')}
@@ -206,12 +223,12 @@ export default function SiemExportersSection() {
                           </Button>
                         )}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          </TableViewport>
+              </TableBody>
+            </Table>
+          </TableContainer>
         )}
       </div>
 

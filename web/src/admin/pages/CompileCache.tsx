@@ -1,22 +1,25 @@
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Field, FieldLabel, FieldDescription } from '@/components/ui/field'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-
 import AdminPage from '@/admin/components/AdminPage'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import { Badge } from '@/components/ui/badge'
+import { Meter, MeterIndicator, MeterTrack } from '@/components/ui/meter'
 import { Button } from '@/components/ui/button'
-import DataTableV2 from '@/components/DataTable'
-import EmptyState from '@/components/EmptyState'
+import DataTable from '@/components/DataTable'
+
 import Icon from '@/components/Icon'
-import IconButton from '@/components/IconButton'
-import InlineNotice from '@/components/InlineNotice'
-import InputV2 from '@/components/Input'
+
+import { Input } from '@/components/ui/input'
 import Metric from '@/components/Metric'
-import ModalV2 from '@/components/Modal'
 import QueryErrorState from '@/components/QueryErrorState'
 import SectionHeader from '@/components/SectionHeader'
-import SelectV2 from '@/components/Select'
+import { NativeSelect } from '@/components/ui/native-select'
 import { useAppToast } from '@/components/Toast'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { useTransientState } from '@/hooks/useTransientFlag'
@@ -169,9 +172,6 @@ export default function CompileCache() {
   const statusError = getApiError(statusQuery.error)
   const credentialsError = getApiError(credentialsQuery.error)
   const isRefreshing = statusQuery.isFetching || credentialsQuery.isFetching
-  const usagePercent = status?.enabled && status.stats.max_bytes > 0
-    ? Math.min(100, (status.stats.size_bytes / status.stats.max_bytes) * 100)
-    : 0
 
   const credentialColumns = [
     {
@@ -332,22 +332,17 @@ export default function CompileCache() {
                     <div className="mb-2 flex items-center justify-between gap-4 text-[11px] text-[var(--text-soft)]">
                       <span>{t('compileCache.capacity')}</span>
                       <span className="font-mono tabular-nums">
-                        {formatBytes(status.stats.size_bytes)} / {formatBytes(status.stats.max_bytes)}
+                        {formatBytes(status.stats.size_bytes)}{status.stats.max_bytes > 0 && ` / ${formatBytes(status.stats.max_bytes)}`}
                       </span>
                     </div>
-                    <div
-                      role="progressbar"
+                    {status.stats.max_bytes > 0 && <Meter
                       aria-label={t('compileCache.capacity')}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={Math.round(usagePercent)}
-                      className="h-2 overflow-hidden rounded-full bg-[var(--bg-soft)]"
+                      value={status.stats.size_bytes}
+                      max={status.stats.max_bytes}
+                      aria-valuetext={`${formatBytes(status.stats.size_bytes)} / ${formatBytes(status.stats.max_bytes)}`}
                     >
-                      <div
-                        className="h-full rounded-full bg-[var(--brand)] transition-[width] duration-300"
-                        style={{ width: `${usagePercent}%` }}
-                      />
-                    </div>
+                      <MeterTrack className="h-2"><MeterIndicator /></MeterTrack>
+                    </Meter>}
                   </div>
 
                   <div className="space-y-3 border-t border-[var(--border)] pt-4">
@@ -362,21 +357,31 @@ export default function CompileCache() {
                           <code className="min-w-0 flex-1 break-all font-mono text-[12px] text-[var(--text-soft)]">
                             {status.endpoints[client]}
                           </code>
-                          <IconButton
-                            icon={copiedValue === target ? 'check' : 'content_copy'}
-                            label={t('compileCache.copyClientEndpoint', { client })}
-                            onClick={() => { void copyValue(status.endpoints[client], target) }}
-                          />
+                          <Tooltip>
+                            <TooltipTrigger render={
+                              <Button
+                                onClick={() => { void copyValue(status.endpoints[client], target) }}
+                                variant="ghost"
+                                size="icon"
+                                data-icon-button
+                                aria-label={t('compileCache.copyClientEndpoint', { client })}
+                                style={{ color: 'var(--text-soft)' }}
+                              />
+                            }>
+                              <Icon name={copiedValue === target ? 'check' : 'content_copy'} size="sm" />
+                            </TooltipTrigger>
+                            <TooltipContent>{t('compileCache.copyClientEndpoint', { client })}</TooltipContent>
+                          </Tooltip>
                         </div>
                       )
                     })}
                   </div>
                 </>
               ) : (
-                <InlineNotice tone="warning" title={t('compileCache.disabledTitle')}>
+                <Alert variant={"warning"}><AlertTitle>{t('compileCache.disabledTitle')}</AlertTitle><AlertDescription>
                   <p>{t('compileCache.disabledHint')}</p>
                   <pre className="mt-2 overflow-x-auto font-mono text-[12px]">[compile_cache]{'\n'}enabled = true</pre>
-                </InlineNotice>
+                </AlertDescription></Alert>
               )}
             </div>
           ) : null}
@@ -413,14 +418,9 @@ export default function CompileCache() {
                 />
               )}
               {credentials.length === 0 ? (
-                <EmptyState
-                  icon="key"
-                  title={t('compileCache.noCredentials')}
-                  hint={t('compileCache.noCredentialsHint')}
-                  minHeight={180}
-                />
+                <Empty style={{ minHeight: 180 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"key"} size="sm" /></EmptyMedia><EmptyTitle>{t('compileCache.noCredentials')}</EmptyTitle>{t('compileCache.noCredentialsHint') && <EmptyDescription>{t('compileCache.noCredentialsHint')}</EmptyDescription>}</EmptyHeader></Empty>
               ) : (
-                <DataTableV2
+                <DataTable
                   columns={credentialColumns}
                   data={credentials.map(credential => ({ ...credential }))}
                   rowKey={row => row.id as number}
@@ -433,189 +433,199 @@ export default function CompileCache() {
         </section>
       </div>
 
-      <ModalV2 open={createOpen} onClose={closeCreateDialog} title={t('compileCache.createCredential')}>
-        <form className="space-y-4" onSubmit={handleCreate}>
-          <InputV2
-            label={t('compileCache.credentialName')}
-            hint={t('compileCache.credentialNameHint')}
-            value={form.name}
-            maxLength={128}
-            autoComplete="off"
-            required
-            onChange={event => setForm(current => ({ ...current, name: event.target.value }))}
-          />
-          <InputV2
-            label={t('compileCache.namespace')}
-            hint={t('compileCache.namespaceHint')}
-            value={form.namespace}
-            maxLength={64}
-            pattern="[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?"
-            autoCapitalize="none"
-            autoComplete="off"
-            spellCheck={false}
-            mono
-            required
-            onChange={event => setForm(current => ({ ...current, namespace: event.target.value.toLowerCase() }))}
-          />
-          <SelectV2
-            label={t('compileCache.permissions')}
-            value={form.permissions}
-            onChange={event => setForm(current => ({
-              ...current,
-              permissions: event.target.value as CompileCachePermissions,
-            }))}
-          >
-            <option value="readonly">{t('compileCache.readonly')}</option>
-            <option value="readwrite">{t('compileCache.readwrite')}</option>
-          </SelectV2>
-          <SelectV2
-            label={t('compileCache.validity')}
-            value={String(form.ttl_days)}
-            onChange={event => setForm(current => ({ ...current, ttl_days: Number(event.target.value) }))}
-          >
-            <option value="7">{t('compileCache.days7')}</option>
-            <option value="30">{t('compileCache.days30')}</option>
-            <option value="90">{t('compileCache.days90')}</option>
-            <option value="0">{t('compileCache.neverExpires')}</option>
-          </SelectV2>
-          {createMutation.isError && (
-            <InlineNotice tone="danger">{getApiError(createMutation.error).message}</InlineNotice>
-          )}
-          <div className="flex justify-end gap-3 pt-2">
-            <Button type="button" variant="outline" disabled={createMutation.isPending} onClick={closeCreateDialog}>
-              {t('cancel')}
-            </Button>
-            <Button
-              type="submit"
-              aria-busy={createMutation.isPending || undefined}
-              disabled={!formValid || createMutation.isPending || !canWrite}
-            >
-              {t(createMutation.isPending ? 'compileCache.creating' : 'compileCache.create')}
-            </Button>
-          </div>
-        </form>
-      </ModalV2>
-
-      <ModalV2
-        open={clientConfigurations !== null}
-        onClose={closeClientConfigurations}
-        title={t('compileCache.credentialCreated')}
-        width={720}
-      >
-        <div className="space-y-4">
-          <InlineNotice tone="warning" title={t('compileCache.oneTimeTitle')}>
-            {t('compileCache.oneTimeWarning')}
-          </InlineNotice>
-          {clientConfigurations && (
-            <div className="grid gap-4 md:grid-cols-2">
-              {([
-                { client: 'ccache', label: t('compileCache.remoteStorage'), value: clientConfigurations.ccache },
-                { client: 'sccache', label: t('compileCache.sccacheConfig'), value: clientConfigurations.sccache },
-              ] as const).map(item => {
-                const target = `${item.client}-config` as CopiedValue
-                return (
-                  <section key={item.client} className="flex min-w-0 flex-col rounded-md border border-[var(--border)] p-4">
-                    <h3 className="font-mono text-[14px] font-[650] text-[var(--text)]">{item.client}</h3>
-                    <p className="mt-1 text-[11px] text-[var(--text-muted)]">{item.label}</p>
-                    <div className="mt-3 flex-1 rounded-sm bg-[var(--bg-soft)] p-3">
-                      <code className="block whitespace-pre-wrap break-all font-mono text-[12px] leading-5 text-[var(--text)]">
-                        {item.value}
-                      </code>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="mt-3 self-start"
-                      aria-label={t(item.client === 'ccache' ? 'compileCache.copyCCacheConfig' : 'compileCache.copySCCacheConfig')}
-                      onClick={() => { void copyValue(item.value, target) }}
-                    >
-                      <Icon name={copiedValue === target ? 'check' : 'content_copy'} size="sm" />
-                      {t(copiedValue === target
-                        ? 'compileCache.copied'
-                        : item.client === 'ccache'
-                          ? 'compileCache.copyCCacheConfig'
-                          : 'compileCache.copySCCacheConfig')}
-                    </Button>
-                  </section>
-                )
-              })}
+      <Dialog open={createOpen} onOpenChange={(nextOpen) => { if (!nextOpen) closeCreateDialog() }} modal>
+        <DialogContent style={{ maxWidth: 440 }} finalFocus={true}>
+          <DialogTitle className="pr-10">{t('compileCache.createCredential')}</DialogTitle>
+          <form className="space-y-4" onSubmit={handleCreate}>
+            <Field>
+              <FieldLabel>{t('compileCache.credentialName')}</FieldLabel>
+              <Input
+                value={form.name}
+                maxLength={128}
+                autoComplete="off"
+                required
+                onChange={event => setForm(current => ({ ...current, name: event.target.value }))}
+              />
+              {(t('compileCache.credentialNameHint')) && <FieldDescription>{t('compileCache.credentialNameHint')}</FieldDescription>}
+            </Field>
+            <Field>
+              <FieldLabel>{t('compileCache.namespace')}</FieldLabel>
+              <Input className="font-mono"
+                value={form.namespace}
+                maxLength={64}
+                pattern="[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?"
+                autoCapitalize="none"
+                autoComplete="off"
+                spellCheck={false}
+                required
+                onChange={event => setForm(current => ({ ...current, namespace: event.target.value.toLowerCase() }))}
+              />
+              {(t('compileCache.namespaceHint')) && <FieldDescription>{t('compileCache.namespaceHint')}</FieldDescription>}
+            </Field>
+            <Field>
+              <FieldLabel>{t('compileCache.permissions')}</FieldLabel>
+              <NativeSelect
+                value={form.permissions}
+                onChange={event => setForm(current => ({
+                  ...current,
+                  permissions: event.target.value as CompileCachePermissions,
+                }))}
+              >
+                <option value="readonly">{t('compileCache.readonly')}</option>
+                <option value="readwrite">{t('compileCache.readwrite')}</option>
+              </NativeSelect>
+            </Field>
+            <Field>
+              <FieldLabel>{t('compileCache.validity')}</FieldLabel>
+              <NativeSelect
+                value={String(form.ttl_days)}
+                onChange={event => setForm(current => ({ ...current, ttl_days: Number(event.target.value) }))}
+              >
+                <option value="7">{t('compileCache.days7')}</option>
+                <option value="30">{t('compileCache.days30')}</option>
+                <option value="90">{t('compileCache.days90')}</option>
+                <option value="0">{t('compileCache.neverExpires')}</option>
+              </NativeSelect>
+            </Field>
+            {createMutation.isError && (
+              <Alert variant={"destructive"}><AlertDescription>{getApiError(createMutation.error).message}</AlertDescription></Alert>
+            )}
+            <div className="flex justify-end gap-3 pt-2">
+              <Button type="button" variant="outline" disabled={createMutation.isPending} onClick={closeCreateDialog}>
+                {t('cancel')}
+              </Button>
+              <Button
+                type="submit"
+                aria-busy={createMutation.isPending || undefined}
+                disabled={!formValid || createMutation.isPending || !canWrite}
+              >
+                {t(createMutation.isPending ? 'compileCache.creating' : 'compileCache.create')}
+              </Button>
             </div>
-          )}
-          <div className="flex flex-wrap justify-end gap-3">
-            <Button type="button" onClick={closeClientConfigurations}>{t('common.close')}</Button>
-          </div>
-        </div>
-      </ModalV2>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-      <ModalV2
-        open={revokeTarget !== null}
-        onClose={() => {
+      <Dialog open={clientConfigurations !== null} onOpenChange={(nextOpen) => { if (!nextOpen) closeClientConfigurations() }} modal>
+        <DialogContent style={{ maxWidth: 720 }} finalFocus={true}>
+          <DialogTitle className="pr-10">{t('compileCache.credentialCreated')}</DialogTitle>
+          <div className="space-y-4">
+            <Alert variant={"warning"}><AlertTitle>{t('compileCache.oneTimeTitle')}</AlertTitle><AlertDescription>
+              {t('compileCache.oneTimeWarning')}
+            </AlertDescription></Alert>
+            {clientConfigurations && (
+              <div className="grid gap-4 md:grid-cols-2">
+                {([
+                  { client: 'ccache', label: t('compileCache.remoteStorage'), value: clientConfigurations.ccache },
+                  { client: 'sccache', label: t('compileCache.sccacheConfig'), value: clientConfigurations.sccache },
+                ] as const).map(item => {
+                  const target = `${item.client}-config` as CopiedValue
+                  return (
+                    <section key={item.client} className="flex min-w-0 flex-col rounded-md border border-[var(--border)] p-4">
+                      <h3 className="font-mono text-[14px] font-[650] text-[var(--text)]">{item.client}</h3>
+                      <p className="mt-1 text-[11px] text-[var(--text-muted)]">{item.label}</p>
+                      <div className="mt-3 flex-1 rounded-sm bg-[var(--bg-soft)] p-3">
+                        <code className="block whitespace-pre-wrap break-all font-mono text-[12px] leading-5 text-[var(--text)]">
+                          {item.value}
+                        </code>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="mt-3 self-start"
+                        aria-label={t(item.client === 'ccache' ? 'compileCache.copyCCacheConfig' : 'compileCache.copySCCacheConfig')}
+                        onClick={() => { void copyValue(item.value, target) }}
+                      >
+                        <Icon name={copiedValue === target ? 'check' : 'content_copy'} size="sm" />
+                        {t(copiedValue === target
+                          ? 'compileCache.copied'
+                          : item.client === 'ccache'
+                            ? 'compileCache.copyCCacheConfig'
+                            : 'compileCache.copySCCacheConfig')}
+                      </Button>
+                    </section>
+                  )
+                })}
+              </div>
+            )}
+            <div className="flex flex-wrap justify-end gap-3">
+              <Button type="button" onClick={closeClientConfigurations}>{t('common.close')}</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={revokeTarget !== null} onOpenChange={(nextOpen) => {
+        if (!nextOpen) (() => {
           if (revokeMutation.isPending) return
           setRevokeTarget(null)
           revokeMutation.reset()
-        }}
-        title={t('compileCache.revokeTitle')}
-      >
-        <p className="text-[13px] leading-5 text-[var(--text-soft)]">
-          {t('compileCache.revokeHint', { name: revokeTarget?.name, namespace: revokeTarget?.namespace })}
-        </p>
-        {revokeMutation.isError && (
-          <div className="mt-4"><InlineNotice tone="danger">{getApiError(revokeMutation.error).message}</InlineNotice></div>
-        )}
-        <div className="mt-5 flex justify-end gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={revokeMutation.isPending}
-            onClick={() => setRevokeTarget(null)}
-          >
-            {t('cancel')}
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            aria-busy={revokeMutation.isPending || undefined}
-            disabled={!revokeTarget || revokeMutation.isPending || !canWrite}
-            onClick={() => revokeTarget && revokeMutation.mutate(revokeTarget.id)}
-          >
-            {t(revokeMutation.isPending ? 'compileCache.revoking' : 'compileCache.confirmRevoke')}
-          </Button>
-        </div>
-      </ModalV2>
+        })()
+      }} modal>
+        <DialogContent style={{ maxWidth: 440 }} finalFocus={true}>
+          <DialogTitle className="pr-10">{t('compileCache.revokeTitle')}</DialogTitle>
+          <p className="text-[13px] leading-5 text-[var(--text-soft)]">
+            {t('compileCache.revokeHint', { name: revokeTarget?.name, namespace: revokeTarget?.namespace })}
+          </p>
+          {revokeMutation.isError && (
+            <div className="mt-4"><Alert variant={"destructive"}><AlertDescription>{getApiError(revokeMutation.error).message}</AlertDescription></Alert></div>
+          )}
+          <div className="mt-5 flex justify-end gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={revokeMutation.isPending}
+              onClick={() => setRevokeTarget(null)}
+            >
+              {t('cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              aria-busy={revokeMutation.isPending || undefined}
+              disabled={!revokeTarget || revokeMutation.isPending || !canWrite}
+              onClick={() => revokeTarget && revokeMutation.mutate(revokeTarget.id)}
+            >
+              {t(revokeMutation.isPending ? 'compileCache.revoking' : 'compileCache.confirmRevoke')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-      <ModalV2
-        open={cleanupOpen}
-        onClose={() => {
+      <Dialog open={cleanupOpen} onOpenChange={(nextOpen) => {
+        if (!nextOpen) (() => {
           if (cleanupMutation.isPending) return
           setCleanupOpen(false)
           cleanupMutation.reset()
-        }}
-        title={t('compileCache.cleanupTitle')}
-      >
-        <p className="text-[13px] leading-5 text-[var(--text-soft)]">{t('compileCache.cleanupHint')}</p>
-        {cleanupMutation.isError && (
-          <div className="mt-4"><InlineNotice tone="danger">{getApiError(cleanupMutation.error).message}</InlineNotice></div>
-        )}
-        <div className="mt-5 flex justify-end gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={cleanupMutation.isPending}
-            onClick={() => setCleanupOpen(false)}
-          >
-            {t('cancel')}
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            aria-busy={cleanupMutation.isPending || undefined}
-            disabled={cleanupMutation.isPending || !status?.enabled || !canWrite}
-            onClick={() => cleanupMutation.mutate()}
-          >
-            {t(cleanupMutation.isPending ? 'compileCache.cleaning' : 'compileCache.confirmCleanup')}
-          </Button>
-        </div>
-      </ModalV2>
+        })()
+      }} modal>
+        <DialogContent style={{ maxWidth: 440 }} finalFocus={true}>
+          <DialogTitle className="pr-10">{t('compileCache.cleanupTitle')}</DialogTitle>
+          <p className="text-[13px] leading-5 text-[var(--text-soft)]">{t('compileCache.cleanupHint')}</p>
+          {cleanupMutation.isError && (
+            <div className="mt-4"><Alert variant={"destructive"}><AlertDescription>{getApiError(cleanupMutation.error).message}</AlertDescription></Alert></div>
+          )}
+          <div className="mt-5 flex justify-end gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={cleanupMutation.isPending}
+              onClick={() => setCleanupOpen(false)}
+            >
+              {t('cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              aria-busy={cleanupMutation.isPending || undefined}
+              disabled={cleanupMutation.isPending || !status?.enabled || !canWrite}
+              onClick={() => cleanupMutation.mutate()}
+            >
+              {t(cleanupMutation.isPending ? 'compileCache.cleaning' : 'compileCache.confirmCleanup')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </AdminPage>
   )
 }

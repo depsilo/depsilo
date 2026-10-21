@@ -6,6 +6,7 @@ import { adminApi } from '@/lib/api'
 import { formatBytes, formatTime } from '@/lib/utils'
 import { getApiError } from '@/lib/apiError'
 import { Badge } from '@/components/ui/badge'
+import { Progress, ProgressIndicator, ProgressTrack } from '@/components/ui/progress'
 import SectionHeader from '@/components/SectionHeader'
 import QueryErrorState from '@/components/QueryErrorState'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
@@ -47,9 +48,11 @@ export default function DownloadTransfers() {
                     <p className="min-w-0 flex-1 break-all font-mono text-[12px] text-[var(--text)]">{item.name}</p>
                     <Badge variant={item.status === 'cached' ? 'success' : item.status === 'failed' ? "destructive" : item.status === 'resuming' ? 'warning' : 'neutral'}>{t(`cache.transfers.${item.status}`)}</Badge>
                   </div>
-                  <div role="progressbar" aria-label={t('cache.transfers.progress', { name: item.name })} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-valuetext={size} className="h-1.5 overflow-hidden rounded-full bg-[var(--bg-soft)]">
-                    <div className="h-full rounded-full bg-[var(--brand)]" style={{ width: percent === undefined ? '25%' : `${percent}%` }} />
-                  </div>
+                  <Progress value={percent ?? null} aria-label={t('cache.transfers.progress', { name: item.name })} aria-valuetext={size}>
+                    <ProgressTrack>
+                      <ProgressIndicator style={item.finished_at ? { animation: 'none' } : undefined} />
+                    </ProgressTrack>
+                  </Progress>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-[var(--text-soft)]">
                     <span className="font-mono tabular-nums">{size}</span>
                     {percent !== undefined && <span>{percent}%</span>}

@@ -45,13 +45,13 @@ function ConnectionHealth({ ecosystem, onNavigate }: { ecosystem: string; onNavi
   return <>
     {ready.data?.status === 'not_ready' && <p role="alert" className="connection-notice connection-danger"><Icon name="warning" size="sm" /><span>
       {ready.isError && `${t('onboarding.lastKnownHealth')} `}
-      {t('onboarding.proxyUnavailable')} <button type="button" onClick={() => onNavigate('dashboard')}>{t('onboarding.viewServiceStatus')}</button>
+      {t('onboarding.proxyUnavailable')} <Button variant="link" type="button" onClick={() => onNavigate('dashboard')}>{t('onboarding.viewServiceStatus')}</Button>
     </span></p>}
     {Boolean(affected?.length) && <p className="connection-notice connection-warning"><Icon name="warning" size="sm" /><span>
       {upstreams.isError && `${t('onboarding.lastKnownHealth')} `}
-      {t('onboarding.upstreamAttention', { names: affected!.map(upstream => upstream.name).join(', ') })} <button type="button" onClick={() => onNavigate('upstreams')}>{t('onboarding.viewUpstreams')}</button>
+      {t('onboarding.upstreamAttention', { names: affected!.map(upstream => upstream.name).join(', ') })} <Button variant="link" type="button" onClick={() => onNavigate('upstreams')}>{t('onboarding.viewUpstreams')}</Button>
     </span></p>}
-    {(ready.isError || upstreams.isError) && <p className="connection-note">{t('onboarding.healthUnknown')} <button type="button" onClick={() => onNavigate('dashboard')}>{t('onboarding.viewServiceStatus')}</button></p>}
+    {(ready.isError || upstreams.isError) && <p className="connection-note">{t('onboarding.healthUnknown')} <Button variant="link" type="button" onClick={() => onNavigate('dashboard')}>{t('onboarding.viewServiceStatus')}</Button></p>}
   </>
 }
 

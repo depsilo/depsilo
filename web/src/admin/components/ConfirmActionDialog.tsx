@@ -1,7 +1,7 @@
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import type { ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
-import InlineNotice from '@/components/InlineNotice'
-import ModalV2 from '@/components/Modal'
 
 export interface ConfirmActionDetail {
   label: string
@@ -39,54 +39,52 @@ export default function ConfirmActionDialog({
   onConfirm,
 }: ConfirmActionDialogProps) {
   return (
-    <ModalV2
-      open={open}
-      onClose={onClose}
-      title={title}
-      closeDisabled={pending}
-    >
-      <div className="space-y-5">
-        <p className="text-[14px] leading-6 text-[var(--text-soft)]">{description}</p>
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen && !pending) onClose() }} modal>
+      <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={pending}>
+        <DialogTitle className="pr-10">{title}</DialogTitle>
+        <div className="space-y-5">
+          <p className="text-[14px] leading-6 text-[var(--text-soft)]">{description}</p>
 
-        {details.length > 0 && (
-          <dl className="space-y-2 border-y border-[var(--border)] py-3 text-[12px]">
-            {details.map((detail) => (
-              <div key={detail.label} className="flex min-w-0 items-start justify-between gap-4">
-                <dt className="shrink-0 text-[var(--text-muted)]">{detail.label}</dt>
-                <dd
-                  className={`min-w-0 break-words text-right text-[var(--text)] ${detail.mono ? 'font-mono' : ''}`}
-                >
-                  {detail.value}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        )}
+          {details.length > 0 && (
+            <dl className="space-y-2 border-y border-[var(--border)] py-3 text-[12px]">
+              {details.map((detail) => (
+                <div key={detail.label} className="flex min-w-0 items-start justify-between gap-4">
+                  <dt className="shrink-0 text-[var(--text-muted)]">{detail.label}</dt>
+                  <dd
+                    className={`min-w-0 break-words text-right text-[var(--text)] ${detail.mono ? 'font-mono' : ''}`}
+                  >
+                    {detail.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
 
-        {errorMessage && <InlineNotice tone="danger">{errorMessage}</InlineNotice>}
+          {errorMessage && <Alert variant={"destructive"}><AlertDescription>{errorMessage}</AlertDescription></Alert>}
 
-        <div className="flex flex-wrap justify-end gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-10"
-            disabled={pending}
-            onClick={onClose}
-          >
-            {cancelLabel}
-          </Button>
-          <Button
-            type="button"
-            variant={confirmVariant === 'danger' ? 'destructive' : 'default'}
-            className="min-h-10"
-            aria-busy={pending || undefined}
-            disabled={pending}
-            onClick={onConfirm}
-          >
-            {pending ? pendingLabel : confirmLabel}
-          </Button>
+          <div className="flex flex-wrap justify-end gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-10"
+              disabled={pending}
+              onClick={onClose}
+            >
+              {cancelLabel}
+            </Button>
+            <Button
+              type="button"
+              variant={confirmVariant === 'danger' ? 'destructive' : 'default'}
+              className="min-h-10"
+              aria-busy={pending || undefined}
+              disabled={pending}
+              onClick={onConfirm}
+            >
+              {pending ? pendingLabel : confirmLabel}
+            </Button>
+          </div>
         </div>
-      </div>
-    </ModalV2>
+      </DialogContent>
+    </Dialog>
   )
 }

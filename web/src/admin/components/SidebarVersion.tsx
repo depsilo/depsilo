@@ -1,6 +1,8 @@
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import TooltipV2 from '@/components/Tooltip'
+
 import { adminApi } from '@/lib/api'
 import { buildVersionLabel, providedBuildValue } from '@/lib/buildVersion'
 
@@ -22,22 +24,13 @@ export default function SidebarVersion({ version }: { version?: string }) {
   ]
 
   return (
-    <TooltipV2 content={(
-      <span className="block max-w-[260px] space-y-1 break-all leading-relaxed">
-        {pending ? t('loading') : fields.map(([name, value]) => (
-          <span key={name} className="block">
-            <span className="font-semibold">{name}: </span>
-            {providedBuildValue(value) ?? t('nav.versionUnavailable')}
-          </span>
-        ))}
-      </span>
-    )}>
-      <button
+    <Tooltip>
+      <TooltipTrigger render={<Button variant="ghost"
         type="button"
         data-admin-version
         aria-label={`${t('nav.versionDetails')}: ${label}`}
         aria-busy={pending || undefined}
-        className="stripe-focus-ring ml-auto inline-flex min-h-[40px] min-w-[40px] max-w-[88px] shrink-0 items-center justify-center rounded-sm bg-transparent"
+        className="ml-auto min-h-[40px] min-w-[40px] max-w-[88px] whitespace-normal px-0"
       >
         <span
           className="block min-w-0 break-all rounded-sm border px-1.5 py-1 font-mono text-[11px] leading-tight tabular-nums"
@@ -45,7 +38,17 @@ export default function SidebarVersion({ version }: { version?: string }) {
         >
           {label}
         </span>
-      </button>
-    </TooltipV2>
+      </Button>} />
+      <TooltipContent>{(
+        <span className="block max-w-[260px] space-y-1 break-all leading-relaxed">
+          {pending ? t('loading') : fields.map(([name, value]) => (
+            <span key={name} className="block">
+              <span className="font-semibold">{name}: </span>
+              {providedBuildValue(value) ?? t('nav.versionUnavailable')}
+            </span>
+          ))}
+        </span>
+      )}</TooltipContent>
+    </Tooltip>
   )
 }

@@ -1,3 +1,4 @@
+import { Skeleton } from '@/components/ui/skeleton'
 import { useTranslation } from 'react-i18next'
 
 import type { DashboardPeriod } from '@/lib/adminApi.types'
@@ -58,7 +59,7 @@ export default function CacheBenefits({ period, prev, pending = false }: CacheBe
                 ))}
               </DashboardMetricHelp>
             </div>
-            {pending ? <span aria-hidden className="my-1 block h-8 w-28 animate-pulse rounded bg-[var(--dash-soft)]" /> : (
+            {pending ? <Skeleton render={<span />} className="my-1 block h-8 w-28" /> : (
               <p className={`font-mono text-[30px] font-semibold leading-tight tabular-nums ${metric.id === 'saved' && (period?.hit_bytes ?? 0) > 0 ? 'text-[var(--dash-ok)]' : 'text-[var(--dash-ink)]'}`}>{metric.value}</p>
             )}
             <p className="mt-1 text-[13px] leading-relaxed text-[var(--dash-muted)]">{pending ? t('overview.loadingStatistics') : metric.detail}</p>

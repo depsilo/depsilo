@@ -1,7 +1,8 @@
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
-import InlineNotice from '@/components/InlineNotice'
+
 import { usePolicyStatus } from '../usePolicyStatus'
 
 /**
@@ -14,7 +15,7 @@ export default function PolicyStatusNotice() {
   if (policy.isIdle) {
     return (
       <div data-admin-policy-idle className="mb-4" role="status">
-        <InlineNotice tone="info">{t('policy.awaitingFirstEvaluation')}</InlineNotice>
+        <Alert variant={"info"}><AlertDescription>{t('policy.awaitingFirstEvaluation')}</AlertDescription></Alert>
       </div>
     )
   }
@@ -28,7 +29,7 @@ export default function PolicyStatusNotice() {
       aria-atomic="true"
       className="mb-4"
     >
-      <InlineNotice tone="warning">
+      <Alert variant={"warning"}><AlertDescription>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="font-[600]">
@@ -53,7 +54,7 @@ export default function PolicyStatusNotice() {
             {policy.refreshing ? t('policy.refreshing') : t('policy.refresh')}
           </Button>
         </div>
-      </InlineNotice>
+      </AlertDescription></Alert>
     </div>
   )
 }

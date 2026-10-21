@@ -1,13 +1,13 @@
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Field, FieldLabel, FieldError } from '@/components/ui/field'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-
 import { Button } from '@/components/ui/button'
 import Icon from '@/components/Icon'
-import IconButton from '@/components/IconButton'
-import InlineNotice from '@/components/InlineNotice'
-import InputV2 from '@/components/Input'
-import SwitchV2 from '@/components/Switch'
+
+import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { adminApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
@@ -99,52 +99,71 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
     >
       <fieldset className="space-y-4" disabled={disabled}>
         <div className="flex flex-wrap gap-x-8 gap-y-2">
-          <SwitchV2
-            label={t('cascade.config.enabled')}
-            checked={draft.enabled}
-            onCheckedChange={checked => update({ enabled: checked })}
-          />
-          <SwitchV2
-            label={t('cascade.config.allowInsecureHTTP')}
-            checked={draft.allowInsecureHTTP}
-            onCheckedChange={checked => update({ allowInsecureHTTP: checked })}
-          />
+          <Field orientation="horizontal">
+            <Switch
+              checked={draft.enabled}
+              onCheckedChange={checked => update({ enabled: checked })}
+            />
+            <FieldLabel>{t('cascade.config.enabled')}</FieldLabel>
+          </Field>
+          <Field orientation="horizontal">
+            <Switch
+              checked={draft.allowInsecureHTTP}
+              onCheckedChange={checked => update({ allowInsecureHTTP: checked })}
+            />
+            <FieldLabel>{t('cascade.config.allowInsecureHTTP')}</FieldLabel>
+          </Field>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <InputV2
-            label={t('cascade.config.maxHops')}
-            type="number"
-            min={1}
-            max={16}
-            value={draft.maxHops}
-            error={errors.maxHops ? t(errors.maxHops) : undefined}
-            onChange={event => update({ maxHops: event.target.value })}
-          />
-          <InputV2
-            label={t('cascade.config.maxTTL')}
-            mono
-            value={draft.maxTTL}
-            error={errors.maxTTL ? t(errors.maxTTL) : undefined}
-            onChange={event => update({ maxTTL: event.target.value })}
-          />
-          <div className="flex items-end gap-1">
-            <InputV2
-              className="min-w-0 flex-1"
-              label={t('cascade.config.sharedToken')}
-              type="password"
-              autoComplete="new-password"
-              value={draft.sharedToken}
-              placeholder={sharedTokenPlaceholder}
-              error={errors.sharedToken ? t(errors.sharedToken) : undefined}
-              onChange={event => update({ sharedToken: event.target.value, clearSharedToken: false })}
+          <Field invalid={Boolean(errors.maxHops ? t(errors.maxHops) : undefined)}>
+            <FieldLabel>{t('cascade.config.maxHops')}</FieldLabel>
+            <Input aria-invalid={Boolean(errors.maxHops ? t(errors.maxHops) : undefined) || undefined}
+              type="number"
+              min={1}
+              max={16}
+              value={draft.maxHops}
+              onChange={event => update({ maxHops: event.target.value })}
             />
-            {draft.sharedTokenSet && draft.sharedToken === '' && (
-              <IconButton
-                icon={draft.clearSharedToken ? 'undo' : 'key'}
-                label={t(draft.clearSharedToken ? 'cascade.config.undoClear' : 'cascade.config.clearToken')}
-                className="mb-0.5"
-                onClick={() => update({ clearSharedToken: !draft.clearSharedToken })}
+            {(errors.maxHops ? t(errors.maxHops) : undefined) && <FieldError match>{errors.maxHops ? t(errors.maxHops) : undefined}</FieldError>}
+          </Field>
+          <Field invalid={Boolean(errors.maxTTL ? t(errors.maxTTL) : undefined)}>
+            <FieldLabel>{t('cascade.config.maxTTL')}</FieldLabel>
+            <Input aria-invalid={Boolean(errors.maxTTL ? t(errors.maxTTL) : undefined) || undefined} className="font-mono"
+              value={draft.maxTTL}
+              onChange={event => update({ maxTTL: event.target.value })}
+            />
+            {(errors.maxTTL ? t(errors.maxTTL) : undefined) && <FieldError match>{errors.maxTTL ? t(errors.maxTTL) : undefined}</FieldError>}
+          </Field>
+          <div className="flex items-end gap-1">
+            <Field invalid={Boolean(errors.sharedToken ? t(errors.sharedToken) : undefined)}>
+              <FieldLabel>{t('cascade.config.sharedToken')}</FieldLabel>
+              <Input aria-invalid={Boolean(errors.sharedToken ? t(errors.sharedToken) : undefined) || undefined}
+                className="min-w-0 flex-1"
+                type="password"
+                autoComplete="new-password"
+                value={draft.sharedToken}
+                placeholder={sharedTokenPlaceholder}
+                onChange={event => update({ sharedToken: event.target.value, clearSharedToken: false })}
               />
+              {(errors.sharedToken ? t(errors.sharedToken) : undefined) && <FieldError match>{errors.sharedToken ? t(errors.sharedToken) : undefined}</FieldError>}
+            </Field>
+            {draft.sharedTokenSet && draft.sharedToken === '' && (
+              <Tooltip>
+                <TooltipTrigger render={
+                  <Button
+                    onClick={() => update({ clearSharedToken: !draft.clearSharedToken })}
+                    variant="ghost"
+                    size="icon"
+                    data-icon-button
+                    aria-label={t(draft.clearSharedToken ? 'cascade.config.undoClear' : 'cascade.config.clearToken')}
+                    className="mb-0.5"
+                    style={{ color: 'var(--text-soft)' }}
+                  />
+                }>
+                  <Icon name={draft.clearSharedToken ? 'undo' : 'key'} size="sm" />
+                </TooltipTrigger>
+                <TooltipContent>{t(draft.clearSharedToken ? 'cascade.config.undoClear' : 'cascade.config.clearToken')}</TooltipContent>
+              </Tooltip>
             )}
           </div>
         </div>
@@ -196,42 +215,57 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
                   className={`${peerRowGrid} rounded-md border p-2 lg:border-0 lg:p-0`}
                   style={{ borderColor: 'var(--border)' }}
                 >
-                  <InputV2
-                    aria-label={t('cascade.config.peerName')}
-                    placeholder={t('cascade.config.peerName')}
-                    value={peer.name}
-                    maxLength={64}
-                    autoComplete="off"
-                    error={peerErrors?.name ? t(peerErrors.name) : undefined}
-                    onChange={event => updatePeer(peer.key, { name: event.target.value })}
-                  />
-                  <InputV2
-                    aria-label={t('cascade.config.peerURL')}
-                    placeholder="https://cache.example:23333"
-                    mono
-                    autoComplete="off"
-                    spellCheck={false}
-                    value={peer.url}
-                    error={peerErrors?.url ? t(peerErrors.url) : undefined}
-                    onChange={event => updatePeer(peer.key, { url: event.target.value })}
-                  />
-                  <div className="flex items-center gap-1">
-                    <InputV2
-                      className="min-w-0 flex-1"
-                      aria-label={t('cascade.config.peerToken')}
-                      placeholder={tokenPlaceholder}
-                      type="password"
-                      autoComplete="new-password"
-                      value={peer.token}
-                      error={peerErrors?.token ? t(peerErrors.token) : undefined}
-                      onChange={event => updatePeer(peer.key, { token: event.target.value, clearToken: false })}
+                  <Field invalid={Boolean(peerErrors?.name ? t(peerErrors.name) : undefined)}>
+                    <Input aria-invalid={Boolean(peerErrors?.name ? t(peerErrors.name) : undefined) || undefined}
+                      aria-label={t('cascade.config.peerName')}
+                      placeholder={t('cascade.config.peerName')}
+                      value={peer.name}
+                      maxLength={64}
+                      autoComplete="off"
+                      onChange={event => updatePeer(peer.key, { name: event.target.value })}
                     />
-                    {peer.tokenSet && peer.token === '' && (
-                      <IconButton
-                        icon={peer.clearToken ? 'undo' : 'key'}
-                        label={t(peer.clearToken ? 'cascade.config.undoClear' : 'cascade.config.clearToken')}
-                        onClick={() => updatePeer(peer.key, { clearToken: !peer.clearToken })}
+                    {(peerErrors?.name ? t(peerErrors.name) : undefined) && <FieldError match>{peerErrors?.name ? t(peerErrors.name) : undefined}</FieldError>}
+                  </Field>
+                  <Field invalid={Boolean(peerErrors?.url ? t(peerErrors.url) : undefined)}>
+                    <Input aria-invalid={Boolean(peerErrors?.url ? t(peerErrors.url) : undefined) || undefined} className="font-mono"
+                      aria-label={t('cascade.config.peerURL')}
+                      placeholder="https://cache.example:23333"
+                      autoComplete="off"
+                      spellCheck={false}
+                      value={peer.url}
+                      onChange={event => updatePeer(peer.key, { url: event.target.value })}
+                    />
+                    {(peerErrors?.url ? t(peerErrors.url) : undefined) && <FieldError match>{peerErrors?.url ? t(peerErrors.url) : undefined}</FieldError>}
+                  </Field>
+                  <div className="flex items-center gap-1">
+                    <Field invalid={Boolean(peerErrors?.token ? t(peerErrors.token) : undefined)}>
+                      <Input aria-invalid={Boolean(peerErrors?.token ? t(peerErrors.token) : undefined) || undefined}
+                        className="min-w-0 flex-1"
+                        aria-label={t('cascade.config.peerToken')}
+                        placeholder={tokenPlaceholder}
+                        type="password"
+                        autoComplete="new-password"
+                        value={peer.token}
+                        onChange={event => updatePeer(peer.key, { token: event.target.value, clearToken: false })}
                       />
+                      {(peerErrors?.token ? t(peerErrors.token) : undefined) && <FieldError match>{peerErrors?.token ? t(peerErrors.token) : undefined}</FieldError>}
+                    </Field>
+                    {peer.tokenSet && peer.token === '' && (
+                      <Tooltip>
+                        <TooltipTrigger render={
+                          <Button
+                            onClick={() => updatePeer(peer.key, { clearToken: !peer.clearToken })}
+                            variant="ghost"
+                            size="icon"
+                            data-icon-button
+                            aria-label={t(peer.clearToken ? 'cascade.config.undoClear' : 'cascade.config.clearToken')}
+                            style={{ color: 'var(--text-soft)' }}
+                          />
+                        }>
+                          <Icon name={peer.clearToken ? 'undo' : 'key'} size="sm" />
+                        </TooltipTrigger>
+                        <TooltipContent>{t(peer.clearToken ? 'cascade.config.undoClear' : 'cascade.config.clearToken')}</TooltipContent>
+                      </Tooltip>
                     )}
                   </div>
                   <div className="flex justify-start lg:justify-center">
@@ -241,20 +275,31 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
                       onCheckedChange={checked => updatePeer(peer.key, { forwardCredentials: checked })}
                     />
                   </div>
-                  <IconButton
-                    icon="delete"
-                    label={t('cascade.config.removePeer', {
+                  <Tooltip>
+                    <TooltipTrigger render={
+                      <Button
+                        onClick={() => {
+                          setDraft(current => ({
+                            ...current,
+                            peers: current.peers.filter(candidate => candidate.key !== peer.key),
+                          }))
+                          setDirty(true)
+                        }}
+                        variant="ghost"
+                        size="icon"
+                        data-icon-button
+                        aria-label={t('cascade.config.removePeer', {
+                          name: peer.name || t('cascade.config.peerName'),
+                        })}
+                        style={{ color: 'var(--danger-text)' }}
+                      />
+                    }>
+                      <Icon name={"delete"} size="sm" />
+                    </TooltipTrigger>
+                    <TooltipContent>{t('cascade.config.removePeer', {
                       name: peer.name || t('cascade.config.peerName'),
-                    })}
-                    tone="danger"
-                    onClick={() => {
-                      setDraft(current => ({
-                        ...current,
-                        peers: current.peers.filter(candidate => candidate.key !== peer.key),
-                      }))
-                      setDirty(true)
-                    }}
-                  />
+                    })}</TooltipContent>
+                  </Tooltip>
                 </div>
               )
             })}
@@ -264,11 +309,11 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
       </fieldset>
 
       {saveError && (
-        <InlineNotice tone="danger">
+        <Alert variant={"destructive"}><AlertDescription>
           {saveError.code === 'CONFIG_READ_ONLY'
             ? t('cascade.config.readOnlyError')
             : t('cascade.config.saveError', { reason: saveError.message })}
-        </InlineNotice>
+        </AlertDescription></Alert>
       )}
 
       {dirty && (

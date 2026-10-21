@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils'
 
 // shadcn/ui Input. Text stays 16px on touch widths so iOS does not zoom the
 // viewport on focus, then drops to shadcn's `text-sm` at `md`.
+// Preserve explicit accessible names that add context to the visible label.
 function Input({ className, type, ...props }: React.ComponentProps<'input'>) {
   return (
     <InputPrimitive
@@ -13,6 +14,7 @@ function Input({ className, type, ...props }: React.ComponentProps<'input'>) {
         className,
       )}
       {...props}
+      {...(props['aria-label'] && !props['aria-labelledby'] ? { 'aria-labelledby': '' } : {})}
     />
   )
 }

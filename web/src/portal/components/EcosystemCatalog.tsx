@@ -1,9 +1,10 @@
+import { Toggle } from '@/components/ui/toggle'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
-import Input from '@/components/Input'
+import { Input } from '@/components/ui/input'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { LANGUAGES, type Language, type LanguageGroup } from '@/lib/ecosystemData'
 
@@ -49,13 +50,13 @@ function EcosystemButton({
   const active = language.id === selected
 
   return (
-    <button
+    <Toggle
       type="button"
-      aria-pressed={active}
+      pressed={active}
       data-active={active ? 'true' : undefined}
       title={language.name}
-      onClick={() => onSelect(language.id)}
-      className="stripe-focus-ring active:scale-[0.98]"
+      onPressedChange={() => onSelect(language.id)}
+      className="stripe-focus-ring active:scale-[0.98] min-h-[40px]"
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -141,7 +142,7 @@ function EcosystemButton({
           </span>
         )}
       </span>
-    </button>
+    </Toggle>
   )
 }
 

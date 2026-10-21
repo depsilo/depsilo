@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
-import { Popover } from '@base-ui/react/popover'
 import { useTranslation } from 'react-i18next'
 
 import Icon from '@/components/Icon'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverClose, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
 
 interface DashboardMetricHelpProps {
   label: string
@@ -16,24 +17,23 @@ export default function DashboardMetricHelp({ label, ariaLabel, children }: Dash
   const { t } = useTranslation()
 
   return (
-    <Popover.Root>
-      <Popover.Trigger aria-label={`${label} · ${ariaLabel}`} className="dash-focus dashboard-help-trigger">
+    <Popover>
+      <PopoverTrigger
+        aria-label={`${label} · ${ariaLabel}`}
+        render={<Button variant="ghost" className="min-h-[40px] min-w-[40px] max-w-full justify-start gap-1.5 whitespace-normal px-0 text-left text-[length:inherit] font-[inherit] leading-normal text-inherit hover:bg-transparent hover:text-primary data-popup-open:text-primary dark:hover:bg-transparent" />}
+      >
         <span>{label}</span>
         <Icon name="info" size="sm" className="shrink-0" />
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Positioner side="bottom" align="start" sideOffset={8} collisionPadding={12} className="z-50">
-          <Popover.Popup data-dashboard-metric-help className="dashboard-help-popup">
-            <div className="dashboard-help-heading">
-              <Popover.Title className="dashboard-help-title">{label}</Popover.Title>
-              <Popover.Close aria-label={t('common.close')} className="stripe-focus-ring dashboard-help-close">
-                <Icon name="close" size="sm" />
-              </Popover.Close>
-            </div>
-            <div className="dashboard-help-body">{children}</div>
-          </Popover.Popup>
-        </Popover.Positioner>
-      </Popover.Portal>
-    </Popover.Root>
+      </PopoverTrigger>
+      <PopoverContent data-dashboard-metric-help align="start" className="w-[360px]">
+        <PopoverHeader>
+          <PopoverTitle>{label}</PopoverTitle>
+          <PopoverClose aria-label={t('common.close')} render={<Button variant="ghost" size="icon" className="-mt-2 -mr-2 -mb-2 text-muted-foreground" />}>
+            <Icon name="close" size="sm" />
+          </PopoverClose>
+        </PopoverHeader>
+        <div className="space-y-3">{children}</div>
+      </PopoverContent>
+    </Popover>
   )
 }

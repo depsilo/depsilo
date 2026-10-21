@@ -47,6 +47,28 @@ test('field primitives compose native and local accessibility feedback', async (
   }
 })
 
+test('composed fields associate generated labels and replace feedback without stale IDs', async ({ page }) => {
+  await page.goto('/e2e/fixtures/admin-forms.html')
+  const input = page.getByRole('textbox', { name: 'Generated control' })
+  await expect(input).toHaveAccessibleDescription('Enter a value')
+  await page.getByText('Generated control', { exact: true }).click()
+  await expect(input).toBeFocused()
+
+  await page.getByRole('button', { name: 'Toggle error' }).click()
+  await expect(input).toHaveAttribute('aria-invalid', 'true')
+  await expect(input).toHaveAccessibleDescription('Try another value')
+  await page.getByRole('button', { name: 'Toggle error' }).click()
+  await expect(input).not.toHaveAttribute('aria-invalid', 'true')
+  await expect(input).toHaveAccessibleDescription('Enter a value')
+
+  const toggle = page.getByRole('switch', { name: 'Enabled feature' })
+  await page.getByText('Enabled feature', { exact: true }).click()
+  await expect(toggle).toBeChecked()
+  await toggle.focus()
+  await page.keyboard.press('Space')
+  await expect(toggle).not.toBeChecked()
+})
+
 test('select keeps a visible keyboard focus ring and native theme scheme', async ({ page }) => {
   await page.goto('/e2e/fixtures/admin-forms.html')
 

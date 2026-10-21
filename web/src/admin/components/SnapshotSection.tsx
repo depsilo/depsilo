@@ -1,3 +1,7 @@
+import { TableContainer, Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Field, FieldLabel } from '@/components/ui/field'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -5,14 +9,13 @@ import { adminApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
 import { Button } from '@/components/ui/button'
 import Icon from '@/components/Icon'
-import InputV2 from '@/components/Input'
+import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import SectionHeader from '@/components/SectionHeader'
-import EmptyState from '@/components/EmptyState'
-import InlineNotice from '@/components/InlineNotice'
+
 import QueryErrorState from '@/components/QueryErrorState'
 import ConfirmActionDialog from '@/admin/components/ConfirmActionDialog'
-import TableViewport from '@/components/TableViewport'
+
 import type { Snapshot } from '@/lib/adminApi.types'
 
 function formatBytes(bytes: number) {
@@ -112,20 +115,26 @@ export default function SnapshotSection() {
   return (
     <section>
       <SectionHeader title={t('snapshot.title')} hint={t('snapshot.description')} />
-      {error && <InlineNotice tone="danger">{error}</InlineNotice>}
+      {error && <Alert variant={"destructive"}><AlertDescription>{error}</AlertDescription></Alert>}
       {activeId !== 0 && (
-        <InlineNotice tone="warning">
+        <Alert variant={"warning"}><AlertDescription>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span>{t('snapshot.activeNotice', { name: activeName })}</span>
             <Button variant="outline" size="sm" onClick={() => activateMutation.mutate(0)} disabled={activateMutation.isPending}>
               {t('snapshot.deactivate')}
             </Button>
           </div>
-        </InlineNotice>
+        </AlertDescription></Alert>
       )}
       <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_auto] sm:items-end">
-        <InputV2 label={t('snapshot.name')} value={name} onChange={(event) => setName(event.target.value)} placeholder={t('snapshot.namePlaceholder')} />
-        <InputV2 label={t('snapshot.note')} value={note} onChange={(event) => setNote(event.target.value)} />
+        <Field>
+          <FieldLabel>{t('snapshot.name')}</FieldLabel>
+          <Input value={name} onChange={(event) => setName(event.target.value)} placeholder={t('snapshot.namePlaceholder')} />
+        </Field>
+        <Field>
+          <FieldLabel>{t('snapshot.note')}</FieldLabel>
+          <Input value={note} onChange={(event) => setNote(event.target.value)} />
+        </Field>
         <Button
           className="w-full sm:w-auto"
           onClick={() => createMutation.mutate()}
@@ -163,33 +172,33 @@ export default function SnapshotSection() {
         ) : snapshotsQuery.isError && !data ? (
           <QueryErrorState message={getApiError(snapshotsQuery.error).message} onRetry={() => { void snapshotsQuery.refetch() }} />
         ) : snapshots.length === 0 ? (
-          <EmptyState icon="storage" title={t('snapshot.empty')} minHeight={140} />
+          <Empty style={{ minHeight: 140 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"storage"} size="sm" /></EmptyMedia><EmptyTitle>{t('snapshot.empty')}</EmptyTitle></EmptyHeader></Empty>
         ) : (
-          <TableViewport label={t('snapshot.table')} minWidth={760}>
-            <table className="w-full text-[12px]">
-              <thead>
-                <tr style={{ color: 'var(--text-soft)' }}>
-                  <th className="px-2 py-2 text-left font-[500]">{t('snapshot.name')}</th>
-                  <th className="px-2 py-2 text-left font-[500]">{t('snapshot.artifacts')}</th>
-                  <th className="px-2 py-2 text-left font-[500]">{t('snapshot.size')}</th>
-                  <th className="px-2 py-2 text-left font-[500]">{t('snapshot.createdAt')}</th>
-                  <th className="px-2 py-2 text-right font-[500]">{t('snapshot.actions')}</th>
-                </tr>
-              </thead>
-              <tbody>
+          <TableContainer label={t('snapshot.table')} minWidth={760}>
+            <Table className="w-full text-[12px]">
+              <TableHeader>
+                <TableRow style={{ color: 'var(--text-soft)' }}>
+                  <TableHead className="px-2 py-2 text-left font-[500]">{t('snapshot.name')}</TableHead>
+                  <TableHead className="px-2 py-2 text-left font-[500]">{t('snapshot.artifacts')}</TableHead>
+                  <TableHead className="px-2 py-2 text-left font-[500]">{t('snapshot.size')}</TableHead>
+                  <TableHead className="px-2 py-2 text-left font-[500]">{t('snapshot.createdAt')}</TableHead>
+                  <TableHead className="px-2 py-2 text-right font-[500]">{t('snapshot.actions')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {snapshots.map((snapshot) => (
-                  <tr key={snapshot.id} style={{ borderTop: '1px solid var(--border)' }}>
-                    <td className="px-2 py-2">
+                  <TableRow key={snapshot.id} style={{ borderTop: '1px solid var(--border)' }}>
+                    <TableCell className="px-2 py-2">
                       <div className="flex min-w-0 items-center gap-2">
                         <span className="min-w-0 truncate" style={{ color: 'var(--text)' }}>{snapshot.name}</span>
                         {snapshot.id === activeId && <Badge variant="success">{t('snapshot.active')}</Badge>}
                       </div>
                       {snapshot.note && <p className="mt-0.5 truncate text-[12px] text-[var(--text-soft)]">{snapshot.note}</p>}
-                    </td>
-                    <td className="px-2 py-2" style={{ color: 'var(--text-soft)' }}>{snapshot.artifact_count}</td>
-                    <td className="px-2 py-2" style={{ color: 'var(--text-soft)' }}>{formatBytes(snapshot.total_bytes)}</td>
-                    <td className="px-2 py-2" style={{ color: 'var(--text-soft)' }}>{dateFormat.format(new Date(snapshot.created_at))}</td>
-                    <td className="px-2 py-2">
+                    </TableCell>
+                    <TableCell className="px-2 py-2" style={{ color: 'var(--text-soft)' }}>{snapshot.artifact_count}</TableCell>
+                    <TableCell className="px-2 py-2" style={{ color: 'var(--text-soft)' }}>{formatBytes(snapshot.total_bytes)}</TableCell>
+                    <TableCell className="px-2 py-2" style={{ color: 'var(--text-soft)' }}>{dateFormat.format(new Date(snapshot.created_at))}</TableCell>
+                    <TableCell className="px-2 py-2">
                       <div className="flex justify-end gap-1.5">
                         {snapshot.id === activeId ? (
                           <Button variant="outline" size="sm" onClick={() => activateMutation.mutate(0)} disabled={activateMutation.isPending}>
@@ -209,12 +218,12 @@ export default function SnapshotSection() {
                           {t('delete')}
                         </Button>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          </TableViewport>
+              </TableBody>
+            </Table>
+          </TableContainer>
         )}
       </div>
 
