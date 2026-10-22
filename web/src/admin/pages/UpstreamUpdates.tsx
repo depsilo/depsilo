@@ -5,7 +5,8 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyCont
 import { Skeleton } from '@/components/ui/skeleton'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
+import { getAdminRouteHref } from '@/admin/routes'
 import { useTranslation } from 'react-i18next'
 
 import AdminPage from '@/admin/components/AdminPage'
@@ -38,8 +39,7 @@ function isUpdateResult(value: string | null): value is UpstreamUpdateResult {
 }
 
 function latencyColor(latencyMs: number): string {
-  if (latencyMs >= 1000) return 'var(--danger-text)'
-  if (latencyMs >= 500) return 'var(--warn-text)'
+  if (latencyMs >= 1000) return 'var(--warn-text)'
   return 'var(--text-muted)'
 }
 
@@ -216,7 +216,7 @@ export default function UpstreamUpdates() {
 
   function source(event: AdminUpstreamUpdateEvent) {
     return (
-      <span className="flex min-w-0 items-center gap-1.5">
+      <Link className="flex min-w-0 items-center gap-1.5 underline-offset-4 hover:underline focus-visible:outline-2" to={`${getAdminRouteHref('upstreams')}?${new URLSearchParams({ search: event.ecosystem })}`}>
         {isAdminEcosystem(event.ecosystem) && (
           <EcosystemIcon type={event.ecosystem} size={13} useColor decorative />
         )}
@@ -227,7 +227,7 @@ export default function UpstreamUpdates() {
         <span className="min-w-0 truncate" title={event.upstream || undefined}>
           {event.upstream || t('upstreamUpdates.unknownUpstream')}
         </span>
-      </span>
+      </Link>
     )
   }
 
@@ -430,11 +430,7 @@ export default function UpstreamUpdates() {
         ) : events.length === 0 ? (
           <Empty style={{ minHeight: 240 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={hasFilters ? 'search' : 'history'} size="sm" /></EmptyMedia><EmptyTitle>{hasFilters
               ? t('upstreamUpdates.noMatches')
-              : t('upstreamUpdates.emptyTitle')}</EmptyTitle>{hasFilters
-              ? t('upstreamUpdates.noMatchesHint')
-              : t('upstreamUpdates.emptyHint') && <EmptyDescription>{hasFilters
-              ? t('upstreamUpdates.noMatchesHint')
-              : t('upstreamUpdates.emptyHint')}</EmptyDescription>}</EmptyHeader><EmptyContent>{hasFilters ? (
+              : t('upstreamUpdates.emptyTitle')}</EmptyTitle><EmptyDescription>{hasFilters ? t('upstreamUpdates.noMatchesHint') : t('upstreamUpdates.emptyHint')}</EmptyDescription></EmptyHeader><EmptyContent>{hasFilters ? (
               <Button type="button" variant="outline" className="min-h-10" onClick={clearFilters}>
                 {t('upstreamUpdates.clearFilters')}
               </Button>
@@ -450,12 +446,12 @@ export default function UpstreamUpdates() {
                 return (
                   <li key={event.id} className="space-y-2.5 py-4 first:pt-0">
                     <div className="flex min-w-0 items-start justify-between gap-3">
-                      <span
-                        className="min-w-0 break-words font-mono text-[13px] font-[550]"
+                      <Link to={`${getAdminRouteHref('cacheIndexes')}?${new URLSearchParams({ package: event.package })}`}
+                        className="min-w-0 break-words font-mono text-[14px] font-[550] underline-offset-4 hover:underline focus-visible:outline-2"
                         style={{ color: 'var(--text)' }}
                       >
                         {event.package}
-                      </span>
+                      </Link>
                       {resultBadge(event.result)}
                     </div>
                     <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
@@ -480,7 +476,7 @@ export default function UpstreamUpdates() {
 
             <div className="hidden md:block">
               <TableContainer label={t('upstreamUpdates.tableLabel')} minWidth={860}>
-                <Table data-upstream-update-table className="w-full text-[12px]">
+                <Table data-upstream-update-table className="w-full text-[13px]">
                   <TableCaption className="sr-only">{t('upstreamUpdates.tableLabel')}</TableCaption>
                   <TableHeader>
                     <TableRow className="border-b border-[var(--border)] text-left">
@@ -494,7 +490,7 @@ export default function UpstreamUpdates() {
                         <TableHead
                           key={heading}
                           scope="col"
-                          className="px-3 py-2 text-[11px] font-[600] first:pl-0"
+                          className="px-3 py-2 text-[12px] font-[600] first:pl-0"
                           style={{ color: 'var(--text-muted)' }}
                         >
                           {heading}
@@ -518,7 +514,7 @@ export default function UpstreamUpdates() {
                           className="max-w-[260px] px-3 py-3 text-left align-top font-mono font-[500]"
                           style={{ color: 'var(--text)' }}
                         >
-                          <span className="block break-words">{event.package}</span>
+                          <Link className="block break-words underline-offset-4 hover:underline focus-visible:outline-2" to={`${getAdminRouteHref('cacheIndexes')}?${new URLSearchParams({ package: event.package })}`}>{event.package}</Link>
                         </TableCell>
                         <TableCell className="max-w-[360px] px-3 py-3 align-top">
                           <div className="flex min-w-0 items-start gap-2">

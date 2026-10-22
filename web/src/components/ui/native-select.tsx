@@ -32,7 +32,7 @@ function NativeSelect({ className, id, name, value, defaultValue, disabled, 'ari
         {...(props['aria-label'] && !props['aria-labelledby'] ? { 'aria-labelledby': '' } : {})}
         render={<select {...props} />}
         data-slot="native-select"
-        className="col-start-1 row-start-1 h-9 w-full min-w-0 cursor-pointer appearance-none rounded-md border border-input bg-transparent py-1 pr-8 pl-3 text-base text-foreground transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50 [&_option]:bg-popover [&_option:enabled]:text-popover-foreground [&_optgroup]:bg-popover [&_optgroup:enabled]:text-popover-foreground"
+        className="col-start-1 row-start-1 h-10 w-full min-w-0 cursor-pointer appearance-none rounded-md border border-input bg-transparent py-1 pr-8 pl-3 text-base text-foreground transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50 [&_option]:bg-popover [&_option:enabled]:text-popover-foreground [&_optgroup]:bg-popover [&_optgroup:enabled]:text-popover-foreground"
       />
       <ChevronDown
         aria-hidden="true"

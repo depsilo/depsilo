@@ -75,7 +75,7 @@ export default function Cascade() {
     () => boundUpstreams.filter(upstream => !peerNames.has(upstream.via ?? '')),
     [boundUpstreams, peerNames],
   )
-  const showStale = Boolean(info && (infoQuery.isRefetchError || upstreamsQuery.isRefetchError))
+  const showStale = Boolean(info && (infoQuery.isRefetchError || upstreamsQuery.isRefetchError || configQuery.isRefetchError))
   const loadError = getApiError(infoQuery.error)
 
   const rebindMutation = useMutation({
@@ -123,8 +123,8 @@ export default function Cascade() {
           type="button"
           variant="outline"
           size="sm"
-          aria-busy={infoQuery.isFetching || undefined}
-          disabled={infoQuery.isFetching}
+          aria-busy={infoQuery.isFetching || upstreamsQuery.isFetching || configQuery.isFetching || undefined}
+          disabled={infoQuery.isFetching || upstreamsQuery.isFetching || configQuery.isFetching}
           onClick={() => {
             void infoQuery.refetch()
             void upstreamsQuery.refetch()
@@ -170,10 +170,11 @@ export default function Cascade() {
               </div>
             )}
 
+            <h2 className="text-base font-semibold">{t('cascade.runtimeTitle')}</h2>
             <CascadeTopology
               info={info}
-              boundUpstreams={boundUpstreams.length}
-              unresolved={unresolved.length}
+              boundUpstreams={upstreamsQuery.isSuccess ? boundUpstreams.length : null}
+              unresolved={upstreamsQuery.isSuccess ? unresolved.length : 0}
             />
 
             <div className="grid grid-cols-1 gap-x-8 gap-y-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
@@ -211,7 +212,7 @@ export default function Cascade() {
               <CascadeQuickConnect info={info} config={config} />
             </div>
 
-            {boundUpstreams.length > 0 && (
+            {(
             <section aria-labelledby="cascade-upstreams-heading">
               <SectionHeader
                 title={t('cascade.upstreamsTitle')}
@@ -222,7 +223,10 @@ export default function Cascade() {
                 )}
               />
               <span id="cascade-upstreams-heading" className="sr-only">{t('cascade.upstreamsTitle')}</span>
-              {unresolved.length > 0 && (
+              {upstreamsQuery.isPending && <p role="status">{t('loading')}</p>}
+              {upstreamsQuery.isError && <QueryErrorState message={t('cascade.bindingsUnavailable')} onRetry={() => upstreamsQuery.refetch()} />}
+              {upstreamsQuery.isSuccess && upstreams.length === 0 && <p className="text-sm text-muted-foreground">{t('cascade.noBindings')}</p>}
+              {upstreamsQuery.isSuccess && unresolved.length > 0 && (
                 <Alert variant={"warning"}><AlertDescription>
                   {t('cascade.unresolvedBody', { count: unresolved.length })}
                 </AlertDescription></Alert>
@@ -230,7 +234,7 @@ export default function Cascade() {
               {canWrite && !info.enabled && (
                 <Alert variant={"info"}><AlertDescription>{t('cascade.rebindRuntimeDisabled')}</AlertDescription></Alert>
               )}
-              <TableContainer label={t('cascade.upstreamsTitle')} minWidth={760}>
+              {upstreams.length > 0 && <TableContainer label={t('cascade.upstreamsTitle')} minWidth={680}>
                   <Table className="w-full text-[12px]">
                     <TableHeader>
                       <TableRow style={{ borderBottom: '1px solid var(--border)' }}>
@@ -248,9 +252,9 @@ export default function Cascade() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {boundUpstreams.map(upstream => {
+                      {upstreams.map(upstream => {
                         const via = upstream.via ?? ''
-                        const missing = !peerNames.has(via)
+                        const missing = via !== '' && !peerNames.has(via)
                         return (
                           <TableRow
                             key={upstream.id}
@@ -269,7 +273,7 @@ export default function Cascade() {
                               <span title={upstream.url}>{truncateMiddle(upstream.url)}</span>
                             </TableCell>
                             <TableCell className={tableCellClass}>
-                              {canWrite && info.enabled ? (
+                              {canWrite ? (
                                 <NativeSelect
                                   aria-label={t('cascade.upstreamVia')}
                                   value={via}
@@ -277,7 +281,7 @@ export default function Cascade() {
                                   onChange={event => rebindUpstream(upstream, event.target.value)}
                                 >
                                   <option value="">{t('cascade.viaDirect')}</option>
-                                  {info.peers.map(peer => (
+                                  {info.enabled && info.peers.map(peer => (
                                     <option key={peer.name} value={peer.name}>{peer.name}</option>
                                   ))}
                                   {missing && <option value={via}>{t('cascade.viaMissing', { peer: via })}</option>}
@@ -285,7 +289,7 @@ export default function Cascade() {
                               ) : missing ? (
                                 <Badge variant="warning">{t('cascade.viaMissing', { peer: via })}</Badge>
                               ) : (
-                                <span className="font-mono" style={{ color: 'var(--text)' }}>{via}</span>
+                                <span className="font-mono" style={{ color: 'var(--text)' }}>{via || t('cascade.viaDirect')}</span>
                               )}
                             </TableCell>
                             <TableCell className={`${tableCellClass} font-mono tabular-nums`} style={{ color: 'var(--text)' }}>
@@ -296,7 +300,7 @@ export default function Cascade() {
                       })}
                     </TableBody>
                   </Table>
-                </TableContainer>
+                </TableContainer>}
             </section>
             )}
           </>

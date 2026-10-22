@@ -25,8 +25,11 @@ func NewTokenHandler(database *gorm.DB) *TokenHandler {
 
 func (h *TokenHandler) List(c *gin.Context) {
 	var tokens []db.APIToken
-	h.db.Select("id, user_id, name, permissions, expires_at, last_used_at, created_at").
-		Order("datetime(created_at) DESC").Find(&tokens)
+	if err := h.db.Select("id, user_id, name, permissions, expires_at, last_used_at, created_at").
+		Order("datetime(created_at) DESC").Find(&tokens).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": "failed to read API tokens"})
+		return
+	}
 	c.JSON(http.StatusOK, tokens)
 }
 
@@ -110,6 +113,10 @@ func (h *TokenHandler) Delete(c *gin.Context) {
 	}
 
 	result := h.db.Delete(&db.APIToken{}, id)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": "failed to revoke API token"})
+		return
+	}
 	if result.RowsAffected == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "message": "token not found"})
 		return

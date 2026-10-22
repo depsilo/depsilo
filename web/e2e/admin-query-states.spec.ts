@@ -42,7 +42,7 @@ const permissionQueries: readonly QueryCase[] = [
 
 async function expectPrimarySiblingVisible(page: Page, path: string) {
   if (path === '/admin/users') await expect(page.getByText('fixture-ci')).toBeVisible()
-  if (path === '/admin/cache') await expect(page.getByText('requests')).toBeVisible()
+  if (path === '/admin/cache') await expect(page.getByRole('region', { name: '存储概览' })).toContainText('1.0 KB')
 }
 
 for (const query of recoveryQueries) {
@@ -558,7 +558,7 @@ test('Rule create recovers the list from an initial query failure with the retur
   await page.goto('/admin/rules')
   await expect(page.getByRole('alert')).toContainText('fixture rules unavailable')
   await page.getByRole('button', { name: /添加规则|Add Rule/ }).click()
-  await page.getByLabel(/包名|Package Name/).fill('recovered-rule')
+  await page.getByRole('dialog').getByLabel(/包名|Package Name/).fill('recovered-rule')
   await page.getByRole('dialog').getByRole('button', { name: /^保存$|^Save$/ }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(page.getByRole('row', { name: /recovered-rule/ })).toBeVisible()
@@ -598,7 +598,9 @@ test('Security legacy-policy disable saves retain per-ecosystem busy, error, and
     'PUT /api/v1/admin/security/policies/pypi': async (request: Request) => {
       expect(request.postDataJSON()).toMatchObject({ auto_block_enabled: false, min_cvss_score: 8.5 })
       await pypiSuccess.promise
-      return policy('pypi', 9.7, false)
+      // A server-normalized enabled result must remain visible and must not be
+      // mistaken for a successful disable based on the submitted draft.
+      return policy('pypi', 9.7, true)
     },
     'PUT /api/v1/admin/security/policies/cargo': async (request: Request) => {
       expect(request.postDataJSON()).toMatchObject({ auto_block_enabled: false, min_cvss_score: 7.5 })
@@ -645,18 +647,18 @@ test('Security legacy-policy disable saves retain per-ecosystem busy, error, and
   pypiSuccess.resolve()
   await expect(pypiRow.getByRole('spinbutton')).toHaveValue('9.7')
   await expect(pypiRow.getByRole('spinbutton')).toBeDisabled()
-  await expect(pypiRow.getByRole('switch')).toBeDisabled()
-  await expect(pypiRow.getByRole('switch')).not.toBeChecked()
+  await expect(pypiRow.getByRole('switch')).toBeEnabled()
+  await expect(pypiRow.getByRole('switch')).toBeChecked()
   await expect(pypiSave).not.toHaveAttribute('aria-busy', 'true')
   await expect(pypiSave).toBeDisabled()
   await expect(cargoSave).toHaveAttribute('aria-busy', 'true')
 
   cargoSuccess.resolve()
-  await expect(cargoRow.getByRole('spinbutton')).toHaveValue('6.4')
-  await expect(cargoRow.getByRole('spinbutton')).toBeDisabled()
-  await expect(cargoRow.getByRole('switch')).toBeDisabled()
-  await expect(cargoRow.getByRole('switch')).not.toBeChecked()
-  await expect(cargoRow.getByRole('alert')).toHaveCount(0)
-  await expect(cargoSave).not.toHaveAttribute('aria-busy', 'true')
-  await expect(cargoSave).toBeDisabled()
+  // Confirmed disabled policies leave the legacy-action list. The other
+  // policy retains the normalized server result without a stale dirty draft.
+  await expect(cargoRow).toHaveCount(0)
+  await expect(pypiRow.getByRole('spinbutton')).toHaveValue('9.7')
+  await expect(pypiRow.getByRole('switch')).toBeChecked()
+  await expect(pypiSave).toBeDisabled()
+  expect(cargoCalls).toBe(2)
 })

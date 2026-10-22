@@ -215,3 +215,8 @@ export function buildCascadePatch(draft: CascadeConfigDraft): AdminCascadeConfig
     })),
   }
 }
+
+/** Compare editable server configuration without transient restart/file status. */
+export function cascadeConfigIdentity(state: AdminCascadeConfigState): string {
+  return JSON.stringify({ enabled:state.enabled, max_hops:state.max_hops, max_ttl:state.max_ttl, allow_insecure_http:state.allow_insecure_http, token_set:state.token_set, peers:state.peers })
+}

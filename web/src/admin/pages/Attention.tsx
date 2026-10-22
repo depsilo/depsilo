@@ -98,6 +98,12 @@ export default function Attention() {
     refetchInterval: 30_000,
     retry: false,
   })
+  const upstreamsQuery = useQuery({
+    queryKey: ['admin', 'upstreams'],
+    queryFn: async ({ signal }) => (await adminApi.listUpstreams({ signal })).data,
+    refetchInterval: 30_000,
+    retry: false,
+  })
   const suggestionsQuery = useQuery({
     queryKey: ['admin', 'security', 'suggestions', ATTENTION_SUGGESTIONS_PAGE],
     queryFn: ({ signal }) => adminApi.listSuggestions(ATTENTION_SUGGESTIONS_PARAMS, { signal }),
@@ -116,15 +122,16 @@ export default function Attention() {
 
   const dashboard = dashboardQuery.data?.data as DashboardResponse | undefined
   const suggestions = suggestionsQuery.data?.data as SecuritySuggestionPage | undefined
-  const unhealthyUpstreams = dashboard?.upstreams.filter(item => upstreamStatus(item) !== 'healthy') ?? []
+  const unhealthyUpstreams = upstreamsQuery.data?.items.filter(item => ['failed', 'degraded'].includes(upstreamStatus(item))) ?? []
+  const unobservedUpstreams = upstreamsQuery.data?.items.filter(item => upstreamStatus(item) === 'unknown') ?? []
   const suggestionCount = suggestions?.total ?? 0
   const cacheUsagePercent = dashboard?.cache_usage_percent
   const cacheNeedsAttention = cacheUsagePercent !== undefined && cacheUsagePercent > 80
-  const isQueueLoading = dashboardQuery.isPending || suggestionsQuery.isPending
+  const isQueueLoading = dashboardQuery.isPending || suggestionsQuery.isPending || upstreamsQuery.isPending
   const queueInitialFailure =
     (dashboardQuery.isError && !dashboardQuery.data) ||
-    (suggestionsQuery.isError && !suggestionsQuery.data)
-  const queueRefreshFailure = dashboardQuery.isRefetchError || suggestionsQuery.isRefetchError
+    (suggestionsQuery.isError && !suggestionsQuery.data) || (upstreamsQuery.isError && !upstreamsQuery.data)
+  const queueRefreshFailure = dashboardQuery.isRefetchError || suggestionsQuery.isRefetchError || upstreamsQuery.isRefetchError
   const quarantineInitialFailure = quarantineQuery.isError && !quarantineQuery.data
   const quarantineRefreshFailure = quarantineQuery.isRefetchError
   const queueIsEmpty = unhealthyUpstreams.length === 0 && suggestionCount === 0 && !cacheNeedsAttention
@@ -134,6 +141,7 @@ export default function Attention() {
     void Promise.all([
       dashboardQuery.refetch(),
       suggestionsQuery.refetch(),
+      upstreamsQuery.refetch(),
     ])
   }
 
@@ -157,8 +165,8 @@ export default function Attention() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      aria-busy={dashboardQuery.isFetching || suggestionsQuery.isFetching || undefined}
-                      disabled={dashboardQuery.isFetching || suggestionsQuery.isFetching}
+                      aria-busy={dashboardQuery.isFetching || suggestionsQuery.isFetching || upstreamsQuery.isFetching || undefined}
+                      disabled={dashboardQuery.isFetching || suggestionsQuery.isFetching || upstreamsQuery.isFetching}
                       onClick={refreshQueue}
                     >
                       {t('attention.retry')}
@@ -174,8 +182,8 @@ export default function Attention() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      aria-busy={dashboardQuery.isFetching || suggestionsQuery.isFetching || undefined}
-                      disabled={dashboardQuery.isFetching || suggestionsQuery.isFetching}
+                      aria-busy={dashboardQuery.isFetching || suggestionsQuery.isFetching || upstreamsQuery.isFetching || undefined}
+                      disabled={dashboardQuery.isFetching || suggestionsQuery.isFetching || upstreamsQuery.isFetching}
                       onClick={refreshQueue}
                     >
                       {t('attention.retry')}
@@ -183,6 +191,7 @@ export default function Attention() {
                   </div>
                 </AlertDescription></Alert>
               )}
+              {unobservedUpstreams.length > 0 && <p className="text-[14px] text-muted-foreground">{t('attention.unobserved', { count: unobservedUpstreams.length })}</p>}
               {!queueInitialFailure && queueIsEmpty ? (
                 <Empty style={{ minHeight: 180 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"task_alt"} size="sm" /></EmptyMedia><EmptyTitle>{t('attention.allClearTitle')}</EmptyTitle>{t('attention.allClearHint') && <EmptyDescription>{t('attention.allClearHint')}</EmptyDescription>}</EmptyHeader></Empty>
               ) : !queueIsEmpty ? (
@@ -197,7 +206,7 @@ export default function Attention() {
                       })}
                       count={unhealthyUpstreams.length}
                       tone={unhealthyUpstreams.some(item => upstreamStatus(item) === 'failed') ? 'danger' : 'warning'}
-                      href={getAdminRouteHref('upstreams')}
+                      href={`${getAdminRouteHref('upstreams')}?status=attention`}
                       action={t('attention.reviewUpstreams')}
                     />
                   )}
@@ -295,7 +304,7 @@ export default function Attention() {
                         )}
                         <div className="min-w-0">
                           <p className="break-all font-mono text-[13px] font-[500] text-[var(--text)]">
-                            {event.package}
+                            <Link className="stripe-focus-ring text-[var(--brand-text)] underline" to={`${getAdminRouteHref('quarantine')}?${new URLSearchParams({ tab: 'events', package: event.package, ecosystem: event.ecosystem, action: event.action })}`}>{event.package}</Link>
                             {event.version ? <span className="text-[var(--text-soft)]"> @{event.version}</span> : null}
                           </p>
                           <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-[var(--text-soft)]">

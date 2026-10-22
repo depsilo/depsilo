@@ -3,6 +3,10 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empt
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { useRef, useState } from 'react'
+import { usePrincipal } from '@/hooks/usePrincipal'
+import { useSearchParams } from 'react-router'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
@@ -32,6 +36,9 @@ function formatBytes(bytes: number) {
 export default function SnapshotSection() {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
+  const { canWrite } = usePrincipal()
+  const [searchParams] = useSearchParams()
+  const [activationTarget, setActivationTarget] = useState<Snapshot | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const [name, setName] = useState('')
   const [note, setNote] = useState('')
@@ -42,6 +49,11 @@ export default function SnapshotSection() {
     queryKey: ['admin', 'snapshots'],
     queryFn: ({ signal }) => adminApi.listSnapshots({ signal }),
     retry: false,
+  })
+  const detailQuery = useQuery({
+    queryKey: ['admin', 'snapshots', activationTarget?.id],
+    queryFn: ({ signal }) => adminApi.getSnapshot(activationTarget!.id, { signal }),
+    enabled: activationTarget !== null, retry: false,
   })
   const data = snapshotsQuery.data?.data
   const snapshots = data?.items ?? []
@@ -73,6 +85,7 @@ export default function SnapshotSection() {
   const activateMutation = useMutation({
     mutationFn: (id: number) => adminApi.activateSnapshot(id),
     onSuccess: () => {
+      setActivationTarget(null)
       setError('')
       invalidate()
     },
@@ -120,12 +133,15 @@ export default function SnapshotSection() {
         <Alert variant={"warning"}><AlertDescription>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span>{t('snapshot.activeNotice', { name: activeName })}</span>
-            <Button variant="outline" size="sm" onClick={() => activateMutation.mutate(0)} disabled={activateMutation.isPending}>
+            {canWrite && <Button variant="outline" size="sm" onClick={() => activateMutation.mutate(0)} disabled={activateMutation.isPending}>
               {t('snapshot.deactivate')}
-            </Button>
+            </Button>}
           </div>
         </AlertDescription></Alert>
       )}
+      <details open={searchParams.get('view') === 'snapshots' || snapshotsQuery.isError} className="mt-3">
+      <summary className="cursor-pointer text-sm font-medium">{t('snapshot.manage', { count: data ? snapshots.length : '—' })}</summary>
+      {canWrite && <>
       <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_auto] sm:items-end">
         <Field>
           <FieldLabel>{t('snapshot.name')}</FieldLabel>
@@ -164,6 +180,8 @@ export default function SnapshotSection() {
         </Button>
       </div>
 
+      </>}
+      {data && snapshotsQuery.isRefetchError && <StaleDataNotice onRefresh={() => snapshotsQuery.refetch()} />}
       <div className="mt-4">
         {snapshotsQuery.isPending ? (
           <div aria-busy="true" className="py-6 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>
@@ -200,23 +218,23 @@ export default function SnapshotSection() {
                     <TableCell className="px-2 py-2" style={{ color: 'var(--text-soft)' }}>{dateFormat.format(new Date(snapshot.created_at))}</TableCell>
                     <TableCell className="px-2 py-2">
                       <div className="flex justify-end gap-1.5">
-                        {snapshot.id === activeId ? (
+                        {canWrite && (snapshot.id === activeId ? (
                           <Button variant="outline" size="sm" onClick={() => activateMutation.mutate(0)} disabled={activateMutation.isPending}>
                             {t('snapshot.deactivate')}
                           </Button>
                         ) : (
-                          <Button variant="outline" size="sm" onClick={() => activateMutation.mutate(snapshot.id)} disabled={activateMutation.isPending}>
+                          <Button variant="outline" size="sm" onClick={() => { activateMutation.reset(); setActivationTarget(snapshot) }} disabled={activateMutation.isPending}>
                             {t('snapshot.activate')}
                           </Button>
-                        )}
+                        ))}
                         <Button variant="outline" size="sm" onClick={() => { void handleExport(snapshot) }}>
                           <Icon name="download" size="sm" />
                           {t('snapshot.export')}
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => setDeleteTarget(snapshot)}>
+                        {canWrite && <Button variant="outline" size="sm" onClick={() => setDeleteTarget(snapshot)}>
                           <Icon name="delete" size="sm" />
                           {t('delete')}
-                        </Button>
+                        </Button>}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -227,6 +245,24 @@ export default function SnapshotSection() {
         )}
       </div>
 
+      </details>
+      <Dialog open={activationTarget !== null} onOpenChange={open => { if (!open && !activateMutation.isPending) setActivationTarget(null) }}>
+        <DialogContent className="max-w-xl" closeDisabled={activateMutation.isPending}>
+          <DialogTitle>{t('snapshot.activationTitle', { name: activationTarget?.name })}</DialogTitle>
+          <p className="text-sm leading-6 text-muted-foreground">{t('snapshot.activationImpact')}</p>
+          {detailQuery.isPending ? <p role="status">{t('loading')}</p> : detailQuery.isError ? <QueryErrorState message={getApiError(detailQuery.error).message} onRetry={() => detailQuery.refetch()} /> : detailQuery.data && <>
+            <p className="text-sm">{t('snapshot.activationScope', { count: detailQuery.data.data.total, shown: detailQuery.data.data.items.length })}</p>
+            <ul className="max-h-60 space-y-2 overflow-auto rounded-md border p-3 text-sm">
+              {detailQuery.data.data.items.map(item => <li key={item.id} className="break-all"><span className="text-muted-foreground">{item.ecosystem} · </span><code>{item.package}@{item.version}</code></li>)}
+            </ul>
+          </>}
+          {activateMutation.isError && <Alert variant="destructive"><AlertDescription>{getApiError(activateMutation.error).message}</AlertDescription></Alert>}
+          <div className="flex flex-wrap justify-end gap-3">
+            <Button variant="outline" disabled={activateMutation.isPending} onClick={() => setActivationTarget(null)}>{t('cancel')}</Button>
+            <Button disabled={!canWrite || !detailQuery.isSuccess || activateMutation.isPending} onClick={() => activationTarget && activateMutation.mutate(activationTarget.id)}>{t('snapshot.confirmActivation')}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <ConfirmActionDialog
         open={deleteTarget !== null}
         title={t('snapshot.deleteTitle')}
@@ -235,9 +271,10 @@ export default function SnapshotSection() {
         confirmLabel={t('delete')}
         pendingLabel={t('loading')}
         pending={deleteMutation.isPending}
+        errorMessage={deleteMutation.isError ? getApiError(deleteMutation.error).message : undefined}
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => {
-          if (deleteTarget) deleteMutation.mutate(deleteTarget.id)
+          if (canWrite && deleteTarget) deleteMutation.mutate(deleteTarget.id)
         }}
       />
     </section>

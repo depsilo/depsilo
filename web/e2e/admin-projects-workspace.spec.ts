@@ -158,6 +158,7 @@ test('project ecosystem filters expose all Operator surfaces without internal al
   await page.goto('/admin/projects')
   await page.getByRole('button', { name: `View ${projectName}`, exact: true }).click()
 
+  await page.getByRole('button', { name: 'Export SBOM', exact: true }).click()
   const ecosystemFilters = page.getByLabel('Filter Ecosystem', { exact: true })
   await expect(ecosystemFilters).toHaveCount(2)
 
@@ -209,13 +210,16 @@ test('long project detail, SBOM controls, package filter, and pagination remain 
   await expectInViewport(page, page.getByRole('heading', { name: longName, exact: true }))
   await expectNoRootOverflow(page, 320)
 
+  await page.getByRole('button', { name: '导出 SBOM', exact: true }).click()
   const sbomControls = page.locator('[data-project-sbom-controls]')
   await expectInViewport(page, sbomControls.getByLabel('格式'))
   await expectInViewport(page, sbomControls.getByLabel('筛选生态'))
   await expectInViewport(page, sbomControls.getByRole('button', { name: '下载 SBOM' }))
   await expectNoRootOverflow(page, 320)
 
-  const packageFilter = page.getByLabel('筛选生态', { exact: true }).nth(1)
+  await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  const packageFilter = page.getByLabel('筛选生态', { exact: true })
   await expectInViewport(page, packageFilter)
   await packageFilter.selectOption('docker')
 
@@ -250,6 +254,7 @@ test('SBOM export requests the CRA preset and saves the detached signature', asy
 
   await page.goto('/admin/projects')
   await page.getByRole('button', { name: `查看 ${projectName}`, exact: true }).click()
+  await page.getByRole('button', { name: '导出 SBOM', exact: true }).click()
   await page.getByRole('checkbox', { name: /CRA 技术文件/ }).check()
   await page.getByRole('checkbox', { name: /签名（Ed25519）/ }).check()
 

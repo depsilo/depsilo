@@ -232,7 +232,7 @@ test('Security policies support a shared draft, changed-only review, and one bat
   await expect(page.locator('[data-policy-ecosystem]')).toHaveCount(10)
   await page.getByRole('button', { name: /保存全部变更|Save all changes/ }).click()
   const dialog = page.getByRole('dialog', { name: /要保存安全策略变更吗|Save security policy changes/ })
-  await expect(dialog).toContainText(/10 个生态策略|10 ecosystem policies/)
+  await expect(dialog).toContainText(/关闭 10 个生态|disable legacy automatic policies for 10/)
   await dialog.getByRole('button', { name: /保存策略变更|Save policy changes/ }).click()
 
   await expect.poll(() => policyRequests.length).toBeGreaterThan(0)
@@ -246,7 +246,7 @@ test('Security policies support a shared draft, changed-only review, and one bat
   expect(policyRequests.every(request =>
     request.autoBlock === supportsVulnerabilityAutoBlock(request.ecosystem) && request.threshold === 8.5,
   )).toBe(true)
-  await expect(page.getByText(/没有策略变更|No policy changes/)).toBeVisible()
+  await expect(page.getByText(/没有需要关闭的旧版策略|No legacy policies need disabling/)).toBeVisible()
 })
 
 test('Security permits disabling but not re-enabling a legacy exact-only auto-block policy', async ({ page }) => {
@@ -280,7 +280,8 @@ test('Security permits disabling but not re-enabling a legacy exact-only auto-bl
 
   await goPolicy.getByRole('button', { name: /GO.*保存|GO.*Save/ }).click()
   await expect.poll(() => savedAutoBlock).toBe(false)
-  await expect(goPolicy.getByRole('button', { name: /GO.*保存|GO.*Save/ })).toBeDisabled()
+  await expect(goPolicy).toHaveCount(0)
+  await expect(page.getByText(/没有需要关闭的旧版策略|No legacy policies need disabling/)).toBeVisible()
 })
 
 test('Security disables conflicting bulk policy actions while a row save is pending', async ({ page }) => {
@@ -328,7 +329,7 @@ test('Security disables conflicting bulk policy actions while a row save is pend
   await expect(page.getByRole('button', { name: /保存全部变更|Save all changes/ })).toBeDisabled()
 
   releaseSave()
-  await expect(pypiPolicy.getByRole('button', { name: /PYPI.*保存|PYPI.*Save/ })).toBeDisabled()
+  await expect(pypiPolicy).toHaveCount(0)
 })
 
 test('Security reports an API scan already in progress as a busy disabled action', async ({ page }) => {
@@ -354,9 +355,7 @@ test('Security reports an API scan already in progress as a busy disabled action
   // Severity bars compare counts against the largest observed count; they
   // must not expose these counts as vulnerability percentages.
   await expect(critical).toHaveAttribute('aria-valuetext', '1')
-  const high = page.getByRole('meter', { name: /high$/ })
-  await expect(high).toHaveAttribute('aria-valuenow', '0')
-  await expect(high.locator('[data-slot="meter-indicator"]')).toHaveCSS('width', '0px')
+  await expect(page.getByRole('meter', { name: /high$/ })).toHaveCount(0)
 })
 
 test('Security suggestion rows do not create root overflow at 320px', async ({ page }) => {

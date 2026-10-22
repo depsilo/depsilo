@@ -14,14 +14,14 @@ test('AdminPage renders the route title once and wraps its actions on mobile', a
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
 })
 
-test('readable and fluid pages preserve distinct desktop widths', async ({ page }) => {
+test('workspace navigation remains stable while readable content has a narrower measure', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
 
   await page.goto('/admin/license')
-  const readableWidth = await page.locator('[data-admin-page-width="readable"]').evaluate(element => element.getBoundingClientRect().width)
+  const readableWidth = await page.locator('[data-admin-page-width="readable"] [data-admin-page-content]').evaluate(element => element.getBoundingClientRect().width)
 
   await page.goto('/admin/upstream-updates')
-  const fluidWidth = await page.locator('[data-admin-page-width="fluid"]').evaluate(element => element.getBoundingClientRect().width)
+  const fluidWidth = await page.locator('[data-admin-page-width="fluid"] [data-admin-page-content]').evaluate(element => element.getBoundingClientRect().width)
   expect(fluidWidth).toBeGreaterThan(readableWidth)
 })
 
@@ -32,14 +32,14 @@ test('workspace destinations are the page header tabs', async ({ page }) => {
   const header = page.locator('[data-admin-page-header]')
   const localNavigation = header.locator('[data-admin-page-navigation="cache"]')
   await expect(localNavigation).toBeVisible()
-  await expect(localNavigation.getByRole('link', { name: '制品缓存', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(localNavigation.getByRole('link', { name: '缓存对象', exact: true })).toHaveAttribute('aria-current', 'page')
   await expect(localNavigation.getByRole('link', { name: '索引缓存', exact: true })).toHaveAttribute('href', '/admin/indexes')
   await expect(localNavigation.getByRole('link', { name: '编译缓存', exact: true })).toHaveAttribute('href', '/admin/compile-cache')
 
   // The rail stands in for the page title, so the route heading stays in the
   // accessibility tree without repeating the visible label.
   const title = header.locator('[data-admin-page-title]')
-  await expect(title).toHaveText('制品缓存')
+  await expect(title).toHaveText('缓存对象')
   expect(await title.evaluate(element => element.getBoundingClientRect().width)).toBeLessThanOrEqual(2)
   await expect(page.locator('[data-admin-page-content] [data-admin-page-navigation]')).toHaveCount(0)
 
@@ -55,7 +55,7 @@ test('tab workspaces keep their own commands below the rail', async ({ page }) =
 
   const description = page.locator('[data-admin-page-description]')
   const actions = page.locator('[data-admin-page-actions]')
-  await expect(actions.getByRole('button', { name: '预热', exact: true })).toBeVisible()
+  await expect(actions.getByRole('button', { name: '预热索引', exact: true })).toBeVisible()
   await expect(actions.getByRole('button', { name: /清理缓存/ })).toBeVisible()
 
   // The rail owns the header band; the selected tab's copy and commands sit one
@@ -79,7 +79,7 @@ test('empty cache keeps the search controls close to the storage overview on mob
   await page.goto('/admin/cache')
 
   await expect(page.getByRole('textbox', { name: '搜索缓存' })).toBeVisible()
-  await expect(page.getByText('暂无数据')).toBeVisible()
+  await expect(page.getByText('暂无缓存数据', { exact: true })).toBeVisible()
   const filters = await page.locator('[data-admin-filters]').boundingBox()
   expect(filters?.y).toBeLessThan(750)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
@@ -107,9 +107,9 @@ test('cache capacity uses its real quota and omits the meter when the quota is u
 
   distribution = { ...distribution, max_size: 0, usage_percent: 0 }
   await page.reload()
-  await expect(page.locator('[data-metric-value]')).toContainText('512 B')
+  await expect(page.getByRole('region', { name: '存储概览' })).toContainText('512 B')
   await expect(meter).toHaveCount(0)
-  await expect(page.locator('[data-metric-value]')).not.toContainText('/ 0 B')
+  await expect(page.getByRole('region', { name: '存储概览' })).not.toContainText('/ 0 B')
 })
 
 test('warmed workspace destinations switch without a loading flash', async ({ page }) => {

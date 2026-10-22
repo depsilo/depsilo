@@ -3,6 +3,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { useEffect, useState, useRef, type ComponentProps } from 'react'
+import VulnerabilityDetails from '@/admin/security/VulnerabilityDetails'
 import type { AxiosResponse } from 'axios'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -54,6 +55,7 @@ function CapabilityOverview() {
   const { t } = useTranslation()
   const query = useQuery({
     queryKey: ['admin', 'capabilities', 'summary'],
+    refetchInterval: 60_000,
     queryFn: ({ signal }) => adminApi.getCapabilitySummary({ signal }),
     retry: false,
   })
@@ -100,10 +102,13 @@ function CapabilityOverview() {
       {query.isError && <Alert variant={"warning"}><AlertDescription>{t('security.capabilityUnavailable')}</AlertDescription></Alert>}
       {!query.isPending && !query.isError && facts.length === 0 && <Alert variant={"warning"}><AlertDescription>{t('security.capabilityNoData')}</AlertDescription></Alert>}
       {facts.length > 0 && (
-        <div className="space-y-3">
+        <div className="grid gap-3 md:grid-cols-2">
           {[...grouped.entries()].map(([name, rows]) => (
             <details key={name} className="rounded-md border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2">
-              <summary className="cursor-pointer stripe-focus-ring text-[13px] font-[600]">{label(name)}</summary>
+              <summary className="cursor-pointer stripe-focus-ring text-[14px] font-[600]">
+                {label(name)}
+                {rows.some(fact => fact.data_status === 'error' || fact.data_status === 'stale') && <Badge variant="warning" className="ml-2">{t('security.capabilityNeedsReview')}</Badge>}
+              </summary>
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {rows.map((fact) => (
                   <div key={`${fact.ecosystem ?? 'all'}-${fact.name}`} className="min-w-0 rounded-sm bg-[var(--bg-page)] p-2 text-[12px]">
@@ -151,15 +156,15 @@ function OverviewTab() {
 
   const dashboard = data?.data
   const scanInProgress = scanMutation.isPending || dashboard?.scan_in_progress === true
-  const severityDist = Object.entries(dashboard?.by_severity ?? {}).map(([severity, count]) => ({ severity, count }))
+  const severityDist = Object.entries(dashboard?.by_severity ?? {}).filter(([, count]) => count > 0).map(([severity, count]) => ({ severity, count }))
   const maxCount = Math.max(...severityDist.map((s) => s.count), 1)
 
   if (query.isPending) {
     return (
       <div aria-busy="true" className="space-y-12">
         <div aria-hidden="true">
-        <div className="grid grid-cols-2 gap-6 py-2 lg:grid-cols-4 lg:gap-8">
-          {[...Array(4)].map((_, i) => (
+        <div className="grid grid-cols-2 gap-6 py-2 lg:grid-cols-3 lg:gap-8">
+          {[...Array(3)].map((_, i) => (
             <div key={i} className="flex flex-col items-center gap-3">
               <Skeleton className="h-3 w-20 rounded" style={{ background: 'var(--bg-soft)' }} />
               <Skeleton className="h-11 w-32 rounded" style={{ background: 'var(--bg-soft)' }} />
@@ -177,15 +182,14 @@ function OverviewTab() {
   }
 
   return (
-    <div className="space-y-12">
-      <CapabilityOverview />
+    <div className="space-y-6">
       {data && query.isRefetchError && <StaleDataNotice refreshing={query.isFetching} onRefresh={() => query.refetch()} />}
       {/* ── Metrics row ───────────────────────────── */}
-      <div className="grid grid-cols-2 gap-6 py-2 lg:grid-cols-4 lg:gap-8">
-        <Metric label={t('security.totalVulnerabilities')} value={String(dashboard?.total_vulnerabilities || 0)} />
-        <Metric label={t('security.affectedPackages')} value={String(dashboard?.affected_packages || 0)} />
-        <Metric label={t('security.criticalCount')} value={String(dashboard?.by_severity.critical || 0)} />
-        <Metric label={t('security.autoBlocked')} value={String(dashboard?.auto_blocked_count || 0)} />
+      <div className="grid grid-cols-2 gap-6 py-2 lg:grid-cols-3 lg:gap-8">
+        <Link className="stripe-focus-ring rounded-md p-3 no-underline hover:bg-muted" to={`${getAdminRouteHref('security')}?tab=vulnerabilities`}><Metric label={t('security.totalVulnerabilities')} value={String(dashboard?.total_vulnerabilities ?? 0)} /></Link>
+        <div className="p-3"><Metric label={t('security.affectedPackages')} value={String(dashboard?.affected_packages ?? 0)} /></div>
+        <Link className="stripe-focus-ring rounded-md p-3 no-underline hover:bg-muted" to={`${getAdminRouteHref('security')}?tab=vulnerabilities&severity=critical`}><Metric label={t('security.criticalCount')} value={String(dashboard?.by_severity.critical ?? 0)} /></Link>
+
       </div>
 
       {/* ── Scan status + action ───────────────────── */}
@@ -211,6 +215,7 @@ function OverviewTab() {
         </p>
       </section>
 
+      <p className="text-[13px] leading-6 text-muted-foreground">{t('security.advisoryScope')}</p>
       {/* ── Severity distribution ──────────────────── */}
       <section>
         <SectionHeader title={t('security.severityDistribution')} />
@@ -245,6 +250,7 @@ function OverviewTab() {
           <Empty style={{ minHeight: 140 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"verified"} size="sm" /></EmptyMedia><EmptyTitle>{t('security.noVulnerabilities')}</EmptyTitle></EmptyHeader></Empty>
         )}
       </section>
+      <CapabilityOverview />
     </div>
   )
 }
@@ -253,11 +259,16 @@ function OverviewTab() {
 
 function VulnerabilitiesTab() {
   const { t } = useTranslation()
-  const [ecosystem, setEcosystem] = useState('')
-  const [severity, setSeverity] = useState('')
-  const [draftSearch, setDraftSearch] = useState('')
-  const [appliedSearch, setAppliedSearch] = useState('')
-  const [page, setPage] = useState(1)
+  const [selected, setSelected] = useState<SecurityVulnerability | null>(null)
+  const [filterParams, setFilterParams] = useSearchParams()
+  const ecosystem = filterParams.get('ecosystem') || ''
+  const severity = filterParams.get('severity') || ''
+  const appliedSearch = filterParams.get('package') || ''
+  const page = Math.max(1, Number.isSafeInteger(Number(filterParams.get('vpage'))) ? Number(filterParams.get('vpage')) : 1)
+  function updateFilters(patch: Record<string, string>) {
+    setFilterParams(current => { const next = new URLSearchParams(current); for (const [key, value] of Object.entries(patch)) { if (value && !(key === 'vpage' && value === '1')) next.set(key, value); else next.delete(key) } return next })
+  }
+  const setPage = (page: number) => updateFilters({ vpage: String(page) })
   const perPage = 20
 
   const params: SecurityQuery = { page, per_page: perPage }
@@ -279,8 +290,8 @@ function VulnerabilitiesTab() {
     {
       key: 'osv_id',
       label: t('security.osvId'),
-      render: (v: unknown) => (
-        <span className="font-mono text-[12px] font-[400]" style={{ color: 'var(--text)' }}>{v as string}</span>
+      render: (v: unknown, row: SecurityVulnerability) => (
+        <Button variant="link" className="h-auto min-h-10 p-0 text-left whitespace-normal" onClick={() => setSelected(row)}>{v as string}</Button>
       ),
     },
     {
@@ -296,8 +307,8 @@ function VulnerabilitiesTab() {
     {
       key: 'package_name',
       label: t('security.package'),
-      render: (v: unknown) => (
-        <span className="font-mono text-[12px]" style={{ color: 'var(--text)' }}>{v as string}</span>
+      render: (v: unknown, row: SecurityVulnerability) => (
+        <div className="max-w-sm"><span className="font-mono text-[14px]">{v as string}</span><p className="mt-1 line-clamp-2 text-[13px] text-muted-foreground">{row.summary}</p></div>
       ),
     },
     {
@@ -329,8 +340,7 @@ function VulnerabilitiesTab() {
 
   function applySearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setAppliedSearch(draftSearch.trim())
-    setPage(1)
+    updateFilters({ package: String(new FormData(event.currentTarget).get('package') ?? '').trim(), vpage: '1' })
   }
 
   return (
@@ -340,7 +350,7 @@ function VulnerabilitiesTab() {
         <div className="w-40">
           <Field>
             <FieldLabel>{t('security.ecosystem')}</FieldLabel>
-            <NativeSelect value={ecosystem} onChange={(e) => { setEcosystem(e.target.value); setPage(1) }}>
+            <NativeSelect value={ecosystem} onChange={(e) => updateFilters({ ecosystem: e.target.value, vpage: '1' })}>
               <option value="">{t('all')}</option>
               {securityEcosystems.map((candidate) => (
                 <option key={candidate.id} value={candidate.id}>{candidate.label}</option>
@@ -351,7 +361,7 @@ function VulnerabilitiesTab() {
         <div className="w-36">
           <Field>
             <FieldLabel>{t('security.severity')}</FieldLabel>
-            <NativeSelect value={severity} onChange={(e) => { setSeverity(e.target.value); setPage(1) }}>
+            <NativeSelect value={severity} onChange={(e) => updateFilters({ severity: e.target.value, vpage: '1' })}>
               <option value="">{t('all')}</option>
               {(['critical', 'high', 'medium', 'low', 'unknown'] satisfies SecuritySeverity[]).map((value) => (
                 <option key={value} value={value}>{t(`security.${value}`)}</option>
@@ -363,8 +373,9 @@ function VulnerabilitiesTab() {
           <Field>
             <FieldLabel>{t('security.packageSearch')}</FieldLabel>
             <Input className="font-mono"
-              value={draftSearch}
-              onChange={(e) => setDraftSearch(e.target.value)}
+              key={appliedSearch}
+              name="package"
+              defaultValue={appliedSearch}
               placeholder={t('security.searchPlaceholder')}
             />
           </Field>
@@ -383,17 +394,20 @@ function VulnerabilitiesTab() {
       ) : (
         <div className="space-y-3">
         {data && query.isRefetchError && <StaleDataNotice refreshing={query.isFetching} onRefresh={() => query.refetch()} />}
-        {items.length === 0 ? <Empty style={{ minHeight: 200 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"verified"} size="sm" /></EmptyMedia><EmptyTitle>{t('security.noVulnerabilities')}</EmptyTitle></EmptyHeader></Empty> : <DataTable
+        {items.length === 0 ? <Empty style={{ minHeight: 200 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"verified"} size="sm" /></EmptyMedia><EmptyTitle>{t(appliedSearch || ecosystem || severity ? 'security.noMatchingAdvisories' : 'security.noVulnerabilities')}</EmptyTitle><EmptyDescription>{t('security.advisoryScope')}</EmptyDescription></EmptyHeader></Empty> : <><ul className="divide-y sm:hidden" aria-label={t('security.vulnerabilitiesTable')}>
+          {items.map(item => <li key={item.id} className="py-4 space-y-2"><Button variant="link" className="h-auto min-h-10 p-0 whitespace-normal text-left break-all" onClick={() => setSelected(item)}>{item.package_name} · {item.osv_id}</Button><p className="text-[14px] text-muted-foreground break-words">{item.summary}</p><Badge variant={SEVERITY_BADGE_MAP[item.severity] ?? 'default'}>{t(`security.${item.severity}`)}</Badge></li>)}
+        </ul><div className="hidden sm:block"><DataTable
           columns={columns}
           data={items.map((item) => ({ ...item }))}
           rowKey={(row) => row.id as number}
           ariaLabel={t('security.vulnerabilitiesTable')}
           minWidth={800}
-        />}
+        /></div></>}
         </div>
       )}
 
-      <AdminPagination page={page} pageSize={perPage} total={total} onPageChange={setPage} />
+      <AdminPagination ready={query.isSuccess && !query.isFetching} page={page} pageSize={perPage} total={total} onPageChange={setPage} />
+      <VulnerabilityDetails item={selected} onClose={() => setSelected(null)} />
     </div>
   )
 }
@@ -404,8 +418,11 @@ function SuggestionsTab() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { canWrite } = usePrincipal()
-  const [page, setPage] = useState(1)
+  const [pageParams, setPageParams] = useSearchParams()
+  const page = Math.max(1, Number.isSafeInteger(Number(pageParams.get('spage'))) ? Number(pageParams.get('spage')) : 1)
+  const setPage = (page: number) => setPageParams(current => { const next = new URLSearchParams(current); if (page > 1) next.set('spage', String(page)); else next.delete('spage'); return next })
   const [dismissTarget, setDismissTarget] = useState<SecurityVulnerability | null>(null)
+  const [selected, setSelected] = useState<SecurityVulnerability | null>(null)
 
   const query = useQuery({
     queryKey: ['admin', 'security', 'suggestions', { page }],
@@ -481,9 +498,7 @@ function SuggestionsTab() {
             >
               <div className="flex-1 min-w-0">
                 <div className="mb-1 flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-[13px] font-[500]" style={{ color: 'var(--text)' }}>
-                    {item.osv_id}
-                  </span>
+                  <Button variant="link" className="h-auto min-h-10 p-0 text-left whitespace-normal" onClick={() => setSelected(item)}>{item.osv_id}</Button>
                   <Badge variant={severityVariant}>{item.severity?.toUpperCase()}</Badge>
                   {item.cvss_score != null && (
                     <span className="font-mono text-[11px] tabular-nums" style={{ color: 'var(--text-soft)' }}>
@@ -497,6 +512,7 @@ function SuggestionsTab() {
                     {item.package_name}
                   </span>
                 </div>
+                <p className="text-[14px] leading-6 text-muted-foreground break-words">{item.summary}</p>
               </div>
               {canWrite && <div className="flex shrink-0 flex-wrap gap-2 self-end sm:self-start">
                 <Button
@@ -514,7 +530,9 @@ function SuggestionsTab() {
         })}
       </div>
 
-      <AdminPagination page={page} pageSize={20} total={total} onPageChange={setPage} />
+      </>}
+      <AdminPagination ready={query.isSuccess && !query.isFetching} page={page} pageSize={20} total={total} onPageChange={setPage} />
+      <VulnerabilityDetails item={selected} onClose={() => setSelected(null)} />
       <ConfirmActionDialog
         open={dismissTarget !== null}
         title={t('security.dismissTitle')}
@@ -540,7 +558,6 @@ function SuggestionsTab() {
           dismissMutation.mutate(dismissTarget.id)
         }}
       />
-      </>}
     </div>
   )
 }
@@ -672,13 +689,13 @@ function PoliciesTab() {
   function applyBulkPolicy() {
     if (!canWrite || batchSaveInFlightRef.current || policyWritesInFlightRef.current.size > 0) return
     setLocalPolicies(Object.fromEntries(
-      securityEcosystems.map(ecosystem => {
-        const autoBlockSupported = supportsVulnerabilityAutoBlock(ecosystem.id)
-        return [ecosystem.id, {
+      ecosystems.map(ecosystem => {
+        const autoBlockSupported = supportsVulnerabilityAutoBlock(ecosystem)
+        return [ecosystem, {
           auto_block_enabled: autoBlockSupported && bulkPolicy.auto_block_enabled,
           min_cvss_score: autoBlockSupported
             ? bulkPolicy.min_cvss_score
-            : getPolicy(ecosystem.id).min_cvss_score,
+            : getPolicy(ecosystem).min_cvss_score,
         }]
       }),
     ))
@@ -742,7 +759,9 @@ function PoliciesTab() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  const ecosystems = securityEcosystems.map(ecosystem => ecosystem.id)
+  const ecosystems = securityEcosystems.map(ecosystem => ecosystem.id).filter(ecosystem =>
+    policies.some(policy => policy.ecosystem === ecosystem && policy.auto_block_enabled) || localPolicies[ecosystem],
+  )
   const dirtyEcosystems = ecosystems.filter(isPolicyDirty)
   const visibleEcosystems = showChangedOnly ? dirtyEcosystems : ecosystems
   const hasPolicyWrites = policyWriteCount > 0
@@ -768,8 +787,69 @@ function PoliciesTab() {
   return (
     <div className="space-y-12">
       {data && query.isRefetchError && <StaleDataNotice refreshing={query.isFetching} onRefresh={() => query.refetch()} />}
-      {/* ── Per-ecosystem policies ───────────────────── */}
+      {/* ── Offline import ────────────────────────── */}
       <section>
+        <SectionHeader title={t('security.offlineImport')} hint={t('security.offlineImportDesc')} />
+        {canWrite && <div
+          data-security-import-dropzone
+          className="rounded-sm p-6 text-center transition-colors duration-150"
+          style={{
+            border: '2px dashed var(--border)',
+            background: 'var(--bg-soft)',
+          }}
+          onDragOver={(e) => { e.preventDefault(); e.stopPropagation() }}
+          onDrop={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            const file = e.dataTransfer.files[0]
+            if (file) submitImport(file)
+          }}
+          aria-busy={importMutation.isPending || undefined}
+        >
+          <Button variant="ghost"
+            type="button"
+            className="h-auto min-h-[40px] flex-col whitespace-normal px-4 py-2 text-muted-foreground"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importMutation.isPending}
+          >
+            <Icon name="upload_file" size="lg" />
+            <span className="mt-2 text-[13px]">
+              {importMutation.isPending ? t('security.importing') : t('security.dropOrClick')}
+            </span>
+          </Button>
+          <label htmlFor="security-vulnerability-import" className="sr-only">
+            {t('security.dropOrClick')}
+          </label>
+          <input
+            id="security-vulnerability-import"
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            disabled={importMutation.isPending}
+            onChange={handleImport}
+            className="sr-only"
+          />
+        </div>}
+        {importMutation.isSuccess && (
+          <div className="mt-2"><Alert variant={"success"}><AlertDescription>
+            <p>{t('security.importSuccess', { count: importMutation.data.data.imported })}</p>
+            <p className="mt-1 text-[12px]">
+              {t('security.importSummary', {
+                received: importMutation.data.data.received,
+                packages: importMutation.data.data.packages,
+                duplicates: importMutation.data.data.duplicates,
+                skipped: importMutation.data.data.skipped,
+              })}
+            </p>
+          </AlertDescription></Alert></div>
+        )}
+        {importMutation.isError && (
+          <div className="mt-2"><Alert variant={"destructive"}><AlertDescription>{getApiError(importMutation.error).message}</AlertDescription></Alert></div>
+        )}
+      </section>
+      {ecosystems.length === 0 && <Alert><AlertDescription>{t('security.noLegacyPolicies')}</AlertDescription></Alert>}
+      {/* Only actionable legacy policies belong in this migration section. */}
+      {ecosystems.length > 0 && <section>
         <SectionHeader
           title={t('security.ecosystemPolicies')}
           hint={t('security.policyHint')}
@@ -950,7 +1030,7 @@ function PoliciesTab() {
             )
           })}
         </div>
-      </section>
+      </section>}
 
       <ConfirmActionDialog
         open={batchConfirmOpen}
@@ -977,66 +1057,7 @@ function PoliciesTab() {
         onConfirm={() => { void handleSaveAll() }}
       />
 
-      {/* ── Offline import ────────────────────────── */}
-      <section>
-        <SectionHeader title={t('security.offlineImport')} hint={t('security.offlineImportDesc')} />
-        {canWrite && <div
-          data-security-import-dropzone
-          className="rounded-sm p-6 text-center transition-colors duration-150"
-          style={{
-            border: '2px dashed var(--border)',
-            background: 'var(--bg-soft)',
-          }}
-          onDragOver={(e) => { e.preventDefault(); e.stopPropagation() }}
-          onDrop={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            const file = e.dataTransfer.files[0]
-            if (file) submitImport(file)
-          }}
-          aria-busy={importMutation.isPending || undefined}
-        >
-          <Button variant="ghost"
-            type="button"
-            className="h-auto min-h-[40px] flex-col whitespace-normal px-4 py-2 text-muted-foreground"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={importMutation.isPending}
-          >
-            <Icon name="upload_file" size="lg" />
-            <span className="mt-2 text-[13px]">
-              {importMutation.isPending ? t('security.importing') : t('security.dropOrClick')}
-            </span>
-          </Button>
-          <label htmlFor="security-vulnerability-import" className="sr-only">
-            {t('security.dropOrClick')}
-          </label>
-          <input
-            id="security-vulnerability-import"
-            ref={fileInputRef}
-            type="file"
-            accept=".json,application/json"
-            disabled={importMutation.isPending}
-            onChange={handleImport}
-            className="sr-only"
-          />
-        </div>}
-        {importMutation.isSuccess && (
-          <div className="mt-2"><Alert variant={"success"}><AlertDescription>
-            <p>{t('security.importSuccess', { count: importMutation.data.data.imported })}</p>
-            <p className="mt-1 text-[12px]">
-              {t('security.importSummary', {
-                received: importMutation.data.data.received,
-                packages: importMutation.data.data.packages,
-                duplicates: importMutation.data.data.duplicates,
-                skipped: importMutation.data.data.skipped,
-              })}
-            </p>
-          </AlertDescription></Alert></div>
-        )}
-        {importMutation.isError && (
-          <div className="mt-2"><Alert variant={"destructive"}><AlertDescription>{getApiError(importMutation.error).message}</AlertDescription></Alert></div>
-        )}
-      </section>
+
     </div>
   )
 }

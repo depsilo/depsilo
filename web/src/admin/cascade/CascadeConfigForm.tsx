@@ -17,6 +17,7 @@ import type {
 } from '@/lib/adminApi.types'
 import {
   buildCascadePatch,
+  cascadeConfigIdentity,
   cascadeDraftHasErrors,
   draftFromState,
   newPeerDraft,
@@ -44,11 +45,38 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
   const [draft, setDraft] = useState<CascadeConfigDraft>(() => draftFromState(state))
   const [errors, setErrors] = useState<CascadeDraftErrors>({ peers: {} })
   const [dirty, setDirty] = useState(false)
+  const [baseline, setBaseline] = useState(state)
+  const [seenState, setSeenState] = useState(cascadeConfigIdentity(state))
+  const [externalState, setExternalState] = useState<AdminCascadeConfigState | null>(null)
+  const stateIdentity = cascadeConfigIdentity(state)
+  // Reconcile new query results before rendering. Dirty drafts remain intact.
+  if (seenState !== stateIdentity) {
+    setSeenState(stateIdentity)
+    if (!dirty) {
+      setBaseline(state)
+      setDraft(draftFromState(state))
+      setExternalState(null)
+    } else if (stateIdentity !== cascadeConfigIdentity(baseline)) {
+      setExternalState(state)
+    }
+  }
+  const conflicted = externalState !== null
 
   const saveMutation = useMutation({
-    mutationFn: (next: CascadeConfigDraft) => adminApi.updateCascadeConfig(buildCascadePatch(next)),
+    mutationFn: async (next: CascadeConfigDraft) => {
+      const latest = (await adminApi.getCascadeConfig()).data
+      if (cascadeConfigIdentity(latest) !== cascadeConfigIdentity(baseline)) {
+        setExternalState(latest)
+        throw new Error(t('cascade.config.externalChange'))
+      }
+      return adminApi.updateCascadeConfig(buildCascadePatch(next))
+    },
     onSuccess: ({ data }) => {
       setDirty(false)
+      setBaseline(data.state)
+      setDraft(draftFromState(data.state))
+      setExternalState(null)
+      setErrors({ peers: {} })
       onSaved(data)
     },
   })
@@ -67,7 +95,10 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
   }
 
   function discard() {
-    setDraft(draftFromState(state))
+    const latest = externalState ?? state
+    setDraft(draftFromState(latest))
+    setBaseline(latest)
+    setExternalState(null)
     setErrors({ peers: {} })
     saveMutation.reset()
     setDirty(false)
@@ -76,7 +107,7 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
   function submit() {
     const nextErrors = validateCascadeDraft(draft)
     setErrors(nextErrors)
-    if (cascadeDraftHasErrors(nextErrors)) return
+    if (cascadeDraftHasErrors(nextErrors) || conflicted || !canWrite || !state.config_writable) return
     saveMutation.mutate(draft)
   }
 
@@ -97,6 +128,8 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
         submit()
       }}
     >
+      <p className="text-sm text-muted-foreground">{t('cascade.config.restartHint')}</p>
+      {conflicted && <Alert variant="warning"><AlertDescription><p>{t('cascade.config.externalChange')}</p><Button type="button" variant="outline" className="mt-3" onClick={discard}>{t('cascade.config.reloadDraft')}</Button></AlertDescription></Alert>}
       <fieldset className="space-y-4" disabled={disabled}>
         <div className="flex flex-wrap gap-x-8 gap-y-2">
           <Field orientation="horizontal">
@@ -187,6 +220,7 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
             {t('cascade.config.addPeer')}
           </Button>
         </div>
+        <p className="text-xs text-muted-foreground">{t('cascade.config.peerIdentityHint')}</p>
         {draft.peers.length === 0 ? (
           <p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
             {t('cascade.config.peersEmpty')}
@@ -220,6 +254,8 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
                       aria-label={t('cascade.config.peerName')}
                       placeholder={t('cascade.config.peerName')}
                       value={peer.name}
+                      readOnly={Boolean(peer.originalName)}
+                      title={peer.originalName ? t('cascade.config.peerIdentityHint') : undefined}
                       maxLength={64}
                       autoComplete="off"
                       onChange={event => updatePeer(peer.key, { name: event.target.value })}
@@ -268,7 +304,8 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
                       </Tooltip>
                     )}
                   </div>
-                  <div className="flex justify-start lg:justify-center">
+                  <div className="flex items-center justify-start gap-2 lg:justify-center">
+                    <span className="text-sm lg:sr-only">{t('cascade.config.peerForwardCredentials')}</span>
                     <Switch
                       aria-label={t('cascade.config.peerForwardCredentials')}
                       checked={peer.forwardCredentials}
@@ -343,7 +380,7 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
               type="submit"
               size="sm"
               aria-busy={saveMutation.isPending || undefined}
-              disabled={saveMutation.isPending || disabled}
+              disabled={saveMutation.isPending || disabled || conflicted}
             >
               {saveMutation.isPending ? t('saving') : t('save')}
             </Button>

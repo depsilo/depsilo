@@ -91,6 +91,7 @@ test('download status failures can be retried and failed fills never claim a com
   await expect(section.getByText('Download status is unavailable.')).toBeVisible()
   failed = false
   await section.getByRole('button', { name: 'Retry', exact: true }).click()
+  await section.locator('summary').click()
   await expect(section.getByText('No recent download tasks. New upstream downloads appear here.')).toBeVisible()
   items = [{ ...transfer, status: 'failed', finished_at: '2026-10-16T10:01:00Z' }]
   await page.clock.runFor(2100)

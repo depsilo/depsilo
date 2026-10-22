@@ -267,6 +267,7 @@ export default function Dashboard() {
             upstreamsUpdatedAt={healthSnapshot?.updatedAt ?? 0}
             onRefresh={refreshStatus}
           />
+          <Button variant="ghost" size="sm" render={<Link to={getAdminRouteHref('attention')} />} nativeButton={false} role="link">{t('overview.allAttention')}</Button>
           <span className="inline-flex items-center gap-1.5 text-[13px]" style={{ color: 'var(--text-soft)' }}>
             <Icon name="history" size="sm" />
             {t('overview.updatedAt', { time: lastUpdatedLabel })}

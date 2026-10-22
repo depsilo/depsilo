@@ -3,11 +3,13 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Field, FieldLabel, FieldDescription } from '@/components/ui/field'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { AxiosResponse } from 'axios'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { adminApi } from '@/lib/api'
+import { adminApi, AUTH_SESSION_EXPIRED_EVENT } from '@/lib/api'
+import { removeLocalStorage } from '@/lib/storage'
+import { tokenStatus } from '@/lib/tokenStatus'
 import { formatTime } from '@/lib/utils'
 import { copyText } from '@/lib/clipboard'
 import { Button } from '@/components/ui/button'
@@ -60,6 +62,11 @@ export default function Users() {
   const [disableTarget, setDisableTarget] = useState<AdminUser | null>(null)
   const [revokeTarget, setRevokeTarget] = useState<APITokenSummary | null>(null)
   const [enableFailure, setEnableFailure] = useState<{ user: AdminUser; error: unknown } | null>(null)
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   const usersQuery = useQuery({ queryKey: ['admin', 'users'], queryFn: ({ signal }) => adminApi.listUsers({ signal }), retry: false })
   const tokensQuery = useQuery({ queryKey: ['admin', 'tokens'], queryFn: ({ signal }) => adminApi.listTokens({ signal }), retry: false })
@@ -70,7 +77,14 @@ export default function Users() {
   const isSelf = (user: AdminUser) => user.id === principal?.id
 
   const createUserMutation = useMutation({ mutationFn: (data: CreateUserRequest) => adminApi.createUser(data), onSuccess: (response) => { queryClient.setQueryData<AxiosResponse<AdminUser[]>>(['admin', 'users'], (current) => upsertUser(current, response)); closeUserDialog() } })
-  const updateUserMutation = useMutation({ mutationFn: ({ id, data }: { id: number; data: UpdateUserRequest }) => adminApi.updateUser(id, data), onSuccess: (response) => { queryClient.setQueryData<AxiosResponse<AdminUser[]>>(['admin', 'users'], (current) => upsertUser(current, response)); closeUserDialog() } })
+  const updateUserMutation = useMutation({ mutationFn: ({ id, data }: { id: number; data: UpdateUserRequest }) => adminApi.updateUser(id, data), onSuccess: (response, { id, data }) => {
+    queryClient.setQueryData<AxiosResponse<AdminUser[]>>(['admin', 'users'], (current) => upsertUser(current, response))
+    closeUserDialog()
+    if (id === principal?.id && data.password && principal.auth_method === 'jwt') {
+      removeLocalStorage('token')
+      window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT))
+    }
+  } })
   const toggleUserMutation = useMutation({
     mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) => adminApi.updateUser(id, { enabled }),
     onMutate: ({ id }) => {
@@ -223,14 +237,19 @@ export default function Users() {
 
   const tokenColumns = [
     { key: 'name', label: t('name'), render: (v: unknown) => <span className="font-[500]" style={{ color: 'var(--text)' }}>{v as string}</span> },
-    { key: 'permissions', label: t('users.permissions'), render: (v: unknown) => <Badge>{t((v as string) === 'readwrite' ? 'users.readwrite' : 'users.readonly')}</Badge> },
-    { key: 'last_used_at', label: t('users.lastUsed'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
+    { key: 'user_id', label: t('users.owner'), render: (v: unknown) => users.find(user => user.id === v)?.username ?? t('users.ownerUnknown', { id: v }) },
+    { key: 'status', label: t('status'), render: (_v: unknown, row: APITokenSummary & Record<string, unknown>) => {
+      const state = tokenStatus(row, usersQuery.isError ? undefined : usersData?.data, now)
+      return <Badge variant={state === 'active' ? 'success' : state === 'unknown' ? 'secondary' : 'warning'}>{t(`users.tokenStates.${state}`)}</Badge>
+    } },
+    { key: 'permissions', label: t('users.declaredPermissions'), render: (v: unknown) => <span>{t((v as string) === 'readwrite' ? 'users.readwrite' : 'users.readonly')}</span> },
+    { key: 'last_used_at', label: t('users.lastUsed'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{v ? formatTime(v as string) : t('users.neverUsed')}</span> },
     { key: 'expires_at', label: t('users.expiresAt'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{v ? formatTime(v as string) : t('users.neverExpires')}</span> },
     { key: 'id', label: t('actions'), render: (_v: unknown, row: APITokenSummary & Record<string, unknown>) => canWrite ? <Button variant="ghost" size="sm" className="!text-[12px]" style={{ color: 'var(--danger)' }} onClick={(e: React.MouseEvent) => { e.stopPropagation(); openRevokeDialog(row) }}>{t('users.revoke')}</Button> : null },
   ]
 
   return (
-    <AdminPage description={t('users.subtitle')}>
+    <AdminPage description={t('users.subtitle')} actions={<Button variant="outline" size="sm" disabled={usersQuery.isFetching || tokensQuery.isFetching} onClick={() => { void usersQuery.refetch(); void tokensQuery.refetch(); setNow(Date.now()) }}><Icon name="refresh" size="sm" />{t('now.refresh')}</Button>}>
     <div className="space-y-12">
       {/* ── Users ─────────────────────────────────────── */}
       <section>
@@ -315,6 +334,7 @@ export default function Users() {
           <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={isUserSaving}>
             <DialogTitle className="pr-10">{editUserId ? t('users.editUser') : t('users.addUser')}</DialogTitle>
             <form onSubmit={handleUserSubmit} className="space-y-4">
+              {editUserId && <p className="text-[13px] leading-5 text-[var(--text-soft)]">{t(editUserId === principal?.id ? 'users.selfCredentialImpact' : 'users.credentialImpact')}</p>}
               <Field disabled={!!editUserId}>
                 <FieldLabel>{t('login.username')}</FieldLabel>
                 <Input value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} disabled={!!editUserId} required={!editUserId} />
@@ -338,6 +358,7 @@ export default function Users() {
           <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={createTokenMutation.isPending}>
             <DialogTitle className="pr-10">{t('users.generateToken')}</DialogTitle>
             <form onSubmit={handleTokenSubmit} className="space-y-4">
+              <p className="text-[13px] leading-5 text-[var(--text-soft)]">{t('users.tokenOwnerHint', { name: principal?.username })}</p>
               <Field>
                 <FieldLabel>{t('name')}</FieldLabel>
                 <Input

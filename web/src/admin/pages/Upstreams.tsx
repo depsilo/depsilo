@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -40,7 +41,7 @@ import { normalizeProbeInterval, probeIntervals } from '@/admin/upstreams/probeI
 import { CheckResults, type CheckRecord } from '@/admin/upstreams/CheckResults'
 
 type UpstreamHealth = ReturnType<typeof upstreamStatus>
-type UpstreamStatusFilter = 'all' | UpstreamHealth
+type UpstreamStatusFilter = 'all' | 'attention' | UpstreamHealth
 
 interface UpstreamFieldErrors {
   name?: string
@@ -141,8 +142,26 @@ export default function Upstreams() {
 
   // Retrieval state. Filtering stays client-side because the list payload is
   // already the source of truth for every group and status count.
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<UpstreamStatusFilter>('all')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const search = searchParams.get('search') ?? searchParams.get('ecosystem') ?? ''
+  const statusParam = searchParams.get('status') ?? 'all'
+  const statusFilter: UpstreamStatusFilter = ['healthy', 'degraded', 'failed', 'unknown', 'attention'].includes(statusParam) ? statusParam as UpstreamStatusFilter : 'all'
+  const searchParamsRef = useRef(searchParams)
+  useEffect(() => { searchParamsRef.current = searchParams }, [searchParams])
+  function updateFilters(update: (next: URLSearchParams) => void, replace = false) {
+    // Keep rapid filter/search edits in one pending URL snapshot. Router
+    // navigations may commit later than the next input event.
+    const next = new URLSearchParams(searchParamsRef.current)
+    update(next)
+    searchParamsRef.current = next
+    setSearchParams(next, { replace })
+  }
+  function setSearch(value: string) {
+    updateFilters(next => { next.delete('ecosystem'); if (value) next.set('search', value); else next.delete('search') }, true)
+  }
+  function setStatusFilter(value: UpstreamStatusFilter) {
+    updateFilters(next => { if (value === 'all') next.delete('status'); else next.set('status', value) })
+  }
 
   useEffect(() => {
     function focusSearch(event: KeyboardEvent) {
@@ -207,7 +226,7 @@ export default function Upstreams() {
     { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' },
   ), [i18n.language])
   const visibleUpstreams = useMemo(() => upstreamItems.filter((item) => {
-    const matchesStatus = statusFilter === 'all' || upstreamStatus(item) === statusFilter
+    const matchesStatus = statusFilter === 'all' || (statusFilter === 'attention' ? ['failed', 'degraded'].includes(upstreamStatus(item)) : upstreamStatus(item) === statusFilter)
     if (!matchesStatus) return false
     if (!normalizedSearch) return true
     return [
@@ -500,6 +519,7 @@ export default function Upstreams() {
     dot?: UpstreamHealth
   }> = [
     { value: 'all', label: t('all'), count: upstreamItems.length },
+    ...(statusFilter === 'attention' ? [{ value: 'attention' as const, label: t('attention.queueTitle'), count: statusCounts.failed + statusCounts.degraded }] : []),
     { value: 'healthy', label: t('monitor.healthy'), count: statusCounts.healthy, dot: 'healthy' },
     { value: 'degraded', label: t('monitor.degraded'), count: statusCounts.degraded, dot: 'degraded' },
     { value: 'failed', label: t('monitor.failed'), count: statusCounts.failed, dot: 'failed' },
@@ -685,8 +705,7 @@ export default function Upstreams() {
                     variant="outline"
                     className="min-h-[40px]"
                     onClick={() => {
-                      setSearch('')
-                      setStatusFilter('all')
+                      updateFilters(next => { next.delete('search'); next.delete('ecosystem'); next.delete('status') })
                     }}
                   >
                     {t('upstreams.clearFilters')}

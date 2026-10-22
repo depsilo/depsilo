@@ -1,7 +1,8 @@
 import { Checkbox } from '@/components/ui/checkbox'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Field, FieldLabel } from '@/components/ui/field'
+import { Field, FieldLabel, FieldDescription, FieldError } from '@/components/ui/field'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import Icon from '@/components/Icon'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
@@ -41,7 +42,8 @@ interface WebhookForm {
   platform: WebhookConfig['platform']
   url: string
   events: string
-  cooldown_minutes: number
+  cooldown_minutes: string
+  enabled: boolean
 }
 
 const emptyForm = (): WebhookForm => ({
@@ -49,7 +51,8 @@ const emptyForm = (): WebhookForm => ({
   platform: 'dingtalk',
   url: '',
   events: '*',
-  cooldown_minutes: 30,
+  cooldown_minutes: '30',
+  enabled: true,
 })
 
 export default function WebhookTab() {
@@ -63,6 +66,7 @@ export default function WebhookTab() {
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [form, setForm] = useState<WebhookForm>(emptyForm)
   const [now, setNow] = useState(() => Date.now())
+  const [testResults, setTestResults] = useState<Record<number, string>>({})
 
   useEffect(() => {
     const updateNow = () => setNow(Date.now())
@@ -117,28 +121,41 @@ export default function WebhookTab() {
 
   const testMutation = useMutation({
     mutationFn: (id: number) => webhookApi.test(id),
-    onSuccess: () => {
+    onSuccess: (_response, id) => {
+      setTestResults(current => ({ ...current, [id]: t('webhook.testSent') }))
       setNow(Date.now())
       void refresh()
       toast.show({ tone: 'success', message: t('webhook.testSent') })
     },
-    onError: error => showFailure(error, t('webhook.testError')),
+    onError: (error, id) => {
+      setTestResults(current => ({ ...current, [id]: getApiError(error).message }))
+      showFailure(error, t('webhook.testError'))
+    },
+  })
+  const toggleMutation = useMutation({
+    mutationFn: (webhook: WebhookConfig) => webhookApi.update(webhook.id, { enabled: !webhook.enabled }),
+    onSuccess: refresh,
   })
 
   const openCreate = () => {
+    createMutation.reset()
+    updateMutation.reset()
     setEditingId(null)
     setForm(emptyForm())
     setFormOpen(true)
   }
 
   const openEdit = (webhook: WebhookConfig) => {
+    createMutation.reset()
+    updateMutation.reset()
     setEditingId(webhook.id)
     setForm({
       name: webhook.name,
       platform: webhook.platform,
       url: webhook.url,
       events: webhook.events,
-      cooldown_minutes: webhook.cooldown_minutes,
+      cooldown_minutes: String(webhook.cooldown_minutes),
+      enabled: webhook.enabled,
     })
     setFormOpen(true)
   }
@@ -149,13 +166,14 @@ export default function WebhookTab() {
   }
 
   const save = () => {
-    if (eventValues(form.events).length === 0) return
+    if (!canWrite || eventValues(form.events).length === 0 || !validCooldown) return
     const data: Partial<WebhookConfig> = {
       name: form.name.trim(),
       platform: form.platform,
       url: form.url.trim(),
       events: form.events,
-      cooldown_minutes: form.cooldown_minutes,
+      cooldown_minutes: Number(form.cooldown_minutes),
+      enabled: form.enabled,
     }
     if (editingId !== null) updateMutation.mutate({ id: editingId, data })
     else createMutation.mutate(data)
@@ -176,7 +194,12 @@ export default function WebhookTab() {
   const guide = t(`webhook.guides.${form.platform}`, { defaultValue: '' })
   const saving = createMutation.isPending || updateMutation.isPending
   const hasEvents = eventValues(form.events).length > 0
+  const validCooldown = /^\d+$/.test(form.cooldown_minutes) && Number(form.cooldown_minutes) >= 5 && Number(form.cooldown_minutes) <= 1440
+  const saveError = editingId === null ? createMutation.error : updateMutation.error
   const deletingWebhook = query.data?.find(webhook => webhook.id === deleteId)
+  const displayAddress = (value: string) => {
+    try { const url = new URL(value); return `${url.protocol}//${url.host}/***` } catch { return '***' }
+  }
 
   return (
     <div className="min-w-0">
@@ -208,15 +231,18 @@ export default function WebhookTab() {
                     <Badge>{t(`webhook.platforms.${webhook.platform}`)}</Badge>
                     {!webhook.enabled && <Badge variant="warning">{t('webhook.disabled')}</Badge>}
                   </div>
-                  <p className="break-all font-mono text-[12px] leading-5 text-[var(--text-soft)]">{webhook.url}</p>
+                  <p className="break-all font-mono text-[12px] leading-5 text-[var(--text-soft)]">{displayAddress(webhook.url)}</p>
                   <dl className="mt-2 flex min-w-0 flex-col gap-1 text-[12px] text-[var(--text-muted)] sm:flex-row sm:flex-wrap sm:gap-x-4">
-                    <div className="flex min-w-0 gap-1"><dt className="shrink-0">{t('webhook.events')}:</dt><dd className="min-w-0 break-words">{webhook.events === '*' ? t('webhook.eventsAll') : webhook.events}</dd></div>
+                    <div className="flex min-w-0 gap-1"><dt className="shrink-0">{t('webhook.events')}:</dt><dd className="min-w-0 break-words">{webhook.events === '*' ? t('webhook.eventsAll') : eventValues(webhook.events).map(event => t(`webhook.events_list.${event}`, { defaultValue: event })).join(' · ')}</dd></div>
                     <div className="flex min-w-0 gap-1"><dt className="shrink-0">{t('webhook.cooldown')}:</dt><dd className="min-w-0 break-words">{t('webhook.minutes', { count: webhook.cooldown_minutes })}</dd></div>
                     <div className="flex min-w-0 gap-1"><dt className="shrink-0">{t('webhook.lastSent')}:</dt><dd className="min-w-0 break-words">{formatLastSent(webhook.last_sent_at)}</dd></div>
                   </dl>
+                  {testResults[webhook.id] && <p role="status" className="mt-2 text-[13px] text-[var(--text-soft)]">{testResults[webhook.id]}</p>}
+                  {toggleMutation.isError && toggleMutation.variables.id === webhook.id && <Alert variant="destructive"><AlertDescription>{getApiError(toggleMutation.error).message}</AlertDescription></Alert>}
                 </div>
                 {canWrite && (
                   <div className="flex shrink-0 items-center gap-1 self-end md:self-start">
+                    <Button variant="ghost" size="sm" disabled={toggleMutation.isPending} onClick={() => toggleMutation.mutate(webhook)} aria-label={t(webhook.enabled ? 'webhook.pauseNamed' : 'webhook.enableNamed', { name: webhook.name })}>{t(webhook.enabled ? 'webhook.pause' : 'webhook.enable')}</Button>
                     <Button
                       type="button"
                       variant="outline"
@@ -248,6 +274,7 @@ export default function WebhookTab() {
                       <TooltipTrigger render={
                         <Button
                           onClick={event => {
+                            deleteMutation.reset()
                             deleteTriggerRef.current = event.currentTarget
                             setDeleteId(webhook.id)
                           }}
@@ -274,7 +301,7 @@ export default function WebhookTab() {
       <Dialog open={formOpen} onOpenChange={(nextOpen) => { if (!nextOpen && !saving) closeForm() }} modal>
         <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={saving}>
           <DialogTitle className="pr-10">{editingId === null ? t('webhook.addWebhook') : t('webhook.editWebhook')}</DialogTitle>
-          <div className="flex flex-col gap-4">
+          <form className="flex flex-col gap-4" onSubmit={event => { event.preventDefault(); save() }}>
             <Field>
               <FieldLabel>{t('webhook.name')}</FieldLabel>
               <Input value={form.name} onChange={event => setForm(current => ({ ...current, name: event.target.value }))} placeholder={t('webhook.namePlaceholder')} />
@@ -289,7 +316,9 @@ export default function WebhookTab() {
             <Field>
               <FieldLabel>{t('webhook.url')}</FieldLabel>
               <Input value={form.url} onChange={event => setForm(current => ({ ...current, url: event.target.value }))} placeholder={t('webhook.urlPlaceholder')} />
+              <FieldDescription>{t('webhook.addressPrivate')}</FieldDescription>
             </Field>
+            <label className="flex min-h-10 items-center gap-2 text-[14px]"><Checkbox checked={form.enabled} onCheckedChange={enabled => setForm(current => ({ ...current, enabled }))} />{t('webhook.enabled')}</label>
             <fieldset aria-invalid={!hasEvents || undefined} aria-describedby={!hasEvents ? 'webhook-events-error' : undefined}>
               <legend className="mb-2 text-[14px] text-[var(--text-muted)]">{t('webhook.events')}</legend>
               <div className="grid gap-2 sm:grid-cols-2">
@@ -316,15 +345,17 @@ export default function WebhookTab() {
                 </p>
               )}
             </fieldset>
-            <Field>
+            <Field invalid={!validCooldown}>
               <FieldLabel>{t('webhook.cooldown')}</FieldLabel>
-              <Input type="number" value={form.cooldown_minutes} min={5} max={1440} onChange={event => setForm(current => ({ ...current, cooldown_minutes: Number(event.target.value) || 30 }))} />
+              <Input type="number" required value={form.cooldown_minutes} min={5} max={1440} step={1} onChange={event => setForm(current => ({ ...current, cooldown_minutes: event.target.value }))} />
+              {!validCooldown && <FieldError>{t('webhook.cooldownInvalid')}</FieldError>}
             </Field>
+            {saveError && <Alert variant="destructive"><AlertDescription>{getApiError(saveError).message}</AlertDescription></Alert>}
             <div className="flex justify-end gap-2 pt-1">
               <Button type="button" variant="outline" disabled={saving} onClick={closeForm}>{t('cancel')}</Button>
-              <Button type="button" aria-busy={saving || undefined} disabled={saving || !form.name.trim() || !form.url.trim() || !hasEvents} onClick={save}>{saving ? t('saving') : t('save')}</Button>
+              <Button type="submit" aria-busy={saving || undefined} disabled={saving || !form.name.trim() || !form.url.trim() || !hasEvents || !validCooldown}>{saving ? t('saving') : t('save')}</Button>
             </div>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -332,6 +363,7 @@ export default function WebhookTab() {
         <DialogContent style={{ maxWidth: 440 }} finalFocus={deleteTriggerRef} closeDisabled={deleteMutation.isPending}>
           <DialogTitle className="pr-10">{t('webhook.deleteConfirmNamed', { name: deletingWebhook?.name ?? '' })}</DialogTitle>
           <p className="mb-5 text-[13px] leading-5 text-[var(--text-soft)]">{t('webhook.deleteWarning')}</p>
+          {deleteMutation.isError && <Alert variant="destructive"><AlertDescription>{getApiError(deleteMutation.error).message}</AlertDescription></Alert>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" disabled={deleteMutation.isPending} onClick={() => setDeleteId(null)}>{t('cancel')}</Button>
             <Button type="button" variant="destructive" aria-busy={deleteMutation.isPending || undefined} disabled={deleteMutation.isPending} onClick={() => { if (deleteId !== null) deleteMutation.mutate(deleteId) }}>

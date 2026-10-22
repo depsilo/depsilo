@@ -92,8 +92,12 @@ func (h *WebhookHandler) Create(c *gin.Context) {
 		events = "*"
 	}
 	cooldown := body.CooldownMinutes
-	if cooldown <= 0 {
+	if cooldown == 0 {
 		cooldown = 30
+	}
+	if cooldown < 5 || cooldown > 1440 {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"code": "INVALID_SETTING", "message": "cooldown_minutes must be between 5 and 1440"})
+		return
 	}
 
 	cfg := db.WebhookConfig{
@@ -147,6 +151,10 @@ func (h *WebhookHandler) Update(c *gin.Context) {
 		updates["events"] = *body.Events
 	}
 	if body.CooldownMinutes != nil {
+		if *body.CooldownMinutes < 5 || *body.CooldownMinutes > 1440 {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"code": "INVALID_SETTING", "message": "cooldown_minutes must be between 5 and 1440"})
+			return
+		}
 		updates["cooldown_minutes"] = *body.CooldownMinutes
 	}
 	if body.Enabled != nil {

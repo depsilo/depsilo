@@ -13,6 +13,7 @@ test('freeze snapshot can be promoted and activated from the cache page', async 
       active_snapshot_id: activeId,
       active_snapshot: snapshots.find(snapshot => snapshot.id === activeId)?.name ?? '',
     } satisfies SnapshotListResponse),
+    'GET /api/v1/admin/snapshots/1': () => ({ snapshot: snapshots[0], items: [{id:1,snapshot_id:1,ecosystem:'pypi',package:'six',version:'1.17.0',cache_key:'pypi/six',sha256:'abc',size:12000}], total:42, page:1, active:false }),
     'POST /api/v1/admin/snapshots': async (request: Request) => {
       const body = (await request.postDataJSON()) as { name: string; note?: string }
       const created: Snapshot = {
@@ -38,13 +39,17 @@ test('freeze snapshot can be promoted and activated from the cache page', async 
     },
   })
 
-  await page.goto('/admin/cache')
+  await page.goto('/admin/cache?view=snapshots')
   await page.getByLabel('快照名称').fill('golden-1')
-  await page.getByRole('button', { name: '从当前缓存创建' }).click()
+  await page.getByRole('button', { name: '创建哈希清单' }).click()
 
   await expect(page.getByText('golden-1', { exact: true })).toBeVisible()
   await expect(page.getByRole('region', { name: '快照表格' })).toContainText('42')
   await page.getByRole('button', { name: '用于快照模式' }).click()
+  await expect(page.getByRole('dialog')).toContainText('未列入该快照的包版本将被拒绝')
+  await expect(page.getByRole('dialog')).toContainText('six@1.17.0')
+  expect(activeId).toBe(0)
+  await page.getByRole('button', { name: '确认启用快照模式' }).click()
 
   await expect(page.getByText(/快照模式已启用/)).toBeVisible()
   await expect(page.getByText('已启用', { exact: true })).toBeVisible()

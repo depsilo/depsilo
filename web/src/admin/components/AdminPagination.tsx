@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -6,6 +7,8 @@ interface AdminPaginationProps {
   page: number
   pageSize: number
   total: number
+  /** Only a completed, successful query can establish the current page bounds. */
+  ready: boolean
   onPageChange: (page: number) => void
 }
 
@@ -22,6 +25,7 @@ export default function AdminPagination({
   page,
   pageSize,
   total,
+  ready,
   onPageChange,
 }: AdminPaginationProps) {
   const { t } = useTranslation()
@@ -29,6 +33,10 @@ export default function AdminPagination({
   const safeTotal = Number.isFinite(total) && total > 0 ? Math.floor(total) : 0
   const totalPages = Math.max(1, Math.ceil(safeTotal / safePageSize))
   const currentPage = Math.min(positiveInteger(page, 1), totalPages)
+
+  useEffect(() => {
+    if (ready && page !== currentPage) onPageChange(currentPage)
+  }, [ready, page, currentPage, onPageChange])
 
   if (totalPages <= 1) return null
 

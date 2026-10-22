@@ -5,6 +5,9 @@ import { Field, FieldLabel } from '@/components/ui/field'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useState } from 'react'
+import { useSearchParams } from 'react-router'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { readManualRuleDraft } from '@/admin/security/evidence'
 import type { AxiosResponse } from 'axios'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -217,9 +220,7 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
                     </span>
                   </div>
                   {specificity && (
-                    <p className="mt-1 break-words text-[11px]" data-rule-test-specificity style={{ color: 'var(--text-muted)' }}>
-                      {t('rules.specificity')}: <span className="font-mono">{specificity}</span>
-                    </p>
+                    <details className="mt-2 text-[13px] text-muted-foreground"><summary className="cursor-pointer stripe-focus-ring">{t('rules.rankingDetails')}</summary><p className="mt-2 break-words" data-rule-test-specificity>{t('rules.specificity')}: <span className="font-mono">{specificity}</span></p></details>
                   )}
                 </li>
               )
@@ -247,13 +248,25 @@ export default function Rules() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { canWrite } = usePrincipal()
-  const [dialogOpen, setDialogOpen] = useState(false); const [editId, setEditId] = useState<number | null>(null); const [form, setForm] = useState<RuleForm>(emptyForm)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const suppliedDraft = readManualRuleDraft(searchParams)
+  const [dialogOpen, setDialogOpen] = useState(() => Boolean(suppliedDraft)); const [editId, setEditId] = useState<number | null>(null); const [form, setForm] = useState<RuleForm>(() => suppliedDraft ?? emptyForm)
+  const [detail, setDetail] = useState<RuleRecord | null>(null)
+  const search = searchParams.get('q') ?? ''
+  const ecosystemFilter = searchParams.get('filter_ecosystem') ?? ''
+  const actionFilter = searchParams.get('action') ?? ''
+  function setFilter(key: string, value: string) {
+    setSearchParams(current => { const next = new URLSearchParams(current); if (value) next.set(key, value); else next.delete(key); return next }, { replace: true })
+  }
   const [deleteTarget, setDeleteTarget] = useState<RuleRecord | null>(null); const [testOpen, setTestOpen] = useState(false); const [testForm, setTestForm] = useState({ ecosystem: 'pypi', package: '', version: '' }); const [testResult, setTestResult] = useState<RuleTestState | null>(null); const [testLoading, setTestLoading] = useState(false)
 
   const query = useQuery({ queryKey: ['admin', 'rules'], queryFn: ({ signal }) => adminApi.listRules({ signal }), retry: false })
   const { data } = query
   const rulePayload = data?.data
-  const items = rulePayload ? (Array.isArray(rulePayload) ? rulePayload : rulePayload.items) : []
+  const allItems = rulePayload ? (Array.isArray(rulePayload) ? rulePayload : rulePayload.items) : []
+  const items = allItems.filter(rule => (!ecosystemFilter || rule.ecosystem === ecosystemFilter)
+    && (!actionFilter || rule.action === actionFilter)
+    && (!search.trim() || [rule.package_name, rule.reason, rule.version].some(value => value.toLowerCase().includes(search.trim().toLowerCase()))))
 
   const createMutation = useMutation({
     mutationFn: (input: RuleForm) => adminApi.createRule(input),
@@ -277,7 +290,10 @@ export default function Rules() {
     },
   })
 
-  function closeDialog() { setDialogOpen(false); setEditId(null); setForm(emptyForm) }
+  function closeDialog() {
+    setDialogOpen(false); setEditId(null); setForm(emptyForm)
+    if (suppliedDraft) setSearchParams(current => { const next = new URLSearchParams(current); ['draft', 'ecosystem', 'package', 'source'].forEach(key => next.delete(key)); return next }, { replace: true })
+  }
   function openCreate() { createMutation.reset(); setEditId(null); setForm({ ...emptyForm }); setDialogOpen(true) }
   function openEdit(rule: RuleRecord) { updateMutation.reset(); setEditId(rule.id); setForm({ ecosystem: rule.ecosystem || '*', package_name: rule.package_name || '', version: rule.version || '*', action: rule.action || 'deny', reason: rule.reason || '' }); setDialogOpen(true) }
   function openDeleteDialog(rule: RuleRecord) { deleteMutation.reset(); setDeleteTarget(rule) }
@@ -304,7 +320,7 @@ export default function Rules() {
 
   const columns = [
     { key: 'ecosystem', label: t('rules.ecosystem'), render: (v: unknown) => { const ecosystem = typeof v === 'string' ? v : ''; return <div className="flex items-center gap-1.5">{isAdminEcosystem(ecosystem) && <EcosystemIcon type={ecosystem} size={14} />}<Badge variant="default">{ecosystem === '*' ? t('rules.allEcosystems') : ecosystem.toUpperCase()}</Badge></div> } },
-    { key: 'package_name', label: t('rules.packageName'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text)' }}>{v as string}</span> },
+    { key: 'package_name', label: t('rules.packageName'), render: (v: unknown, row: RuleRecord) => <Button variant="link" className="h-auto min-h-10 whitespace-normal p-0 text-left break-all" onClick={() => setDetail(row)}>{v as string}</Button> },
     { key: 'version', label: t('rules.version'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{(v as string) === '*' ? t('rules.allVersions') : (v as string)}</span> },
     { key: 'action', label: t('rules.action'), render: (v: unknown) => (v as string) === 'allow' ? <Badge variant="success">{t('rules.allow')}</Badge> : <Badge variant="destructive">{t('rules.deny')}</Badge> },
     { key: 'reason', label: t('rules.reason'), render: (v: unknown) => <span className="text-[12px] truncate block max-w-[200px]" style={{ color: 'var(--text-soft)' }} title={v as string}>{(v as string) || '-'}</span> },
@@ -352,6 +368,11 @@ export default function Rules() {
       )}
     >
     <div className="space-y-6">
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px_160px]">
+        <Input aria-label={t('rules.search')} placeholder={t('rules.search')} value={search} onChange={event => setFilter('q', event.target.value)} />
+        <NativeSelect aria-label={t('rules.ecosystem')} value={ecosystemFilter} onChange={event => setFilter('filter_ecosystem', event.target.value)}><option value="">{t('all')}</option><option value="*">{t('rules.allEcosystems')}</option>{ECOSYSTEM_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</NativeSelect>
+        <NativeSelect aria-label={t('rules.action')} value={actionFilter} onChange={event => setFilter('action', event.target.value)}><option value="">{t('all')}</option><option value="allow">{t('rules.allow')}</option><option value="deny">{t('rules.deny')}</option></NativeSelect>
+      </div>
       {query.isPending ? (
         <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}><span aria-hidden="true">{t('loading')}</span></div>
       ) : query.isError && !data ? (
@@ -359,20 +380,23 @@ export default function Rules() {
       ) : (
         <div className="space-y-3">
         {data && query.isRefetchError && <Alert variant={"warning"}><AlertDescription><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void query.refetch() }}>{t('now.refresh')}</Button></div></AlertDescription></Alert>}
-        {items.length === 0 ? <Empty style={{ minHeight: 200 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"rule"} size="sm" /></EmptyMedia><EmptyTitle>{t('rules.noRules')}</EmptyTitle></EmptyHeader></Empty> : <DataTable
+        {items.length === 0 ? <Empty style={{ minHeight: 200 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"rule"} size="sm" /></EmptyMedia><EmptyTitle>{t(allItems.length ? 'rules.noMatchingRules' : 'rules.noRules')}</EmptyTitle><p className="text-[14px] text-muted-foreground">{t('rules.testScope')}</p></EmptyHeader></Empty> : <><ul className="divide-y sm:hidden" aria-label={t('rules.table')}>
+          {items.map(rule => <li key={rule.id} className="space-y-2 py-4"><div className="flex items-start justify-between gap-3"><Button variant="link" className="p-0 h-auto min-h-10 text-left whitespace-normal break-all" onClick={() => setDetail(rule)}>{rule.package_name}</Button><Badge variant={rule.action === 'allow' ? 'success' : 'destructive'}>{t(`rules.${rule.action}`)}</Badge></div><p className="font-mono text-[13px] break-all">{rule.ecosystem} · {rule.version}</p><p className="line-clamp-2 text-[14px] text-muted-foreground">{rule.reason || '—'}</p></li>)}
+        </ul><div className="hidden sm:block"><DataTable
           columns={columns}
           data={items.map((rule) => ({ ...rule }))}
           rowKey={(row) => row.id as number}
           ariaLabel={t('rules.table')}
           minWidth={860}
-        />}
+        /></div></>}
         </div>
       )}
 
-        <Dialog open={dialogOpen} onOpenChange={(nextOpen) => { if (!nextOpen && !isSaving) closeDialog() }} modal>
+        <Dialog open={dialogOpen && canWrite} onOpenChange={(nextOpen) => { if (!nextOpen && !isSaving) closeDialog() }} modal>
           <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={isSaving}>
             <DialogTitle className="pr-10">{editId ? t('rules.editRule') : t('rules.addRule')}</DialogTitle>
             <form onSubmit={handleSubmit} className="space-y-4">
+              <p className="text-[14px] leading-6 text-muted-foreground">{t(suppliedDraft ? 'rules.draftReviewHint' : 'rules.saveImpact')}</p>
               <Field>
                 <FieldLabel>{t('rules.ecosystem')}</FieldLabel>
                 <NativeSelect value={form.ecosystem} onChange={(e) => { const ecosystem = e.target.value; setForm({ ...form, ecosystem, ...(ecosystem === '*' ? { package_name: '*', version: '*' } : !supportsPackageRuleVersions(ecosystem) ? { version: '*' } : {}) }) }}><option value="*">{t('rules.allEcosystems')} (*)</option>{ECOSYSTEM_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</NativeSelect>
@@ -383,7 +407,7 @@ export default function Rules() {
               </Field>
               <Field disabled={globalRule || !versionsSupported}>
                 <FieldLabel>{t('rules.version')}</FieldLabel>
-                <Input className="font-mono" value={form.version} onChange={(e) => setForm({ ...form, version: e.target.value })} placeholder={rangesSupported ? t('rules.versionPlaceholder') : t('rules.exactVersionPlaceholder')} disabled={globalRule || !versionsSupported} />
+                <Input className="font-mono" value={form.version} onChange={(e) => setForm({ ...form, version: e.target.value })} placeholder={rangesSupported ? t('rules.versionPlaceholder') : t('rules.exactVersionPlaceholder')} required disabled={globalRule || !versionsSupported} />
               </Field>
               {globalRule && <Alert variant={"warning"}><AlertDescription>{t('rules.globalRuleHint')}</AlertDescription></Alert>}
               {!globalRule && versionsSupported && !rangesSupported && <Alert variant={"warning"}><AlertDescription>{t('rules.exactOnlyHint')}</AlertDescription></Alert>}
@@ -447,6 +471,7 @@ export default function Rules() {
           <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={testLoading}>
             <DialogTitle className="pr-10">{t('rules.testTitle')}</DialogTitle>
             <div className="space-y-4">
+              <p className="text-[14px] leading-6 text-muted-foreground">{t('rules.testScope')}</p>
               <Field disabled={testLoading}>
                 <FieldLabel>{t('rules.ecosystem')}</FieldLabel>
                 <NativeSelect value={testForm.ecosystem} disabled={testLoading} onChange={(e) => updateTestField('ecosystem', e.target.value)}>{ECOSYSTEM_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</NativeSelect>
@@ -465,6 +490,18 @@ export default function Rules() {
             </div>
           </DialogContent>
         </Dialog>
+      <Sheet open={detail !== null} onOpenChange={open => { if (!open) setDetail(null) }}>
+        <SheetContent className="w-full overflow-y-auto sm:w-[520px]" finalFocus>
+          <SheetHeader className="p-5 pr-14"><SheetTitle className="text-[18px] break-all">{detail?.package_name}</SheetTitle></SheetHeader>
+          {detail && <div className="space-y-5 px-5 pb-6 text-[14px] leading-6">
+            <p className="font-mono break-all">{ruleSelector(detail)}</p><Badge variant={detail.action === 'allow' ? 'success' : 'destructive'}>{t(`rules.${detail.action}`)}</Badge>
+            <section><h3 className="font-semibold">{t('rules.reason')}</h3><p className="mt-2 whitespace-pre-wrap break-words text-muted-foreground">{detail.reason || '—'}</p></section>
+            <dl className="space-y-3"><div><dt className="text-muted-foreground">{t('rules.author')}</dt><dd>{detail.created_by || '—'}</dd></div><div><dt className="text-muted-foreground">{t('rules.updated')}</dt><dd>{formatTime(detail.updated_at || detail.created_at)}</dd></div></dl>
+            <p className="text-muted-foreground">{t('rules.testScope')}</p>
+            {canWrite && <div className="flex flex-wrap gap-3"><Button onClick={() => { const row = detail; setDetail(null); openEdit(row) }}>{t('rules.editRule')}</Button><Button variant="destructive" onClick={() => { const row = detail; setDetail(null); openDeleteDialog(row) }}>{t('delete')}</Button></div>}
+          </div>}
+        </SheetContent>
+      </Sheet>
     </div>
     </AdminPage>
   )

@@ -1,4 +1,5 @@
 import { Skeleton } from '@/components/ui/skeleton'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Field, FieldLabel, FieldDescription, FieldError } from '@/components/ui/field'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -19,6 +20,7 @@ import { useAppToast } from '@/components/Toast'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { adminApi } from '@/lib/api'
+import { readSessionStorage, writeSessionStorage, removeSessionStorage } from '@/lib/storage'
 import type {
   AdminSettingsResponse,
   AdminSettingsSnapshot,
@@ -55,6 +57,26 @@ const validationLocations: Record<ValidatedDraftKey, { tab: TabKey; id: string }
   ttlIndex: { tab: 'cache', id: 'setting-cache-ttl-index' },
   ttlBlob: { tab: 'cache', id: 'setting-cache-ttl-blob' },
   tokenTTL: { tab: 'auth', id: 'setting-auth-token-ttl' },
+}
+const draftPaths: Record<keyof SettingsDraft, EditableSettingPath> = {
+  logLevel: 'server.log_level', maxSizeGB: 'cache.max_size_gb', ttlIndex: 'cache.ttl_index',
+  ttlBlob: 'cache.ttl_blob', lruThreshold: 'cache.lru_threshold', tokenTTL: 'auth.token_ttl',
+}
+const tabIcons = { basic: 'tune', cache: 'cached', storage: 'database', auth: 'shield', webhooks: 'notifications' } as const
+const tabLabels: Record<TabKey, string> = { basic: 'settings.basic', cache: 'settings.cachePolicy', storage: 'settings.storageBackend', auth: 'settings.authSecurity', webhooks: 'settings.webhooks' }
+
+function restoreDraft(key: string, configured: SettingsDraft): SettingsDraft | null {
+  try {
+    const stored = JSON.parse(readSessionStorage(key) ?? 'null')
+    if (!stored?.draft || !stored?.configured) return null
+    const next = { ...configured }
+    for (const field of Object.keys(draftPaths) as (keyof SettingsDraft)[]) {
+      if (typeof stored.draft[field] !== 'string' || typeof stored.configured[field] !== 'string') return null
+      if (field === 'logLevel' && !['debug', 'info', 'warn', 'error'].includes(stored.draft[field])) return null
+      if (stored.draft[field] !== stored.configured[field]) Object.assign(next, { [field]: stored.draft[field] })
+    }
+    return next
+  } catch { return null }
 }
 
 function validateDraft(draft: SettingsDraft): SettingsValidationErrors {
@@ -144,13 +166,17 @@ export default function Settings() {
   const queryClient = useQueryClient()
   const toast = useAppToast()
   const desktopTabs = useMediaQuery('(min-width: 768px)')
-  const { canWrite } = usePrincipal()
+  const { principal, canWrite } = usePrincipal()
   const [activeTab, setActiveTab] = useState<TabKey>('basic')
   const [draft, setDraft] = useState<SettingsDraft | null>(null)
   const [validationErrors, setValidationErrors] = useState<SettingsValidationErrors>({})
   const [inlineError, setInlineError] = useState<string | null>(null)
   const [lastResult, setLastResult] = useState<UpdateAdminSettingsResponse | null>(null)
   const configuredRef = useRef<AdminSettingsSnapshot | null>(null)
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const [restored, setRestored] = useState(false)
+  const [draftStored, setDraftStored] = useState(true)
+  const draftStorageKey = principal ? `depsilo:settings-draft:${window.location.origin}:${principal.id}` : null
 
   const settingsQuery = useQuery<AdminSettingsResponse>({
     queryKey: ['admin', 'settings'],
@@ -161,13 +187,31 @@ export default function Settings() {
     if (!settingsQuery.data) return
     const previous = configuredRef.current
     const next = settingsQuery.data.configured
+    const recovered = !previous && draftStorageKey ? restoreDraft(draftStorageKey, draftFrom(next)) : null
+    if (recovered) setRestored(true)
     setDraft(current => {
       return current && previous
         ? rebaseDraft(current, previous, next)
-        : draftFrom(next)
+        : recovered ?? draftFrom(next)
     })
     configuredRef.current = next
-  }, [settingsQuery.data])
+  }, [settingsQuery.data, draftStorageKey])
+
+  const baseDraft = settingsQuery.data ? draftFrom(settingsQuery.data.configured) : null
+  const changedFields = draft && baseDraft ? (Object.keys(draftPaths) as (keyof SettingsDraft)[]).filter(key => draft[key] !== baseDraft[key]) : []
+  const dirty = changedFields.length > 0
+  useEffect(() => {
+    if (!draftStorageKey || !draft || !settingsQuery.data) return
+    if (buildPatch(draft, settingsQuery.data.configured)) {
+      setDraftStored(writeSessionStorage(draftStorageKey, JSON.stringify({ draft, configured: draftFrom(settingsQuery.data.configured) })))
+    } else removeSessionStorage(draftStorageKey)
+  }, [draft, settingsQuery.data, draftStorageKey])
+  useEffect(() => {
+    if (!dirty) return
+    const protect = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', protect)
+    return () => window.removeEventListener('beforeunload', protect)
+  }, [dirty])
 
   const updateMutation = useMutation({
     mutationFn: async (request: UpdateAdminSettingsRequest) => (await adminApi.updateSettings(request)).data,
@@ -178,6 +222,8 @@ export default function Settings() {
       setValidationErrors({})
       setInlineError(null)
       setLastResult(response)
+      setReviewOpen(false)
+      setRestored(false)
       const tone = response.blocked_by_override.length || response.restart_required.length ? 'warning' : 'success'
       const message = response.blocked_by_override.length
         ? t('settings.blockedOverrideTitle')
@@ -194,31 +240,48 @@ export default function Settings() {
     },
   })
 
+  const isolatedSection = (children: ReactNode) => (
+    <AdminPage description={t('settings.subtitle')}>
+      <Tabs value={activeTab} onValueChange={value => setActiveTab(value as TabKey)} orientation={desktopTabs ? 'vertical' : 'horizontal'} className="data-[orientation=vertical]:grid data-[orientation=vertical]:grid-cols-[180px_minmax(0,1fr)] data-[orientation=vertical]:items-start data-[orientation=vertical]:gap-6">
+        <TabsList aria-label={t('settings.tabsLabel')} activateOnFocus className="data-[orientation=vertical]:w-full">
+          {(Object.keys(tabLabels) as TabKey[]).map(key => <TabsTrigger key={key} value={key}><Icon name={tabIcons[key]} size="sm" />{t(tabLabels[key])}{dirty && key !== 'webhooks' && key !== 'storage' ? ' ·' : ''}</TabsTrigger>)}
+        </TabsList>
+        <TabsContent value={activeTab}>{children}</TabsContent>
+      </Tabs>
+    </AdminPage>
+  )
+  // Notification settings are database-owned and stay usable when config.toml cannot be read.
+  if (activeTab === 'webhooks') return isolatedSection(<>
+    {!canWrite && <Alert variant="warning" className="mb-4"><AlertDescription>{t('settings.readOnlyPrincipal')}</AlertDescription></Alert>}
+    {dirty && <p className="mb-4 text-[13px] text-[var(--text-soft)]">{t('settings.draftRetained')}</p>}
+    <WebhookTab />
+  </>)
+
   if (settingsQuery.isPending) {
     return (
-      <AdminPage description={t('settings.subtitle')}>
+      <>{isolatedSection(
         <Skeleton role="status" aria-hidden={false} aria-busy="true" className="h-40">
           <span className="sr-only">{t('loading')}</span>
         </Skeleton>
-      </AdminPage>
+      )}</>
     )
   }
 
   if (settingsQuery.isError && !settingsQuery.data) {
     return (
-      <AdminPage description={t('settings.subtitle')}>
+      <>{isolatedSection(
         <QueryErrorState message={t('settings.loadError')} onRetry={() => { void settingsQuery.refetch() }} />
-      </AdminPage>
+      )}</>
     )
   }
 
   if (!settingsQuery.data || !draft) {
     return (
-      <AdminPage description={t('settings.subtitle')}>
+      <>{isolatedSection(
         <Skeleton role="status" aria-hidden={false} aria-busy="true" className="h-40">
           <span className="sr-only">{t('loading')}</span>
         </Skeleton>
-      </AdminPage>
+      )}</>
     )
   }
 
@@ -274,10 +337,12 @@ export default function Settings() {
     setLastResult(null)
   }
   const save = () => {
+    if (globallyReadOnly || updateMutation.isPending) return
     const errors = validateDraft(draft)
     setValidationErrors(errors)
     const firstInvalid = validationOrder.find(key => errors[key])
     if (firstInvalid) {
+      setReviewOpen(false)
       setInlineError(null)
       setLastResult(null)
       const location = validationLocations[firstInvalid]
@@ -401,7 +466,7 @@ export default function Settings() {
         <Field invalid={Boolean(fieldError('tokenTTL'))} disabled={isDisabled('auth.token_ttl')}>
           <FieldLabel>{fieldLabel('auth.token_ttl')}</FieldLabel>
           <Input aria-invalid={Boolean(fieldError('tokenTTL')) || undefined} className="font-mono" id="setting-auth-token-ttl" required value={draft.tokenTTL} onChange={event => updateDraft('tokenTTL', event.target.value)} disabled={isDisabled('auth.token_ttl')} />
-          {(fieldError('tokenTTL')) ? <FieldError match>{fieldError('tokenTTL')}</FieldError> : (fieldHint('auth.token_ttl', t('settings.durationHint'))) ? <FieldDescription>{fieldHint('auth.token_ttl', t('settings.durationHint'))}</FieldDescription> : null}
+          {(fieldError('tokenTTL')) ? <FieldError match>{fieldError('tokenTTL')}</FieldError> : (fieldHint('auth.token_ttl', t('settings.sessionHint'))) ? <FieldDescription>{fieldHint('auth.token_ttl', t('settings.sessionHint'))}</FieldDescription> : null}
         </Field>
       ))),
     },
@@ -413,19 +478,21 @@ export default function Settings() {
     },
   ]
 
-  const configurationTab = activeTab !== 'webhooks'
-
   return (
     <AdminPage
       description={t('settings.subtitle')}
-      actions={configurationTab ? (
+      actions={(
         <Button type="submit" form={`settings-form-${activeTab}`} size="sm" aria-busy={updateMutation.isPending || undefined} disabled={globallyReadOnly || updateMutation.isPending}>
           <Icon name="save" size="sm" />
-          {updateMutation.isPending ? t('saving') : t('save')}
+          {updateMutation.isPending ? t('saving') : t('settings.saveAll')}
         </Button>
-      ) : undefined}
+      )}
     >
     <div className="min-w-0 space-y-4">
+      {dirty && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--bg-soft)] p-4">
+        <div><p className="text-[14px] font-medium">{t('settings.dirtyCount', { count: changedFields.length })}</p><p className="mt-1 text-[13px] text-[var(--text-soft)]">{t(!draftStored ? 'settings.draftNotStored' : restored ? 'settings.draftRestored' : 'settings.draftRetained')}</p></div>
+        <div className="flex gap-2"><Button variant="outline" onClick={() => setReviewOpen(true)}>{t('settings.reviewChanges')}</Button><Button variant="ghost" disabled={updateMutation.isPending} onClick={() => { setDraft(draftFrom(data.configured)); setValidationErrors({}); setInlineError(null); setLastResult(null); setRestored(false) }}>{t('settings.discardChanges')}</Button></div>
+      </div>}
       {settingsQuery.isError && settingsQuery.data && (
         <StaleDataNotice
           message={`${t('settings.stale')} ${mutationErrorMessage(settingsQuery.error, t('settings.stale'))}`}
@@ -433,8 +500,8 @@ export default function Settings() {
           onRefresh={() => settingsQuery.refetch()}
         />
       )}
-      {configurationTab && inlineError && <Alert variant={"destructive"}><AlertTitle>{t('settings.saveError')}</AlertTitle><AlertDescription>{inlineError}</AlertDescription></Alert>}
-      {configurationTab && lastResult && (
+      {inlineError && !reviewOpen && <Alert variant={"destructive"}><AlertTitle>{t('settings.saveError')}</AlertTitle><AlertDescription>{inlineError}</AlertDescription></Alert>}
+      {lastResult && (
         <div className="space-y-2">
           {resultList(t('settings.appliedNowTitle'), lastResult.applied_now, 'success')}
           {resultList(t('settings.blockedOverrideTitle'), lastResult.blocked_by_override, 'warning')}
@@ -446,12 +513,12 @@ export default function Settings() {
         </AlertDescription></Alert>
       )}
       {!canWrite && <Alert variant={"warning"}><AlertDescription>{t('settings.readOnlyPrincipal')}</AlertDescription></Alert>}
-      {configurationTab && !data.config_writable && (
+      {!data.config_writable && (
         <Alert variant={"warning"}><AlertTitle>{t('settings.configReadOnlyTitle')}</AlertTitle><AlertDescription>
           {t('settings.configReadOnlyBody')}
         </AlertDescription></Alert>
       )}
-      {configurationTab && (
+      {(
         <div className="flex min-w-0 items-start gap-2 border-b border-[var(--border)] pb-3 text-[12px] text-[var(--text-soft)]">
           <Icon name="info" size="sm" className="mt-0.5 shrink-0" />
           <span>{t('settings.hotReloadNote')}</span>
@@ -459,12 +526,20 @@ export default function Settings() {
       )}
         <Tabs value={activeTab} onValueChange={value => setActiveTab(value as TabKey)} orientation={desktopTabs ? 'vertical' : 'horizontal'} className="data-[orientation=vertical]:grid data-[orientation=vertical]:grid-cols-[180px_minmax(0,1fr)] data-[orientation=vertical]:items-start data-[orientation=vertical]:gap-6">
           <TabsList aria-label={t('settings.tabsLabel')} activateOnFocus variant="default" className="data-[orientation=vertical]:w-full">
-            {tabs.map(item => <TabsTrigger key={item.key} value={item.key}>{item.icon}{item.label}</TabsTrigger>)}
+            {tabs.map(item => <TabsTrigger key={item.key} value={item.key}>{item.icon}{item.label}{changedFields.some(key => (key === 'logLevel' ? 'basic' : validationLocations[key].tab) === item.key) ? ' ·' : ''}</TabsTrigger>)}
           </TabsList>
           <div className="min-w-0">
             {tabs.map(item => <TabsContent key={item.key} value={item.key}>{item.content}</TabsContent>)}
           </div>
         </Tabs>
+      <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
+        <DialogContent className="max-w-xl"><DialogTitle>{t('settings.reviewChanges')}</DialogTitle>
+          <p className="text-[13px] text-[var(--text-soft)]">{t('settings.reviewHint')}</p>
+          {inlineError && <Alert variant="destructive"><AlertDescription>{inlineError}</AlertDescription></Alert>}
+          <dl className="divide-y divide-[var(--border)]">{changedFields.map(key => <div key={key} className="py-3"><dt className="text-[14px] font-medium">{fieldLabel(draftPaths[key])}</dt><dd className="mt-1 break-all font-mono text-[13px]">{baseDraft?.[key]} → {draft[key]}</dd><dd className="mt-1 text-[12px] text-[var(--text-soft)]">{data.overrides[draftPaths[key]] ? t('settings.envOverride', { variable: data.overrides[draftPaths[key]] }) : key === 'logLevel' ? t('settings.appliedNowTitle') : t('settings.requiresRestart')}</dd></div>)}</dl>
+          <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setReviewOpen(false)}>{t('common.close')}</Button><Button disabled={globallyReadOnly || updateMutation.isPending} onClick={save}>{t('settings.saveAll')}</Button></div>
+        </DialogContent>
+      </Dialog>
     </div>
     </AdminPage>
   )

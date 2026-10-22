@@ -108,7 +108,7 @@ test('select keeps a visible keyboard focus ring and native theme scheme', async
   await expect.poll(() => select.evaluate(element => getComputedStyle(element).colorScheme)).toBe('dark')
 })
 
-test('security policy controls have distinct ecosystem names and toggle with Space', async ({ page }) => {
+test('security policy controls name legacy ecosystems and omit inactive policies', async ({ page }) => {
   await setUiPreferences(page, 'light', 'zh')
   await mockAdminApi(page, {
     'GET /api/v1/admin/security/policies': [{
@@ -122,27 +122,21 @@ test('security policy controls have distinct ecosystem names and toggle with Spa
     }],
   })
   await page.goto('/admin/security')
-  // TabsV2 receives tab semantics in Plan 04 Task 5; use its current button contract here.
   await page.getByRole('combobox', { name: /情报视图|Intelligence view/ }).selectOption('policies')
 
   const pypiSwitch = page.getByRole('switch', { name: 'PYPI 自动拦截' })
   const npmPolicy = page.locator('[data-policy-ecosystem="npm"]')
-  const npmSwitch = npmPolicy.getByRole('switch')
   const goPolicy = page.locator('[data-policy-ecosystem="go"]')
-  const goSwitch = goPolicy.getByRole('switch')
   const aptPolicy = page.locator('[data-policy-ecosystem="apt"]')
   await expect(pypiSwitch).toBeVisible()
   await expect(pypiSwitch).toBeChecked()
   await expect(pypiSwitch).toBeEnabled()
   await expect(page.locator('[data-policy-ecosystem="pypi"]')).toContainText(/完整 OSV 受影响集合|complete OSV affected sets/)
-  await expect(npmSwitch).toBeDisabled()
-  await expect(npmPolicy).toContainText(/完整 OSV 受影响集合|complete OSV affected sets/)
-  await expect(goSwitch).toBeDisabled()
-  await expect(goPolicy).toContainText(/自动拦截依赖版本范围|automatic blocking requires version ranges/)
-  await expect(aptPolicy.getByRole('switch')).toBeDisabled()
-  await expect(aptPolicy).toContainText(/\.deb 路径不含 Debian epoch|\.deb paths omit the Debian epoch/)
+  await expect(npmPolicy).toHaveCount(0)
+  await expect(goPolicy).toHaveCount(0)
+  await expect(aptPolicy).toHaveCount(0)
   await expect(page.getByRole('spinbutton', { name: 'PYPI CVSS 阈值' })).toBeVisible()
-  await expect(page.getByRole('spinbutton', { name: 'NPM CVSS 阈值' })).toBeVisible()
+  await expect(page.getByRole('spinbutton', { name: 'NPM CVSS 阈值' })).toHaveCount(0)
 
   await pypiSwitch.focus()
   const before = await pypiSwitch.getAttribute('aria-checked')
@@ -209,9 +203,9 @@ test('dynamic rule and cache forms expose named controls and pass axe', async ({
 
   await page.keyboard.press('Escape')
   await page.goto('/admin/cache')
-  await page.getByRole('button', { name: /预热|Warmup/ }).click()
+  await page.getByRole('button', { name: /预热|Warm indexes/ }).click()
 
-  const warmupDialog = page.getByRole('dialog', { name: /缓存预热|Cache Warmup/ })
+  const warmupDialog = page.getByRole('dialog', { name: /索引元数据预热|Warm index metadata/ })
   const warmupPackages = warmupDialog.getByRole('textbox', { name: /包名列表|Package list/ })
   const warmupStart = warmupDialog.getByRole('button', { name: /开始预热|Start Warmup/ })
   await expect(warmupPackages).toBeVisible()

@@ -3,6 +3,8 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empt
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { useState } from 'react'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
@@ -37,6 +39,7 @@ export default function SiemExportersSection() {
     events: '*',
   })
   const [error, setError] = useState('')
+  const [createOpen, setCreateOpen] = useState(false)
   const [notice, setNotice] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<AuditExporter | null>(null)
 
@@ -68,6 +71,7 @@ export default function SiemExportersSection() {
       setForm({ name: '', kind: 'ndjson', url: '', token: '', events: '*' })
       setError('')
       setNotice(t('siem.created'))
+      setCreateOpen(false)
       invalidate()
     },
     onError: fail,
@@ -104,11 +108,16 @@ export default function SiemExportersSection() {
   return (
     <section data-siem-exporters>
       <SectionHeader title={t('siem.title')} hint={t('siem.description')} />
-      {error && <Alert variant={"destructive"}><AlertDescription>{error}</AlertDescription></Alert>}
+      {error && !createOpen && <Alert variant={"destructive"}><AlertDescription>{error}</AlertDescription></Alert>}
       {notice && <Alert variant={"success"}><AlertDescription>{notice}</AlertDescription></Alert>}
 
-      {canWrite && (
-        <div className="mt-3 grid min-w-0 items-end gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {canWrite && <>
+        <Button variant="outline" className="mt-3" onClick={() => { setError(''); setCreateOpen(true) }}><Icon name="add" size="sm" />{t('siem.configure')}</Button>
+        <Dialog open={createOpen} onOpenChange={open => { if (!createMutation.isPending) { setCreateOpen(open); if (!open) setForm(value => ({ ...value, token: '' })) } }}>
+        <DialogContent className="sm:max-w-[640px]" closeDisabled={createMutation.isPending}>
+        <DialogTitle>{t('siem.configure')}</DialogTitle>
+        {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+        <div className="mt-3 grid min-w-0 items-end gap-3 sm:grid-cols-2">
           <Field>
             <FieldLabel>{t('siem.name')}</FieldLabel>
             <Input value={form.name} onChange={event => setForm(value => ({ ...value, name: event.target.value }))} placeholder={t('siem.namePlaceholder')} />
@@ -145,10 +154,12 @@ export default function SiemExportersSection() {
             {createMutation.isPending ? t('siem.creating') : t('siem.create')}
           </Button>
         </div>
-      )}
+        </DialogContent></Dialog>
+      </>}
       <p className="mt-2 text-[13px] text-[var(--text-soft)]">{t('siem.filterHint')}</p>
 
       <div className="mt-4">
+        {query.isRefetchError && data && <StaleDataNotice onRefresh={() => { void query.refetch() }} />}
         {query.isPending ? (
           <div aria-busy="true" className="py-6 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>
             <span aria-hidden="true">{t('loading')}</span>
@@ -208,16 +219,16 @@ export default function SiemExportersSection() {
                     </TableCell>
                     <TableCell className="px-2 py-3">
                       <div className="flex justify-end gap-1.5">
-                        <Button variant="outline" size="sm" onClick={() => testMutation.mutate(exporter.id)} disabled={testMutation.isPending}>
+                        {canWrite && <Button variant="outline" size="sm" onClick={() => testMutation.mutate(exporter.id)} disabled={testMutation.isPending}>
                           {t('siem.test')}
-                        </Button>
+                        </Button>}
                         {canWrite && (
                           <Button variant="outline" size="sm" onClick={() => toggleMutation.mutate(exporter)} disabled={toggleMutation.isPending}>
                             {exporter.enabled ? t('siem.disable') : t('siem.enable')}
                           </Button>
                         )}
                         {canWrite && (
-                          <Button variant="outline" size="sm" onClick={() => setDeleteTarget(exporter)}>
+                          <Button variant="outline" size="sm" onClick={() => { deleteMutation.reset(); setDeleteTarget(exporter) }}>
                             <Icon name="delete" size="sm" />
                             {t('delete')}
                           </Button>
@@ -240,6 +251,7 @@ export default function SiemExportersSection() {
         confirmLabel={t('delete')}
         pendingLabel={t('loading')}
         pending={deleteMutation.isPending}
+        errorMessage={deleteMutation.isError ? getApiError(deleteMutation.error).message : null}
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => {
           if (deleteTarget) deleteMutation.mutate(deleteTarget.id)

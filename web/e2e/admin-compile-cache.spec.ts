@@ -68,13 +68,13 @@ test('creates a scoped credential and clears both one-time client configurations
   await createDialog.getByRole('button', { name: 'Create', exact: true }).click()
 
   const resultDialog = page.getByRole('dialog', { name: 'Credential created' })
-  await expect(resultDialog.getByText('ccache', { exact: true })).toBeVisible()
+  await expect(resultDialog.getByRole('tab', { name: 'ccache', exact: true })).toBeVisible()
   await expect(resultDialog.getByText(remoteStorage, { exact: true })).toBeVisible()
-  await expect(resultDialog.getByText('sccache', { exact: true })).toBeVisible()
-  await expect(resultDialog.getByText(sccacheConfig, { exact: true })).toBeVisible()
   const copyCCache = resultDialog.getByRole('button', { name: 'Copy ccache configuration' })
   await copyCCache.click()
   await expect(copyCCache).toContainText('Copied')
+  await resultDialog.getByRole('tab', { name: 'sccache', exact: true }).click()
+  await expect(resultDialog.getByText(sccacheConfig, { exact: true })).toBeVisible()
   const copySCCache = resultDialog.getByRole('button', { name: 'Copy sccache configuration' })
   await copySCCache.click()
   await expect(copySCCache).toContainText('Copied')
@@ -126,4 +126,21 @@ test('confirms credential revocation and manual cleanup', async ({ page }) => {
   const cleanupDialog = page.getByRole('dialog', { name: 'Clean up compiler cache' })
   await cleanupDialog.getByRole('button', { name: 'Start cleanup' }).click()
   await expect(page.getByText('Cleanup complete: removed 4 entries and reclaimed 8.0 MB.')).toBeVisible()
+})
+
+test('distinguishes expired build credentials and filters by usability', async ({ page }) => {
+  const credential = {namespace:'ci',permissions:'readonly',last_used_at:null,created_at:'2020-01-01T00:00:00Z',updated_at:'2020-01-01T00:00:00Z'}
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/compile-cache/status':enabledStatus,
+    'GET /api/v1/admin/compile-cache/credentials':{items:[{...credential,id:1,name:'Expired build',expires_at:'2020-01-01T00:00:00Z'},{...credential,id:2,name:'Current build',expires_at:null}],total:2},
+  })
+  await setUiPreferences(page, 'light', 'en')
+  await page.goto('/admin/compile-cache')
+  await expect(page.getByRole('row').filter({hasText:'Expired build'})).toContainText('Expired')
+  await page.getByRole('combobox',{name:'Credential status'}).selectOption('active')
+  await expect(page.getByText('Expired build',{exact:true})).toHaveCount(0)
+  await expect(page.getByText('Current build',{exact:true})).toBeVisible()
+  await page.getByRole('combobox',{name:'Credential status'}).selectOption('expired')
+  await expect(page.getByText('Expired build',{exact:true})).toBeVisible()
+  await expect(page.getByText('Current build',{exact:true})).toHaveCount(0)
 })

@@ -7,7 +7,6 @@ import { formatBytes, formatTime } from '@/lib/utils'
 import { getApiError } from '@/lib/apiError'
 import { Badge } from '@/components/ui/badge'
 import { Progress, ProgressIndicator, ProgressTrack } from '@/components/ui/progress'
-import SectionHeader from '@/components/SectionHeader'
 import QueryErrorState from '@/components/QueryErrorState'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
 
@@ -33,7 +32,7 @@ export default function DownloadTransfers() {
   const items = data?.items.slice(0, 12) ?? []
   return (
     <section aria-label={t('cache.transfers.title')} className="min-w-0">
-      <SectionHeader title={t('cache.transfers.title')} hint={t('cache.transfers.scope')} />
+      <details open={items.length > 0 || query.isError || query.isPending}><summary className="cursor-pointer text-sm font-medium">{t('cache.transfers.title')} <span className="font-normal text-muted-foreground">· {items.length > 0 ? items.length : t('cache.transfers.noneActive')}</span></summary><p className="my-2 text-xs text-muted-foreground">{t('cache.transfers.scope')}</p>
       {query.isPending ? <p role="status" className="text-[13px] text-[var(--text-soft)]">{t('cache.transfers.loading')}</p>
         : query.isError && (!data || error.status === 403) ? <QueryErrorState message={t(error.status === 403 ? 'cache.transfers.permission' : 'cache.transfers.unavailable')} onRetry={() => { void query.refetch() }} />
           : <>
@@ -68,6 +67,7 @@ export default function DownloadTransfers() {
             </ul>}
             {data && data.items.length > items.length && <p className="text-[12px] text-[var(--text-soft)]">{t('cache.transfers.shown', { shown: items.length, count: data.items.length })}</p>}
           </>}
+      </details>
     </section>
   )
 }

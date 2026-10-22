@@ -152,7 +152,7 @@ for (const malformedCase of [
   })
 }
 
-test('Audit refetch and export compute their time range when each request executes', async ({ page }) => {
+test('Audit refresh advances its window and export uses the displayed query window', async ({ page }) => {
   const queryRequests: Array<Record<string, string>> = []
   const exportRequests: Array<Record<string, string>> = []
   let queryCalls = 0
@@ -199,8 +199,8 @@ test('Audit refetch and export compute their time range when each request execut
   await page.getByRole('button', { name: /导出 CSV|Export CSV/ }).click()
   await downloadPromise
   expect(exportRequests).toHaveLength(1)
-  expect(Date.parse(exportRequests[0].start) - refetchStart).toBeGreaterThanOrEqual(60_000)
-  expect(Date.parse(exportRequests[0].end) - refetchEnd).toBeGreaterThanOrEqual(60_000)
+  expect(Date.parse(exportRequests[0].start)).toBe(refetchStart)
+  expect(Date.parse(exportRequests[0].end)).toBe(refetchEnd)
 })
 
 for (const exportCase of [

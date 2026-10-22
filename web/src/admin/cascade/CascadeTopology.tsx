@@ -9,7 +9,7 @@ import type { AdminCascadeInfo } from '@/lib/adminApi.types'
 
 interface CascadeTopologyProps {
   info: AdminCascadeInfo
-  boundUpstreams: number
+  boundUpstreams: number | null
   unresolved: number
 }
 
@@ -81,9 +81,9 @@ export default function CascadeTopology({
   const chips: ReactNode[] = []
   if (info.enabled && info.instance_id) {
     chips.push(
-      <span key="instance" className="inline-flex items-center gap-0.5">
-        <span style={{ color: 'var(--text-subtle)' }}>{t('cascade.instanceId')}</span>
-        <span className="font-mono" style={{ color: 'var(--text)' }}>{info.instance_id}</span>
+      <span key="instance" className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="shrink-0" style={{ color: 'var(--text-subtle)' }}>{t('cascade.instanceId')}</span>
+        <span className="min-w-0 break-all font-mono" style={{ color: 'var(--text)' }}>{info.instance_id}</span>
         <Tooltip>
           <TooltipTrigger render={
             <Button
@@ -109,10 +109,10 @@ export default function CascadeTopology({
       </span>,
     )
   }
-  if (boundUpstreams > 0 || info.enabled) {
+  if (boundUpstreams === null || boundUpstreams > 0 || info.enabled) {
     chips.push(
       <span key="bound">
-        {t('cascade.boundLabel')} <span className="font-mono" style={{ color: 'var(--text)' }}>{boundUpstreams}</span>
+        {t('cascade.boundLabel')} <span className="font-mono" style={{ color: 'var(--text)' }}>{boundUpstreams ?? '—'}</span>
       </span>,
     )
   }
@@ -134,7 +134,7 @@ export default function CascadeTopology({
         <FlowNode
           icon="computer"
           title={t('cascade.topology.clients')}
-          subtitle="npm · pip · go · docker"
+          subtitle="npm · pip · go"
         />
         <FlowArrow label={t('cascade.topology.serviceRequests')} dashed={!info.enabled} />
         <FlowNode
@@ -145,7 +145,7 @@ export default function CascadeTopology({
           badge={(
             <span
               className="size-1.5 shrink-0 rounded-full"
-              style={{ background: info.enabled ? 'var(--ok-text)' : 'var(--warn-text)' }}
+              style={{ background: info.enabled ? 'var(--brand-text)' : 'var(--text-subtle)' }}
               title={t(info.enabled ? 'cascade.enabled' : 'cascade.disabled')}
             />
           )}

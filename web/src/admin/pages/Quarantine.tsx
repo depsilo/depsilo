@@ -4,6 +4,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useState } from 'react'
+import { Link, useSearchParams } from 'react-router'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { getAdminRouteHref } from '@/admin/routes'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
@@ -116,14 +119,20 @@ export default function Quarantine() {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const { canWrite } = usePrincipal()
-  const [tab, setTab] = useState<'events' | 'approvals' | 'blocklist'>('events')
-  const [eventsPage, setEventsPage] = useState(1)
-  const [approvalsPage, setApprovalsPage] = useState(1)
-
-  // Filters (events tab)
-  const [ecoFilter, setEcoFilter] = useState('all')
-  const [actionFilter, setActionFilter] = useState('all')
-  const [pkgSearch, setPkgSearch] = useState('')
+  const [params, setParams] = useSearchParams()
+  const tab = params.get('tab') === 'approvals' ? 'approvals' : params.get('tab') === 'blocklist' ? 'blocklist' : 'events'
+  const pageNumber = (value: string | null) => Math.max(1, Number.isSafeInteger(Number(value)) ? Number(value) : 1)
+  const eventsPage = pageNumber(params.get('page'))
+  const approvalsPage = pageNumber(params.get('approvals_page'))
+  const ecoFilter = params.get('ecosystem') || 'all'
+  const actionFilter = params.get('action') || 'all'
+  const pkgSearch = params.get('package') || ''
+  function updateParams(patch: Record<string, string>) {
+    setParams(current => { const next = new URLSearchParams(current); for (const [key, value] of Object.entries(patch)) { if (value && value !== 'all' && !(key.endsWith('page') && value === '1')) next.set(key, value); else next.delete(key) } return next })
+  }
+  const setTab = (value: string) => updateParams({ tab: value === 'events' ? '' : value, draft: '', version: '' })
+  const setEventsPage = (page: number) => updateParams({ page: String(page) })
+  const setApprovalsPage = (page: number) => updateParams({ approvals_page: String(page) })
 
   const [revokeOpen, setRevokeOpen] = useState(false)
   const [revokeTarget, setRevokeTarget] = useState<ApprovedVersion | null>(null)
@@ -190,16 +199,16 @@ export default function Quarantine() {
             </NativeSelect>
           </Field>
       </div>
-      {tab === 'events' && <EventsTab
+      {tab === 'events' && <EventsTab key={pkgSearch}
         eventsQ={eventsQ}
         page={eventsPage}
         setPage={setEventsPage}
         ecoFilter={ecoFilter}
-        setEcoFilter={value => { setEcoFilter(value); setEventsPage(1) }}
+        setEcoFilter={value => updateParams({ ecosystem: value, page: '1' })}
         actionFilter={actionFilter}
-        setActionFilter={value => { setActionFilter(value); setEventsPage(1) }}
+        setActionFilter={value => updateParams({ action: value, page: '1' })}
         pkgSearch={pkgSearch}
-        setPkgSearch={value => { setPkgSearch(value); setEventsPage(1) }}
+        setPkgSearch={value => updateParams({ package: value, page: '1' })}
       />}
       {tab === 'approvals' && <ApprovalsTab approvalsQ={approvalsQ} page={approvalsPage} setPage={setApprovalsPage} canWrite={canWrite} onRevoke={(row) => {
         revokeM.reset()
@@ -263,16 +272,20 @@ function EventsTab(props: {
   const { t } = useTranslation()
   const data = props.eventsQ.data as { items: QuarantineEvent[]; total: number } | undefined
   const items = data?.items ?? []
+  const [searchDraft, setSearchDraft] = useState(props.pkgSearch)
+  const [selected, setSelected] = useState<QuarantineEvent | null>(null)
+  const { canWrite } = usePrincipal()
+  const interventionHref = (event: QuarantineEvent, view: string) => `${getAdminRouteHref('quarantine')}?${new URLSearchParams({ tab: view, draft: '1', ecosystem: event.ecosystem, package: event.package, version: event.version })}`
 
   return (
     <div className="space-y-4">
       {/* Filter bar */}
-      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+      <form className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center" onSubmit={event => { event.preventDefault(); props.setPkgSearch(searchDraft.trim()) }}>
         <Input
           aria-label={t('quarantine.filter.package_placeholder')}
           placeholder={t('quarantine.filter.package_placeholder')}
-          value={props.pkgSearch}
-          onChange={(e) => props.setPkgSearch(e.target.value)}
+          value={searchDraft}
+          onChange={(e) => setSearchDraft(e.target.value)}
           className="col-span-2 sm:w-[260px]"
         />
         <NativeSelect className="min-h-10 sm:min-h-9 sm:w-auto" aria-label={t('quarantine.col.ecosystem')} value={props.ecoFilter} onChange={(event) => (props.setEcoFilter)(event.target.value)}>
@@ -287,7 +300,8 @@ function EventsTab(props: {
             ...ACTIONS.map((a) => ({ value: a, label: t(`quarantine.action.${a}`) })),
           ]).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
         </NativeSelect>
-      </div>
+        <Button type="submit" variant="outline" className="col-span-2 min-h-10">{t('search')}</Button>
+      </form>
 
       {/* Table */}
       {props.eventsQ.isPending ? (
@@ -314,6 +328,7 @@ function EventsTab(props: {
                 />
                 <div className="shrink-0">{actionBadge(ev.action, t)}</div>
               </div>
+              <Button variant="link" className="p-0 min-h-10" onClick={() => setSelected(ev)}>{t('quarantine.eventDetails')}</Button>
               <MobileMetadata
                 entries={[
                   { label: t('quarantine.col.reason'), value: ev.reason },
@@ -351,7 +366,7 @@ function EventsTab(props: {
                       <span className="text-[12px] font-mono">{ev.ecosystem}</span>
                     </div>
                   </Td>
-                  <Td><span className="text-[13px] font-mono">{ev.package}</span></Td>
+                  <Td><Button variant="link" className="h-auto min-h-10 p-0 whitespace-normal text-left" onClick={() => setSelected(ev)}>{ev.package}</Button></Td>
                   <Td><span className="text-[13px] font-mono" style={{ color: 'var(--text-soft)' }}>{ev.version}</span></Td>
                   <Td>{actionBadge(ev.action, t)}</Td>
                   <Td>
@@ -366,9 +381,28 @@ function EventsTab(props: {
         </div>
         </>
         )}
-        <AdminPagination page={props.page} pageSize={PAGE_SIZE} total={data?.total ?? 0} onPageChange={props.setPage} />
+        <AdminPagination ready={props.eventsQ.isSuccess && !props.eventsQ.isFetching} page={props.page} pageSize={PAGE_SIZE} total={data?.total ?? 0} onPageChange={props.setPage} />
         </div>
       )}
+      <Sheet open={selected !== null} onOpenChange={open => { if (!open) setSelected(null) }}>
+        <SheetContent className="w-full overflow-y-auto sm:w-[520px]" finalFocus>
+          <SheetHeader className="p-5 pr-14"><SheetTitle className="text-[18px]">{t('quarantine.eventDetails')}</SheetTitle></SheetHeader>
+          {selected && <div className="space-y-5 px-5 pb-6 text-[14px] leading-6">
+            <p className="font-mono break-all">{selected.ecosystem} / {selected.package}@{selected.version}</p>
+            {actionBadge(selected.action, t)}
+            <p className="whitespace-pre-wrap break-words">{selected.reason || '—'}</p>
+            <dl className="space-y-3">
+              <div><dt className="text-muted-foreground">{t('quarantine.col.time')}</dt><dd>{formatTime(selected.created_at)}</dd></div>
+              {selected.threshold_seconds > 0 && <><div><dt className="text-muted-foreground">{t('quarantine.eventThreshold')}</dt><dd>{t('quarantine.seconds', { count: selected.threshold_seconds })}</dd></div><div><dt className="text-muted-foreground">{t('quarantine.eventAge')}</dt><dd>{selected.age_at_call_seconds > 0 ? t('quarantine.seconds', { count: selected.age_at_call_seconds }) : t('quarantine.ageUnavailable')}</dd></div></>}
+              <div><dt className="text-muted-foreground">{t('quarantine.actor')}</dt><dd>{selected.actor_id ? `#${selected.actor_id}` : t('quarantine.systemActor')}</dd></div>
+              {selected.client_ip && <div><dt className="text-muted-foreground">{t('quarantine.client')}</dt><dd className="font-mono">{selected.client_ip}</dd></div>}
+            </dl>
+            <p className="text-muted-foreground">{t('quarantine.historicalEvidence')}</p>
+            {canWrite && selected.action === 'blocked' && <Button render={<Link to={interventionHref(selected, 'approvals')} />} nativeButton={false} role="link">{t('quarantine.approvals.create')}</Button>}
+            {canWrite && selected.action === 'malware_blocked' && <Button render={<Link to={interventionHref(selected, 'blocklist')} />} nativeButton={false} role="link">{t('quarantine.blocklist.add_override')}</Button>}
+          </div>}
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
@@ -384,8 +418,10 @@ function ApprovalsTab(props: {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const toast = useAppToast()
-  const [createOpen, setCreateOpen] = useState(false)
-  const [form, setForm] = useState({ ecosystem: '', package: '', version: '', reason: '' })
+  const [params, setParams] = useSearchParams()
+  const [createOpen, setCreateOpen] = useState(params.get('draft') === '1')
+  const [form, setForm] = useState({ ecosystem: params.get('ecosystem') || '', package: params.get('package') || '', version: params.get('version') || '', reason: '' })
+  function closeCreate() { setCreateOpen(false); setParams(current => { const next = new URLSearchParams(current); next.delete('draft'); next.delete('version'); return next }, { replace: true }) }
   const capabilityQ = useQuery({
     queryKey: ['admin', 'capabilities', 'summary'],
     queryFn: ({ signal }) => adminApi.getCapabilitySummary({ signal }),
@@ -407,7 +443,7 @@ function ApprovalsTab(props: {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['admin', 'quarantine'] })
       props.setPage(1)
-      setCreateOpen(false)
+      closeCreate()
       setForm({ ecosystem: '', package: '', version: '', reason: '' })
       toast.show({ tone: 'success', message: t('quarantine.approvals.createSuccess') })
     },
@@ -531,8 +567,9 @@ function ApprovalsTab(props: {
     </div>
     </>
     )}
-    <AdminPagination page={props.page} pageSize={PAGE_SIZE} total={data?.total ?? 0} onPageChange={props.setPage} />
-      <Dialog open={createOpen} onOpenChange={(nextOpen) => { if (!nextOpen && !createM.isPending) (() => { if (!createM.isPending) setCreateOpen(false) })() }} modal>
+    <AdminPagination ready={props.approvalsQ.isSuccess && !props.approvalsQ.isFetching} page={props.page} pageSize={PAGE_SIZE} total={data?.total ?? 0} onPageChange={props.setPage} />
+      {createOpen && !capabilityQ.isPending && !capabilityQ.isError && !activeEcosystems.includes(form.ecosystem) && <Alert variant="warning"><AlertDescription>{t('quarantine.approvals.noActiveGate')}</AlertDescription></Alert>}
+      <Dialog open={createOpen && props.canWrite && !capabilityQ.isError && activeEcosystems.includes(form.ecosystem)} onOpenChange={nextOpen => { if (!nextOpen && !createM.isPending) closeCreate() }} modal>
         <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={createM.isPending}>
           <DialogTitle className="pr-10">{t('quarantine.approvals.createTitle')}</DialogTitle>
           <form className="space-y-4" onSubmit={event => {
@@ -541,6 +578,7 @@ function ApprovalsTab(props: {
               || !form.version.trim() || form.reason.trim().length < 3) return
             createM.mutate()
           }}>
+            <Alert><AlertDescription>{t('quarantine.approvals.scope')}</AlertDescription></Alert>
             <Field disabled={createM.isPending}>
               <FieldLabel>{t('quarantine.col.ecosystem')}</FieldLabel>
               <NativeSelect value={form.ecosystem} disabled={createM.isPending} onChange={event => setForm({ ...form, ecosystem: event.target.value })}>
@@ -561,7 +599,7 @@ function ApprovalsTab(props: {
             </Field>
             {createM.isError && <Alert variant={"destructive"}><AlertDescription>{getApiError(createM.error).message}</AlertDescription></Alert>}
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" disabled={createM.isPending} onClick={() => setCreateOpen(false)}>{t('cancel')}</Button>
+              <Button type="button" variant="outline" disabled={createM.isPending} onClick={closeCreate}>{t('cancel')}</Button>
               <Button type="submit" aria-busy={createM.isPending || undefined} disabled={createM.isPending || !form.package.trim() || !form.version.trim() || form.reason.trim().length < 3}>{t('quarantine.approvals.create')}</Button>
             </div>
           </form>
@@ -583,8 +621,11 @@ function BlocklistTab() {
   const qc = useQueryClient()
   const { canWrite } = usePrincipal()
 
-  const [createOpen, setCreateOpen] = useState(false)
-  const [form, setForm] = useState({ ecosystem: 'npm', package: '', version: '', reason: '' })
+  const [params, setParams] = useSearchParams()
+  const [createOpen, setCreateOpen] = useState(params.get('draft') === '1')
+  const [allVersions, setAllVersions] = useState(false)
+  const [form, setForm] = useState({ ecosystem: params.get('ecosystem') || 'npm', package: params.get('package') || '', version: params.get('version') || '', reason: '' })
+  function closeCreate() { setCreateOpen(false); setParams(current => { const next = new URLSearchParams(current); next.delete('draft'); next.delete('version'); return next }, { replace: true }) }
   const [revokeTarget, setRevokeTarget] = useState<MalwareOverride | null>(null)
   const [revokeReason, setRevokeReason] = useState('')
   const [mountedAt] = useState(() => Date.now())
@@ -611,14 +652,15 @@ function BlocklistTab() {
     },
   })
   const createM = useMutation({
-    mutationFn: async () => (await adminApi.createBlocklistOverride(form)).data as MalwareOverride,
+    mutationFn: async () => (await adminApi.createBlocklistOverride({ ...form, package: form.package.trim(), version: allVersions ? '' : form.version.trim(), reason: form.reason.trim() })).data as MalwareOverride,
     onSuccess: (created) => {
       qc.setQueryData<{ items: MalwareOverride[]; now: string }>(['admin', 'blocklist', 'overrides'], (current) => current ? {
         ...current,
         items: [...current.items.filter((item) => item.id !== created.id), created],
       } : { items: [created], now: created.created_at })
       qc.invalidateQueries({ queryKey: ['admin', 'quarantine'] })
-      setCreateOpen(false)
+      closeCreate()
+      setAllVersions(false)
       setForm({ ecosystem: 'npm', package: '', version: '', reason: '' })
     },
   })
@@ -690,7 +732,7 @@ function BlocklistTab() {
           </StatusItem>
         )}
         {canWrite && <div className="grid w-full grid-cols-1 gap-2 min-[400px]:grid-cols-2 sm:ml-auto sm:flex sm:w-auto">
-          <Button className="min-h-[40px] sm:min-h-9" variant="outline" onClick={() => { createM.reset(); setCreateOpen(true) }}>
+          <Button className="min-h-[40px] sm:min-h-9" variant="outline" onClick={() => { createM.reset(); setAllVersions(false); setForm({ ecosystem: overrideEcosystems[0]?.id || '', package: '', version: '', reason: '' }); setCreateOpen(true) }}>
             <Icon name="add" size="sm" /> {t('quarantine.blocklist.add_override')}
           </Button>
           <Button className="min-h-[40px] sm:min-h-9" onClick={() => syncM.mutate()} aria-busy={syncM.isPending || undefined} disabled={syncM.isPending || !!st?.running}>
@@ -832,7 +874,7 @@ function BlocklistTab() {
       </div>
 
       {/* Create override dialog */}
-      <Dialog open={createOpen} onOpenChange={(nextOpen) => { if (!nextOpen && !createM.isPending) setCreateOpen(false) }} modal>
+      <Dialog open={createOpen && canWrite} onOpenChange={(nextOpen) => { if (!nextOpen && !createM.isPending) closeCreate() }} modal>
         <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={createM.isPending}>
           <DialogTitle className="pr-10">{t('quarantine.blocklist.create_title')}</DialogTitle>
           <div className="space-y-4">
@@ -854,12 +896,17 @@ function BlocklistTab() {
               </Field>
             </div>
             <Field disabled={createM.isPending}>
+              <FieldLabel>{t('quarantine.blocklist.versionScope')}</FieldLabel>
+              <NativeSelect value={allVersions ? 'all' : 'exact'} disabled={createM.isPending} onChange={event => setAllVersions(event.target.value === 'all')}><option value="exact">{t('quarantine.blocklist.exactVersion')}</option><option value="all">{t('quarantine.blocklist.all_versions')}</option></NativeSelect>
+            </Field>
+            {allVersions && <Alert variant="warning"><AlertDescription>{t('quarantine.blocklist.allVersionImpact')}</AlertDescription></Alert>}
+            <Field disabled={createM.isPending || allVersions}>
               <FieldLabel>{t('quarantine.col.version')}</FieldLabel>
               <Input className="font-mono"
-                placeholder={t('quarantine.blocklist.version_placeholder')}
+                placeholder={t('quarantine.blocklist.exactVersion')}
                 value={form.version}
                 onChange={(e) => setForm({ ...form, version: e.target.value })}
-                disabled={createM.isPending}
+                disabled={createM.isPending || allVersions}
               />
             </Field>
             <Field disabled={createM.isPending}>
@@ -873,11 +920,11 @@ function BlocklistTab() {
             </Field>
             {createM.isError && <Alert variant={"destructive"}><AlertDescription>{getApiError(createM.error).message}</AlertDescription></Alert>}
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createM.isPending}>{t('cancel')}</Button>
+              <Button variant="outline" onClick={closeCreate} disabled={createM.isPending}>{t('cancel')}</Button>
               <Button
                 onClick={() => createM.mutate()}
                 aria-busy={createM.isPending || undefined}
-                disabled={!form.package.trim() || form.reason.trim().length < 3 || createM.isPending || !canWrite}
+                disabled={!form.package.trim() || (!allVersions && !form.version.trim()) || !overrideEcosystems.some(eco => eco.id === form.ecosystem) || statusQ.isError || form.reason.trim().length < 3 || createM.isPending || !canWrite}
               >
                 {createM.isPending ? t('quarantine.blocklist.creating') : t('quarantine.blocklist.create_submit')}
               </Button>
@@ -893,7 +940,7 @@ function BlocklistTab() {
           {revokeTarget && (
             <div className="space-y-4">
               <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>
-                {t('quarantine.revoke.body', { eco: revokeTarget.ecosystem, pkg: revokeTarget.package, ver: revokeTarget.version || t('quarantine.blocklist.all_versions') })}
+                {t('quarantine.blocklist.revokeImpact', { eco: revokeTarget.ecosystem, pkg: revokeTarget.package, ver: revokeTarget.version || t('quarantine.blocklist.all_versions') })}
               </p>
               <Field disabled={revokeM.isPending}>
                 <FieldLabel>{t('quarantine.col.reason')}</FieldLabel>

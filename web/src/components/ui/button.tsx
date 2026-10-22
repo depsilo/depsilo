@@ -3,7 +3,7 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 // shadcn/ui Button (base-nova). Class strings are upstream's; the only local
-// change is the size ladder, which keeps Depsilo's 36px default and 40px icon
+// change is the size ladder, which keeps Depsilo's 40px default and icon
 // control heights so the Admin touch-target contract survives the redesign.
 const buttonVariants = cva(
   "group/button app-button inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
@@ -23,11 +23,11 @@ const buttonVariants = cva(
         link: 'text-primary underline-offset-4 hover:underline',
       },
       size: {
-        default: 'h-9 gap-1.5 px-3 text-[13px]',
-        sm: 'h-8 gap-1 rounded-md px-2.5 text-xs',
-        lg: 'h-10 gap-1.5 px-4 text-[13px]',
+        default: 'h-10 min-h-10 gap-1.5 px-3 text-sm',
+        sm: 'h-10 min-h-10 gap-1 rounded-md px-2.5 text-[13px] sm:h-9 sm:min-h-9',
+        lg: 'h-11 min-h-11 gap-1.5 px-4 text-sm',
         icon: 'size-[40px] min-h-[40px] min-w-[40px]',
-        'icon-sm': 'size-8 rounded-md',
+        'icon-sm': 'size-[40px] min-h-[40px] min-w-[40px] rounded-md',
         'icon-lg': 'size-[40px] min-h-[40px] min-w-[40px]',
       },
     },

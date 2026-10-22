@@ -20,6 +20,7 @@ import Metric from '@/components/Metric'
 import QueryErrorState from '@/components/QueryErrorState'
 import SectionHeader from '@/components/SectionHeader'
 import { NativeSelect } from '@/components/ui/native-select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAppToast } from '@/components/Toast'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { useTransientState } from '@/hooks/useTransientFlag'
@@ -60,6 +61,8 @@ export default function CompileCache() {
   const [copiedValue, showCopiedValue, resetCopiedValue] = useTransientState<CopiedValue | null>(null)
   const [revokeTarget, setRevokeTarget] = useState<CompileCacheCredential | null>(null)
   const [cleanupOpen, setCleanupOpen] = useState(false)
+  const [credentialFilter, setCredentialFilter] = useState('all')
+  const [client, setClient] = useState<'ccache' | 'sccache'>('ccache')
 
   const statusQuery = useQuery({
     queryKey: ['admin', 'compile-cache', 'status'],
@@ -77,6 +80,8 @@ export default function CompileCache() {
   const status = statusResponse?.data
   const credentialsResponse = credentialsQuery.data
   const credentials = credentialsResponse?.data.items ?? []
+  const now = Math.max(statusQuery.dataUpdatedAt, credentialsQuery.dataUpdatedAt)
+  const filteredCredentials = credentials.filter(credential => credentialFilter === 'all' || (credentialFilter === 'expired') === Boolean(credential.expires_at && new Date(credential.expires_at).getTime() <= now))
   const numberFormatter = new Intl.NumberFormat(i18n.resolvedLanguage ?? i18n.language)
 
   const createMutation = useMutation({
@@ -207,12 +212,12 @@ export default function CompileCache() {
     },
     {
       key: 'expires_at',
-      label: t('compileCache.expiresAt'),
-      render: (value: unknown) => (
-        <span className="font-mono text-[12px] text-[var(--text-soft)]">
-          {value ? formatTime(value as string) : t('compileCache.neverExpires')}
-        </span>
-      ),
+      label: t('compileCache.credentialStatus'),
+      render: (value: unknown) => {
+        const expired = Boolean(value && new Date(value as string).getTime() <= now)
+        const expiring = Boolean(value && !expired && new Date(value as string).getTime() - now < 7 * 86400000)
+        return <div className="space-y-1"><Badge variant={expired ? 'neutral' : expiring ? 'warning' : 'success'}>{t(expired ? 'compileCache.expired' : expiring ? 'compileCache.expiring' : 'compileCache.active')}</Badge><p className="text-xs text-muted-foreground">{value ? formatTime(value as string) : t('compileCache.neverExpires')}</p></div>
+      },
     },
     {
       key: 'id',
@@ -220,7 +225,7 @@ export default function CompileCache() {
       render: (_value: unknown, row: CompileCacheCredential & Record<string, unknown>) => canWrite ? (
         <Button
           type="button"
-          variant="destructive"
+          variant="ghost"
           size="sm"
           disabled={revokeMutation.isPending}
           aria-label={t('compileCache.revokeNamed', { name: row.name })}
@@ -273,7 +278,13 @@ export default function CompileCache() {
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
         {copiedValue ? t('compileCache.copied') : ''}
       </span>
-      <div className="space-y-12">
+      <div className="space-y-7">
+        {status?.enabled && credentialsQuery.isSuccess && credentials.length === 0 && <section className="rounded-lg border border-l-2 border-l-primary p-5">
+          <h2 className="text-base font-semibold">{t('compileCache.connectTitle')}</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{t('compileCache.connectHint')}</p>
+          {canWrite && <Button className="mt-4" onClick={openCreateDialog}><Icon name="add" size="sm" />{t('compileCache.createCredential')}</Button>}
+        </section>}
+
         <section aria-labelledby="compile-cache-status-heading">
           <SectionHeader
             title={t('compileCache.statusTitle')}
@@ -305,31 +316,35 @@ export default function CompileCache() {
               )}
               {status.enabled ? (
                 <>
-                  <div className="grid grid-cols-2 gap-x-5 gap-y-8 lg:grid-cols-4">
+                  <div className="grid grid-cols-1 gap-x-5 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
                     <Metric
                       label={t('compileCache.capacityUsed')}
                       value={formatBytes(status.stats.size_bytes)}
-                      size={30}
+                      size={24}
+                      align="start"
                     />
                     <Metric
                       label={t('compileCache.entries')}
                       value={`${numberFormatter.format(status.stats.entries)} / ${numberFormatter.format(status.stats.max_entries)}`}
                       size={24}
+                      align="start"
                     />
                     <Metric
                       label={t('compileCache.hits')}
                       value={numberFormatter.format(status.stats.hits)}
-                      size={30}
+                      size={24}
+                      align="start"
                     />
                     <Metric
                       label={t('compileCache.namespaces')}
                       value={numberFormatter.format(status.stats.namespace_count)}
-                      size={30}
+                      size={24}
+                      align="start"
                     />
                   </div>
 
-                  <div>
-                    <div className="mb-2 flex items-center justify-between gap-4 text-[11px] text-[var(--text-soft)]">
+                  <div className="max-w-xl">
+                    <div className="mb-2 flex items-center justify-between gap-4 text-[13px] text-[var(--text-soft)]">
                       <span>{t('compileCache.capacity')}</span>
                       <span className="font-mono tabular-nums">
                         {formatBytes(status.stats.size_bytes)}{status.stats.max_bytes > 0 && ` / ${formatBytes(status.stats.max_bytes)}`}
@@ -391,7 +406,7 @@ export default function CompileCache() {
           <SectionHeader
             title={t('compileCache.credentialsTitle')}
             hint={t('compileCache.credentialsHint')}
-            action={canWrite ? (
+            action={canWrite && credentials.length > 0 ? (
               <Button type="button" size="sm" disabled={!status?.enabled} onClick={openCreateDialog}>
                 <Icon name="add" size="sm" />
                 {t('compileCache.createCredential')}
@@ -399,6 +414,7 @@ export default function CompileCache() {
             ) : undefined}
           />
 
+          {credentials.length > 0 && <div className="mb-4 max-w-56"><NativeSelect aria-label={t('compileCache.credentialStatus')} value={credentialFilter} onChange={event => setCredentialFilter(event.target.value)}><option value="all">{t('compileCache.allCredentials')}</option><option value="active">{t('compileCache.active')}</option><option value="expired">{t('compileCache.expired')}</option></NativeSelect></div>}
           {credentialsQuery.isPending ? (
             <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]">
               <span aria-hidden="true">{t('loading')}</span>
@@ -422,10 +438,10 @@ export default function CompileCache() {
               ) : (
                 <DataTable
                   columns={credentialColumns}
-                  data={credentials.map(credential => ({ ...credential }))}
+                  data={filteredCredentials.map(credential => ({ ...credential }))}
                   rowKey={row => row.id as number}
                   ariaLabel={t('compileCache.credentialsTable')}
-                  minWidth={860}
+                  minWidth={740}
                 />
               )}
             </div>
@@ -514,14 +530,15 @@ export default function CompileCache() {
               {t('compileCache.oneTimeWarning')}
             </AlertDescription></Alert>
             {clientConfigurations && (
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-4">
+                <Tabs value={client} onValueChange={value => setClient(value as typeof client)}><TabsList aria-label={t('compileCache.client')}><TabsTrigger value="ccache">ccache</TabsTrigger><TabsTrigger value="sccache">sccache</TabsTrigger></TabsList>
                 {([
                   { client: 'ccache', label: t('compileCache.remoteStorage'), value: clientConfigurations.ccache },
                   { client: 'sccache', label: t('compileCache.sccacheConfig'), value: clientConfigurations.sccache },
                 ] as const).map(item => {
                   const target = `${item.client}-config` as CopiedValue
                   return (
-                    <section key={item.client} className="flex min-w-0 flex-col rounded-md border border-[var(--border)] p-4">
+                    <TabsContent key={item.client} value={item.client}><section className="flex min-w-0 flex-col rounded-md border border-[var(--border)] p-4">
                       <h3 className="font-mono text-[14px] font-[650] text-[var(--text)]">{item.client}</h3>
                       <p className="mt-1 text-[11px] text-[var(--text-muted)]">{item.label}</p>
                       <div className="mt-3 flex-1 rounded-sm bg-[var(--bg-soft)] p-3">
@@ -543,9 +560,10 @@ export default function CompileCache() {
                             ? 'compileCache.copyCCacheConfig'
                             : 'compileCache.copySCCacheConfig')}
                       </Button>
-                    </section>
+                    </section></TabsContent>
                   )
                 })}
+                </Tabs>
               </div>
             )}
             <div className="flex flex-wrap justify-end gap-3">

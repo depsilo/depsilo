@@ -242,8 +242,8 @@ export interface RecentDownload {
 
 export interface RecentDownloadsResponse { items: RecentDownload[] }
 
-export interface CacheQuery { page?: number; page_size?: number; search?: string; adapter_type?: string }
-export interface CacheEntry { id: number; key: string; adapter_type: string; package_name: string; size: number; hit_count: number; last_accessed: string; expires_at: string }
+export interface CacheQuery { page?: number; page_size?: number; search?: string; adapter_type?: string; cache_kind?: 'artifact' | 'metadata' }
+export interface CacheEntry { cache_kind?: 'artifact' | 'metadata'; id: number; key: string; adapter_type: string; package_name: string; size: number; hit_count: number; last_accessed: string; expires_at: string }
 export interface CacheListResponse { items: CacheEntry[]; total: number; page: number; page_size: number }
 export interface CacheDeleteResponse {
   message: string
@@ -399,6 +399,7 @@ export interface CacheIndexQuery {
   status?: CacheIndexStatus
 }
 export interface CacheIndexEntry {
+  refresh_supported?: boolean
   id: number
   key: string
   adapter_type: string

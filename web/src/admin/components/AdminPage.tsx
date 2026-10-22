@@ -49,7 +49,7 @@ export default function AdminPage({
     <div
       data-admin-page
       data-admin-page-width={width}
-      className={`mx-auto min-w-0 w-full ${widthClasses[width]}`}
+      className={`mx-auto min-w-0 w-full ${widthClasses[workspaceTabs ? 'fluid' : width]}`}
     >
       {hasHeader && (
         <header data-admin-page-header className="mb-4 min-w-0">
@@ -68,7 +68,7 @@ export default function AdminPage({
                   {description && (
                     <div
                       data-admin-page-description
-                      className="min-w-0 max-w-[72ch] text-[12px] leading-[1.6]"
+                      className="min-w-0 max-w-[72ch] text-[13px] leading-[1.6]"
                       style={{ color: 'var(--text-soft)' }}
                     >
                       {description}
@@ -98,7 +98,7 @@ export default function AdminPage({
                   {description && (
                     <div
                       data-admin-page-description
-                      className={`${resolvedTitle ? 'mt-1.5' : ''} text-[12px] leading-[1.6]`}
+                      className={`${resolvedTitle ? 'mt-1.5' : ''} text-[13px] leading-[1.6]`}
                       style={{ color: 'var(--text-soft)' }}
                     >
                       {description}
@@ -115,7 +115,7 @@ export default function AdminPage({
           )}
         </header>
       )}
-      <div data-admin-page-content className="min-w-0">
+      <div data-admin-page-content className={`min-w-0 ${workspaceTabs && width === 'readable' ? 'max-w-3xl' : ''}`}>
         {/* Policy runtime status belongs to the page that owns policy, not to a
             shell banner above every page. Overview surfaces it in the
             attention queue instead. */}

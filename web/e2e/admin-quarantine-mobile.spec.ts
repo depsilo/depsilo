@@ -104,7 +104,7 @@ test('quarantine mobile lists keep decision context and available actions visibl
   const createDialog = page.getByRole('dialog', { name: 'Create malware override' })
   await expect(createDialog.getByLabel('Ecosystem')).toBeVisible()
   await expect(createDialog.getByLabel('Package')).toBeVisible()
-  await expect(createDialog.getByLabel('Version')).toBeVisible()
+  await expect(createDialog.getByLabel('Version', { exact: true })).toBeVisible()
   await expect(createDialog.getByLabel('Reason')).toBeVisible()
 
   const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()

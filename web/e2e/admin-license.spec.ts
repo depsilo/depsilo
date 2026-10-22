@@ -20,7 +20,7 @@ function deferred<T>() {
 }
 
 async function openReplacementEditor(page: Page) {
-  await page.getByRole('button', { name: /许可证密钥|License key/ }).click()
+  await expect(page.getByRole('button', { name: /许可证密钥|License key/ })).toHaveAttribute('aria-expanded', 'true')
   await page.getByRole('button', { name: /更换密钥|Change key/ }).click()
   return page.getByLabel(/许可证密钥|License key/)
 }

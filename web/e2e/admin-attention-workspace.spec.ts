@@ -23,6 +23,7 @@ const securitySuggestion: SecurityVulnerability = {
 test('attention workspace brings operational risks into one direct queue', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await mockAdminApi(page, {
+    'GET /api/v1/admin/upstreams': { items: [{ id: 7, name: 'PyPI primary', adapter_type: 'pypi', healthy: false, has_observations: true, avg_latency_ms: 0, success_rate: 0 }], total: 1 },
     'GET /api/v1/admin/dashboard': {
       last_24h: { total_requests: 12, hit_rate: 0.5, bytes_served: 2048, avg_latency_ms: 120 },
       prev_24h: { total_requests: 8, hit_rate: 0.4, bytes_served: 1024, avg_latency_ms: 100 },
@@ -168,8 +169,10 @@ test('attention keeps cached results visible when background refreshes fail', as
   let dashboardCalls = 0
   let suggestionCalls = 0
   let quarantineCalls = 0
+  let upstreamCalls = 0
   const failed = { status: 500, body: { code: 'FAILED', message: 'fixture refresh unavailable' } }
   await mockAdminApi(page, {
+    'GET /api/v1/admin/upstreams': () => { upstreamCalls += 1; return failRefresh ? failed : { items: [{ id: 7, name: 'Cached upstream', adapter_type: 'pypi', healthy: false, has_observations: true, avg_latency_ms: 0, success_rate: 0 }], total: 1 } },
     'GET /api/v1/admin/dashboard': () => {
       dashboardCalls += 1
       return failRefresh ? failed : {
@@ -217,7 +220,7 @@ test('attention keeps cached results visible when background refreshes fail', as
   await page.goBack()
   await expect(page).toHaveURL(/\/admin\/attention$/)
   await expect(page.locator('[data-admin-page-title]')).toHaveText(/待处理|Needs Attention/)
-  await expect.poll(() => Math.min(dashboardCalls, suggestionCalls, quarantineCalls)).toBeGreaterThan(1)
+  await expect.poll(() => Math.min(dashboardCalls, suggestionCalls, quarantineCalls, upstreamCalls)).toBeGreaterThan(1)
 
   const queue = page.locator('section[aria-labelledby="attention-queue-title"]')
   const recent = page.locator('section[aria-labelledby="attention-recent-title"]')

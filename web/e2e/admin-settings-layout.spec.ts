@@ -65,13 +65,13 @@ test('owns Save at page level and keeps Add Webhook inside the Webhook tab', asy
   await page.goto('/admin/settings')
 
   const pageActions = page.locator('[data-admin-page-actions]')
-  await expect(pageActions.getByRole('button', { name: /^保存$/ })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^保存$/ })).toHaveCount(1)
+  await expect(pageActions.getByRole('button', { name: /^保存全部变更$/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^保存全部变更$/ })).toHaveCount(1)
 
   await page.getByRole('tab', { name: /Webhook/ }).click()
 
   await expect(page.locator('[data-admin-page-actions]')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /^保存$/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^保存全部变更$/ })).toHaveCount(0)
   const addWebhook = page.getByRole('tabpanel').getByRole('button', { name: /添加 Webhook/ })
   await expect(addWebhook).toBeVisible()
   await expect(addWebhook).toBeEnabled()
@@ -88,7 +88,7 @@ test('scopes config-file read-only feedback to configuration tabs', async ({ pag
 
   const configReadOnly = page.getByText(/配置文件只读/)
   await expect(configReadOnly).toBeVisible()
-  await expect(page.locator('[data-admin-page-actions]').getByRole('button', { name: /^保存$/ })).toBeDisabled()
+  await expect(page.locator('[data-admin-page-actions]').getByRole('button', { name: /^保存全部变更$/ })).toBeDisabled()
 
   await page.getByRole('tab', { name: /Webhook/ }).click()
 
@@ -140,7 +140,7 @@ test('renders one restart notice after a save that requires restart', async ({ p
   await page.goto('/admin/settings')
   await page.getByRole('tab', { name: /缓存策略/ }).click()
   await page.getByLabel(/索引 TTL/).fill('10m')
-  await page.locator('[data-admin-page-actions]').getByRole('button', { name: /^保存$/ }).click()
+  await page.locator('[data-admin-page-actions]').getByRole('button', { name: /^保存全部变更$/ }).click()
 
   const pageContent = page.locator('[data-admin-page-content]')
   await expect(pageContent.getByText(/^重启后生效$/)).toHaveCount(1)
@@ -171,7 +171,7 @@ test('has no root overflow across Settings and Webhooks at 320px in English', as
   })
   await page.goto('/admin/settings')
 
-  await expect(page.getByRole('button', { name: /^Save$/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Save all changes$/ })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
 
   await page.getByRole('tab', { name: /Webhooks/ }).click()

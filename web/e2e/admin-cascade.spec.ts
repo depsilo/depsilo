@@ -53,14 +53,13 @@ test('cascade page shows peers, bindings, and dangling references', { tag: '@smo
   await expect(page.getByRole('tab', { name: '客户端接入' })).toBeVisible()
   await expect(page.getByRole('tab', { name: '作为父节点' })).toBeVisible()
   await expect(page.getByRole('tab', { name: '作为子节点' })).toBeVisible()
-  await expect(page.getByText(`npm config set registry ${new URL(page.url()).origin}/npm`).first()).toBeVisible()
-
-  // The generated commands follow the client-reachable address field.
-  await page.getByLabel('本机访问地址').fill('http://10.0.0.9:23333')
-  await expect(page.getByText('npm config set registry http://10.0.0.9:23333/npm').first()).toBeVisible()
-  // The child tab exposes the parent health check.
+  await expect(page.getByRole('link', { name: '查看全部客户端接入方式' })).toHaveAttribute('href', '/admin/connect')
+  await page.getByRole('tab', { name: '作为父节点' }).click()
+  await expect(page.getByText(/url = /).first()).toContainText(new URL(page.url()).origin)
+  await expect(page.getByText(/普通上游配置由数据库管理/)).toBeVisible()
   await page.getByRole('tab', { name: '作为子节点' }).click()
-  await expect(page.getByText('curl -fsS http://192.168.1.10:23333/health').first()).toBeVisible()
+  await expect(page.getByText('在左侧添加父节点地址与凭据，保存配置。')).toBeVisible()
+
 })
 
 test('cascade page explains how to enable the feature when it is off', { tag: '@smoke' }, async ({ page }) => {

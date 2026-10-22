@@ -13,6 +13,27 @@ afterEach(() => {
 })
 
 describe('safe local storage', () => {
+  it('clears only configuration drafts when the authentication token is removed', () => {
+    const session: Record<string, unknown> = {
+      'depsilo:settings-draft:https://instance.test:1': '{}',
+      'unrelated-cursor': '12',
+      removeItem: (key: string) => { delete session[key] },
+    }
+    const removeItem = vi.fn()
+    vi.stubGlobal('window', { localStorage: { removeItem }, sessionStorage: session })
+    expect(removeLocalStorage('lang')).toBe(true)
+    expect(session['depsilo:settings-draft:https://instance.test:1']).toBe('{}')
+    expect(removeLocalStorage('token')).toBe(true)
+    expect(session['depsilo:settings-draft:https://instance.test:1']).toBeUndefined()
+    expect(session['unrelated-cursor']).toBe('12')
+    expect(removeItem).toHaveBeenCalledWith('token')
+  })
+  it('still logs out when session draft storage is inaccessible', () => {
+    const removeItem = vi.fn()
+    vi.stubGlobal('window', { localStorage: { removeItem }, get sessionStorage() { throw new Error('blocked') } })
+    expect(removeLocalStorage('token')).toBe(true)
+    expect(removeItem).toHaveBeenCalledWith('token')
+  })
   it('degrades when the browser storage object is unavailable', () => {
     vi.stubGlobal('window', undefined)
 

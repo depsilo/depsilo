@@ -48,11 +48,18 @@
   --font-display: 'Inter Tight Variable', 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei', sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* Pin the spacing scale in px. Tailwind derives it from `--spacing` in
-     `rem`, and this document sets a 13px root font size, so the derived
-     steps would be 3.25/6.5/9.75… instead of the 4/8/12… grid the layout
-     is drawn on. These entries keep every p-*, gap-*, h-*, w-* utility on
-     the intended grid. */
+  /* The compact document root must not shrink standard controls. Set the
+     entire scale, including half steps and h-9/h-10, rather than only a
+     handful of spacing utilities. Typography uses the same explicit units. */
+  --spacing: 4px;
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+  --text-4xl: 36px;
   --spacing-1:  4px;
   --spacing-2:  8px;
   --spacing-3:  12px;

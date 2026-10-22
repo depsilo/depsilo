@@ -140,7 +140,7 @@ test('sends only dirty settings and renders server-authored restart status', asy
   })
   await openCacheSettings(page)
   await page.getByLabel(/索引 TTL/).fill('10m')
-  await page.getByRole('button', { name: /^保存$/ }).click()
+  await page.getByRole('button', { name: /^保存全部变更$/ }).click()
   expect(requestBody).toEqual({ cache: { ttl_index: '10m' } })
   await expect(page.getByText(/重启后生效/)).toBeVisible()
   await expect(page.getByLabel(/索引 TTL/)).toHaveValue('10m')
@@ -154,7 +154,7 @@ test('keeps dirty input and never reports success after 422', async ({ page }) =
   await openCacheSettings(page)
   const ttl = page.getByLabel(/索引 TTL/)
   await ttl.fill('999999999999999999999999h')
-  await page.getByRole('button', { name: /^保存$/ }).click()
+  await page.getByRole('button', { name: /^保存全部变更$/ }).click()
   await expect(page.getByRole('alert')).toContainText('bad ttl')
   await expect(ttl).toHaveValue('999999999999999999999999h')
   await expect(page.getByText(/^已保存$/)).toHaveCount(0)
@@ -178,7 +178,7 @@ test('validates cache constraints locally and focuses the first invalid field', 
   await threshold.fill('101')
   await indexTTL.fill('7d')
   await blobTTL.fill('')
-  await page.getByRole('button', { name: /^保存$|^Save$/ }).click()
+  await page.getByRole('button', { name: /^保存全部变更$|^Save all changes$/ }).click()
 
   expect(updateRequests).toBe(0)
   await expect(maxSize).toBeFocused()
@@ -215,9 +215,9 @@ test('rejects unsupported token never and submits a valid duration with Enter', 
     },
   })
   await page.goto('/admin/settings')
-  await page.getByRole('tab', { name: /认证与安全|Auth & Security/ }).click()
+  await page.getByRole('tab', { name: /登录会话|Login sessions/ }).click()
 
-  const tokenTTL = page.getByLabel(/Token 有效期|Token Validity/)
+  const tokenTTL = page.getByLabel(/登录会话有效期|Login session lifetime/)
   await tokenTTL.fill('never')
   await page.keyboard.press('Enter')
   expect(updateRequests).toBe(0)
@@ -251,13 +251,13 @@ test('renders applied-now results from the update response', async ({ page }) =>
   })
   await page.goto('/admin/settings')
   await page.getByLabel(/日志级别/).selectOption('debug')
-  await page.getByRole('button', { name: /^保存$/ }).click()
+  await page.getByRole('button', { name: /^保存全部变更$/ }).click()
   await expect(page.getByText(/已立即生效/).first()).toBeVisible()
 })
 
 test('does not send a request when there are no changes', async ({ page }) => {
   await page.goto('/admin/settings')
-  await page.getByRole('button', { name: /^保存$/ }).click()
+  await page.getByRole('button', { name: /^保存全部变更$/ }).click()
   await expect(page.getByText(/^没有变更$/)).toBeVisible()
 })
 
@@ -277,7 +277,7 @@ test('renders environment-blocked results from the update response', async ({ pa
   })
   await page.goto('/admin/settings')
   await page.getByLabel(/日志级别/).selectOption('debug')
-  await page.getByRole('button', { name: /^保存$/ }).click()
+  await page.getByRole('button', { name: /^保存全部变更$/ }).click()
   await expect(page.getByText(/被环境变量覆盖/).first()).toBeVisible()
   await expect(page.getByText(/DEPSILO_SERVER_LOG_LEVEL/)).toBeVisible()
 })
@@ -303,7 +303,7 @@ test('disables settings when the config file is not writable', async ({ page }) 
   await openCacheSettings(page)
   await expect(page.getByText(/配置文件只读/)).toBeVisible()
   await expect(page.getByLabel(/索引 TTL/)).toBeDisabled()
-  await expect(page.getByRole('button', { name: /^保存$/ })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /^保存全部变更$/ })).toBeDisabled()
 })
 
 test('disables settings for a principal whose wire DTO has can_write false', async ({ page }) => {
@@ -321,7 +321,7 @@ test('disables settings for a principal whose wire DTO has can_write false', asy
   await openCacheSettings(page)
   await expect(page.getByText(/当前账号为只读/)).toBeVisible()
   await expect(page.getByLabel(/索引 TTL/)).toBeDisabled()
-  await expect(page.getByRole('button', { name: /^保存$/ })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /^保存全部变更$/ })).toBeDisabled()
 })
 
 test('recovers from an initial settings 500 via Retry', async ({ page }) => {
@@ -387,7 +387,7 @@ test('rebases untouched draft fields before building a patch after refetch', asy
   })
   await expect.poll(() => getRequests).toBeGreaterThan(1)
   await expect(page.getByLabel(/最大缓存容量/)).toHaveValue('30')
-  await page.getByRole('button', { name: /^保存$/ }).click()
+  await page.getByRole('button', { name: /^保存全部变更$/ }).click()
   expect(requestBody).toEqual({ cache: { ttl_index: '10m' } })
 })
 

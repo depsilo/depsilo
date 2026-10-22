@@ -4,7 +4,10 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router'
+import { getAdminRouteHref } from '@/admin/routes'
+import { useAppToast } from '@/components/Toast'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
@@ -33,10 +36,13 @@ import type { CreateProjectRequest, ProjectDetail, ProjectSBOMFormat, ProjectSum
 
 function CopyButton({ text, label }: { text: string; label: string }) {
   const [copied, showCopied] = useTransientFlag()
+  const { t } = useTranslation()
+  const toast = useAppToast()
   async function handleClick() {
     if (await copyText(text)) {
       showCopied()
-    }
+      toast.show({ tone: 'success', message: t('copied') })
+    } else toast.show({ tone: 'danger', message: t('projects.copyFailed') })
   }
   return (
     <Tooltip>
@@ -62,19 +68,48 @@ export default function Projects() {
   const queryClient = useQueryClient()
   const { canWrite } = usePrincipal()
 
-  const [selectedProject, setSelectedProject] = useState<ProjectSummary | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const projectParam = Number(searchParams.get('project'))
+  const projectId = Number.isSafeInteger(projectParam) && projectParam > 0 ? projectParam : null
+  const requestedPage = Number(searchParams.get('page'))
+  const pkgPage = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1
+  const requestedEcosystem = searchParams.get('ecosystem') ?? ''
+  const pkgEcosystem = operatorEcosystems.some(item => item.id === requestedEcosystem) ? requestedEcosystem : ''
+  function setSelectedProject(project: ProjectSummary | null) {
+    setSearchParams(project ? { project: String(project.id) } : {})
+  }
+  function setPkgPage(page: number) {
+    setSearchParams(current => { const next = new URLSearchParams(current); if (page > 1) next.set('page', String(page)); else next.delete('page'); return next })
+  }
+  function setPkgEcosystem(ecosystem: string) {
+    setSearchParams(current => { const next = new URLSearchParams(current); if (ecosystem) next.set('ecosystem', ecosystem); else next.delete('ecosystem'); next.delete('page'); return next })
+  }
+  const [exportOpen, setExportOpen] = useState(false)
+  const [editForm, setEditForm] = useState<{ name: string; description: string } | null>(null)
+  const [rotateOpen, setRotateOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [createForm, setCreateForm] = useState({ name: '', description: '' })
   const [tokenData, setTokenData] = useState<{ token: string; proxy_url: string } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ProjectSummary | null>(null)
-  const [pkgPage, setPkgPage] = useState(1)
-  const [pkgEcosystem, setPkgEcosystem] = useState('')
   const [sbomFormat, setSbomFormat] = useState<ProjectSBOMFormat>('spdx')
   const [sbomEcosystem, setSbomEcosystem] = useState('')
   const [sbomTechnicalFile, setSbomTechnicalFile] = useState(false)
   const [sbomSign, setSbomSign] = useState(false)
   const [sbomError, setSbomError] = useState('')
   const [sbomLoading, setSbomLoading] = useState(false)
+  const exportController = useRef<AbortController | null>(null)
+  const [viewProjectId, setViewProjectId] = useState(projectId)
+  if (viewProjectId !== projectId) {
+    setViewProjectId(projectId)
+    setExportOpen(false)
+    setEditForm(null)
+    setRotateOpen(false)
+    setTokenData(null)
+    setSbomError('')
+    setSbomLoading(false)
+  }
+  useEffect(() => () => { exportController.current?.abort() }, [projectId])
+
 
   const locale = i18n.resolvedLanguage?.startsWith('zh') ? 'zh-CN' : 'en-US'
   const formatProjectTime = (value: string) => {
@@ -97,27 +132,28 @@ export default function Projects() {
   })
   const { data } = query
   const projects = data?.data.items ?? []
+  const selectedProject = projects.find(project => project.id === projectId) ?? null
 
   const detailQuery = useQuery({
-    queryKey: ['admin', 'projects', selectedProject?.id],
-    queryFn: ({ signal }) => adminApi.getProject(selectedProject!.id, { signal }),
-    enabled: !!selectedProject,
+    queryKey: ['admin', 'projects', projectId],
+    queryFn: ({ signal }) => adminApi.getProject(projectId!, { signal }),
+    enabled: projectId !== null,
     retry: false,
   })
   const detailData = detailQuery.data
   const projectDetail: ProjectDetail | ProjectSummary | null = detailData?.data ?? selectedProject
 
   const packagesQuery = useQuery({
-    queryKey: ['admin', 'projects', selectedProject?.id, 'packages', pkgPage, pkgEcosystem],
-    queryFn: ({ signal }) => adminApi.listProjectPackages(selectedProject!.id, { page: pkgPage, per_page: 20, ecosystem: pkgEcosystem || undefined }, { signal }),
-    enabled: !!selectedProject,
+    queryKey: ['admin', 'projects', projectId, 'packages', pkgPage, pkgEcosystem],
+    queryFn: ({ signal }) => adminApi.listProjectPackages(projectId!, { page: pkgPage, per_page: 20, ecosystem: pkgEcosystem || undefined }, { signal }),
+    enabled: projectId !== null,
     retry: false,
   })
   const pkgData = packagesQuery.data
   const complianceQuery = useQuery({
     queryKey: ['admin', 'compliance', 'profile'],
     queryFn: ({ signal }) => adminApi.complianceProfile({ signal }),
-    enabled: !!selectedProject,
+    enabled: projectId !== null && exportOpen,
     retry: false,
     staleTime: 5 * 60 * 1000,
   })
@@ -126,16 +162,29 @@ export default function Projects() {
   const pkgTotal = pkgData?.data.total ?? 0
 
   const createMutation = useMutation({
-    mutationFn: (input: CreateProjectRequest) => adminApi.createProject(input),
-    onSuccess: (res) => {
+    mutationFn: async (input: CreateProjectRequest) => {
+      const { data: result } = await adminApi.createProject(input)
+      if (result.token) setTokenData({ token: result.token, proxy_url: `${window.location.origin}/p/${result.slug}` })
+      // One-time credentials remain in component state, never mutation data.
+    },
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'projects'] })
       setCreateOpen(false)
       setCreateForm({ name: '', description: '' })
-      const result = res.data
-      if (result?.token) {
-        setTokenData({ token: result.token, proxy_url: result.proxy_url || `${window.location.origin}/p/${result.slug}` })
-      }
+
     },
+  })
+
+  const editMutation = useMutation({
+    mutationFn: (form: { name: string; description: string }) => adminApi.updateProject(projectId!, form),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['admin', 'projects'] }); setEditForm(null) },
+  })
+  const rotateMutation = useMutation({
+    mutationFn: async () => {
+      const { data: result } = await adminApi.regenerateProjectToken(projectId!)
+      setTokenData({ token: result.token, proxy_url: `${window.location.origin}/p/${projectDetail?.slug ?? ''}` })
+    },
+    onSuccess: () => setRotateOpen(false),
   })
 
   const deleteMutation = useMutation({
@@ -143,7 +192,7 @@ export default function Projects() {
     onSuccess: (_response, deletedProjectId) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'projects'] })
       setDeleteTarget(null)
-      if (selectedProject?.id === deletedProjectId) {
+      if (projectId === deletedProjectId) {
         setSelectedProject(null)
       }
     },
@@ -192,16 +241,19 @@ export default function Projects() {
   }
 
   async function handleSbomDownload() {
-    if (!selectedProject) return
+    if (!projectId) return
+    const controller = new AbortController()
+    exportController.current = controller
     setSbomLoading(true)
     setSbomError('')
     try {
-      const res = await adminApi.exportSbom(selectedProject.id, {
+      const res = await adminApi.exportSbom(projectId, {
         format: sbomFormat,
         ecosystem: sbomEcosystem || undefined,
         preset: sbomTechnicalFile ? 'technical-file' : undefined,
         sign: sbomSign || undefined,
-      })
+      }, { signal: controller.signal })
+      if (controller.signal.aborted) return
       const base = `${projectDetail?.name || 'project'}-sbom`
       const filename = sbomTechnicalFile
         ? `${projectDetail?.name || 'project'}-cra-technical-file.json`
@@ -219,11 +271,51 @@ export default function Projects() {
         downloadBlob(new Blob([JSON.stringify(sidecar, null, 2)], { type: 'application/json' }), `${filename}.sig.json`)
       }
     } catch (error) {
-      setSbomError(await sbomFailureMessage(error))
+      if (!controller.signal.aborted) setSbomError(await sbomFailureMessage(error))
     } finally {
-      setSbomLoading(false)
+      if (exportController.current === controller) setSbomLoading(false)
     }
   }
+
+  const tokenDialog = <>
+{/* Token reveal modal */}
+        <Dialog open={tokenData !== null} onOpenChange={(nextOpen) => { if (!nextOpen) setTokenData(null) }} modal>
+          <DialogContent style={{ maxWidth: 440 }} finalFocus={true}>
+            <DialogTitle className="pr-10">{t('projects.token')}</DialogTitle>
+            {tokenData && (
+              <div className="space-y-4">
+                <div className="rounded-md p-3" style={{ background: 'var(--warn-fill)', border: '1px solid var(--warn-border)' }}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Icon name="warning" size="sm" style={{ color: 'var(--warn-text)' }} />
+                    <span className="text-[13px] font-[500]" style={{ color: 'var(--warn-text)' }}>{t('projects.tokenWarning')}</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[13px] font-[500] mb-1" style={{ color: 'var(--text-muted)' }}>{t('projects.token')}</label>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-sm break-all" style={{ background: 'var(--bg-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}>
+                      {tokenData.token}
+                    </code>
+                    <CopyButton text={tokenData.token} label={t('projects.copyToken')} />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[13px] font-[500] mb-1" style={{ color: 'var(--text-muted)' }}>{t('projects.proxyUrl')}</label>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-sm break-all" style={{ background: 'var(--bg-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}>
+                      {tokenData.proxy_url}
+                    </code>
+                    <CopyButton text={tokenData.proxy_url} label={t('projects.copyProxyUrl')} />
+                  </div>
+                </div>
+                <div className="flex justify-end pt-2">
+                  <Button onClick={() => setTokenData(null)}>{t('confirm')}</Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+  </>
 
   const apiError = getApiError(query.error)
   if (query.isError && !data && apiError.status === 402) {
@@ -256,8 +348,8 @@ export default function Projects() {
   }
 
   // ── Detail view ────────────────────────────────────────────────
-  if (selectedProject) {
-    const proxyUrl = detailData?.data?.proxy_url ?? `${window.location.origin}/p/${projectDetail?.slug ?? ''}`
+  if (projectId) {
+    const proxyUrl = `${window.location.origin}/p/${projectDetail?.slug ?? ''}`
     const ecosystems: Record<string, number> = detailData?.data?.ecosystem_breakdown ?? {}
 
     const pkgColumns = [
@@ -271,8 +363,8 @@ export default function Projects() {
           </div>
         ),
       },
-      { key: 'package_name', label: t('name'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text)' }}>{v as string}</span> },
-      { key: 'version', label: t('projects.version'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{(v as string) || '-'}</span> },
+      { key: 'package_name', label: t('name'), render: (v: unknown) => <span className="font-mono text-[13px]" style={{ color: 'var(--text)' }}>{v as string}</span> },
+      { key: 'version', label: t('projects.version'), render: (v: unknown) => <span className="font-mono text-[13px]" style={{ color: 'var(--text-soft)' }}>{(v as string) || '-'}</span> },
       { key: 'first_seen_at', label: t('projects.firstSeen'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatProjectTime(v as string)}</span> },
       { key: 'last_seen_at', label: t('projects.lastSeen'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatProjectTime(v as string)}</span> },
       { key: 'download_count', label: t('projects.downloads'), render: (v: unknown) => <span className="text-[12px] font-mono" style={{ color: 'var(--text-soft)' }}>{(v as number) ?? 0}</span> },
@@ -280,13 +372,13 @@ export default function Projects() {
 
     return (
       <AdminPage description={t('projects.subtitle')}>
-      <div className="space-y-12">
+      <div className="space-y-6">
         {/* Detail header */}
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
             <Tooltip>
               <TooltipTrigger render={
                 <Button
-                  onClick={() => { setSelectedProject(null); setPkgPage(1); setPkgEcosystem('') }}
+                  onClick={() => setSelectedProject(null)}
                   variant="ghost"
                   size="icon"
                   data-icon-button
@@ -299,6 +391,13 @@ export default function Projects() {
               <TooltipContent>{t('projects.backToList')}</TooltipContent>
             </Tooltip>
           <h2 className="min-w-0 break-words text-[20px] font-[600] [overflow-wrap:anywhere]" style={{ color: 'var(--text)' }}>{projectDetail?.name}</h2>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Button variant="outline" disabled={!detailData} onClick={() => { setSbomError(''); setExportOpen(true) }}><Icon name="download" size="sm" />{t('sbom.export')}</Button>
+            {canWrite && <>
+              <Button variant="outline" disabled={!detailData} onClick={() => { editMutation.reset(); setEditForm({ name: projectDetail?.name ?? '', description: projectDetail?.description ?? '' }) }}>{t('projects.editTitle')}</Button>
+              <Button variant="outline" disabled={!detailData} onClick={() => { rotateMutation.reset(); setRotateOpen(true) }}>{t('projects.regenerateToken')}</Button>
+            </>}
+          </div>
         </div>
 
         {/* Project info */}
@@ -313,6 +412,7 @@ export default function Projects() {
             />
           ) : detailData?.data ? (
           <div className="space-y-3">
+            {projectDetail?.description && <p className="text-sm text-muted-foreground">{projectDetail.description}</p>}
             {detailQuery.isRefetchError && <StaleDataNotice refreshing={detailQuery.isFetching} onRefresh={() => detailQuery.refetch()} />}
             <div
               data-project-proxy-row
@@ -322,7 +422,7 @@ export default function Projects() {
               <div className="flex min-w-0 items-center gap-2">
                 <span
                   data-project-proxy-value
-                  className="min-w-0 flex-1 break-all rounded-sm px-2 py-1 font-mono text-[12px] leading-5"
+                  className="min-w-0 flex-1 break-all rounded-sm px-2 py-1 font-mono text-[13px] leading-5"
                   style={{ background: 'var(--bg-soft)', color: 'var(--text)' }}
                 >
                   {proxyUrl}
@@ -332,6 +432,8 @@ export default function Projects() {
                 </div>
               </div>
             </div>
+            <p className="max-w-[80ch] text-sm text-muted-foreground">{t('projects.connectionHint')}</p>
+            <Button variant="link" className="px-0" render={<Link to={getAdminRouteHref('connect')} />} nativeButton={false} role="link">{t('projects.connectionGuide')}<Icon name="arrow_forward" size="sm" /></Button>
             <div className="flex items-center gap-3">
               <span className="text-[13px] w-32 shrink-0" style={{ color: 'var(--text-soft)' }}>{t('projects.packageCount')}</span>
               <span className="text-[13px] font-mono tabular-nums" style={{ color: 'var(--text)' }}>{projectDetail?.package_count ?? 0}</span>
@@ -354,27 +456,31 @@ export default function Projects() {
           ) : <Empty style={{ minHeight: 180 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"folder_managed"} size="sm" /></EmptyMedia><EmptyTitle>{t('noData')}</EmptyTitle></EmptyHeader></Empty>}
         </section>
 
-        {/* SBOM export */}
-        <section>
-          <SectionHeader title={t('sbom.export')} />
-          <div data-project-sbom-controls className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,14rem)_auto] sm:items-end">
+        <Dialog open={exportOpen} onOpenChange={open => { if (!sbomLoading) setExportOpen(open) }}>
+          <DialogContent className="sm:max-w-[640px]" closeDisabled={sbomLoading}>
+          <DialogTitle>{t('sbom.export')}</DialogTitle>
+          <p className="min-w-0 break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">{projectDetail?.name}</p>
+          {complianceQuery.isPending && <p role="status">{t('loading')}</p>}
+          {complianceQuery.isError && <QueryErrorState message={t('sbom.profileUnavailable')} onRetry={() => { void complianceQuery.refetch() }} />}
+          {complianceQuery.isRefetchError && compliance && <StaleDataNotice onRefresh={() => { void complianceQuery.refetch() }} />}
+          <div data-project-sbom-controls className="grid min-w-0 gap-3 sm:grid-cols-2 sm:items-end">
               <Field>
                 <FieldLabel>{t('sbom.format')}</FieldLabel>
-                <NativeSelect value={sbomFormat} onChange={(event) => setSbomFormat(event.target.value as ProjectSBOMFormat)}>
+                <NativeSelect disabled={sbomLoading} value={sbomFormat} onChange={(event) => setSbomFormat(event.target.value as ProjectSBOMFormat)}>
                   <option value="spdx">{t('sbom.spdx')}</option>
                   <option value="cyclonedx">{t('sbom.cyclonedx')}</option>
                 </NativeSelect>
               </Field>
               <Field>
                 <FieldLabel>{t('sbom.filterEcosystem')}</FieldLabel>
-                <NativeSelect value={sbomEcosystem} onChange={(e) => setSbomEcosystem(e.target.value)}>
+                <NativeSelect disabled={sbomLoading} value={sbomEcosystem} onChange={(e) => setSbomEcosystem(e.target.value)}>
                   <option value="">{t('sbom.allEcosystems')}</option>
                   {operatorEcosystems.map(ecosystem => (
                     <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>
                   ))}
                 </NativeSelect>
               </Field>
-            <Button className="w-full sm:w-auto" onClick={handleSbomDownload} disabled={sbomLoading}>
+            <Button className="w-full sm:w-auto" onClick={handleSbomDownload} disabled={sbomLoading || (sbomSign && (!complianceQuery.isSuccess || !compliance?.signing_configured))}>
               <Icon name="download" size="sm" />
               {sbomLoading ? t('sbom.generating') : t('sbom.download')}
             </Button>
@@ -383,7 +489,7 @@ export default function Projects() {
             <label className="flex cursor-pointer items-start gap-2 text-[14px] text-[var(--text-soft)]">
                 <Checkbox
                   className="mt-0.5"
-                  checked={sbomTechnicalFile}
+                  disabled={sbomLoading} checked={sbomTechnicalFile}
                   onCheckedChange={setSbomTechnicalFile}
                 />
               <span>
@@ -395,28 +501,30 @@ export default function Projects() {
                 <Checkbox
                   className="mt-0.5"
                   checked={sbomSign}
+                  disabled={sbomLoading || (!sbomSign && (!complianceQuery.isSuccess || !compliance?.signing_configured))}
                   onCheckedChange={setSbomSign}
                 />
               <span>
                 {t('sbom.sign')}
                 <span className="block text-[13px] text-[var(--text-soft)]">
-                  {compliance?.signing_configured ? t('sbom.signHint') : t('sbom.signUnavailable')}
+                  {complianceQuery.isSuccess ? (compliance?.signing_configured ? t('sbom.signHint') : t('sbom.signUnavailable')) : t('sbom.profileUnknown')}
                 </span>
               </span>
             </label>
-            {sbomTechnicalFile && !compliance?.organization && (
+            {sbomTechnicalFile && complianceQuery.isSuccess && !compliance?.organization && (
               <p className="text-[13px] text-[var(--text-soft)]">{t('sbom.organizationMissing')}</p>
             )}
             {sbomError && <Alert variant={"destructive"}><AlertDescription>{sbomError}</AlertDescription></Alert>}
           </div>
-        </section>
+          </DialogContent>
+        </Dialog>
 
         {/* Package table */}
         <section>
           <SectionHeader
             title={t('projects.packages')}
             action={
-              <NativeSelect aria-label={t('sbom.filterEcosystem')} value={pkgEcosystem} onChange={(e) => { setPkgEcosystem(e.target.value); setPkgPage(1) }}>
+              <NativeSelect aria-label={t('sbom.filterEcosystem')} value={pkgEcosystem} onChange={(e) => setPkgEcosystem(e.target.value)}>
                 <option value="">{t('all')}</option>
                 {operatorEcosystems.map(ecosystem => (
                   <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>
@@ -435,23 +543,41 @@ export default function Projects() {
             <div className="space-y-3">
               {pkgData && packagesQuery.isRefetchError && <StaleDataNotice refreshing={packagesQuery.isFetching} onRefresh={() => packagesQuery.refetch()} />}
               {packages.length === 0 ? (
-                <Empty style={{ minHeight: 200 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"inventory_2"} size="sm" /></EmptyMedia><EmptyTitle>{t('projects.noPackages')}</EmptyTitle></EmptyHeader></Empty>
+                <Empty style={{ minHeight: 200 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"inventory_2"} size="sm" /></EmptyMedia><EmptyTitle>{t('projects.noPackages')}</EmptyTitle><EmptyDescription>{t('projects.noPackagesHelp')}</EmptyDescription></EmptyHeader></Empty>
               ) : (
                 <DataTable
                   columns={pkgColumns}
                   data={packages.map((pkg) => ({ ...pkg }))}
                   rowKey={(row) => `${row.ecosystem}:${row.package_name}:${row.version}`}
                   ariaLabel={t('projects.packagesTable')}
-                  minWidth={900}
+                  minWidth={760}
                 />
               )}
             </div>
           )}
           <div className="mt-4">
-            <AdminPagination page={pkgPage} pageSize={20} total={pkgTotal} onPageChange={setPkgPage} />
+            <AdminPagination page={pkgPage} pageSize={20} total={pkgTotal} ready={packagesQuery.isSuccess && !packagesQuery.isFetching} onPageChange={setPkgPage} />
           </div>
         </section>
       </div>
+      {tokenDialog}
+      <Dialog open={editForm !== null} onOpenChange={open => { if (!open && !editMutation.isPending) setEditForm(null) }}>
+        <DialogContent closeDisabled={editMutation.isPending}>
+          <DialogTitle>{t('projects.editTitle')}</DialogTitle>
+          {editForm && <form className="space-y-4" onSubmit={event => { event.preventDefault(); if (canWrite) editMutation.mutate(editForm) }}>
+            <Field><FieldLabel>{t('projects.name')}</FieldLabel><Input required value={editForm.name} onChange={event => setEditForm({ ...editForm, name: event.target.value })} /></Field>
+            <Field><FieldLabel>{t('projects.description')}</FieldLabel><Input value={editForm.description} onChange={event => setEditForm({ ...editForm, description: event.target.value })} /></Field>
+            <p className="text-sm text-muted-foreground">{t('projects.slugStable')}</p>
+            {editMutation.isError && <Alert variant="destructive"><AlertDescription>{getApiError(editMutation.error).message}</AlertDescription></Alert>}
+            <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={editMutation.isPending} onClick={() => setEditForm(null)}>{t('cancel')}</Button><Button type="submit" disabled={editMutation.isPending}>{editMutation.isPending ? t('saving') : t('save')}</Button></div>
+          </form>}
+        </DialogContent>
+      </Dialog>
+      <ConfirmActionDialog open={rotateOpen} title={t('projects.regenerateToken')} description={t('projects.rotateWarning')}
+        details={[{label:t('projects.name'),value:projectDetail?.name ?? ''}]} pending={rotateMutation.isPending}
+        cancelLabel={t('cancel')} confirmLabel={t('projects.regenerateToken')} pendingLabel={t('saving')}
+        errorMessage={rotateMutation.isError ? getApiError(rotateMutation.error).message : null}
+        onClose={() => setRotateOpen(false)} onConfirm={() => { if (canWrite) rotateMutation.mutate() }} />
       </AdminPage>
     )
   }
@@ -471,7 +597,7 @@ export default function Projects() {
             size="sm"
             type="button"
             aria-label={t('projects.viewNamed', { name: row.name })}
-            onClick={() => { setSelectedProject(row); setPkgPage(1); setPkgEcosystem('') }}
+            onClick={() => setSelectedProject(row)}
           >
             <Icon name="visibility" size="sm" />
             {t('projects.view')}
@@ -555,43 +681,7 @@ export default function Projects() {
           </DialogContent>
         </Dialog>
 
-      {/* Token reveal modal */}
-        <Dialog open={tokenData !== null} onOpenChange={(nextOpen) => { if (!nextOpen) setTokenData(null) }} modal>
-          <DialogContent style={{ maxWidth: 440 }} finalFocus={true}>
-            <DialogTitle className="pr-10">{t('projects.token')}</DialogTitle>
-            {tokenData && (
-              <div className="space-y-4">
-                <div className="rounded-md p-3" style={{ background: 'var(--warn-fill)', border: '1px solid var(--warn-border)' }}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <Icon name="warning" size="sm" style={{ color: 'var(--warn-text)' }} />
-                    <span className="text-[13px] font-[500]" style={{ color: 'var(--warn-text)' }}>{t('projects.tokenWarning')}</span>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[13px] font-[500] mb-1" style={{ color: 'var(--text-muted)' }}>{t('projects.token')}</label>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-sm break-all" style={{ background: 'var(--bg-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}>
-                      {tokenData.token}
-                    </code>
-                    <CopyButton text={tokenData.token} label={t('projects.copyToken')} />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[13px] font-[500] mb-1" style={{ color: 'var(--text-muted)' }}>{t('projects.proxyUrl')}</label>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-sm break-all" style={{ background: 'var(--bg-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}>
-                      {tokenData.proxy_url}
-                    </code>
-                    <CopyButton text={tokenData.proxy_url} label={t('projects.copyProxyUrl')} />
-                  </div>
-                </div>
-                <div className="flex justify-end pt-2">
-                  <Button onClick={() => setTokenData(null)}>{t('confirm')}</Button>
-                </div>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
+      {tokenDialog}
 
       <ConfirmActionDialog
         open={deleteTarget !== null}

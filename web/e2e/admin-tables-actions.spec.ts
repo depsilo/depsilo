@@ -29,7 +29,7 @@ const cases = [
   { path: '/admin/audit', endpoint: 'GET /api/v1/admin/audit-logs', table: true, actionCount: 0 },
   { path: '/admin/cache', endpoint: 'GET /api/v1/admin/cache', table: true, actionCount: 1 },
   { path: '/admin/quarantine', endpoint: 'GET /api/v1/admin/quarantine/events', table: true, actionCount: 0 },
-  { path: '/admin/rules', endpoint: 'GET /api/v1/admin/rules', table: true, actionCount: 2 },
+  { path: '/admin/rules', endpoint: 'GET /api/v1/admin/rules', table: true, actionCount: 0 },
   { path: '/admin/users', endpoint: 'GET /api/v1/admin/users', table: true, actionCount: 2 },
   // Upstreams intentionally uses cards. Its actions still follow the shared icon-button contract.
   { path: '/admin/upstreams', endpoint: 'GET /api/v1/admin/upstreams', table: false, actionCount: 3 },
@@ -77,6 +77,28 @@ for (const routeCase of cases) {
       await expect(mobileList).toBeVisible()
       await expect(mobileList.getByText('unsafe', { exact: true })).toBeVisible()
       await expect(page.locator('[data-table-viewport]')).toBeHidden()
+    } else if (routeCase.path === '/admin/rules') {
+      const mobileList = page.getByRole('list', { name: /包治理规则表格|Package governance rules table/ })
+      await expect(mobileList).toBeVisible()
+      const review = mobileList.getByRole('button', { name: 'unsafe', exact: true })
+      await expect(review).toHaveAccessibleName('unsafe')
+      await review.focus()
+      await page.keyboard.press('Enter')
+      const detail = page.getByRole('dialog', { name: 'unsafe', exact: true })
+      await expect(detail.getByRole('button', { name: /编辑规则|Edit Rule/ })).toBeVisible()
+      await expect(detail.getByRole('button', { name: /^(删除|Delete)$/ })).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(detail).toBeHidden()
+      await expect(page.locator('[data-table-viewport]')).toBeHidden()
+      // Above the card breakpoint, dense rule data still scrolls only inside
+      // the named table region rather than extending the document canvas.
+      await page.setViewportSize({ width: 768, height: 844 })
+      const ruleTable = page.getByRole('region', { name: /包治理规则表格|Package governance rules table/ })
+      await expect(ruleTable).toBeVisible()
+      expect(await ruleTable.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(768)
+      await page.setViewportSize({ width: 390, height: 844 })
+      await expect(mobileList).toBeVisible()
     } else if (routeCase.table) {
       const region = page.locator('[data-table-viewport]').first()
       await expect(region).toBeVisible()
@@ -215,7 +237,7 @@ test('empty states for wide Admin tables do not create local scroll regions at 3
   }
 })
 
-test('project and security tables expose named local scroll regions and explicit actions', async ({ page }) => {
+test('project and security data use accessible mobile actions and named local table scroll regions', async ({ page }) => {
   const duplicateKeyWarnings: string[] = []
   page.on('console', message => {
     if (message.text().includes('Encountered two children with the same key')) {
@@ -232,8 +254,8 @@ test('project and security tables expose named local scroll regions and explicit
     'GET /api/v1/admin/projects/7/packages': { items: [{ ecosystem: 'pypi', package_name: 'requests', version: '2.32.0', first_seen_at: '2026-07-10T00:00:00Z', last_seen_at: '2026-07-10T00:00:00Z', download_count: 3 }], total: 1, page: 1 },
     'GET /api/v1/admin/security/vulnerabilities': {
       items: [
-        { id: 3, osv_id: 'OSV-2026-1', ecosystem: 'pypi', package_name: 'unsafe', version: '1.0.0', severity: 'high', cvss_score: 8.1, summary: 'fixture', details: 'fixture', affected_versions: ['1.0.0'], fixed_versions: ['1.0.1'], published_at: '2026-07-10T00:00:00Z', modified_at: '2026-07-10T00:00:00Z', created_at: '2026-07-10T00:00:00Z' },
-        { id: 4, osv_id: 'OSV-2026-1', ecosystem: 'npm', package_name: 'unsafe-js', version: '2.0.0', severity: 'medium', cvss_score: 6.1, summary: 'fixture two', details: 'fixture two', affected_versions: ['2.0.0'], fixed_versions: ['2.0.1'], published_at: '2026-07-10T00:00:00Z', modified_at: '2026-07-10T00:00:00Z', created_at: '2026-07-10T00:00:00Z' },
+        { id: 3, osv_id: 'OSV-2026-1', ecosystem: 'pypi', package_name: 'unsafe', version: '1.0.0', severity: 'high', cvss_score: 8.1, summary: 'fixture', details: 'fixture', affected_ranges: '>=1.0.0 <1.0.1', aliases: '', references: '', published_at: '2026-07-10T00:00:00Z', modified_at: '2026-07-10T00:00:00Z', created_at: '2026-07-10T00:00:00Z' },
+        { id: 4, osv_id: 'OSV-2026-1', ecosystem: 'npm', package_name: 'unsafe-js', version: '2.0.0', severity: 'medium', cvss_score: 6.1, summary: 'fixture two', details: 'fixture two', affected_ranges: '>=2.0.0 <2.0.1', aliases: '', references: '', published_at: '2026-07-10T00:00:00Z', modified_at: '2026-07-10T00:00:00Z', created_at: '2026-07-10T00:00:00Z' },
       ],
       total: 21,
       page: 1,
@@ -256,6 +278,19 @@ test('project and security tables expose named local scroll regions and explicit
 
   await page.goto('/admin/security')
   await page.getByRole('combobox', { name: /情报视图|Intelligence view/ }).selectOption('vulnerabilities')
+  const securityList = page.getByRole('list', { name: /安全漏洞表格|Security vulnerabilities table/ })
+  await expect(securityList).toBeVisible()
+  await expect(securityList.getByRole('listitem')).toHaveCount(2)
+  const review = securityList.getByRole('button', { name: 'unsafe · OSV-2026-1', exact: true })
+  await review.focus()
+  await page.keyboard.press('Enter')
+  const advisory = page.getByRole('dialog', { name: 'OSV-2026-1', exact: true })
+  await expect(advisory).toContainText('fixture')
+  await expect(advisory.getByRole('link', { name: /复核并起草包规则|Review and draft a Package Rule/ })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(advisory).toBeHidden()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
+  await page.setViewportSize({ width: 768, height: 844 })
   const securityTable = page.getByRole('region', { name: /安全漏洞表格|Security vulnerabilities table/ })
   await expect(securityTable).toBeVisible()
   await expect(securityTable.locator('tbody tr')).toHaveCount(2)
@@ -266,6 +301,9 @@ test('project and security tables expose named local scroll regions and explicit
   expect(await securityTable.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
   await expect(page.getByRole('button', { name: /上一页|Previous/ })).toBeVisible()
   await expect(page.getByRole('button', { name: /下一页|Next/ })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(768)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(securityList).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
 })
 

@@ -1,5 +1,4 @@
 import { Input } from '@/components/ui/input'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { TableContainer, Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -7,7 +6,8 @@ import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
+import { getAdminRouteHref } from '@/admin/routes'
 import { adminApi } from '@/lib/api'
 import { formatTime } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -30,9 +30,7 @@ import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { AccessLog, AccessLogDetail, AccessLogQuery } from '@/lib/adminApi.types'
 
 function latencyColor(ms: number): string {
-  if (ms < 100) return 'var(--ok)'
-  if (ms < 500) return 'var(--text-soft)'
-  return 'var(--danger)'
+  return ms >= 1000 ? 'var(--warn-text)' : 'var(--text-soft)'
 }
 
 function parsePage(value: string | null): number {
@@ -104,7 +102,7 @@ export default function AccessLogs() {
   if (hitFilter === 'miss') params.hit = false
   if (hitFilter === 'unknown') params.result = 'unknown'
 
-  const { data, error, isPending, isError, isRefetchError, refetch } = useQuery({
+  const { data, error, isPending, isError, isSuccess, isFetching, dataUpdatedAt, isRefetchError, refetch } = useQuery({
     queryKey: ['admin', 'logs', params],
     queryFn: ({ signal }) => adminApi.listLogs(params, { signal }),
     retry: false,
@@ -186,6 +184,7 @@ export default function AccessLogs() {
       `upstream: ${detail.upstream || '-'}`,
     ].join('\n')
     if (await copyText(summary)) toast.show({ tone: 'success', message: t('logs.summaryCopied') })
+    else toast.show({ tone: 'danger', message: t('logs.copyFailed') })
   }
 
   const hasFilters = Boolean(appliedSearch || adapterType !== 'all' || hitFilter !== 'all')
@@ -194,7 +193,9 @@ export default function AccessLogs() {
   return (
     <AdminPage
       description={t('logs.subtitle')}
-      actions={(
+      actions={<>
+        {dataUpdatedAt > 0 && <span className="text-[12px] text-muted-foreground">{t('logs.updatedAt', { time: formatTime(new Date(dataUpdatedAt).toISOString()) })}</span>}
+        <Button variant="outline" size="sm" disabled={isFetching} onClick={() => { void refetch() }}><Icon name="refresh" size="sm" />{t('now.refresh')}</Button>
         <Button
           type="button"
           variant="outline"
@@ -206,7 +207,7 @@ export default function AccessLogs() {
           <Icon name="download" size="sm" />
           {exportMutation.isPending ? t('logs.exporting') : t('logs.export')}
         </Button>
-      )}
+      </>}
     >
       <div className="space-y-6">
       <form
@@ -256,11 +257,11 @@ export default function AccessLogs() {
             </NativeSelect>
         </div>
 
-        <Button type="submit" variant="default" size="sm" className="min-h-10 self-start sm:min-h-0">
+        <Button type="submit" variant="default" size="sm" className="min-h-10 self-start">
           {t('search')}
         </Button>
         {hasFilters && (
-          <Button type="button" variant="outline" size="sm" className="min-h-10 self-start sm:min-h-0" onClick={clearFilters}>
+          <Button type="button" variant="outline" size="sm" className="min-h-10 self-start" onClick={clearFilters}>
             {t('logs.clearFilters')}
           </Button>
         )}
@@ -276,14 +277,14 @@ export default function AccessLogs() {
         <div className="space-y-3">
           {data && isRefetchError && <StaleDataNotice onRefresh={() => { void refetch() }} />}
           {items.length === 0 ? (
-            <Empty style={{ minHeight: 240 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"receipt_long"} size="sm" /></EmptyMedia><EmptyTitle>{t('logs.noLogs')}</EmptyTitle>{t('logs.noLogsHint') && <EmptyDescription>{t('logs.noLogsHint')}</EmptyDescription>}</EmptyHeader></Empty>
+            <Empty style={{ minHeight: 240 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"receipt_long"} size="sm" /></EmptyMedia><EmptyTitle>{hasFilters ? t('logs.noMatches') : t('logs.noLogs')}</EmptyTitle>{t('logs.noLogsHint') && <EmptyDescription>{hasFilters ? t('logs.noMatchesHint') : t('logs.noLogsHint')}</EmptyDescription>}</EmptyHeader></Empty>
           ) : (
-            <TableContainer label={t('logs.table')} minWidth={860}>
-          <Table className="w-full text-[12px]">
+            <TableContainer label={t('logs.table')} minWidth={720}>
+          <Table className="w-full text-[13px]">
             <TableHeader>
               <TableRow style={{ borderBottom: '1px solid var(--border)' }}>
-                {[t('logs.time'), t('type'), t('logs.packageName'), t('logs.result'), t('logs.latency'), t('logs.upstream'), t('logs.clientIp'), t('actions')].map(h => (
-                  <TableHead key={h} scope="col" className="text-left text-[11px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>
+                {[t('logs.time'), t('type'), t('logs.packageName'), t('logs.cacheFact'), t('logs.status'), t('logs.latency'), t('actions')].map(h => (
+                  <TableHead key={h} scope="col" className="text-left text-[12px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>
                     {h}
                   </TableHead>
                 ))}
@@ -305,14 +306,14 @@ export default function AccessLogs() {
                   <TableCell className="py-2 px-3">
                     <div className="flex items-center gap-1.5">
                       {isAdminEcosystem(row.adapter_type) && <EcosystemIcon type={row.adapter_type} size={13} />}
-                      <span className="text-[11px] uppercase" style={{ color: 'var(--text)' }}>{row.adapter_type}</span>
+                      <span className="text-[12px] uppercase" style={{ color: 'var(--text)' }}>{row.adapter_type}</span>
                     </div>
                   </TableCell>
 
                   {/* Package name + cache key */}
                   <TableCell className="py-2 px-3 max-w-[260px]">
                     <span className="font-mono truncate block" style={{ color: 'var(--text)' }}>{row.package_name || '-'}</span>
-                    <span className="font-mono text-[10px] truncate block" style={{ color: 'var(--text-soft)' }} title={row.cache_key}>{row.cache_key}</span>
+                    <span className="font-mono text-[12px] truncate block" style={{ color: 'var(--text-soft)' }} title={row.cache_key}>{row.cache_key}</span>
                   </TableCell>
 
                   {/* Result */}
@@ -325,21 +326,12 @@ export default function AccessLogs() {
                     </span>
                   </TableCell>
 
+                  <TableCell className="py-2 px-3"><Badge variant={row.status_code >= 500 ? 'destructive' : row.status_code >= 400 ? 'warning' : 'neutral'}>{row.status_code || '—'}</Badge></TableCell>
                   {/* Latency */}
                   <TableCell className="py-2 px-3 whitespace-nowrap">
                     <span className="font-mono tabular-nums" style={{ color: latencyColor(row.latency_ms) }}>
                       {row.latency_ms}ms
                     </span>
-                  </TableCell>
-
-                  {/* Upstream */}
-                  <TableCell className="py-2 px-3">
-                    <span style={{ color: 'var(--text-soft)' }}>{row.upstream || '-'}</span>
-                  </TableCell>
-
-                  {/* Client IP */}
-                  <TableCell className="py-2 px-3">
-                    <span className="font-mono" style={{ color: 'var(--text-soft)' }}>{row.client_ip}</span>
                   </TableCell>
 
                   <TableCell className="py-2 px-3 text-right">
@@ -368,17 +360,17 @@ export default function AccessLogs() {
         </div>
       )}
 
-      <AdminPagination page={page} pageSize={50} total={total} onPageChange={setPage} />
+      <AdminPagination page={page} pageSize={50} total={total} ready={isSuccess && !isFetching} onPageChange={setPage} />
       </div>
 
       <Sheet open={detailId !== null} onOpenChange={(open) => { if (!open) setDetailId(null) }} modal>
-        <SheetContent side="left" finalFocus>
+        <SheetContent side="right" className="w-[min(580px,100vw)]" finalFocus>
           <SheetTitle className="sr-only">{t('logs.detailTitle')}</SheetTitle>
           <div className="flex h-full flex-col gap-5 overflow-y-auto p-5 sm:p-6">
             <div className="flex items-start justify-between gap-4 pr-10">
               <div>
-                <p className="font-mono text-[11px] uppercase" style={{ color: 'var(--text-subtle)' }}>{t('logs.detailTitle')}</p>
-                <h2 className="mt-1 break-words font-mono text-[16px]" style={{ color: 'var(--text)' }}>{detailQuery.data?.data.package_name || t('logs.loadingDetail')}</h2>
+                <p className="font-mono text-[12px] uppercase" style={{ color: 'var(--text-subtle)' }}>{t('logs.detailTitle')}</p>
+                <h2 className="mt-1 break-words font-mono text-[16px]" style={{ color: 'var(--text)' }}>{detailQuery.data?.data.package_name || (detailQuery.isPending ? t('logs.loadingDetail') : t('logs.detailTitle'))}</h2>
               </div>
               {detailQuery.data?.data && <Tooltip>
                 <TooltipTrigger render={
@@ -396,7 +388,14 @@ export default function AccessLogs() {
                 <TooltipContent>{t('logs.copySummary')}</TooltipContent>
               </Tooltip>}
             </div>
-            {detailQuery.isPending ? <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div> : detailQuery.isError ? <Alert variant={"destructive"}><AlertDescription>{getApiError(detailQuery.error).message}</AlertDescription></Alert> : detailQuery.data?.data && <DiagnosticDetail detail={detailQuery.data.data} t={t} />}
+            {detailQuery.isPending ? <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div> : detailQuery.isError && !detailQuery.data ? <QueryErrorState message={getApiError(detailQuery.error).message} onRetry={() => { void detailQuery.refetch() }} /> : detailQuery.data?.data && <>
+              {detailQuery.isRefetchError && <StaleDataNotice onRefresh={() => { void detailQuery.refetch() }} />}
+              <DiagnosticDetail detail={detailQuery.data.data} t={t} />
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" render={<Link to={`${getAdminRouteHref('auditLogs')}?${new URLSearchParams({ ecosystem: detailQuery.data.data.adapter_type, package: detailQuery.data.data.package_name, range: '7d' })}`} />} nativeButton={false} role="link">{t('logs.relatedAudit')}</Button>
+                {detailQuery.data.data.adapter_type !== 'docker' && <Button variant="outline" render={<Link to={`${getAdminRouteHref('upstreams')}?${new URLSearchParams({ ecosystem: detailQuery.data.data.adapter_type })}`} />} nativeButton={false} role="link">{t('logs.viewUpstreams')}</Button>}
+              </div>
+            </>}
           </div>
         </SheetContent>
       </Sheet>
@@ -414,14 +413,16 @@ function DiagnosticDetail({ detail, t }: { detail: AccessLogDetail; t: (key: str
     [t('logs.deliveryFact'), `${value(detail.delivery_result)} · ${value(detail.delivery_reason)}`],
     [t('logs.upstream'), value(detail.upstream)],
     [t('logs.status'), String(detail.status_code || '-')],
+    [t('logs.clientIp'), detail.client_ip || '—'],
+    [t('logs.cacheKey'), detail.cache_key || '—'],
   ]
   return <div className="space-y-5">
-    <dl className="grid gap-3 text-[12px]">
-      {facts.map(([label, content]) => <div key={label} className="grid grid-cols-[minmax(0,8rem)_1fr] gap-3 border-b pb-2" style={{ borderColor: 'var(--border-soft, var(--border))' }}><dt style={{ color: 'var(--text-soft)' }}>{label}</dt><dd className="min-w-0 break-words font-mono" style={{ color: 'var(--text)' }}>{content}</dd></div>)}
+    <dl className="grid gap-3 text-[14px]">
+      {facts.map(([label, content]) => <div key={label} className="grid grid-cols-1 sm:grid-cols-[112px_minmax(0,1fr)] gap-3 border-b pb-2" style={{ borderColor: 'var(--border-soft, var(--border))' }}><dt style={{ color: 'var(--text-soft)' }}>{label}</dt><dd className="min-w-0 break-words font-mono" style={{ color: 'var(--text)' }}>{content}</dd></div>)}
     </dl>
     <div>
       <h3 className="mb-2 text-[12px] font-semibold" style={{ color: 'var(--text)' }}>{t('logs.auditEvents')}</h3>
-      {detail.audit_events.length === 0 ? <p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>{t('logs.noAuditEvents')}</p> : <ul className="space-y-2">{detail.audit_events.map(event => <li key={event.id} className="rounded border p-2 text-[11px]" style={{ borderColor: 'var(--border-soft, var(--border))' }}><span className="font-mono">{event.action}</span> · {value(event.cache_result)} · {event.status_code || '-'} · {formatTime(event.created_at)}</li>)}</ul>}
+      {detail.audit_events.length === 0 ? <p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>{t('logs.noAuditEvents')}</p> : <ul className="space-y-2">{detail.audit_events.map(event => <li key={event.id} className="rounded border p-2 text-[12px]" style={{ borderColor: 'var(--border-soft, var(--border))' }}><span className="font-mono">{event.action}</span> · {value(event.cache_result)} · {event.status_code || '-'} · {formatTime(event.created_at)}</li>)}</ul>}
     </div>
   </div>
 }

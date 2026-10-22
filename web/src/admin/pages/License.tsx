@@ -1,7 +1,7 @@
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { licenseApi } from '@/lib/api'
@@ -63,6 +63,8 @@ export default function License() {
   const { t, i18n } = useTranslation()
   const qc = useQueryClient()
   const { canWrite } = usePrincipal()
+  const [verification, setVerification] = useState<{ checked: string; started: number } | null>(null)
+  const [verificationDelayed, setVerificationDelayed] = useState(false)
 
   const statusQuery = useQuery({
     queryKey: ['license', 'status'],
@@ -71,11 +73,20 @@ export default function License() {
       return res.data as EntitlementStatus
     },
     refetchOnWindowFocus: true,
-    refetchInterval: 60_000,
+    refetchInterval: verification ? 1_500 : 60_000,
     retry: false,
   })
 
   const status = statusQuery.data
+  useEffect(() => {
+    if (!verification) return
+    if (status && status.last_checked !== verification.checked) {
+      const timer = window.setTimeout(() => setVerification(null), 0)
+      return () => window.clearTimeout(timer)
+    }
+    const timer = window.setTimeout(() => { setVerification(null); setVerificationDelayed(true) }, Math.max(0, 60_000 - (Date.now() - verification.started)))
+    return () => window.clearTimeout(timer)
+  }, [status, verification])
 
   const activateTrial = useMutation({
     mutationFn: async () => {
@@ -114,7 +125,9 @@ export default function License() {
 
   const revalidate = useMutation({
     mutationFn: licenseApi.revalidate,
+    onMutate: () => { setVerificationDelayed(false); setVerification({ checked: status?.last_checked ?? '', started: Date.now() }) },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['license', 'status'] }),
+    onError: () => setVerification(null),
   })
 
   const [keyInput, setKeyInput] = useState('')
@@ -145,7 +158,7 @@ export default function License() {
 
   const source = status.source
   const trialUsed = status.trial_used
-  const keySectionOpen = keyExpanded ?? (source === 'none' && !trialUsed)
+  const keySectionOpen = keyExpanded ?? (Boolean(status.license_key_masked) || source === 'none' && !trialUsed)
   const keyEditorOpen = canWrite && (source !== 'paid' || replacingKey)
 
   const formatDate = (iso?: string) =>
@@ -160,6 +173,7 @@ export default function License() {
       {statusQuery.isRefetchError && (
         <Alert variant={"warning"}><AlertDescription><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void statusQuery.refetch() }}>{t('now.refresh')}</Button></div></AlertDescription></Alert>
       )}
+      {status.license_error && <Alert variant="warning"><AlertDescription><p className="font-medium">{t('license.key.validationProblem')}</p><p className="mt-1 break-words">{status.license_error}</p></AlertDescription></Alert>}
       {/* ── State panel ────────────────────────────── */}
       {/* Commercial terms are intentionally absent until the product model
           is settled. Pro CTAs open a neutral access enquiry. */}
@@ -205,7 +219,7 @@ export default function License() {
 
       {source === 'none' && trialUsed && (
         <StatePanel
-          tone="danger"
+          tone="brand"
           icon="warning"
           title={t('license.trial.expired_message', { date: formatDate(status.expires_at) })}
         >
@@ -223,11 +237,9 @@ export default function License() {
         >
           <div className="space-y-0">
             {[
-              { label: t('license.pro.key_label'), value: <code className="font-mono text-[13px]">{status.license_key_masked}</code> },
               ...(status.expires_at
                 ? [{ label: t('license.pro.expires_at', { date: '' }).replace('：', ':').split(':')[0], value: formatDate(status.expires_at) }]
                 : []),
-              { label: t('license.pro.last_checked', { relative_time: '' }).replace(/：.*$/, '').replace(/:.+$/, ''), value: formatRelative(status.last_checked) },
             ].map((item, i, arr) => (
               <div
                 key={i}
@@ -239,20 +251,6 @@ export default function License() {
               </div>
             ))}
           </div>
-          {canWrite && <Button
-            variant="outline"
-            onClick={() => revalidate.mutate()}
-            disabled={revalidate.isPending}
-            className="mt-4"
-          >
-            <Icon name="refresh" size="sm" />
-            {t('license.revalidate')}
-          </Button>}
-          {revalidate.isError && (
-            <div className="mt-3">
-              <Alert variant={"destructive"}><AlertDescription>{getApiError(revalidate.error).message}</AlertDescription></Alert>
-            </div>
-          )}
         </StatePanel>
       )}
 
@@ -275,6 +273,17 @@ export default function License() {
 
         {keySectionOpen && (
           <div id="license-key-content" className="mt-4 space-y-3">
+            {status.license_key_masked && <div className="space-y-3 rounded-md border border-[var(--border)] p-4">
+              <p className="break-all font-mono text-[14px]">{status.license_key_masked}</p>
+              <p className="text-[13px] text-[var(--text-soft)]">{t('license.pro.last_checked', { relative_time: formatRelative(status.last_checked) })}</p>
+              {source !== 'paid' && <p className="text-[13px] text-[var(--text-soft)]">{t('license.key.notGranting')}</p>}
+              {(verification || verificationDelayed) && <p role="status" className="text-[13px] text-[var(--text-soft)]">{t(verification ? 'license.key.checking' : 'license.key.checkDelayed')}</p>}
+              <div className="flex flex-wrap gap-2">
+                {canWrite && <Button variant="outline" onClick={() => revalidate.mutate()} disabled={revalidate.isPending || verification !== null || setKey.isPending || clearKey.isPending}><Icon name="refresh" size="sm" />{t('license.revalidate')}</Button>}
+                <Button variant="ghost" disabled={statusQuery.isFetching} onClick={() => { void statusQuery.refetch() }}>{t('now.refresh')}</Button>
+              </div>
+              {revalidate.isError && <Alert variant="destructive"><AlertDescription>{getApiError(revalidate.error).message}</AlertDescription></Alert>}
+            </div>}
             {keyEditorOpen && (
               <form
                 className="space-y-3"
@@ -315,17 +324,6 @@ export default function License() {
                         {setKey.data.license_error}
                       </p>
                     )}
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => revalidate.mutate()}
-                        disabled={revalidate.isPending}
-                      >
-                        {t('license.key.try_revalidate')}
-                      </Button>
-                    </div>
                   </div>
                 )}
                 {setKey.isError && <Alert variant={"destructive"}><AlertDescription>{getApiError(setKey.error).message}</AlertDescription></Alert>}

@@ -38,6 +38,18 @@ export function writeLocalStorage(key: string, value: string): boolean {
 }
 
 export function removeLocalStorage(key: string): boolean {
+  if (key === 'token') {
+    // Settings drafts contain only the six non-secret editable fields. Clear
+    // them on every logout path, including session expiry and password change.
+    try {
+      const session = getSessionStorage()
+      if (session) {
+        for (const name of Object.keys(session)) {
+          if (name.startsWith('depsilo:settings-draft:')) session.removeItem(name)
+        }
+      }
+    } catch { /* unavailable draft storage must never prevent logout */ }
+  }
   try {
     const storage = getLocalStorage()
     if (!storage) return false

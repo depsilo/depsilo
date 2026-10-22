@@ -46,18 +46,19 @@ type cleanupPlan struct {
 }
 
 type cacheIndexItem struct {
-	ID           uint      `json:"id"`
-	Key          string    `json:"key"`
-	AdapterType  string    `json:"adapter_type"`
-	PackageName  string    `json:"package_name"`
-	Size         int64     `json:"size"`
-	HitCount     int64     `json:"hit_count"`
-	ETag         string    `json:"etag"`
-	LastModified string    `json:"last_modified"`
-	LastAccessed time.Time `json:"last_accessed"`
-	ExpiresAt    time.Time `json:"expires_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	Status       string    `json:"status"`
+	ID               uint      `json:"id"`
+	Key              string    `json:"key"`
+	AdapterType      string    `json:"adapter_type"`
+	PackageName      string    `json:"package_name"`
+	Size             int64     `json:"size"`
+	HitCount         int64     `json:"hit_count"`
+	ETag             string    `json:"etag"`
+	LastModified     string    `json:"last_modified"`
+	LastAccessed     time.Time `json:"last_accessed"`
+	ExpiresAt        time.Time `json:"expires_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+	Status           string    `json:"status"`
+	RefreshSupported bool      `json:"refresh_supported"`
 }
 
 type cacheIndexSummary struct {
@@ -112,6 +113,7 @@ func (h *CacheHandler) ListIndexes(c *gin.Context) {
 	}
 	items := make([]cacheIndexItem, len(rows))
 	for i, row := range rows {
+		_, refreshErr := CacheIndexPublicPath(row)
 		rowStatus := "stale"
 		if row.ExpiresAt.After(now) {
 			rowStatus = "fresh"
@@ -121,7 +123,7 @@ func (h *CacheHandler) ListIndexes(c *gin.Context) {
 			PackageName: row.PackageName, Size: row.Size, HitCount: row.HitCount,
 			ETag: row.ETag, LastModified: row.LastModified,
 			LastAccessed: row.LastAccessed, ExpiresAt: row.ExpiresAt,
-			UpdatedAt: row.UpdatedAt, Status: rowStatus,
+			UpdatedAt: row.UpdatedAt, Status: rowStatus, RefreshSupported: refreshErr == nil && h.indexRefresher != nil,
 		}
 	}
 
@@ -372,7 +374,14 @@ func (h *CacheHandler) List(c *gin.Context) {
 	}
 	offset := (page - 1) * pageSize
 
-	query := h.db.Model(&db.CacheEntry{})
+	query := h.db.WithContext(c.Request.Context()).Model(&db.CacheEntry{})
+	if kind := c.Query("cache_kind"); kind != "" {
+		if kind != string(db.CacheKindArtifact) && kind != string(db.CacheKindMetadata) {
+			c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": "invalid cache kind"})
+			return
+		}
+		query = query.Where("cache_kind = ?", kind)
+	}
 	if search != "" {
 		query = query.Where("key LIKE ?", "%"+search+"%")
 	}
@@ -381,10 +390,16 @@ func (h *CacheHandler) List(c *gin.Context) {
 	}
 
 	var total int64
-	query.Count(&total)
+	if err := query.Count(&total).Error; err != nil {
+		h.readError(c, err)
+		return
+	}
 
 	var entries []db.CacheEntry
-	query.Order("last_accessed DESC").Offset(offset).Limit(pageSize).Find(&entries)
+	if err := query.Order("last_accessed DESC").Offset(offset).Limit(pageSize).Find(&entries).Error; err != nil {
+		h.readError(c, err)
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"total":     total,
@@ -696,22 +711,31 @@ func (h *CacheHandler) GetDistribution(c *gin.Context) {
 	}
 
 	var byType []TypeBreakdown
-	h.db.Model(&db.CacheEntry{}).
+	if err := h.db.WithContext(c.Request.Context()).Model(&db.CacheEntry{}).
 		Select("adapter_type as type, COALESCE(SUM(size), 0) as size, COUNT(*) as file_count").
 		Group("adapter_type").
-		Find(&byType)
+		Find(&byType).Error; err != nil {
+		h.readError(c, err)
+		return
+	}
 
 	var topPackages []PackageSize
-	h.db.Model(&db.CacheEntry{}).
+	if err := h.db.WithContext(c.Request.Context()).Model(&db.CacheEntry{}).
 		Select("package_name as name, adapter_type as type, COALESCE(SUM(size), 0) as size, COALESCE(SUM(hit_count), 0) as hit_count").
 		Where("package_name != ''").
 		Group("package_name, adapter_type").
 		Order("size DESC").
 		Limit(30).
-		Find(&topPackages)
+		Find(&topPackages).Error; err != nil {
+		h.readError(c, err)
+		return
+	}
 
 	var totalSize int64
-	h.db.Model(&db.CacheEntry{}).Select("COALESCE(SUM(size), 0)").Scan(&totalSize)
+	if err := h.db.WithContext(c.Request.Context()).Model(&db.CacheEntry{}).Select("COALESCE(SUM(size), 0)").Scan(&totalSize).Error; err != nil {
+		h.readError(c, err)
+		return
+	}
 
 	maxSize := int64(h.maxSizeGB) * 1024 * 1024 * 1024
 	usagePercent := float64(0)
@@ -737,4 +761,9 @@ func (h *CacheHandler) ListTransfers(c *gin.Context) {
 		items = h.transferReader()
 	}
 	c.JSON(http.StatusOK, gin.H{"items": items, "limit": traffic.TransferLimit})
+}
+
+func (h *CacheHandler) readError(c *gin.Context, err error) {
+	zap.L().Error("read cache inventory", zap.Error(err))
+	c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": "cache data is temporarily unavailable"})
 }
