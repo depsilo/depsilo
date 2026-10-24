@@ -40,7 +40,7 @@ export default function Cascade() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const toast = useAppToast()
-  const { canWrite } = usePrincipal()
+  const { canWrite, canManageCredentials } = usePrincipal()
 
   const infoQuery = useQuery({
     queryKey: ['admin', 'cascade'],
@@ -179,6 +179,7 @@ export default function Cascade() {
 
             <div className="grid grid-cols-1 gap-x-8 gap-y-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
               <section aria-labelledby="cascade-config-heading">
+                {canWrite && !canManageCredentials && <Alert variant="info"><AlertDescription>{t('account.credentialRestriction')}</AlertDescription></Alert>}
                 <SectionHeader title={t('cascade.configSectionTitle')} divider={false} />
                 <span id="cascade-config-heading" className="sr-only">{t('cascade.configSectionTitle')}</span>
                 {configQuery.isPending ? (
@@ -195,7 +196,7 @@ export default function Cascade() {
                 ) : config ? (
                   <CascadeConfigForm
                     state={config}
-                    canWrite={canWrite}
+                    canWrite={canManageCredentials}
                     onSaved={(result) => {
                       toast.show({
                         tone: 'success',

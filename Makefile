@@ -35,6 +35,7 @@ GO_RACE_PKGS := \
 	./internal/compilecache/... \
 	./internal/config/... \
 	./internal/db/... \
+	./internal/identity/... \
 	./internal/license/... \
 	./internal/middleware/... \
 	./internal/notify/... \

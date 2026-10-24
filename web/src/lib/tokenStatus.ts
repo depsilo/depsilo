@@ -6,6 +6,7 @@ export function tokenStatus(token: APITokenSummary, users: AdminUser[] | undefin
   if (!users) return 'unknown'
   const owner = users.find(user => user.id === token.user_id)
   if (!owner) return 'ownerMissing'
+  if (owner.permission_source && owner.permission_source !== 'local') return 'externalOwner'
   if (!owner.enabled) return 'ownerDisabled'
   if (token.permissions === 'readwrite' && owner.role !== 'admin') return 'restricted'
   return 'active'

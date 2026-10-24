@@ -240,6 +240,8 @@ func currentSchemaModelsForTest() []any {
 		&UpstreamRecord{},
 		&ControlPlaneState{},
 		&User{},
+		&ExternalIdentity{},
+		&IdentitySession{},
 		&APIToken{},
 		&UpstreamLatencyLog{},
 		&AuditLog{},

@@ -21,7 +21,7 @@ import ThemeToggle from '@/components/ThemeToggle'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { authApi, statsApi } from '@/lib/api'
 import { removeLocalStorage } from '@/lib/storage'
-import { adminNavigationGroups, resolveAdminRoute } from '../routes'
+import { adminNavigationGroups, getAdminRouteHref, resolveAdminRoute } from '../routes'
 import SidebarVersion from './SidebarVersion'
 import '../admin-shell.css'
 
@@ -38,7 +38,7 @@ interface SidebarContentProps {
   sections: NavSection[]
   surface: 'sidebar' | 'drawer'
   username?: string
-  canWrite: boolean
+  isAdmin: boolean
   version?: string
   firstNavigationRef?: RefObject<HTMLAnchorElement | null>
   reserveCloseSpace?: boolean
@@ -50,7 +50,7 @@ function SidebarContent({
   sections,
   surface,
   username,
-  canWrite,
+  isAdmin,
   version,
   firstNavigationRef,
   reserveCloseSpace = false,
@@ -136,8 +136,8 @@ function SidebarContent({
           <LangToggle variant="admin" />
           <ThemeToggle labeled variant="admin" />
         </div>
-        <Link
-          to="/admin/users"
+        {isAdmin && <Link
+          to={getAdminRouteHref('users')}
           onClick={onNavigate}
           aria-label={t('nav.instanceManagement')}
           className="stripe-focus-ring mb-2 flex min-h-10 items-center gap-2.5 rounded-md px-2 py-2 text-[13px] font-[550] no-underline transition-colors hover:bg-[var(--admin-rail-hover)]"
@@ -145,7 +145,7 @@ function SidebarContent({
         >
           <Icon name="settings" size="sm" />
           <span>{t('nav.instanceManagement')}</span>
-        </Link>
+        </Link>}
         <div className="group flex cursor-default items-center gap-2.5 rounded-md px-2 py-2 transition-colors duration-150 hover:bg-[var(--admin-rail-hover)]">
           <div
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[13px] font-[600]"
@@ -153,12 +153,12 @@ function SidebarContent({
           >
             {username?.[0]?.toUpperCase() || 'A'}
           </div>
-          <div className="min-w-0 flex-1">
+          <Link to={getAdminRouteHref('account')} onClick={onNavigate} aria-label={t('account.title')} className="stripe-focus-ring min-w-0 flex-1 rounded-md py-1 no-underline">
             <p className="truncate text-[13px] font-[500] leading-tight" style={{ color: 'var(--text)' }}>{username}</p>
             <p className="mt-0.5 text-[11px] leading-tight" style={{ color: 'var(--text-muted)' }}>
-              {canWrite ? t('nav.admin') : t('nav.readonly')}
+              {isAdmin ? t('nav.admin') : t('nav.readonly')} · {t('account.title')}
             </p>
-          </div>
+          </Link>
           <Button variant="ghost" size="icon"
             type="button"
             onClick={onLogout}
@@ -180,7 +180,7 @@ export default function MainLayout() {
   const queryClient = useQueryClient()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const firstMobileNavigationRef = useRef<HTMLAnchorElement>(null)
-  const { principal, canWrite } = usePrincipal()
+  const { principal } = usePrincipal()
   const activeRoute = resolveAdminRoute(location.pathname)
 
   const { data: stats } = useQuery<{ service: { version: string; status: string } }>({
@@ -201,7 +201,7 @@ export default function MainLayout() {
   const sidebarProps = {
     sections,
     username: principal?.username,
-    canWrite,
+    isAdmin: principal?.role === 'admin',
     version: stats?.service?.version,
   }
 

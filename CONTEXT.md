@@ -24,6 +24,34 @@ infrastructure/security owner. Their motivations differ from the Operator's
 (risk, cost control, auditability), even when one person holds both roles.
 _Avoid_: Client, customer (ambiguous with org-level "customer")
 
+### Operator access
+
+**Operator Account**:
+The durable Depsilo account through which an Operator accesses Admin. Its
+permissions and enabled state belong to the account, independently of the
+identity used to sign in.
+_Avoid_: End User, Login Identity, SSO user
+
+**Authentication Source**:
+A named, independently configured connection through which Depsilo trusts an
+external identity provider or user directory. Its durable identity is separate from its display
+name and authentication protocol; it is not an Operator Account or a Permission
+Source. Its saved settings, running settings, and a particular login-test
+result are separate states; enabling a source does not prove its availability.
+_Avoid_: Login Identity, Permission Source, Upstream, Casdoor (a provider product)
+
+**Login Identity**:
+A proven way to sign in to an Operator Account, such as its local password or
+an identity issued through an Authentication Source. Linking adds a sign-in
+method to the same account without merging accounts or transferring permissions.
+_Avoid_: Operator Account, Permission Source
+
+**Permission Source**:
+The authority that determines an Operator Account's role: local administration
+or its identity provider. Adding or removing a Login Identity does not transfer
+that authority.
+_Avoid_: Login method, group membership, project role
+
 ### Distribution posture
 
 User-facing documentation should describe Depsilo as MIT-licensed,
@@ -70,6 +98,9 @@ The authenticated web UI at `/admin` — for Operators after deployment. Hosts c
 - An **Upstream** belongs to exactly one **Ecosystem**.
 - An **Upstream** may egress through at most one **Cascade Peer**; the peer shares cache results, never the database or policy.
 - The **Portal** serves the first-90-seconds experience; the **Admin** serves everything after.
+- An **Operator Account** may have more than one **Login Identity** while retaining
+  one **Permission Source**; using an external identity does not elevate a locally
+  managed account's permissions.
 
 ## Example dialogue
 
@@ -79,8 +110,8 @@ The authenticated web UI at `/admin` — for Operators after deployment. Hosts c
 > **Engineer:** "Can we make OSV scanning optional or hidden?"
 > **Domain expert:** "No — OSV scanning, the rules engine, and the security intelligence dashboard are part of the self-hosted control surface. Governance primitives stay open so the proxy itself is the buyer's compliance instrument."
 
-> **Engineer:** "Should we build SSO into Depsilo?"
-> **Domain expert:** "No. The 'SSO tax' pattern damages trust. Recommend a mature OIDC reverse proxy rather than building a shallow in-product SSO layer."
+> **Engineer:** "Does binding a company login make the company directory authoritative for this account?"
+> **Domain expert:** "No. Binding adds a Login Identity. The account's Permission Source is a separate choice, so its local permissions and recovery password remain local."
 
 ## Flagged ambiguities
 

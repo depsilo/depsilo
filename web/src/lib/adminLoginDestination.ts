@@ -2,9 +2,10 @@ export function safeAdminDestination(candidate: unknown, origin = window.locatio
   if (typeof candidate !== 'string' || !candidate.startsWith('/admin') || candidate.startsWith('//')) return null
   try {
     const parsed = new URL(candidate, origin)
+    const pathname = parsed.pathname.toLowerCase().replace(/\/+$/, '')
     if (parsed.origin !== origin ||
         (parsed.pathname !== '/admin' && !parsed.pathname.startsWith('/admin/')) ||
-        parsed.pathname === '/admin/login') return null
+        (pathname === '/admin/login' || pathname.startsWith('/admin/auth/'))) return null
     return `${parsed.pathname}${parsed.search}${parsed.hash}`
   } catch {
     return null

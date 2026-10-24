@@ -20,6 +20,9 @@ export interface Principal {
   auth_method: 'jwt' | 'api_token'
   token_permissions: TokenPermissions | null
   can_write: boolean
+  permission_source?: 'local' | 'oidc' | 'ldap'
+  login_method?: 'password' | 'oidc' | 'ldap' | 'api_token'
+  can_manage_credentials?: boolean
 }
 
 export interface LoginResponse {
@@ -819,7 +822,7 @@ export interface SnapshotDetailResponse {
   active: boolean
 }
 
-export interface AdminUser { id: number; username: string; role: UserRole; enabled: boolean; last_login_at: string | null; created_at: string; updated_at: string }
+export interface AdminUser { permission_source?: 'local' | 'oidc' | 'ldap'; id: number; username: string; role: UserRole; enabled: boolean; last_login_at: string | null; created_at: string; updated_at: string }
 export interface CreateUserRequest { username: string; password: string; role: UserRole }
 export interface UpdateUserRequest { password?: string; role?: UserRole; enabled?: boolean }
 export interface APITokenSummary { id: number; user_id: number; name: string; permissions: TokenPermissions; expires_at: string | null; last_used_at: string | null; created_at: string }
@@ -1093,3 +1096,128 @@ export interface CacheTransfer {
   finished_at?: string
 }
 export interface CacheTransfersResponse { items: CacheTransfer[]; limit: number }
+
+export interface IdentityProvider { id: string; name: string; protocol?: 'oidc' | 'ldap' }
+export interface AuthenticationSettings {
+  enabled: boolean
+  display_name: string
+  issuer: string
+  client_id: string
+  client_secret_set: boolean
+  redirect_url: string
+  admin_groups: string[]
+  readonly_groups: string[]
+  groups_claim: string
+  session_ttl: string
+  allow_insecure_loopback: boolean
+}
+export type AuthenticationField = Exclude<keyof AuthenticationSettings, 'client_secret_set'> | 'client_secret'
+export type AuthenticationPatch = Partial<Omit<AuthenticationSettings, 'client_secret_set'> & { client_secret: string }>
+export interface AuthenticationSettingsResponse {
+  configured: AuthenticationSettings
+  effective: AuthenticationSettings
+  overrides: Partial<Record<AuthenticationField, string>>
+  pending_restart: boolean
+  config_writable: boolean
+}
+export interface OIDCAuthenticationSourceState {
+  sessions_will_reset?: boolean
+  can_restore?: boolean
+  id: string
+  protocol: 'oidc'
+  legacy: boolean
+  configured: AuthenticationSettings | null
+  effective: AuthenticationSettings | null
+  overrides: Partial<Record<AuthenticationField, string>>
+  pending_restart: boolean
+  config_writable: boolean
+}
+export interface LDAPDirectorySettings {
+  url: string
+  bind_dn: string
+  bind_password_set: boolean
+  user_base_dn: string
+  user_filter: string
+  subject_attribute: string
+  display_name_attribute: string
+  groups_attribute: string
+  ca_cert_pem: string
+}
+export interface LDAPAuthenticationSettings {
+  enabled: boolean
+  display_name: string
+  admin_groups: string[]
+  readonly_groups: string[]
+  session_ttl: string
+  ldap: LDAPDirectorySettings
+}
+export type LDAPAuthenticationPatch = Partial<Omit<LDAPAuthenticationSettings, 'ldap'>> & { ldap?: Partial<Omit<LDAPDirectorySettings, 'bind_password_set'> & { bind_password: string }> }
+export interface LDAPAuthenticationSourceState {
+  id: string
+  protocol: 'ldap'
+  legacy: boolean
+  configured: LDAPAuthenticationSettings | null
+  effective: LDAPAuthenticationSettings | null
+  overrides: Record<string, string>
+  pending_restart: boolean
+  config_writable: boolean
+  can_restore?: boolean
+  sessions_will_reset?: boolean
+}
+export type AuthenticationSourceState = OIDCAuthenticationSourceState | LDAPAuthenticationSourceState
+export interface LDAPPreviewRequest { id: string; protocol: 'ldap'; create: boolean; settings: LDAPAuthenticationPatch }
+export interface LDAPConfigurationCheck { checked_at: string; configuration_valid: boolean; tls_valid: boolean; bind_valid: boolean; directory_readable: boolean }
+export interface AuthenticationSourcesResponse {
+  sources: AuthenticationSourceState[]
+  config_writable: boolean
+}
+export type CreateAuthenticationSource = (AuthenticationPatch & { id: string; protocol: 'oidc'; display_name: string }) | (LDAPAuthenticationPatch & { id: string; protocol: 'ldap'; display_name: string })
+export interface LoginIdentity {
+  id: number
+  provider: string
+  provider_name: string
+  protocol?: 'oidc' | 'ldap'
+  provider_matches?: boolean
+  login_available?: boolean
+  display_name: string
+  created_at: string
+  last_login_at: string | null
+  can_unlink: boolean
+}
+export interface LoginIdentitiesResponse {
+  permission_source: 'local' | 'oidc' | 'ldap'
+  password_enabled: boolean
+  can_link: boolean
+  current_identity_id?: number | null
+  current_provider_id?: string | null
+  identities: LoginIdentity[]
+  providers?: (IdentityProvider & { enabled: boolean; can_link: boolean; session_ttl_seconds?: number })[]
+  provider: (IdentityProvider & { enabled: boolean; issuer?: string; redirect_url?: string; session_ttl_seconds?: number }) | null
+}
+export type OIDCCompleteResponse =
+  | { mode: 'login'; token: string; expires_at: number; return_to: string }
+  | { mode: 'link'; return_to: string; result: 'linked' }
+  | { mode: 'choice'; provider: IdentityProvider; display_name: string; role: 'admin' | 'readonly'; return_to: string; expires_at: number }
+  | { mode: 'test'; provider: IdentityProvider; outcome: 'success' | 'denied' | 'failed'; authenticated: boolean; mapped_role: 'admin' | 'readonly' | null; display_name?: string; code?: string; checked_at: string; return_to: string }
+
+export interface AuthenticationPreviewRequest {
+  id: string
+  protocol: 'oidc'
+  create: boolean
+  settings: AuthenticationPatch
+}
+export interface AuthenticationCheck {
+  checked_at: string
+  configuration_valid: boolean
+  discovery_valid: boolean
+  jwks_readable: boolean
+}
+export interface AuthenticationImpact {
+  source_id: string
+  bound_user_count: number
+  dependent_managed_user_count: number
+  active_session_count: number
+  observed_at: string
+  users: { id: number; username: string; permission_source: 'local' | 'oidc' | 'ldap'; enabled: boolean }[]
+  users_truncated: boolean
+}

@@ -111,19 +111,19 @@ export interface ApiGetOptions {
 
 export const AUTH_SESSION_EXPIRED_EVENT = 'depsilo:auth-session-expired'
 
-function isLoginRequest(url?: string) {
+function isPublicAuthRequest(url?: string) {
   if (!url) return false
   try {
-    return new URL(url, window.location.origin).pathname.endsWith('/auth/login')
+    return /\/auth\/(?:login|providers|ldap\/login|identity\/(?:complete|resolve|cancel)|oidc\/(?:start|complete|resolve|cancel))$/.test(new URL(url, window.location.origin).pathname)
   } catch {
-    return url.endsWith('/auth/login')
+    return /\/auth\/(?:login|providers|ldap\/login|identity\/(?:complete|resolve|cancel)|oidc\/(?:start|complete|resolve|cancel))$/.test(url)
   }
 }
 
 // Request interceptor: attach JWT from localStorage
 api.interceptors.request.use((config) => {
   const token = readLocalStorage('token')
-  if (token && !isLoginRequest(config.url)) {
+  if (token && !isPublicAuthRequest(config.url)) {
     config.headers.Authorization = `Bearer ${token}`
   }
   return config
@@ -135,7 +135,7 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (error: unknown) => {
-    if (axios.isAxiosError(error) && error.response?.status === 401 && !isLoginRequest(error.config?.url)) {
+    if (axios.isAxiosError(error) && error.response?.status === 401 && !isPublicAuthRequest(error.config?.url)) {
       const authorization = error.config?.headers?.get?.('Authorization')
       const currentToken = readLocalStorage('token')
       if (currentToken && typeof authorization === 'string' && authorization === `Bearer ${currentToken}`) {

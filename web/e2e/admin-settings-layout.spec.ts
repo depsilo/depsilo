@@ -99,15 +99,15 @@ test('scopes config-file read-only feedback to configuration tabs', async ({ pag
   await expect(page.getByRole('dialog', { name: /添加 Webhook/ })).toBeVisible()
 })
 
-test('hides Webhook mutation controls for a read-only principal', async ({ page }) => {
+test('hides Webhook mutation controls for an admin using a readonly API token', async ({ page }) => {
   await mockAdminApi(page, {
     'GET /api/v1/auth/me': {
       id: 2,
-      username: 'viewer',
-      role: 'viewer',
+      username: 'admin',
+      role: 'admin',
       enabled: true,
-      auth_method: 'jwt',
-      token_permissions: null,
+      auth_method: 'api_token',
+      token_permissions: 'readonly',
       can_write: false,
     },
     'GET /api/v1/admin/settings': settingsResponse({ pending_restart: [] }),

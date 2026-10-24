@@ -7,7 +7,7 @@ COPY web/ ./
 RUN npm run build
 
 # Stage 2: Build backend
-FROM --platform=$BUILDPLATFORM golang:1.27.1-alpine3.23@sha256:0908ac9b9319e09d7c238aabe914e0395c51d63c4e3d0ae8c554fda9158a5769 AS backend
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine3.23@sha256:754d5200fc3edae76d3b6598a9a3fac7e74981ee6a5413ab955025f185753ef2 AS backend
 WORKDIR /app
 
 # Version stamped into the binary so `depsilo version` / the topbar version

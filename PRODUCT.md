@@ -118,6 +118,23 @@ ADR-0004.
   authority per instance, and cascade connects independent nodes without a
   shared control plane. Multi-node HA and shared-database deployments are not
   shipped capabilities.
+- Admin supports local password login and multiple named authentication sources
+  configured by protocol: OIDC and LDAP over LDAPS or mandatory StartTLS. Casdoor
+  is one tested OIDC provider, not a default source. OIDC sources require distinct
+  issuers; directory identities use a stable UUID or GUID. A locally
+  managed account can bind one identity per source and unlink each separately
+  after proving its password; a new external account requires an explicit group
+  mapping to the existing `admin` or `readonly` role and an explicit first-login
+  creation choice. Unknown identities may instead prove and link an existing local
+  account. System management offers isolated connection and sign-in tests. External account
+  permissions remain with their original provider. Those accounts cannot bind
+  another source, add a local password, or mint durable machine credentials.
+  Provider sessions have a bounded absolute lifetime, and a local password
+  administrator remains the recovery authority. This is an open-source Admin
+  integration, without SCIM, SAML, directory synchronization, immediate remote revocation, or new
+  project-level roles. [ADR-0007](docs/adr/0007-operator-oidc-identities.md)
+  partially supersedes the earlier SSO non-goal; the enforcement and repository
+  scope decisions in ADR-0004/0005 remain in force.
 - The web product is bilingual in Chinese and English. Native mobile clients
   are not part of the current product.
 - The entitlement boundary is decided: governance primitives (minimum release

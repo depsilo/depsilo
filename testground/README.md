@@ -77,6 +77,13 @@ make test-clean
 
 `test-clean` 删除测试镜像和其他端到端测试产物，不会删除项目源文件。
 
+## 第三方身份提供方联调
+
+[oidc-casdoor](oidc-casdoor/README.md) 是独立、按需启动的 Casdoor 测试环境，
+使用本机 Docker、固定镜像和仓库外的私有状态。它不随包管理器测试启动，也
+不修改已有 Depsilo 服务。真实浏览器探针验证提供方的授权码/PKCE 和组信息，
+不表示 Depsilo 已支持第三方登录。启停及测试命令见该目录说明。
+
 ## 新增夹具
 
 1. 新建 `testground/docker-<ecosystem>/Dockerfile`。
@@ -194,3 +201,12 @@ ARM 主机可用原生 pip 的 `download` 加目标 Python、ABI 和完整兼容
 x86_64 wheel；随后仍需用两个独立的 x86_64 客户端执行完整安装。每个阶段分别记录
 耗时、退出状态、制品命中及实际上游流量。此流程只能算显式预热缓存后的功能检查，
 不能替代上面的冷安装对照或 GPU 推理检查。
+
+
+### LDAP directory authentication
+
+[The isolated LDAP fixture](ldap/README.md) runs pinned OpenLDAP with verified
+LDAPS/StartTLS, stable UUIDs and group membership. It checks directory login,
+account choice, binding/unlinking, diagnostics, session restart behavior and
+real browser flows against an isolated Depsilo instance. It does not touch the
+normal development service or its accounts.

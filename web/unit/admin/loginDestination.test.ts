@@ -18,6 +18,9 @@ describe('Admin login destination', () => {
   it('rejects external, protocol-relative, and recursive login targets', () => {
     expect(safeAdminDestination('https://evil.example/admin', origin)).toBeNull()
     expect(safeAdminDestination('//evil.example/admin', origin)).toBeNull()
+    expect(safeAdminDestination('/admin/auth/complete', origin)).toBeNull()
+    expect(safeAdminDestination('/admin/LOGIN/', origin)).toBeNull()
+    expect(safeAdminDestination('/admin/AUTH/complete', origin)).toBeNull()
     expect(safeAdminDestination('/admin/login?next=/admin/connect', origin)).toBeNull()
     expect(loginDestination(undefined, '?next=https://evil.example/admin', origin)).toBe('/admin')
   })

@@ -280,6 +280,10 @@ func writeSettingsError(c *gin.Context, err error) {
 	switch storeErr.Code {
 	case config.StoreInvalidSetting:
 		status = http.StatusUnprocessableEntity
+	case config.StoreAuthenticationSourceNotFound:
+		status = http.StatusNotFound
+	case config.StoreAuthenticationSourceConflict:
+		status = http.StatusConflict
 	case config.StoreConfigReadOnly:
 		status = http.StatusConflict
 	case config.StoreConfigReadFailed, config.StoreConfigWriteFailed:

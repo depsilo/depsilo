@@ -49,7 +49,7 @@ function upsertUser(current: AxiosResponse<AdminUser[]> | undefined, response: A
 export default function Users() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const { principal, canWrite } = usePrincipal()
+  const { principal, canManageCredentials: canWrite } = usePrincipal()
   const [userDialogOpen, setUserDialogOpen] = useState(false)
   const [editUserId, setEditUserId] = useState<number | null>(null)
   const [userForm, setUserForm] = useState<{ username: string; password: string; role: UserRole }>({ username: '', password: '', role: 'readonly' })
@@ -130,7 +130,7 @@ export default function Users() {
 
   function closeUserDialog() { setUserDialogOpen(false); setEditUserId(null); setUserForm({ username: '', password: '', role: 'readonly' }) }
   function openCreateUser() { createUserMutation.reset(); setEditUserId(null); setUserForm({ username: '', password: '', role: 'readonly' }); setUserDialogOpen(true) }
-  function openEditUser(user: AdminUser) { updateUserMutation.reset(); setEditUserId(user.id); setUserForm({ username: user.username, password: '', role: user.role }); setUserDialogOpen(true) }
+  function openEditUser(user: AdminUser) { if (user.permission_source && user.permission_source !== 'local') return; updateUserMutation.reset(); setEditUserId(user.id); setUserForm({ username: user.username, password: '', role: user.role }); setUserDialogOpen(true) }
   function openDisableDialog(user: AdminUser) {
     toggleUserMutation.reset()
     setDisableTarget(user)
@@ -174,6 +174,7 @@ export default function Users() {
     e.preventDefault()
     if (!canWrite) return
     if (editUserId) {
+      if (!['local', undefined].includes(users.find(user => user.id === editUserId)?.permission_source)) return
       const data: UpdateUserRequest = {}
       if (editUserId !== principal?.id) data.role = userForm.role
       if (userForm.password) data.password = userForm.password
@@ -197,12 +198,13 @@ export default function Users() {
 
   const userColumns = [
     { key: 'username', label: t('users.user'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => (<div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-md text-[13px] font-[500] shrink-0" style={{ background: 'var(--hit)', color: 'var(--on-hit)' }}>{row.username?.[0]?.toUpperCase() || '?'}</div><span className="font-[500]" style={{ color: 'var(--text)' }}>{row.username}</span></div>) },
+    { key: 'permission_source', label: t('account.permissionSource'), render: (v: unknown) => <Badge variant="secondary">{t(v && v !== 'local' ? 'account.externalSource' : 'account.localSource')}</Badge> },
     { key: 'role', label: t('users.role'), render: (v: unknown) => <Badge variant={(v as string) === 'admin' ? "default" : 'default'}>{t((v as string) === 'admin' ? 'users.admin' : 'users.readonly')}</Badge> },
     { key: 'enabled', label: t('status'), render: (v: unknown) => <Badge variant={v ? 'success' : "destructive"}>{v ? t('users.enabled') : t('users.disabled')}</Badge> },
     { key: 'last_login_at', label: t('users.lastLogin'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
     { key: 'created_at', label: t('users.createdAt'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
     {
-      key: 'id', label: t('actions'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><Tooltip>
+      key: 'id', label: t('actions'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => canWrite ? (<div className="flex gap-1">{(!row.permission_source || row.permission_source === 'local') && <Tooltip>
         <TooltipTrigger render={
           <Button
             onClick={(e) => { e.stopPropagation(); openEditUser(row) }}
@@ -216,7 +218,7 @@ export default function Users() {
           <Icon name={"edit"} size="sm" />
         </TooltipTrigger>
         <TooltipContent>{t('users.editNamed', { name: row.username })}</TooltipContent>
-      </Tooltip>{!isSelf(row) && <Tooltip>
+      </Tooltip>}{!isSelf(row) && <Tooltip>
       <TooltipTrigger render={
         <Button
           onClick={(e) => { e.stopPropagation(); if (row.enabled) openDisableDialog(row); else enableUser(row) }}
@@ -251,6 +253,7 @@ export default function Users() {
   return (
     <AdminPage description={t('users.subtitle')} actions={<Button variant="outline" size="sm" disabled={usersQuery.isFetching || tokensQuery.isFetching} onClick={() => { void usersQuery.refetch(); void tokensQuery.refetch(); setNow(Date.now()) }}><Icon name="refresh" size="sm" />{t('now.refresh')}</Button>}>
     <div className="space-y-12">
+      {!canWrite && principal?.can_write && <Alert variant="info"><AlertDescription>{t('account.credentialRestriction')}</AlertDescription></Alert>}
       {/* ── Users ─────────────────────────────────────── */}
       <section>
         <SectionHeader

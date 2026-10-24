@@ -27,6 +27,7 @@ type Claims struct {
 	Username          string `json:"username"`
 	Role              string `json:"role"`
 	CredentialVersion uint64 `json:"credential_version"`
+	SessionID         string `json:"sid,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -65,6 +66,19 @@ func JWTOnly(secret string, database *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+// OptionalLogoutPrincipal preserves idempotent logout for missing/expired tokens.
+// Only a fully authenticated JWT can identify a server session to revoke.
+func OptionalLogoutPrincipal(secret string, database *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if token := extractToken(c); token != "" {
+			if principal, err := resolveJWTPrincipal(secret, database, token); err == nil {
+				setPrincipal(c, principal)
+			}
+		}
+		c.Next()
+	}
+}
+
 func resolveJWTPrincipal(secret string, database *gorm.DB, tokenString string) (Principal, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
@@ -84,14 +98,70 @@ func resolveJWTPrincipal(secret string, database *gorm.DB, tokenString string) (
 		return Principal{}, errors.New("unsupported user role")
 	}
 	if claims.CredentialVersion == 0 || user.CredentialVersion == 0 ||
-		claims.Role != user.Role || claims.CredentialVersion != user.CredentialVersion {
+		claims.CredentialVersion != user.CredentialVersion {
 		return Principal{}, errors.New("stale JWT credential state")
 	}
-	return Principal{
+	source := permissionSource(user)
+	if source != "local" && source != "oidc" && source != "ldap" {
+		return Principal{}, errors.New("unsupported permission source")
+	}
+	principal := Principal{
 		ID: user.ID, Username: user.Username, Role: user.Role, Enabled: true,
 		AuthMethod: AuthMethodJWT, TokenPermissions: nil, CanWrite: user.Role == "admin",
 		CredentialVersion: user.CredentialVersion,
-	}, nil
+		PermissionSource:  source, LoginMethod: "password", CanManageCredentials: user.Role == "admin" && source == "local",
+	}
+	if claims.SessionID != "" {
+		var session db.IdentitySession
+		if err := database.Where("id = ? AND user_id = ?", claims.SessionID, user.ID).First(&session).Error; err != nil {
+			return Principal{}, errors.New("identity session unavailable")
+		}
+		if session.RevokedAt != nil || !time.Now().Before(session.ExpiresAt) || session.ConfigFingerprint == "" {
+			return Principal{}, errors.New("identity session expired or revoked")
+		}
+		var identity db.ExternalIdentity
+		if err := database.Where("id = ? AND user_id = ? AND provider <> ? AND issuer <> ? AND subject <> ?", session.IdentityID, user.ID, "", "", "").First(&identity).Error; err != nil {
+			return Principal{}, errors.New("identity no longer linked")
+		}
+		protocol := identity.LoginProtocol()
+		if source != "local" && source != protocol {
+			return Principal{}, errors.New("identity does not match account permission authority")
+		}
+		role, err := identitySessionRole(user.Role, session.Role)
+		if err != nil {
+			return Principal{}, err
+		}
+		principal.Role, principal.CanWrite = role, role == "admin"
+		principal.LoginMethod, principal.CanManageCredentials = protocol, false
+		principal.SessionID, principal.SessionExpiresAt = session.ID, session.ExpiresAt
+		principal.CurrentIdentityID, principal.CurrentProviderID = identity.ID, identity.Provider
+		if claims.ExpiresAt.Time.After(session.ExpiresAt) {
+			return Principal{}, errors.New("JWT exceeds identity session lifetime")
+		}
+	} else if source != "local" || user.PasswordHash == "" {
+		return Principal{}, errors.New("account requires an identity session")
+	}
+	if claims.Role != principal.Role {
+		return Principal{}, errors.New("stale JWT role")
+	}
+	return principal, nil
+}
+
+func permissionSource(user db.User) string {
+	if user.PermissionSource == "" {
+		return "local"
+	}
+	return user.PermissionSource
+}
+
+func identitySessionRole(userRole, sessionRole string) (string, error) {
+	if (userRole != "admin" && userRole != "readonly") || (sessionRole != "admin" && sessionRole != "readonly") {
+		return "", errors.New("unsupported identity session role")
+	}
+	if userRole == "readonly" || sessionRole == "readonly" {
+		return "readonly", nil
+	}
+	return "admin", nil
 }
 
 func resolveAPITokenPrincipal(database *gorm.DB, tokenString string) (Principal, error) {
@@ -114,6 +184,9 @@ func resolveAPITokenPrincipal(database *gorm.DB, tokenString string) (Principal,
 	if !user.Enabled {
 		return Principal{}, errors.New("user disabled")
 	}
+	if permissionSource(user) != "local" {
+		return Principal{}, errors.New("external user cannot use a local API token")
+	}
 	if user.Role != "admin" && user.Role != "readonly" {
 		return Principal{}, errors.New("unsupported user role")
 	}
@@ -127,11 +200,16 @@ func resolveAPITokenPrincipal(database *gorm.DB, tokenString string) (Principal,
 		AuthMethod: AuthMethodAPIToken, TokenPermissions: &permissions,
 		CanWrite:          user.Role == "admin" && permissions == "readwrite",
 		CredentialVersion: user.CredentialVersion,
+		PermissionSource:  "local", LoginMethod: "api_token",
+		CanManageCredentials: user.Role == "admin" && permissions == "readwrite",
 	}, nil
 }
 
 // GenerateJWT creates a new JWT token for a user.
 func GenerateJWT(secret string, user db.User, ttl time.Duration) (string, error) {
+	if permissionSource(user) != "local" {
+		return "", errors.New("external users require an identity session")
+	}
 	if user.CredentialVersion == 0 {
 		return "", errors.New("user credential version is not initialized")
 	}
@@ -152,6 +230,28 @@ func GenerateJWT(secret string, user db.User, ttl time.Duration) (string, error)
 		return "", err
 	}
 	return signed, nil
+}
+
+// GenerateIdentityJWT binds a bearer JWT to an independently revocable session.
+// Refreshing this JWT can never extend the provider authorization's lifetime.
+func GenerateIdentityJWT(secret string, user db.User, session db.IdentitySession, ttl time.Duration) (string, error) {
+	now := time.Now()
+	if user.CredentialVersion == 0 || session.ID == "" || session.UserID != user.ID || session.IdentityID == 0 || session.RevokedAt != nil || !now.Before(session.ExpiresAt) || ttl <= 0 {
+		return "", errors.New("invalid identity session")
+	}
+	role, err := identitySessionRole(user.Role, session.Role)
+	if err != nil {
+		return "", err
+	}
+	expiresAt := now.Add(ttl)
+	if session.ExpiresAt.Before(expiresAt) {
+		expiresAt = session.ExpiresAt
+	}
+	claims := Claims{
+		UserID: user.ID, Username: user.Username, Role: role, CredentialVersion: user.CredentialVersion, SessionID: session.ID,
+		RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(expiresAt), IssuedAt: jwt.NewNumericDate(now)},
+	}
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
 }
 
 func extractToken(c *gin.Context) string {

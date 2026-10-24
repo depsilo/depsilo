@@ -13,6 +13,8 @@ role is `admin` and a token whose permission is `readwrite`.
 | Ordinary active Upstreams | Database | Registry atomically updates the next proxy request |
 | Docker registries and extra indexes | `config.toml` | Restart-managed; absent from Admin Upstream CRUD. Admin may only initialize an empty Docker configuration with the Docker Hub default |
 | Users, tokens, package rules, Webhooks, security scan policies | Database | Existing handler-specific runtime behavior |
+| Authentication sources, per-source OIDC group mapping and session lifetime | `config.toml` / environment | Restart-managed; System management can patch file-owned fields with local credential authority; client secret is write-only |
+| External login bindings, session revocation, local enabled state | Database | Checked on authenticated requests; provider group decisions refresh at login |
 | Minimum-release-age thresholds, blocklist/tamper settings | `config.toml` | Loaded at startup; restart to change |
 
 ## Upstream observations
@@ -45,7 +47,31 @@ Webhook URLs, proxy credentials, secrets, keys, and every other credential-beari
 response field are masked by the server.
 
 The service rejects self-delete, self-disable, and self-demotion with `409 SELF_LOCKOUT`.
-It also rejects removing the final enabled administrator with `409 LAST_ADMIN`.
+It also rejects removing the final enabled **local password administrator** with
+`409 LAST_ADMIN`; an external administrator does not replace that recovery account.
+
+`GET /api/v1/auth/me` also reports `permission_source` (`local` / `oidc` / `ldap`),
+`login_method` (`password` / `oidc` / `ldap` / `api_token`), and
+`can_manage_credentials`. User mutations, API-token mutations, compiler-cache
+credential mutations, Cascade configuration writes, and authentication configuration writes require
+`can_manage_credentials` in addition to normal write permission. Only local
+administrator password sessions or their existing readwrite API tokens have
+that capability. OIDC administrators may perform ordinary operational writes
+but cannot create a persistent credential that bypasses their external session
+lifetime. Those gates return `403 LOCAL_CREDENTIALS_REQUIRED` when absent.
+
+System management (Users, Identity authentication, Settings, and License) is an
+administrator-only browser workspace. Existing operational read API contracts
+are unchanged. `GET /api/v1/admin/authentication` additionally requires an
+effective `admin` role, including for an administrator's read-only API token.
+`PUT` also requires write and local credential-management capabilities.
+The authentication response distinguishes `configured` and `effective` values,
+`pending_restart`, environment `overrides`, and `config_writable`. Its client
+secret field is only a boolean indicating whether a secret is set. Updates
+are partial, serialized with other file edits, and require restart; omitting
+`client_secret` preserves it, and environment values are never copied into
+the file. An explicit secret replacement restricts file permissions to its owner.
+Personal login bindings remain under the authenticated user's Account security.
 
 ## Docker first connection
 
@@ -125,6 +151,121 @@ user. Schema version 2 initializes existing users at credential version 1; pre-u
 JWTs have no matching claim and are invalidated once. API tokens are intentionally not
 bound to the JWT credential version and continue to use their own expiry and permissions
 plus the owner's current enabled state and role.
+
+## External Operator identities
+
+Multiple optional authentication sources support explicit account binding and
+the existing two roles. Sources have stable IDs and an explicit protocol; only
+OIDC is implemented, with no implicit Casdoor source. Nonempty issuers must be
+distinct across all configured sources, including disabled sources. Disabled
+drafts may leave the issuer unset. Configuration and Operator workflows are documented in
+[OIDC login and account binding](oidc.md); [ADR-0007](adr/0007-operator-oidc-identities.md)
+records the authority split.
+
+`GET /api/v1/auth/providers` is public and returns enabled sources as
+`{id,name,protocol}`. Login starts at `POST /api/v1/auth/oidc/start` with
+`provider_id` selecting the source. New callbacks are
+`GET /api/v1/auth/oidc/:provider_id/callback`; legacy source `oidc` retains
+`GET /api/v1/auth/oidc/callback`. Omitting `provider_id` selects legacy `oidc`
+when present, or the sole enabled named source when legacy is absent. Multiple
+enabled named sources require an explicit selection; a disabled legacy source
+does not silently fall through to another source. The callback redirects to
+the Admin completion page without a JWT in the URL; `POST /api/v1/auth/oidc/complete` consumes a
+single-use, browser-bound completion cookie to return a login token, binding
+result, isolated test result, or an explicit first-account choice. Unknown
+identities have no durable account/session yet. `POST /api/v1/auth/oidc/resolve`
+accepts `action: "create"` or `action: "link"` plus a local username/password;
+`POST /api/v1/auth/oidc/cancel` discards that short-lived choice. Password failures
+use the existing shared admission limits. A linked result is an OIDC session,
+not a password session. Provider tokens never enter the browser application. Browser-bound
+transactions and callbacks are source-specific; all enabled callback URLs must
+share the instance origin.
+
+`GET /api/v1/admin/authentication/sources` returns `{sources,config_writable}`.
+Each source state includes `id`, `protocol`, `legacy`, nullable `configured` and
+`effective` snapshots, `overrides`, `pending_restart`, `config_writable`, and
+`can_restore` for a reliable pending-removal file baseline.
+Snapshots expose `client_secret_set`, never `client_secret`. New sources have
+`effective: null`; removed but running sources have `configured: null` until
+restart. `POST /sources` creates `{id,protocol,...OIDCSettingsPatch}`;
+`PUT /sources/:id` patches source settings; `DELETE /sources/:id` removes its saved
+configuration without deleting accounts or bindings. Source IDs and protocols
+are immutable. An effective-only source cannot be recreated until restart.
+These paths are relative to `/api/v1/admin/authentication`.
+
+`POST /check` and `POST /trial` accept
+`{id,protocol:"oidc",create:boolean,settings:OIDCSettingsPatch}`. Preview merges
+saved values and startup environment ownership without writing the file or
+changing the running registry. Check validates configuration, discovery and JWKS
+readability; its result does not validate client credentials. Trial returns an
+authorization URL for an isolated browser flow; completion reports authentication
+and mapped role, never creates users/bindings/sessions or returns a new Admin JWT.
+Starting and completing a trial require the same current local password
+administrator session and unchanged credential version; API Tokens can check
+configuration but cannot run browser trials.
+The UI requires saving a clean form before trial, so no secret draft must survive
+a cross-site navigation. A disabled saved source can be tested before enablement.
+
+`GET /sources/:id/impact` returns full linked-user, dependent-managed-user and
+valid-session-record counts, an observation time, and up to 20 affected users.
+It requires local credential authority as well as an administrator role. The
+session count is an observation of durable valid records, not online browsers.
+`POST /sources/:id/restore` undoes pending removal only from a reliably captured
+original file baseline, preserving original field presence and environment
+ownership. Validation responses contain fixed safe `field_errors` codes rather
+than configuration values.
+
+Reads require an administrator role. Writes additionally require write and
+local credential-management authority. All writes share the settings store's
+lock and atomic file replacement. Environment-owned fields cannot be edited,
+and sources with environment overrides cannot be deleted. Explicit
+`[auth.sources.<id>]` or legacy `[auth.oidc]` tables are writable. LDAP settings
+support either an inline `ldap = { ... }` value or a nested
+`[auth.sources.<id>.ldap]` table. Other unsupported inline, dotted-key, or nested
+source shapes are read-only. Changes apply only
+after restart. Legacy `GET`/`PUT /api/v1/admin/authentication` remain limited to
+`[auth.oidc]`; they never edit named sources.
+
+JWT sessions can call `GET /api/v1/auth/identities`,
+`POST /api/v1/auth/identities/link`, and
+`POST /api/v1/auth/identities/:id/unlink`. Link/unlink require current local
+password proof and are unavailable to provider-managed accounts. The link body
+selects `provider_id`; a local account may bind one identity per source. The
+identity response includes `current_identity_id` and `current_provider_id` for
+the current external session, plus a `providers` array while retaining the legacy
+singleton `provider` field where an unambiguous compatibility value exists.
+Linking retains the current local account and role; unlinking retains its
+password and revokes only sessions created through that identity. Local
+accounts can unlink even when the source is disabled or removed. An already-bound
+external identity returns `409 IDENTITY_ALREADY_BOUND`; there is no implicit merge.
+API-token sessions cannot use these self-service identity routes.
+
+New external accounts are admitted only through explicit groups and an explicit
+first-login creation choice. Their
+Permission Source is `oidc` or `ldap` and they have no local password. Admin permits
+local enable/disable but rejects local role/password changes and deletion with
+`409 IDENTITY_MANAGED`; retaining the disabled identity prevents a later login
+from silently recreating an enabled account. These accounts cannot add another
+authentication source or move their permission authority. API tokens owned by
+an external account are rejected even if a token row exists.
+
+External JWTs identify a durable session. Each request verifies that the user
+is enabled, its credential version matches, the identity still belongs to it,
+and the session is neither expired nor revoked. The effective role is the lower
+of the account role and the provider session role. Refresh retains the same
+session and cannot extend its absolute deadline (default 30 minutes, maximum
+1 hour). `POST /api/v1/auth/logout` revokes an external session; local password
+JWT logout retains the existing client-discard behavior. Provider removal or
+configuration changes revoke that source's incompatible sessions at startup;
+unchanged sources retain their valid sessions. Source removal preserves stored
+identity ownership. The existing schema version 12 and global exact
+`(issuer,subject)` uniqueness are retained; multiple sources add no migration.
+
+Remote directory changes are not continuously polled. A newly authenticated
+identity that no longer matches an admission group has its existing external
+sessions revoked; otherwise the absolute deadline bounds the old admission.
+Local account disable takes effect on its next request. No SCIM or provider-wide
+logout contract is implied.
 
 ## Contract compatibility
 
@@ -274,3 +415,29 @@ make test
 make test-ui
 make verify-web
 ```
+
+
+### LDAP directory authentication
+
+Authentication Sources additionally support `protocol: "ldap"` and a typed
+`ldap` settings object; the service bind password is write-only. Reads return
+`ldap.bind_password_set`, never the password. The source collection, per-source
+mutation, pending-restart, environment ownership and impact rules are shared
+with OIDC. Source IDs and protocols remain immutable.
+
+- `POST /api/v1/auth/ldap/login`: source ID, directory username/password and
+  optional return path. Returns an existing login or the explicit account
+  choice, never implicit creation.
+- `POST /api/v1/auth/identities/ldap/link`: directory username/password plus
+  current local password proof, preserving account authority and current login.
+- `POST /api/v1/admin/authentication/ldap/check`: an unsaved configuration
+  envelope; verifies TLS, service bind and search-base readability.
+- `POST /api/v1/admin/authentication/ldap/trial`: the envelope plus directory
+  username/password; tests authentication and group admission without creating
+  accounts, links or sessions. Requires a local administrator password session.
+
+Directory credential requests require same-origin JSON over HTTPS, allowing
+loopback HTTP only for development. Returned errors do not contain credentials
+or raw directory failures. Choice endpoints have protocol-neutral aliases at
+`/api/v1/auth/identity/{complete,resolve,cancel}`; existing OIDC routes remain.
+The existing personal unlink route applies to both protocols.

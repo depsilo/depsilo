@@ -144,9 +144,9 @@ test('shows the service error and no success Toast when Test fails', async ({ pa
   await expect(page.locator('[data-sonner-toast][data-type="success"]')).toHaveCount(0)
 })
 
-test('hides mutation controls when the principal cannot write', async ({ page }) => {
+test('hides mutation controls for an admin using a readonly API token', async ({ page }) => {
   await mockAdminApi(page, {
-    'GET /api/v1/auth/me': { id: 2, username: 'viewer', role: 'viewer', enabled: true, auth_method: 'jwt', token_permissions: null, can_write: false },
+    'GET /api/v1/auth/me': { id: 2, username: 'admin', role: 'admin', enabled: true, auth_method: 'api_token', token_permissions: 'readonly', can_write: false },
     'GET /api/v1/admin/webhooks': webhookRows,
   })
   await openWebhookTab(page)

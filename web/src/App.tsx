@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router'
+import { createBrowserRouter, RouterProvider, Routes, Route } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { lazyRoute } from '@/routing/lazyRoute'
 import SetupGate from '@/setup/SetupGate'
@@ -24,14 +24,16 @@ function ApplicationRoutes() {
   )
 }
 
+// A data router provides the shared navigation blocker used by configuration forms.
+const router = createBrowserRouter([{
+  path: '*',
+  element: <SetupGate><ApplicationRoutes /></SetupGate>,
+}])
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <SetupGate>
-          <ApplicationRoutes />
-        </SetupGate>
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>
   )
 }

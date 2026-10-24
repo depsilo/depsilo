@@ -24,6 +24,7 @@ interface AdminRouteDefinition {
 
 const routeDefinitions = [
   { id: 'dashboard', path: '', titleKey: 'nav.workspaces.overview', icon: 'dashboard', navGroup: 'overview' },
+  { id: 'account', path: 'account', titleKey: 'account.title', icon: 'person', navGroup: 'overview', hiddenFromNavigation: true },
   { id: 'connect', path: 'connect', titleKey: 'onboarding.title', icon: 'link', navGroup: 'overview', hiddenFromNavigation: true },
   { id: 'attention', path: 'attention', titleKey: 'nav.attention', icon: 'inbox', navGroup: 'overview', hiddenFromNavigation: true },
   { id: 'upstreams', path: 'upstreams', titleKey: 'nav.upstreams', icon: 'cloud_sync', navGroup: 'upstreams' },
@@ -39,6 +40,7 @@ const routeDefinitions = [
   { id: 'rules', path: 'rules', titleKey: 'nav.rules', icon: 'shield', navGroup: 'security' },
   { id: 'projects', path: 'projects', titleKey: 'nav.projects', icon: 'folder_managed', navGroup: 'projects', pro: true },
   { id: 'users', path: 'users', titleKey: 'nav.userManage', icon: 'group', navGroup: 'instance' },
+  { id: 'authentication', path: 'authentication', titleKey: 'nav.authentication', icon: 'security', navGroup: 'instance' },
   { id: 'settings', path: 'settings', titleKey: 'nav.settings', icon: 'settings', navGroup: 'instance' },
   { id: 'license', path: 'license', titleKey: 'license.title', icon: 'key', navGroup: 'instance' },
 ] as const satisfies readonly AdminRouteDefinition[]
@@ -57,6 +59,8 @@ export interface AdminRoute {
   index: boolean
   pro: boolean
   hiddenFromNavigation: boolean
+  /** System management is reserved for effective administrator roles. */
+  requiresAdmin: boolean
 }
 
 export const adminRouteManifest: readonly AdminRoute[] = Object.freeze(
@@ -64,6 +68,7 @@ export const adminRouteManifest: readonly AdminRoute[] = Object.freeze(
     ...route,
     href: route.path ? `/admin/${route.path}` : '/admin',
     index: route.path === '',
+    requiresAdmin: route.navGroup === 'instance',
     pro: 'pro' in route && route.pro === true,
     hiddenFromNavigation: 'hiddenFromNavigation' in route && route.hiddenFromNavigation === true,
   })),
@@ -111,7 +116,7 @@ export function getAdminRouteHref(id: AdminRouteId): string {
  */
 export function resolveWorkspaceNavigation(pathname: string): AdminNavigationGroup | undefined {
   const currentRoute = resolveAdminRoute(pathname)
-  if (!currentRoute || currentRoute.id === 'connect') return undefined
+  if (!currentRoute || (currentRoute.id === 'connect' || currentRoute.id === 'account')) return undefined
   const workspace = adminNavigationGroups.find(group => group.id === currentRoute.navGroup)
   if (!workspace || workspace.routes.length < 2) return undefined
   return workspace
@@ -128,3 +133,6 @@ export function resolveAdminRoute(pathname: string): AdminRoute | undefined {
   const normalized = normalizePathname(pathname)
   return adminRouteManifest.find(route => route.href.toLowerCase() === normalized)
 }
+
+export const adminAuthRoutes = { login: 'login', complete: 'auth/complete' } as const
+export const ADMIN_LOGIN_PATH = `/admin/${adminAuthRoutes.login}`

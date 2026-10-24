@@ -15,10 +15,12 @@ import (
 type StoreErrorCode string
 
 const (
-	StoreInvalidSetting    StoreErrorCode = "INVALID_SETTING"
-	StoreConfigReadOnly    StoreErrorCode = "CONFIG_READ_ONLY"
-	StoreConfigReadFailed  StoreErrorCode = "CONFIG_READ_FAILED"
-	StoreConfigWriteFailed StoreErrorCode = "CONFIG_WRITE_FAILED"
+	StoreInvalidSetting               StoreErrorCode = "INVALID_SETTING"
+	StoreAuthenticationSourceNotFound StoreErrorCode = "AUTH_SOURCE_NOT_FOUND"
+	StoreAuthenticationSourceConflict StoreErrorCode = "AUTH_SOURCE_CONFLICT"
+	StoreConfigReadOnly               StoreErrorCode = "CONFIG_READ_ONLY"
+	StoreConfigReadFailed             StoreErrorCode = "CONFIG_READ_FAILED"
+	StoreConfigWriteFailed            StoreErrorCode = "CONFIG_WRITE_FAILED"
 )
 
 type StoreError struct {
@@ -30,14 +32,20 @@ func (e *StoreError) Error() string { return e.Err.Error() }
 func (e *StoreError) Unwrap() error { return e.Err }
 
 type Store struct {
-	mu               sync.Mutex
-	path             string
-	effective        SettingsSnapshot
-	effectiveCascade cascadeFingerprint
-	effectiveDocker  DockerConfig
-	overrides        map[SettingPath]string
-	logLevel         zap.AtomicLevel
-	writer           atomicFileWriter
+	mu                  sync.Mutex
+	path                string
+	effective           SettingsSnapshot
+	effectiveCascade    cascadeFingerprint
+	effectiveDocker     DockerConfig
+	effectiveOIDC       OIDCConfig
+	oidcOverrides       map[string]string
+	effectiveSources    map[string]AuthenticationSourceConfig
+	sourceOverrides     map[string]map[string]string
+	startupSources      map[string]AuthenticationSourceConfig
+	startupSourceFields map[string]map[string]bool
+	overrides           map[SettingPath]string
+	logLevel            zap.AtomicLevel
+	writer              atomicFileWriter
 }
 
 var settingEnvNames = map[SettingPath]string{
@@ -76,7 +84,31 @@ func newStore(path string, effective *Config, level zap.AtomicLevel, writer atom
 	if effective != nil {
 		store.effectiveCascade = fingerprintCascade(effective.Cascade)
 		store.effectiveDocker = effective.Docker
+		store.effectiveOIDC = cloneOIDCConfig(effective.Auth.OIDC)
 	}
+	store.oidcOverrides = make(map[string]string)
+	for _, name := range oidcFields {
+		env := oidcEnvName(name)
+		if os.Getenv(env) != "" {
+			store.oidcOverrides[name] = env
+		}
+	}
+	store.effectiveSources = make(map[string]AuthenticationSourceConfig)
+	if effective != nil {
+		store.effectiveSources = AuthenticationSources(effective.Auth)
+	}
+	store.sourceOverrides = make(map[string]map[string]string)
+	for id, source := range store.effectiveSources {
+		overrides := make(map[string]string)
+		for _, field := range sourceEnvironmentFields(source) {
+			name := authenticationSourceEnvName(id, field)
+			if os.Getenv(name) != "" {
+				overrides[field] = name
+			}
+		}
+		store.sourceOverrides[id] = overrides
+	}
+	store.captureAuthenticationSourceBaseline()
 	return store
 }
 

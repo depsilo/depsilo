@@ -37,14 +37,19 @@ Assumptions, all operator-controlled:
 | Cached artifact bytes | storage dir or S3 bucket | Builds install these bytes | Tamper detection (first-seen SHA-256, mismatch alert, first-seen copy kept), upstream provenance bindings, ecosystem checksums/signatures preserved end to end |
 | Policy data (package rules, blocklist, snapshots, approvals, allow-lists) | SQLite | Decides what may be served | Authenticated admin writes, audited mutations, fail-closed gates |
 | Admin credentials and API tokens | SQLite (bcrypt password hashes, hashed tokens) | Full control plane | Read/write capability groups, Pro entitlement gates, bootstrap-token flow |
+| External Operator identities and sessions | SQLite | Account binding, admission, revocation | Stable source ownership plus exact issuer/subject identity; explicit password-proven binding; absolute session lifetime and local account checks |
+| Per-source OIDC client secrets | Operator configuration/environment | Confidential provider client authentication | Write-only Admin input restricted to local credential authority; never returned; issuer-origin constrained requests; private configuration |
 | Instance signing key | managed `data/secrets/jwt.key` relative to the config directory, or explicit environment/config secret | Mints admin sessions and signs npm / extra PyPI artifact URLs | Automatic 256-bit generation for new instances; mode-0700 directory and mode-0600 file; restart reuse; explicit-secret startup guard |
 | Setup bootstrap token | current process and private `data/secrets/bootstrap.token` during initialization | Authorizes initial administrator creation | Mode-0600 file, refreshed before serving, removed after setup; local `depsilo setup token` requires the service to be awaiting setup; no public token-read endpoint |
-| Upstream credentials (registry username/password, extra-index keys) | config file | Upstream account | File permissions; never returned by the API |
-| Webhook URLs and SIEM collector tokens (incl. Splunk HEC) | SQLite | Outbound data path | Write-only in the API, masked for read-only principals |
+| Ordinary Upstream and proxy URL credentials | SQLite | Upstream/proxy accounts | Full URLs are available to write-capable Principals; masked for other Principals |
+| Docker registry credentials and extra-index keys | config file | Config-owned package sources | Private configuration; not exposed through Admin responses |
+| Webhook and SIEM collector URLs | SQLite | Outbound data path | Full URLs are available to write-capable Principals; masked for other Principals |
+| SIEM collector tokens (incl. Splunk HEC) | SQLite | Collector authentication | Write-only in the API; responses expose configured state, not the token |
+| Cascade shared/peer tokens | config file | Authenticated parent relay | Write-only in the API; responses expose configured state, not the token |
 | SBOM signing key (Ed25519) | operator-provided PEM file | Provenance of CRA exports | Never read into the DB; public key travels with each signature |
 | License key | SQLite (plaintext by design) | Entitlement only, not a credential | Documented as a key identifier, masked in the UI |
 | Audit log and quarantine events | SQLite | Accountability; SIEM source stream | Delivery cursor + lag/error status in Admin; at-least-once forwarding |
-| Compile-cache objects and credentials | compile storage + SQLite | Source code and build output | Per-namespace credentials (see `docs/compile-cache.md`) |
+| Compile-cache objects and credentials | compile storage + SQLite | Source code and build output | Per-namespace credentials; plaintext returned once at creation and omitted from lists (see `docs/compile-cache.md`) |
 
 ## 3. Adversaries considered
 
@@ -63,7 +68,8 @@ Assumptions, all operator-controlled:
 | Boundary | Enforcement |
 | --- | --- |
 | Package client → proxy routes | **Open by design.** Package managers cannot present Depsilo credentials on every fetch, so proxy routes are not access-controlled. A `Bearer depsilo_proj_*` token is optional and only attributes usage; a missing or unknown token still serves, untracked. `SECURITY.md` therefore requires restricting *network reachability* of the proxy. |
-| Admin browser/API → control plane | JWT bearer sessions; `ReadRequired` / `WriteRequired` capability groups; `RequirePro` for the multi-project and SBOM surfaces. |
+| Admin browser/API → control plane | JWT bearer sessions; read/write and local credential-management capability groups; `RequirePro` for the multi-project and SBOM surfaces. OIDC sessions retain their independent expiry/revocation checks. |
+| Depsilo → configured identity provider | Authorization Code + PKCE, state/nonce, signed ID-token verification and matching UserInfo subject; HTTPS and same-issuer-origin endpoints. Explicit isolated loopback HTTP is development-only. |
 | MCP client → `/mcp` | JWT + read capability, read-only tools, and resource reads never fetch caller-supplied hosts (SSRF contract test). |
 | Portal → anonymous status | Public by design; exposes service health and guidance only. |
 | Depsilo → upstream | HTTPS; per-ecosystem provenance binding to the serving upstream; HTTPS→HTTP downgrade rejected; guarded dialer re-checks the resolved IP at connect time (loopback, link-local, multicast, unspecified rejected). |
@@ -138,10 +144,18 @@ first fetch; tamper detection only notices later changes.
 
 ### 5.6 Credential leakage through the API/UI
 
-Passwords are bcrypt hashes; API tokens are stored hashed; SIEM/webhook
-tokens are write-only and collector URLs are masked for read-only
-principals; the license key is masked in the UI. The JWT secret has a startup
-guard. New instances without an explicit secret generate and persist a random
+Passwords are bcrypt hashes; API tokens are stored hashed. Saved SIEM collector
+tokens, Cascade shared/peer tokens, Docker/extra-index credentials, and the OIDC
+client secret are not returned through Admin read responses. Compiler-cache
+tokens are returned once when created and are not available from later lists.
+
+Ordinary Upstream/proxy, Webhook, and SIEM collector **URLs** follow the existing
+`CanWrite` visibility rule: write-capable administrators, including OIDC
+administrators, can read their complete URLs and any embedded credentials.
+Other Principals receive masked URLs. `can_manage_credentials` restricts
+credential mutations; it does not replace this existing URL visibility rule.
+The license key is masked in the UI. The JWT secret has a startup guard.
+New instances without an explicit secret generate and persist a random
 256-bit signing key; an existing database with no key or a malformed key file
 fails startup instead of silently rotating sessions and signed artifact URLs.
 Explicit environment/config secrets remain supported. The legacy development
@@ -163,8 +177,86 @@ group; Pro surfaces sit behind the entitlement checker; setup requires the
 bootstrap token; a router AST contract test fails if a route is registered
 outside those groups.
 
-**Residual:** no in-product SSO/RBAC by decision (ADR-0005) — front Depsilo
-with oauth2-proxy / Authelia / Pomerium for identity guarantees.
+Optional OIDC and LDAP integrations separate account permissions from login
+identities ([ADR-0007](adr/0007-operator-oidc-identities.md)). Each binding belongs
+to a stable authentication source and exact issuer/subject identity. Source
+display names and authentication protocol names are not identity keys;
+email/name matching cannot bind or merge accounts. Nonempty issuer values must
+be distinct across all configured sources, including disabled sources. Global
+issuer/subject uniqueness is retained, so deleting a source and adding another
+ID cannot adopt its old identities. Linking requires a local password and a
+fresh provider authentication, and local enabled state/credential version are
+checked again at callback.
+Unknown admitted identities first receive a short-lived browser-bound account
+choice; no account, binding or session exists before explicit creation or
+local-password-proven linking. Decisions are consumed once, with cancellation
+and expiry respected before durable writes. The linked result remains an OIDC
+session with capped permissions. Existing managed identities cannot be moved by
+this mechanism. Isolated administrator test logins use the same protocol checks
+but never open the durable user/binding/session write path or replace an existing
+JWT. Configuration diagnostics require local credential authority and retain
+issuer-origin and bounded-response protections.
+Local accounts may bind one identity per source. Unlinking preserves the local
+password and revokes only that identity's sessions, including when its source
+is unavailable or removed. Provider-managed accounts cannot add another source,
+remove their required identity, gain a local password, or be deleted and
+recreated through Admin to escape local disable. Deleting source configuration
+preserves those identity and account records.
+
+Provider-group admission maps only to `admin` or `readonly`. A local account's
+external session receives the lower of the local and provider roles. Each JWT
+is checked against the current account and its nonrevoked, unexpired external
+session; refresh keeps the same absolute deadline (30 minutes by default,
+configurable from 5 minutes to 1 hour). External sessions cannot mutate users,
+API tokens, compiler-cache credentials, Cascade credentials/configuration, or
+authentication configuration, even when their operational role is admin. Local password administrators and
+their existing readwrite API tokens retain credential management.
+
+The authentication source collection and compatibility configuration endpoint
+require an effective administrator role for reads and local
+credential-management authority for writes. Stable IDs and protocols cannot be
+renamed through the editor. New sources select OIDC or LDAP; no default provider
+product is trusted. File updates preserve unrelated settings and environment-owned secrets; replaced
+client secrets are saved with owner-only file permissions. Responses expose
+only whether a secret is set. The browser editor keeps an entered replacement
+only in component/request memory, clears it after submission, and never echoes
+server error text that could contain that value. Updates do not alter the live
+sources; activation remains a deployment restart with local recovery available.
+Startup revocation is scoped to changed, disabled, or removed sources. Unchanged
+sources keep their valid sessions; source deletion never purges stored bindings.
+Environment-only secrets are not persisted by configuration writes or backups.
+
+Login transactions use short-lived, browser-bound HttpOnly cookies, single-use
+state/completion, and JSON/same-origin guards. Transactions and callbacks bind
+an explicit source ID; a callback cannot complete another source's flow. Enabled
+sources must share a callback origin. HTTPS cookies use the `__Host-` prefix.
+JWTs and provider tokens are not placed in redirect URLs; provider
+payloads and credentials are not included in public errors or identity audit
+details. Server request logs omit query strings. Discovery and token/UserInfo
+requests are bounded and cannot follow redirects or use another issuer origin.
+
+LDAP directory authentication uses verified LDAPS or mandatory StartTLS before
+sending bind credentials. Service-account search escapes user input, rejects
+ambiguous matches and referrals, and requires an immutable UUID/GUID identity.
+User binding is followed by a current group read; no directory password is
+stored in accounts, sessions, cookies or browser storage. Private directory
+networks are explicitly supported; only local credential-management authority
+may configure them or submit connection diagnostics. Same-origin HTTPS (or
+loopback development HTTP), bounded request size/time and login rate limits
+protect directory credential endpoints. The browser checks before sending
+passwords, including replacement service credentials; the API checks the same
+transport boundary. HTTPS Origin handling assumes a trusted TLS reverse proxy
+preserving Host and a private backend. It cannot prove TLS for arbitrary clients
+that forge headers, or undo a password already sent over plaintext HTTP.
+No recursive group expansion or directory synchronization is performed.
+
+**Residual:** directory changes are not continuously polled. Remote disable or
+group removal can leave existing external sessions usable until their absolute
+deadline; a new login that proves loss of admission revokes affected sessions,
+and local disable rejects the next request. SCIM, back-channel logout,
+provider-wide browser logout, custom roles, and project authorization are not
+implemented. The provider and its group issuance remain trusted authorities.
+The last enabled local password administrator remains necessary for recovery.
 
 ### 5.8 Audit tampering or loss
 
@@ -234,7 +326,10 @@ for the `v0.x` line.
 
 These are deliberate, documented, and not vulnerabilities:
 
-- No in-product SSO/LDAP/SAML/RBAC; use a reverse proxy (ADR-0005).
+- Multiple optional OIDC sources with distinct issuers and LDAP sources with
+  the existing two-role mapping are supported under ADR-0007. Multiple OIDC
+  clients sharing one issuer, SAML, SMTP authentication, SCIM, custom/project roles, account merging, and
+  immediate remote revocation remain outside the integration.
 - SQLite and cached bytes are not encrypted at rest; protect the directory
   and disks (`SECURITY.md`).
 - The bootstrap token is printed to the log during first-run setup.
@@ -250,7 +345,8 @@ These are deliberate, documented, and not vulnerabilities:
   backup). Anchoring without shipping the file off-box adds little.
   (`checkpoint_url` covers the push case; RFC 3161 timestamping is out of
   scope.)
-- No in-product rate limiting (reverse proxy responsibility).
+- Login starts and local password proofs have bounded in-process attempt
+  limits. General traffic/abuse rate limiting remains a reverse-proxy concern.
 - A configured HTTP forward proxy and cross-origin registry Bearer realms
   are trusted egress components.
 
@@ -264,6 +360,7 @@ These are deliberate, documented, and not vulnerabilities:
 | Snapshot-only mode | `internal/snapshot`, `internal/quarantine/snapshot_gate_test.go`, `docs/specs/2026-10-06-freeze-snapshot.md` |
 | SSRF and redirect guards | `internal/upstream/request` tests, `internal/api/mcp_ssrf_test.go`, Docker resolver tests |
 | Capability groups and Pro gates | `internal/api/router_permissions_test.go`, `web/e2e` permission cases |
+| External login, explicit binding, and bounded sessions | `internal/identity`, `internal/api/oidc.go`, `internal/api/ldap.go`, `internal/middleware/identity_auth_test.go`; isolated fixtures under `testground/oidc-casdoor` and `testground/ldap` |
 | Audit forwarding integrity of delivery | `internal/audit/forwarder_test.go`, `internal/api/admin/audit_exporters_test.go` |
 | Dependencies and known CVEs | `make security` (govulncheck + npm audit) |
 | Release artifacts | `docs/release-verification.md`, release workflow tests in `make verify` |

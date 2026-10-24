@@ -15,6 +15,7 @@ describe('effective API token status', () => {
   })
   it('bounds granted permissions by the account state', () => {
     expect(tokenStatus(token, [owner], 100)).toBe('active')
+    for (const protocol of ['oidc', 'ldap'] as const) expect(tokenStatus(token, [{ ...owner, permission_source: protocol }], 100)).toBe('externalOwner')
     expect(tokenStatus(token, [{ ...owner, enabled: false }], 100)).toBe('ownerDisabled')
     expect(tokenStatus(token, [{ ...owner, role: 'readonly' }], 100)).toBe('restricted')
     expect(tokenStatus({ ...token, permissions: 'readonly' }, [{ ...owner, role: 'readonly' }], 100)).toBe('active')

@@ -175,7 +175,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	if !user.Enabled {
+	if !user.Enabled || (user.PermissionSource != "" && user.PermissionSource != "local") || user.PasswordHash == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"code": "UNAUTHORIZED", "message": "user disabled"})
 		return
 	}
@@ -209,7 +209,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
-	// JWT is stateless; client should discard the token
+	if principal, ok := middleware.PrincipalFromContext(c); ok && principal.SessionID != "" {
+		now := time.Now().UTC()
+		if err := h.db.Model(&db.IdentitySession{}).Where("id = ? AND user_id = ? AND revoked_at IS NULL", principal.SessionID, principal.ID).Update("revoked_at", now).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": "failed to revoke login session"})
+			return
+		}
+	}
+	// Legacy local JWTs retain their existing client-discard semantics.
 	c.JSON(http.StatusOK, gin.H{"message": "logged out"})
 }
 
@@ -228,15 +235,31 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"code": "UNAUTHORIZED", "message": "valid JWT required"})
 		return
 	}
-	token, err := middleware.GenerateJWT(h.cfg.JWTSecret, db.User{
+	user := db.User{
 		ID: principal.ID, Username: principal.Username, Role: principal.Role,
-		CredentialVersion: principal.CredentialVersion,
-	}, h.cfg.TokenTTL)
+		CredentialVersion: principal.CredentialVersion, PermissionSource: principal.PermissionSource,
+	}
+	expiresAt := time.Now().Add(h.cfg.TokenTTL)
+	var token string
+	var err error
+	if principal.SessionID != "" {
+		var session db.IdentitySession
+		if lookupErr := h.db.Where("id = ? AND user_id = ?", principal.SessionID, principal.ID).First(&session).Error; lookupErr != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"code": "UNAUTHORIZED", "message": "login session unavailable"})
+			return
+		}
+		token, err = middleware.GenerateIdentityJWT(h.cfg.JWTSecret, user, session, h.cfg.TokenTTL)
+		if session.ExpiresAt.Before(expiresAt) {
+			expiresAt = session.ExpiresAt
+		}
+	} else {
+		token, err = middleware.GenerateJWT(h.cfg.JWTSecret, user, h.cfg.TokenTTL)
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL_ERROR", "message": "failed to generate token"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"token": token, "expires_at": time.Now().Add(h.cfg.TokenTTL).Unix()})
+	c.JSON(http.StatusOK, gin.H{"token": token, "expires_at": expiresAt.Unix()})
 }
 
 // ValidateInitialAdminCredentials combines the stricter first-run username
@@ -266,7 +289,7 @@ func CreateInitialAdmin(database *gorm.DB, username, password string) error {
 	}
 	var count int64
 	if err := database.Model(&db.User{}).
-		Where("role = ? AND enabled = ?", "admin", true).
+		Where("role = ? AND enabled = ? AND permission_source = ? AND password_hash <> ''", "admin", true, "local").
 		Count(&count).Error; err != nil {
 		return fmt.Errorf("count administrators: %w", err)
 	}
@@ -295,7 +318,7 @@ func CreateInitialAdmin(database *gorm.DB, username, password string) error {
 // resetting an administrator from a surviving database.
 func VerifyExistingAdminCredentials(database *gorm.DB, username, password string) error {
 	var user db.User
-	if err := database.Where("username = ? AND role = ? AND enabled = ?", username, "admin", true).First(&user).Error; err != nil {
+	if err := database.Where("username = ? AND role = ? AND enabled = ? AND permission_source = ? AND password_hash <> ''", username, "admin", true, "local").First(&user).Error; err != nil {
 		return ErrExistingAdminCredentialMismatch
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
@@ -324,7 +347,7 @@ func ReconcileSetupState(database *gorm.DB, cfg *config.Config) error {
 	}
 	var count int64
 	if err := database.Model(&db.User{}).
-		Where("role = ? AND enabled = ?", "admin", true).
+		Where("role = ? AND enabled = ? AND permission_source = ? AND password_hash <> ''", "admin", true, "local").
 		Count(&count).Error; err != nil {
 		return fmt.Errorf("count loginable administrators: %w", err)
 	}
@@ -349,7 +372,7 @@ func EnsureInitialAdmin(database *gorm.DB, setupPending bool) error {
 	}
 	var count int64
 	if err := database.Model(&db.User{}).
-		Where("role = ? AND enabled = ?", "admin", true).
+		Where("role = ? AND enabled = ? AND permission_source = ? AND password_hash <> ''", "admin", true, "local").
 		Count(&count).Error; err != nil {
 		return fmt.Errorf("count administrators: %w", err)
 	}

@@ -206,6 +206,33 @@ type User struct {
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
 	CredentialVersion uint64     `gorm:"not null;default:1" json:"-"`
+	PermissionSource  string     `gorm:"size:16;not null;default:'local'" json:"permission_source"`
+}
+
+// ExternalIdentity binds an issuer's stable subject to one local account.
+// Display names are informational and are never used to merge accounts.
+type ExternalIdentity struct {
+	ID          uint      `gorm:"primarykey" json:"id"`
+	UserID      uint      `gorm:"not null;index;uniqueIndex:idx_external_identity_user_provider,priority:1" json:"user_id"`
+	Provider    string    `gorm:"size:32;not null;uniqueIndex:idx_external_identity_user_provider,priority:2" json:"provider"`
+	Issuer      string    `gorm:"size:1024;not null;uniqueIndex:idx_external_identity_issuer_subject,priority:1" json:"-"`
+	Subject     string    `gorm:"size:255;not null;uniqueIndex:idx_external_identity_issuer_subject,priority:2" json:"-"`
+	DisplayName string    `gorm:"size:255" json:"display_name"`
+	CreatedAt   time.Time `json:"created_at"`
+	LastLoginAt time.Time `json:"last_login_at"`
+}
+
+// IdentitySession gives OIDC JWTs a durable revocation record and an absolute
+// lifetime. Refreshing a JWT cannot extend the provider admission decision.
+type IdentitySession struct {
+	ID                string     `gorm:"primarykey;size:64" json:"-"`
+	UserID            uint       `gorm:"not null;index" json:"-"`
+	IdentityID        uint       `gorm:"not null;index" json:"-"`
+	Role              string     `gorm:"size:16;not null" json:"-"`
+	ConfigFingerprint string     `gorm:"size:64;not null" json:"-"`
+	CreatedAt         time.Time  `json:"-"`
+	ExpiresAt         time.Time  `gorm:"not null;index" json:"-"`
+	RevokedAt         *time.Time `json:"-"`
 }
 
 type APIToken struct {

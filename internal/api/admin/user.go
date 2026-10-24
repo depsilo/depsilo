@@ -76,24 +76,26 @@ func (h *UserHandler) signalInvariantRead() {
 }
 
 type userResponse struct {
-	ID          uint       `json:"id"`
-	Username    string     `json:"username"`
-	Role        string     `json:"role"`
-	Enabled     bool       `json:"enabled"`
-	LastLoginAt *time.Time `json:"last_login_at"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID               uint       `json:"id"`
+	Username         string     `json:"username"`
+	Role             string     `json:"role"`
+	Enabled          bool       `json:"enabled"`
+	LastLoginAt      *time.Time `json:"last_login_at"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+	PermissionSource string     `json:"permission_source"`
 }
 
 func toUserResponse(user db.User) userResponse {
 	return userResponse{
-		ID:          user.ID,
-		Username:    user.Username,
-		Role:        user.Role,
-		Enabled:     user.Enabled,
-		LastLoginAt: user.LastLoginAt,
-		CreatedAt:   user.CreatedAt,
-		UpdatedAt:   user.UpdatedAt,
+		ID:               user.ID,
+		Username:         user.Username,
+		Role:             user.Role,
+		Enabled:          user.Enabled,
+		LastLoginAt:      user.LastLoginAt,
+		CreatedAt:        user.CreatedAt,
+		UpdatedAt:        user.UpdatedAt,
+		PermissionSource: user.PermissionSource,
 	}
 }
 
@@ -163,10 +165,11 @@ type updateUserRequest struct {
 }
 
 var (
-	errSelfLockout  = errors.New("self lockout")
-	errLastAdmin    = errors.New("last enabled admin")
-	errUserMissing  = errors.New("user not found")
-	errPasswordHash = errors.New("password hash failed")
+	errSelfLockout     = errors.New("self lockout")
+	errLastAdmin       = errors.New("last enabled admin")
+	errUserMissing     = errors.New("user not found")
+	errPasswordHash    = errors.New("password hash failed")
+	errManagedIdentity = errors.New("identity provider owns this account")
 )
 
 type invalidCredentialError struct{ cause error }
@@ -201,13 +204,13 @@ func mutationPrincipal(c *gin.Context) (middleware.Principal, error) {
 }
 
 func effectiveAdmin(user db.User) bool {
-	return user.Role == "admin" && user.Enabled
+	return user.Role == "admin" && user.Enabled && user.PermissionSource == "local" && user.PasswordHash != ""
 }
 
 func anotherEffectiveAdminExists(tx *gorm.DB, excludedID uint) (bool, error) {
 	var count int64
 	err := tx.Model(&db.User{}).
-		Where("role = ? AND enabled = ? AND id != ?", "admin", true, excludedID).
+		Where("role = ? AND enabled = ? AND id != ? AND permission_source = ? AND password_hash <> ''", "admin", true, excludedID, "local").
 		Count(&count).Error
 	return count > 0, err
 }
@@ -226,7 +229,9 @@ func writeUserMutationError(c *gin.Context, err error) {
 	case errors.Is(err, errSelfLockout):
 		c.JSON(http.StatusConflict, gin.H{"code": "SELF_LOCKOUT", "message": "current user cannot delete, disable, or demote itself"})
 	case errors.Is(err, errLastAdmin):
-		c.JSON(http.StatusConflict, gin.H{"code": "LAST_ADMIN", "message": "at least one enabled admin must remain"})
+		c.JSON(http.StatusConflict, gin.H{"code": "LAST_ADMIN", "message": "at least one enabled local administrator with a password must remain"})
+	case errors.Is(err, errManagedIdentity):
+		c.JSON(http.StatusConflict, gin.H{"code": "IDENTITY_MANAGED", "message": "manage this account's role and credentials at its identity provider; use local disable to revoke access"})
 	case errors.Is(err, errUserMissing):
 		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "message": "user not found"})
 	default:
@@ -277,6 +282,9 @@ func (h *UserHandler) Update(c *gin.Context) {
 				return errUserMissing
 			}
 			return err
+		}
+		if target.PermissionSource != "" && target.PermissionSource != "local" && (req.Password != nil || req.Role != nil) {
+			return errManagedIdentity
 		}
 		credentialChanged := false
 		if req.Password != nil {
@@ -356,6 +364,9 @@ func (h *UserHandler) Delete(c *gin.Context) {
 			}
 			return err
 		}
+		if target.PermissionSource != "" && target.PermissionSource != "local" {
+			return errManagedIdentity
+		}
 		if effectiveAdmin(target) {
 			another, err := anotherEffectiveAdminExists(tx, target.ID)
 			if err != nil {
@@ -367,6 +378,12 @@ func (h *UserHandler) Delete(c *gin.Context) {
 			h.signalInvariantRead()
 		}
 		if err := tx.Where("user_id = ?", target.ID).Delete(&db.APIToken{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ?", target.ID).Delete(&db.IdentitySession{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ?", target.ID).Delete(&db.ExternalIdentity{}).Error; err != nil {
 			return err
 		}
 		return tx.Delete(&target).Error

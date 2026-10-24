@@ -226,7 +226,7 @@ func TestAuthMeAndRefreshUseCurrentPrincipal(t *testing.T) {
 	if err := json.Unmarshal(me.Body.Bytes(), &fields); err != nil {
 		t.Fatalf("decode principal fields: %v", err)
 	}
-	expectedFields := []string{"id", "username", "role", "enabled", "auth_method", "token_permissions", "can_write"}
+	expectedFields := []string{"id", "username", "role", "enabled", "auth_method", "token_permissions", "can_write", "permission_source", "login_method", "can_manage_credentials"}
 	if len(fields) != len(expectedFields) {
 		t.Fatalf("principal fields = %v", fields)
 	}

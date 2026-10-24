@@ -306,15 +306,15 @@ test('disables settings when the config file is not writable', async ({ page }) 
   await expect(page.getByRole('button', { name: /^保存全部变更$/ })).toBeDisabled()
 })
 
-test('disables settings for a principal whose wire DTO has can_write false', async ({ page }) => {
+test('disables settings changes for an admin using a readonly API token', async ({ page }) => {
   await mockAdminApi(page, {
     'GET /api/v1/auth/me': {
       id: 2,
-      username: 'viewer',
-      role: 'viewer',
+      username: 'admin',
+      role: 'admin',
       enabled: true,
-      auth_method: 'jwt',
-      token_permissions: null,
+      auth_method: 'api_token',
+      token_permissions: 'readonly',
       can_write: false,
     },
   })

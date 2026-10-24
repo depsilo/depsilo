@@ -5,6 +5,7 @@ import type { AdminRouteId } from './routes'
 /** Every Admin route resolves through one registry so navigation and prefetch
  *  share the same dynamic import and a warm chunk is never downloaded twice. */
 export const adminRouteLoaders: Record<AdminRouteId, () => Promise<{ default: ComponentType<object> }>> = {
+  account: () => import('./pages/Account'),
   dashboard: () => import('./pages/Dashboard'),
   connect: () => import('./pages/ConnectProject'),
   attention: () => import('./pages/Attention'),
@@ -22,6 +23,7 @@ export const adminRouteLoaders: Record<AdminRouteId, () => Promise<{ default: Co
   projects: () => import('./pages/Projects'),
   users: () => import('./pages/Users'),
   license: () => import('./pages/License'),
+  authentication: () => import('./pages/Authentication'),
   settings: () => import('./pages/Settings'),
 }
 

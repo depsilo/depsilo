@@ -27,6 +27,7 @@ import (
 	"depsilo/internal/config"
 	"depsilo/internal/db"
 	"depsilo/internal/entitlement"
+	"depsilo/internal/identity"
 	"depsilo/internal/license"
 	"depsilo/internal/middleware"
 	"depsilo/internal/notify"
@@ -141,6 +142,10 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	})
 	if err := db.AutoMigrate(database); err != nil {
 		return nil, fmt.Errorf("migrate database: %w", err)
+	}
+	identityManager, err := identity.NewRegistry(database, cfg.Auth)
+	if err != nil {
+		return nil, fmt.Errorf("initialize operator identity: %w", err)
 	}
 	seedDefinitions := standardEcosystemDefinitions(cfg, nil)
 	bootstrap, err := upstream.ReconcileBootstrap(database, seedSources(seedDefinitions))
@@ -677,6 +682,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		Storage:                    storage,
 		Config:                     cfg,
 		ConfigStore:                settingsStore,
+		Identity:                   identityManager,
 		CascadeInstanceID:          cascadeIdentity,
 		Pools:                      pools,
 		UpstreamRegistry:           registry,

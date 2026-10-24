@@ -295,9 +295,36 @@ type CompileCacheConfig struct {
 }
 
 type AuthConfig struct {
-	Enabled   bool          `mapstructure:"enabled"`
-	JWTSecret string        `mapstructure:"jwt_secret"`
-	TokenTTL  time.Duration `mapstructure:"token_ttl"`
+	Enabled        bool                                  `mapstructure:"enabled"`
+	JWTSecret      string                                `mapstructure:"jwt_secret"`
+	TokenTTL       time.Duration                         `mapstructure:"token_ttl"`
+	OIDC           OIDCConfig                            `mapstructure:"oidc"`
+	Sources        map[string]AuthenticationSourceConfig `mapstructure:"sources"`
+	OIDCConfigured bool                                  `mapstructure:"-" json:"-"`
+}
+
+// AuthenticationSourceConfig keeps the stable source identity separate from its
+// protocol, so future protocols do not change existing account bindings.
+type AuthenticationSourceConfig struct {
+	Protocol   string `mapstructure:"protocol"`
+	OIDCConfig `mapstructure:",squash"`
+	LDAP       *LDAPConfig `mapstructure:"ldap" json:"ldap,omitempty"`
+}
+
+// OIDCConfig is operator-owned configuration. The client secret is accepted
+// from TOML/environment or a write-only Admin update and never enters a snapshot.
+type OIDCConfig struct {
+	Enabled               bool          `mapstructure:"enabled" json:"enabled"`
+	DisplayName           string        `mapstructure:"display_name" json:"display_name"`
+	Issuer                string        `mapstructure:"issuer" json:"issuer"`
+	ClientID              string        `mapstructure:"client_id" json:"client_id"`
+	ClientSecret          string        `mapstructure:"client_secret" json:"-"`
+	RedirectURL           string        `mapstructure:"redirect_url" json:"redirect_url"`
+	AdminGroups           []string      `mapstructure:"admin_groups" json:"admin_groups"`
+	ReadonlyGroups        []string      `mapstructure:"readonly_groups" json:"readonly_groups"`
+	GroupsClaim           string        `mapstructure:"groups_claim" json:"groups_claim"`
+	SessionTTL            time.Duration `mapstructure:"session_ttl" json:"session_ttl"`
+	AllowInsecureLoopback bool          `mapstructure:"allow_insecure_loopback" json:"allow_insecure_loopback"`
 }
 
 // AccessLogConfig tunes the access-log rollup pipeline.

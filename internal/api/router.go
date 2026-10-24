@@ -18,6 +18,7 @@ import (
 	"depsilo/internal/compilecache"
 	"depsilo/internal/config"
 	"depsilo/internal/entitlement"
+	"depsilo/internal/identity"
 	"depsilo/internal/license"
 	"depsilo/internal/middleware"
 	"depsilo/internal/notify"
@@ -46,6 +47,7 @@ type Deps struct {
 	Storage          cache.Storage
 	Config           *config.Config
 	ConfigStore      *config.Store
+	Identity         *identity.Registry
 	// CascadeInstanceID is the runtime identity resolved at startup (auto-
 	// generated and persisted when configuration leaves it empty).
 	CascadeInstanceID string
@@ -193,9 +195,26 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	authHandler := NewAuthHandler(deps.DB, deps.Config.Auth)
 	authGroup := apiV1.Group("/auth")
 	authGroup.POST("/login", authHandler.Login)
-	authGroup.POST("/logout", authHandler.Logout)
+	authGroup.POST("/logout", middleware.OptionalLogoutPrincipal(deps.Config.Auth.JWTSecret, deps.DB), authHandler.Logout)
 	authGroup.GET("/me", middleware.Authenticate(deps.Config.Auth.JWTSecret, deps.DB), authHandler.Me)
 	authGroup.POST("/refresh", middleware.JWTOnly(deps.Config.Auth.JWTSecret, deps.DB), authHandler.Refresh)
+	oidcHandler := NewOIDCHandler(deps.Identity, deps.DB, deps.Config.Auth)
+	oidcHandler.ConfigureDraftPreview(deps.ConfigStore)
+	authGroup.GET("/providers", oidcHandler.Providers)
+	authGroup.POST("/oidc/start", oidcHandler.Start)
+	authGroup.GET("/oidc/callback", oidcHandler.Callback)
+	authGroup.GET("/oidc/:provider_id/callback", oidcHandler.Callback)
+	authGroup.POST("/oidc/complete", middleware.OptionalLogoutPrincipal(deps.Config.Auth.JWTSecret, deps.DB), oidcHandler.Complete)
+	authGroup.POST("/oidc/resolve", oidcHandler.Resolve)
+	authGroup.POST("/oidc/cancel", oidcHandler.Cancel)
+	authGroup.POST("/identity/complete", middleware.OptionalLogoutPrincipal(deps.Config.Auth.JWTSecret, deps.DB), oidcHandler.Complete)
+	authGroup.POST("/identity/resolve", oidcHandler.Resolve)
+	authGroup.POST("/identity/cancel", oidcHandler.Cancel)
+	authGroup.POST("/ldap/login", oidcHandler.LDAPLogin)
+	authGroup.GET("/identities", middleware.JWTOnly(deps.Config.Auth.JWTSecret, deps.DB), oidcHandler.Identities)
+	authGroup.POST("/identities/link", middleware.JWTOnly(deps.Config.Auth.JWTSecret, deps.DB), oidcHandler.Link)
+	authGroup.POST("/identities/ldap/link", middleware.JWTOnly(deps.Config.Auth.JWTSecret, deps.DB), oidcHandler.LDAPLink)
+	authGroup.POST("/identities/:id/unlink", middleware.JWTOnly(deps.Config.Auth.JWTSecret, deps.DB), oidcHandler.Unlink)
 
 	// Admin routes require authentication and an explicit capability.
 	adminGroup := apiV1.Group("/admin")
@@ -274,8 +293,8 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	)
 	adminRead.GET("/compile-cache/status", compileCacheHandler.Status)
 	adminRead.GET("/compile-cache/credentials", compileCacheHandler.ListCredentials)
-	adminWrite.POST("/compile-cache/credentials", compileCacheHandler.CreateCredential)
-	adminWrite.DELETE("/compile-cache/credentials/:id", compileCacheHandler.DeleteCredential)
+	adminWrite.POST("/compile-cache/credentials", middleware.CredentialManagementRequired(), compileCacheHandler.CreateCredential)
+	adminWrite.DELETE("/compile-cache/credentials/:id", middleware.CredentialManagementRequired(), compileCacheHandler.DeleteCredential)
 	adminWrite.POST("/compile-cache/cleanup", compileCacheHandler.Cleanup)
 
 	// Upstream management
@@ -291,7 +310,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminRead.GET("/cascade", cascadeHandler.Info)
 	cascadeConfigHandler := admin.NewCascadeConfigHandler(deps.ConfigStore, deps.UpstreamRegistry)
 	adminRead.GET("/cascade/config", cascadeConfigHandler.Get)
-	adminWrite.PUT("/cascade/config", cascadeConfigHandler.Update)
+	adminWrite.PUT("/cascade/config", middleware.CredentialManagementRequired(), cascadeConfigHandler.Update)
 
 	// Upstream latency history
 	latencyHandler := admin.NewLatencyHandler(deps.DB)
@@ -307,15 +326,32 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	// User management
 	userHandler := admin.NewUserHandler(deps.DB)
 	adminRead.GET("/users", userHandler.List)
-	adminWrite.POST("/users", userHandler.Create)
-	adminWrite.PUT("/users/:id", userHandler.Update)
-	adminWrite.DELETE("/users/:id", userHandler.Delete)
+	adminWrite.POST("/users", middleware.CredentialManagementRequired(), userHandler.Create)
+	adminWrite.PUT("/users/:id", middleware.CredentialManagementRequired(), userHandler.Update)
+	adminWrite.DELETE("/users/:id", middleware.CredentialManagementRequired(), userHandler.Delete)
 
 	// API Tokens
 	tokenHandler := admin.NewTokenHandler(deps.DB)
 	adminRead.GET("/tokens", tokenHandler.List)
-	adminWrite.POST("/tokens", tokenHandler.Create)
-	adminWrite.DELETE("/tokens/:id", tokenHandler.Delete)
+	adminWrite.POST("/tokens", middleware.CredentialManagementRequired(), tokenHandler.Create)
+	adminWrite.DELETE("/tokens/:id", middleware.CredentialManagementRequired(), tokenHandler.Delete)
+
+	// System authentication configuration is visible only to administrators.
+	authenticationHandler := admin.NewAuthenticationHandler(deps.ConfigStore)
+	adminRead.GET("/authentication", admin.AdminRoleRequired(), authenticationHandler.Get)
+	adminWrite.PUT("/authentication", admin.AdminRoleRequired(), middleware.CredentialManagementRequired(), authenticationHandler.Update)
+	adminWrite.POST("/authentication/check", admin.AdminRoleRequired(), middleware.CredentialManagementRequired(), oidcHandler.Check)
+	adminWrite.POST("/authentication/trial", admin.AdminRoleRequired(), middleware.CredentialManagementRequired(), oidcHandler.StartTrial)
+	adminWrite.POST("/authentication/ldap/check", admin.AdminRoleRequired(), middleware.CredentialManagementRequired(), oidcHandler.LDAPCheck)
+	adminWrite.POST("/authentication/ldap/trial", admin.AdminRoleRequired(), middleware.CredentialManagementRequired(), oidcHandler.LDAPTrial)
+	authenticationSources := admin.NewAuthenticationSourceHandler(deps.ConfigStore)
+	adminRead.GET("/authentication/sources", admin.AdminRoleRequired(), authenticationSources.List)
+	adminWrite.POST("/authentication/sources", admin.AdminRoleRequired(), middleware.CredentialManagementRequired(), authenticationSources.Create)
+	adminWrite.PUT("/authentication/sources/:id", admin.AdminRoleRequired(), middleware.CredentialManagementRequired(), authenticationSources.Update)
+	adminWrite.DELETE("/authentication/sources/:id", admin.AdminRoleRequired(), middleware.CredentialManagementRequired(), authenticationSources.Delete)
+	adminWrite.POST("/authentication/sources/:id/restore", admin.AdminRoleRequired(), middleware.CredentialManagementRequired(), authenticationSources.Restore)
+	authenticationImpact := admin.NewAuthenticationSourceImpactHandler(deps.ConfigStore, deps.DB, deps.Identity)
+	adminRead.GET("/authentication/sources/:id/impact", admin.AdminRoleRequired(), middleware.CredentialManagementRequired(), authenticationImpact.Get)
 
 	// Settings
 	settingsHandler := admin.NewSettingsHandler(deps.ConfigStore)

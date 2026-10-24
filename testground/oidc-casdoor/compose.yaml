@@ -1,0 +1,27 @@
+name: depsilo-oidc-casdoor
+
+services:
+  casdoor:
+    image: casbin/casdoor-all-in-one:4.23.0@sha256:0a65b3cbca95ec16783e43eb7520f152de16e1eaa9b6b6547f01d7d006da6da6
+    ports:
+      - "127.0.0.1:18000:8000"
+    environment:
+      driverName: sqlite
+      dataSourceName: file:/fixture/casdoor.db?cache=shared&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)
+    volumes:
+      - type: bind
+        source: ${DEPSILO_CASDOOR_STATE:?Use fixture.py start}
+        target: /fixture
+      - type: bind
+        source: ${DEPSILO_CASDOOR_STATE:?Use fixture.py start}/app.conf
+        target: /conf/app.conf
+        read_only: true
+    restart: "no"
+    labels:
+      com.depsilo.fixture: oidc-casdoor
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8000/api/health"]
+      interval: 3s
+      timeout: 3s
+      start_period: 20s
+      retries: 30

@@ -96,12 +96,79 @@ consequence.
 - Safety rejections are not deprecations. Values that cannot be enforced
   safely (for example a positive minimum-release-age threshold without bound
   provenance) keep failing at startup, with the fix named in the error.
+- Optional `[auth.sources.<id>]` configuration declares stable source IDs and
+  a protocol (`oidc` or `ldap`). No external source is created by defaults.
+  Sources use the existing file/environment precedence, are restart-managed,
+  and are preserved by ordinary settings writes. Enabling a source requires a
+  complete valid effective configuration. File-only validation permits omitted
+  fields supplied by the service environment; runtime loading validates the
+  combined result. Per-source environment keys use
+  `DEPSILO_AUTH_SOURCES_<UPPERCASE_ID_WITH_HYPHENS_AS_UNDERSCORES>_<FIELD>`;
+  only source IDs declared in TOML are enumerated. Nonempty issuer values must
+  be distinct across configured sources, including disabled ones; disabled
+  drafts may leave the issuer unset. Enabled callbacks
+  must share one instance origin. See [OIDC configuration](oidc.md#configure-authentication-sources).
+- Existing `[auth.oidc]` remains source ID `oidc`, with its old callback path and
+  `DEPSILO_AUTH_OIDC_*` overrides. Explicit names are preserved; the fallback
+  name is OIDC. The reserved ID cannot be used by a new named source. Moving
+  configuration to another ID does not migrate account bindings.
+
+## Operator authentication
+
+- OIDC and LDAP add public provider/login endpoints and authenticated self-service
+  binding endpoints under `/api/v1/auth`; existing local password login remains
+  available. `auth/me` adds `permission_source`, `login_method`, and
+  `can_manage_credentials`. Clients should use those capabilities rather than
+  assuming every administrator session can manage long-lived credentials.
+- System management is visible only to administrators; personal Account
+  security remains available to every authenticated browser account. The
+  existing Users, Settings, and License URLs are preserved. The new
+  `/api/v1/admin/authentication/sources` collection supports listing, creation,
+  per-source updates, and removal; reads require an administrator role and
+  writes additionally require local credential-management authority. The old
+  GET/PUT `/api/v1/admin/authentication` remains legacy-only. Client
+  secrets are write-only, environment overrides cannot be edited, and saved
+  configuration applies after restart. Removed running sources remain listed
+  with null configured state until restart; removal preserves account bindings.
+- Public providers include `id`, `name`, and `protocol`; login and linking accept
+  `provider_id`. Existing legacy callback and completion paths remain. Requests
+  without a source select the legacy source, or a sole enabled named source if
+  legacy is absent; ambiguous multi-source requests require explicit selection.
+  Self-service identities add `providers` while retaining the old `provider`
+  field when a legacy or sole source supplies an unambiguous value.
+- Existing local password JWTs without an external session claim retain their
+  local authentication behavior when the account is enabled, has a password,
+  and its credential version and role still match. External accounts and
+  external sessions cannot use that legacy path.
+- External sessions have a separate absolute expiry and revocation record; refresh
+  never converts them into local sessions or extends the provider admission
+  window. Existing locally owned API tokens keep their role/expiry behavior;
+  provider-managed accounts cannot use API tokens to bypass that window.
+  Startup invalidation is source-scoped: changing, disabling, or removing one
+  source does not revoke valid sessions for unchanged sources. An unchanged
+  legacy OIDC configuration upgrades its exact old fingerprint transactionally
+  while preserving valid sessions. Subsequent display-name-only changes also
+  preserve sessions. A simultaneous rename during that first legacy upgrade
+  cannot prove the old configuration and revokes those sessions conservatively.
+- Linking and unlinking are explicit account operations and do not merge
+  usernames or emails. Local accounts may bind one identity per source and
+  unlink each separately. Provider-managed accounts cannot add another source;
+  their deletion, password/role edits, and removal of the required identity are
+  rejected. These identity capabilities do not change the authority of existing
+  local accounts.
 
 ## Database and backups
 
 - Schema changes are numbered, one-way migrations applied exactly once and
   recorded in `schema_migrations`. A database written by a newer binary is
   rejected at startup instead of being mutated by an older binary.
+- Schema version 12 adds external login identities, sessions, and a local
+  default for account Permission Source. Existing account IDs, password hashes,
+  credential versions, and API-token rows are preserved. Multiple OIDC and LDAP sources
+  reuse version 12 tables and the global `(issuer,subject)` unique key, without
+  an additional database migration. Downgrading across
+  this boundary requires the pre-upgrade SQLite backup as well as the older
+  binary/image.
 - The supported downgrade path is restoring a backup taken before the
   upgrade with `depsilo restore`; migrations are not reversed in place.
 - `depsilo backup` writes a checksummed `depsilo-backup` archive containing
@@ -117,6 +184,10 @@ consequence.
   keys remain supported when archiving older state.
   Cached artifact bytes are deliberately excluded; copy the storage directory
   or bucket out-of-band if you need them.
+  OIDC client secrets supplied only through the service environment are not
+  copied into the archive; restore the corresponding environment separately.
+  Inline OIDC configuration and persisted identity/session records remain part
+  of the saved configuration/database and must be protected as private state.
 - `depsilo restore` accepts the current archive version (`v2` today) and
   rejects other versions with an explicit error rather than guessing. When a
   new archive version is introduced, the previous reader stays available for
@@ -171,3 +242,14 @@ The mechanically checkable parts of this policy are covered by tests:
   the fresh/upgraded schema convergence.
 - `internal/snapshot` and `internal/sbom` tests assert their exported format
   identifiers keep the `/vN` suffix.
+
+
+LDAP source settings are nested under `[auth.sources.<id>.ldap]`; see
+[LDAP configuration](ldap.md). Existing OIDC paths, source IDs and source
+configuration remain compatible. The shared browser account-choice endpoints
+also have `/api/v1/auth/identity/{complete,resolve,cancel}` aliases. LDAP adds
+`ldap` to `permission_source`, `login_method` and provider protocol values.
+Presentation-only source renames retain external sessions after restart. On the
+first upgrade from the old full-config OIDC fingerprint, only an exact current
+configuration match preserves sessions; changing configuration during that
+upgrade remains fail-closed. This refinement and LDAP reuse schema version 12.

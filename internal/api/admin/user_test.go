@@ -37,7 +37,7 @@ func newUserTestRouterWithHandler(t *testing.T) (*gin.Engine, *gorm.DB, *UserHan
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	if err := database.AutoMigrate(&db.User{}, &db.APIToken{}); err != nil {
+	if err := database.AutoMigrate(&db.User{}, &db.APIToken{}, &db.ExternalIdentity{}, &db.IdentitySession{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	h := NewUserHandler(database)
@@ -100,6 +100,46 @@ func responseCode(t *testing.T, rec *httptest.ResponseRecorder) string {
 	return body.Code
 }
 
+func TestManagedUsersCannotReplaceOrBypassLocalRecovery(t *testing.T) {
+	for _, protocol := range []string{"oidc", "ldap"} {
+		t.Run(protocol, func(t *testing.T) {
+			router, database := newUserTestRouter(t)
+			local := createUserForMutationTest(t, database, "recovery", "admin", true)
+			managed := db.User{Username: "managed", Role: "admin", Enabled: true, PermissionSource: protocol}
+			if err := database.Create(&managed).Error; err != nil {
+				t.Fatal(err)
+			}
+			path := "/users/" + strconv.FormatUint(uint64(managed.ID), 10)
+			for _, body := range []string{`{"role":"readonly"}`, `{"password":"New&SecurePassword123"}`} {
+				response := userMutationRequest(router, http.MethodPut, path, body, local.ID)
+				if response.Code != http.StatusConflict || responseCode(t, response) != "IDENTITY_MANAGED" {
+					t.Fatalf("managed mutation: %d %s", response.Code, response.Body.String())
+				}
+			}
+			response := userMutationRequest(router, http.MethodDelete, path, "", local.ID)
+			if response.Code != http.StatusConflict || responseCode(t, response) != "IDENTITY_MANAGED" {
+				t.Fatalf("managed deletion: %d", response.Code)
+			}
+			localPath := "/users/" + strconv.FormatUint(uint64(local.ID), 10)
+			response = userMutationRequest(router, http.MethodPut, localPath, `{"enabled":false}`, managed.ID)
+			if response.Code != http.StatusConflict || responseCode(t, response) != "LAST_ADMIN" {
+				t.Fatalf("last recovery admin: %d %s", response.Code, response.Body.String())
+			}
+			response = userMutationRequest(router, http.MethodPut, path, `{"enabled":false}`, local.ID)
+			if response.Code != http.StatusOK {
+				t.Fatalf("disable managed user: %d %s", response.Code, response.Body.String())
+			}
+			var persisted db.User
+			if err := database.First(&persisted, managed.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			if persisted.Enabled || persisted.Role != "admin" || persisted.PasswordHash != "" {
+				t.Fatal("managed user disable altered authority or created credentials")
+			}
+		})
+	}
+}
+
 func assertSafeUserObject(t *testing.T, raw json.RawMessage) {
 	t.Helper()
 	var object map[string]json.RawMessage
@@ -109,6 +149,7 @@ func assertSafeUserObject(t *testing.T, raw json.RawMessage) {
 	allowed := map[string]bool{
 		"id": true, "username": true, "role": true, "enabled": true,
 		"last_login_at": true, "created_at": true, "updated_at": true,
+		"permission_source": true,
 	}
 	if len(object) != len(allowed) {
 		t.Fatalf("user response keys = %#v", object)

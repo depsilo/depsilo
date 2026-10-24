@@ -132,8 +132,15 @@ func load(keyMode signingKeyLoadMode) (*Config, error) {
 		}
 	}
 
+	if err := prepareAuthenticationSources(v, true); err != nil {
+		return nil, err
+	}
 	cfg, err := decodeViper(v)
 	if err != nil {
+		return nil, err
+	}
+	cfg.Auth.OIDCConfigured = legacyOIDCConfigured(v, true)
+	if err := ValidateAuthenticationSources(cfg.Auth); err != nil {
 		return nil, err
 	}
 
@@ -480,8 +487,19 @@ func decodeConfigDocument(data []byte) (*Config, error) {
 	} else {
 		v.Set("config_version", 0)
 	}
+	if err := prepareAuthenticationSources(v, false); err != nil {
+		return nil, err
+	}
 	cfg, err := decodeViper(v)
 	if err != nil {
+		return nil, err
+	}
+	// An operator can supply OIDC credentials and admission mappings solely
+	// through environment variables. File-only updates/backup validation must
+	// preserve that partial document; complete validation happens after runtime
+	// environment precedence has been resolved by Load.
+	cfg.Auth.OIDCConfigured = legacyOIDCConfigured(v, false)
+	if err := validateAuthenticationSources(cfg.Auth, false); err != nil {
 		return nil, err
 	}
 	if err := ValidateSettingsSnapshot(SettingsSnapshotFromConfig(cfg)); err != nil {
@@ -557,6 +575,17 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("auth.enabled", true)
 	v.SetDefault("auth.jwt_secret", "change-me-in-production")
 	v.SetDefault("auth.token_ttl", "168h")
+	v.SetDefault("auth.oidc.enabled", false)
+	v.SetDefault("auth.oidc.display_name", "OIDC")
+	v.SetDefault("auth.oidc.issuer", "")
+	v.SetDefault("auth.oidc.client_id", "")
+	v.SetDefault("auth.oidc.client_secret", "")
+	v.SetDefault("auth.oidc.redirect_url", "")
+	v.SetDefault("auth.oidc.admin_groups", []string{})
+	v.SetDefault("auth.oidc.readonly_groups", []string{})
+	v.SetDefault("auth.oidc.groups_claim", "groups")
+	v.SetDefault("auth.oidc.session_ttl", "30m")
+	v.SetDefault("auth.oidc.allow_insecure_loopback", false)
 	v.SetDefault("policy.on_load_error", defaultPolicyOnLoadError)
 	v.SetDefault("audit.checkpoint_file", "")
 	v.SetDefault("audit.checkpoint_interval", "15m")

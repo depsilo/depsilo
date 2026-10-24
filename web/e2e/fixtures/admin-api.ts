@@ -54,6 +54,12 @@ const effectiveSettings: AdminSettingsSnapshot = {
   ...configuredSettings,
   cache: { ...configuredSettings.cache, ttl_blob: '72h' },
 }
+
+export const authenticationSettings = {
+  enabled: false, display_name: 'OIDC', issuer: '', client_id: '', client_secret_set: false,
+  redirect_url: '', admin_groups: [], readonly_groups: [], groups_claim: 'groups',
+  session_ttl: '30m', allow_insecure_loopback: false,
+}
 const settingSources: AdminSettingsResponse['sources'] = {
   'server.host': 'file', 'server.port': 'file', 'server.log_level': 'file',
   'database.driver': 'file', 'storage.type': 'file', 'storage.path': 'file',
@@ -71,6 +77,8 @@ const existingAdminApiDefaults: Record<string, JsonValue> = {
     configured: true, effective: true, docker_hub: true,
     pending_restart: false, config_writable: true, blocked_by_override: false,
   },
+  'GET /api/v1/auth/providers': { providers: [] },
+  'GET /api/v1/auth/identities': { permission_source: 'local', password_enabled: true, can_link: false, identities: [], providers: [], provider: null },
   'GET /api/v1/auth/me': { id: 1, username: 'admin', role: 'admin', enabled: true, auth_method: 'jwt', token_permissions: null, can_write: true },
   'GET /api/v1/integration-prompt': { status: 200, body: '# Depsilo project integration\nUse the configured Depsilo package mirror.', contentType: 'text/plain; charset=utf-8', serialize: 'text' },
   'GET /api/v1/stats': {
@@ -216,6 +224,8 @@ const canonicalAdminApiDefaults = {
     needs_setup: false,
     token_required: false,
   } satisfies SetupStatusResponse,
+  'GET /api/v1/admin/authentication': { configured: authenticationSettings, effective: authenticationSettings, overrides: {}, pending_restart: false, config_writable: true },
+  'GET /api/v1/admin/authentication/sources': { sources: [], config_writable: true },
   'GET /api/v1/admin/settings': {
     configured: configuredSettings,
     effective: effectiveSettings,

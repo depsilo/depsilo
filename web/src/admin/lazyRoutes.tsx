@@ -9,6 +9,7 @@ import type { AdminRouteId } from './routes'
  * very same component instances the router renders.
  */
 export const adminRouteComponents = {
+  account: lazyRoute(adminRouteLoaders.account),
   dashboard: lazyRoute(adminRouteLoaders.dashboard),
   connect: lazyRoute(adminRouteLoaders.connect),
   attention: lazyRoute(adminRouteLoaders.attention),
@@ -26,6 +27,7 @@ export const adminRouteComponents = {
   projects: lazyRoute(adminRouteLoaders.projects),
   users: lazyRoute(adminRouteLoaders.users),
   license: lazyRoute(adminRouteLoaders.license),
+  authentication: lazyRoute(adminRouteLoaders.authentication),
   settings: lazyRoute(adminRouteLoaders.settings),
 } satisfies Record<AdminRouteId, LazyRouteComponent<object>>
 

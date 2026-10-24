@@ -54,7 +54,7 @@ export default function CompileCache() {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const toast = useAppToast()
-  const { canWrite } = usePrincipal()
+  const { canWrite, canManageCredentials } = usePrincipal()
   const [createOpen, setCreateOpen] = useState(false)
   const [form, setForm] = useState<CreateCompileCacheCredentialRequest>(DEFAULT_FORM)
   const [clientConfigurations, setClientConfigurations] = useState<OneTimeClientConfigurations | null>(null)
@@ -150,7 +150,7 @@ export default function CompileCache() {
 
   function handleCreate(event: FormEvent) {
     event.preventDefault()
-    if (!canWrite || !formValid) return
+    if (!canManageCredentials || !formValid) return
     createMutation.mutate({
       ...form,
       name: normalizedName,
@@ -222,7 +222,7 @@ export default function CompileCache() {
     {
       key: 'id',
       label: t('actions'),
-      render: (_value: unknown, row: CompileCacheCredential & Record<string, unknown>) => canWrite ? (
+      render: (_value: unknown, row: CompileCacheCredential & Record<string, unknown>) => canManageCredentials ? (
         <Button
           type="button"
           variant="ghost"
@@ -282,7 +282,7 @@ export default function CompileCache() {
         {status?.enabled && credentialsQuery.isSuccess && credentials.length === 0 && <section className="rounded-lg border border-l-2 border-l-primary p-5">
           <h2 className="text-base font-semibold">{t('compileCache.connectTitle')}</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{t('compileCache.connectHint')}</p>
-          {canWrite && <Button className="mt-4" onClick={openCreateDialog}><Icon name="add" size="sm" />{t('compileCache.createCredential')}</Button>}
+          {canManageCredentials && <Button className="mt-4" onClick={openCreateDialog}><Icon name="add" size="sm" />{t('compileCache.createCredential')}</Button>}
         </section>}
 
         <section aria-labelledby="compile-cache-status-heading">
@@ -406,7 +406,7 @@ export default function CompileCache() {
           <SectionHeader
             title={t('compileCache.credentialsTitle')}
             hint={t('compileCache.credentialsHint')}
-            action={canWrite && credentials.length > 0 ? (
+            action={canManageCredentials && credentials.length > 0 ? (
               <Button type="button" size="sm" disabled={!status?.enabled} onClick={openCreateDialog}>
                 <Icon name="add" size="sm" />
                 {t('compileCache.createCredential')}
@@ -414,6 +414,7 @@ export default function CompileCache() {
             ) : undefined}
           />
 
+          {canWrite && !canManageCredentials && <Alert variant="info"><AlertDescription>{t('account.credentialRestriction')}</AlertDescription></Alert>}
           {credentials.length > 0 && <div className="mb-4 max-w-56"><NativeSelect aria-label={t('compileCache.credentialStatus')} value={credentialFilter} onChange={event => setCredentialFilter(event.target.value)}><option value="all">{t('compileCache.allCredentials')}</option><option value="active">{t('compileCache.active')}</option><option value="expired">{t('compileCache.expired')}</option></NativeSelect></div>}
           {credentialsQuery.isPending ? (
             <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]">
@@ -513,7 +514,7 @@ export default function CompileCache() {
               <Button
                 type="submit"
                 aria-busy={createMutation.isPending || undefined}
-                disabled={!formValid || createMutation.isPending || !canWrite}
+                disabled={!formValid || createMutation.isPending || !canManageCredentials}
               >
                 {t(createMutation.isPending ? 'compileCache.creating' : 'compileCache.create')}
               </Button>
@@ -601,7 +602,7 @@ export default function CompileCache() {
               type="button"
               variant="destructive"
               aria-busy={revokeMutation.isPending || undefined}
-              disabled={!revokeTarget || revokeMutation.isPending || !canWrite}
+              disabled={!revokeTarget || revokeMutation.isPending || !canManageCredentials}
               onClick={() => revokeTarget && revokeMutation.mutate(revokeTarget.id)}
             >
               {t(revokeMutation.isPending ? 'compileCache.revoking' : 'compileCache.confirmRevoke')}

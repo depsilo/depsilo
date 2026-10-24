@@ -11,9 +11,11 @@ const chunkBudgetBytes = 500_000
 // Raised from 650 kB by the Portal brand surface (docs/brand tokens scoped to
 // the anonymous Portal) plus the code-block scroll affordance, and to 655 kB by
 // the SIEM audit-routing surface (exporter API client + audit-page section).
-// Headroom is kept at the same ~1.8 kB it had before, so the guardrail still
-// catches accidental growth rather than only deliberate additions.
-const initialAssetsBudgetBytes = 655_000
+// The standard React Router data router adds ~55 kB uncompressed for navigation
+// blocking across tabs/sidebar/history. This deliberately replaces partial,
+// page-local leave prompts; no dependency version or lazy route seam changes.
+// Keep <2 kB headroom; the existing 320 kB transfer limit remains unchanged.
+const initialAssetsBudgetBytes = 711_000
 const initialAssetsTransferBudgetBytes = 320_000
 const lazyModules = ['PortalApp-', 'SetupWizard-', 'AdminApp-', 'AdminShell-']
 

@@ -123,6 +123,49 @@ enabled    = true
 # jwt_secret = "<your-generated-instance-secret>"
 token_ttl  = "168h"         # 7天
 
+# Optional authentication sources. No external source is enabled or assumed by
+# default. Add sources by protocol; currently only OpenID Connect (OIDC) is
+# supported. Casdoor is one compatible provider, not a required/default product.
+# Each source ID is stable: 1–32 lowercase letters/digits/hyphens, beginning with
+# a letter. Rename display_name rather than the ID; bindings retain their ID.
+# Nonempty issuer values must be distinct across sources, including disabled
+# sources. Disabled drafts may leave the issuer unset until activation.
+# Configure Authorization Code + PKCE and register the exact source callback.
+# All enabled callbacks must share the instance's browser-visible HTTPS origin.
+# Keep a local password administrator for recovery. Changes apply on restart;
+# deleting a source never deletes accounts or bindings.
+#
+# [auth.sources.company]
+# protocol = "oidc"
+# enabled = false
+# display_name = "Company login"
+# issuer = "https://identity.example" # exact discovery issuer, including path
+# client_id = "depsilo"
+# Prefer DEPSILO_AUTH_SOURCES_COMPANY_CLIENT_SECRET; never add real secrets here.
+# client_secret = ""
+# redirect_url = "https://depsilo.example/api/v1/auth/oidc/company/callback"
+# groups_claim = "groups"
+# admin_groups = ["company/depsilo-admins"]
+# readonly_groups = ["company/depsilo-readers"] # disjoint; unmapped users denied
+# session_ttl = "30m" # absolute lifetime, 5m–1h; refresh cannot extend it
+# allow_insecure_loopback = false # only isolated HTTP loopback development
+#
+# Repeat under another stable ID for another issuer. Environment overrides are
+# DEPSILO_AUTH_SOURCES_<UPPERCASE_ID_WITH_HYPHENS_AS_UNDERSCORES>_<FIELD>.
+# Group lists use comma-separated values. Only source IDs declared in TOML are
+# loaded; environment variables cannot introduce another source. Secrets remain
+# write-only in Admin; environment-only credentials are never written to TOML.
+# Browser editing requires explicit source tables, not inline/dotted-key forms.
+#
+# Legacy configurations remain supported without renaming or a schema upgrade:
+# [auth.oidc]
+# enabled = false
+# display_name = "OIDC"
+# Its callback remains /api/v1/auth/oidc/callback and its environment prefix is
+# DEPSILO_AUTH_OIDC_. The reserved source ID "oidc" cannot name a new source.
+# Keep existing legacy issuer/client/group settings when upgrading; moving them
+# to a different source ID does not migrate account bindings.
+
 [license]
 key = ""   # Leave empty for Community edition, set License Key for Pro
 
@@ -270,6 +313,25 @@ name     = "bitnami"
 url      = "https://charts.bitnami.com/bitnami"
 priority = 2
 # proxy  = "http://127.0.0.1:7890"
+
+# Optional directory source; see docs/ldap.md. Use actual endpoint, DNs and CA.
+# [auth.sources.directory]
+# protocol = "ldap"
+# enabled = false
+# display_name = "Company directory"
+# admin_groups = ["cn=depsilo-admins,ou=groups,dc=example,dc=com"]
+# readonly_groups = ["cn=depsilo-readers,ou=groups,dc=example,dc=com"]
+# session_ttl = "30m"
+# [auth.sources.directory.ldap]
+# url = "ldaps://directory.example:636" # ldap:// always requires StartTLS
+# bind_dn = "cn=depsilo-reader,ou=services,dc=example,dc=com"
+# Bind password: DEPSILO_AUTH_SOURCES_DIRECTORY_LDAP_BIND_PASSWORD
+# user_base_dn = "ou=people,dc=example,dc=com"
+# user_filter = "(uid={username})"
+# subject_attribute = "entryUUID" # or objectGUID for Active Directory
+# display_name_attribute = "displayName"
+# groups_attribute = "memberOf"
+# ca_cert_pem = "" # optional public CA certificates; no private keys
 
 # ─── Hugging Face Hub ─────────────────────────────────────
 [[huggingface.upstreams]]

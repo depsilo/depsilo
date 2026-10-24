@@ -132,6 +132,9 @@ func indexSettingsDocument(document []byte) (settingsDocumentIndex, error) {
 }
 
 func validateConfigDocumentSyntax(document []byte) error {
+	if err := validateAuthenticationDocumentIDs(document); err != nil {
+		return err
+	}
 	var parser unstable.Parser
 	parser.KeepComments = true
 	parser.Reset(document)

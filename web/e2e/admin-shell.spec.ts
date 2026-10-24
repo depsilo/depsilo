@@ -193,11 +193,12 @@ test('desktop navigation shows only workspaces and keeps destinations in page ta
     }
   }
 
-  await page.locator('[data-admin-sidebar-footer]').getByRole('link', { name: 'Instance management', exact: true }).click()
+  await page.locator('[data-admin-sidebar-footer]').getByRole('link', { name: 'System management', exact: true }).click()
   await expect(page).toHaveURL(/\/admin\/users$/)
   const instanceNavigation = page.locator('[data-admin-page-navigation="instance"]')
   await expect(instanceNavigation).toBeVisible()
-  await expect(instanceNavigation.locator('a')).toHaveCount(3)
+  await expect(instanceNavigation.getByRole('link', { name: 'Authentication', exact: true })).toHaveAttribute('href', '/admin/authentication')
+  await expect(instanceNavigation.locator('a')).toHaveCount(4)
 
   const visibleRouteHrefs = [
     ...workspaceNavigation.flatMap(workspace => workspace.routes),

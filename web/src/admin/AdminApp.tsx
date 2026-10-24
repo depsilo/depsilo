@@ -1,9 +1,10 @@
-import { useEffect, useReducer, type ReactElement } from 'react'
-import { Routes, Route, Navigate, useLocation } from 'react-router'
+import { useEffect, useReducer, useRef, type ReactElement } from 'react'
+import { Routes, Route, Navigate, Link, useLocation } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import QueryErrorState from '@/components/QueryErrorState'
 import Icon from '@/components/Icon'
+import { Button } from '@/components/ui/button'
 import Logo from '@/components/Logo'
 import { useTranslation } from 'react-i18next'
 import { adminApi, AUTH_SESSION_EXPIRED_EVENT } from '@/lib/api'
@@ -12,11 +13,13 @@ import { readLocalStorage } from '@/lib/storage'
 import { lazyRoute } from '@/routing/lazyRoute'
 import RouteNotFound from '@/routing/RouteNotFound'
 import { adminRouteComponents } from './lazyRoutes'
-import { adminRouteManifest, type AdminRouteId } from './routes'
+import { ADMIN_LOGIN_PATH, adminAuthRoutes, adminRouteManifest, getAdminRouteHref, resolveAdminRoute, type AdminRouteId } from './routes'
 
+const AuthComplete = lazyRoute(() => import('./pages/AuthComplete'), { surface: 'page' })
 const Login = lazyRoute(() => import('./pages/Login'), { surface: 'page' })
 const AdminShell = lazyRoute(() => import('./AdminShell'), { surface: 'page' })
 const {
+  account: Account,
   dashboard: Dashboard,
   connect: ConnectProject,
   attention: Attention,
@@ -34,10 +37,12 @@ const {
   projects: Projects,
   users: Users,
   license: License,
+  authentication: Authentication,
   settings: Settings,
 } = adminRouteComponents
 
 const routeElements = {
+  account: <Account />,
   dashboard: <Dashboard />,
   connect: <ConnectProject />,
   attention: <Attention />,
@@ -55,6 +60,7 @@ const routeElements = {
   projects: <Projects />,
   users: <Users />,
   license: <License />,
+  authentication: <Authentication />,
   settings: <Settings />,
 } satisfies Readonly<Record<AdminRouteId, ReactElement>>
 
@@ -115,7 +121,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
     retry: false,
   })
 
-  if (!token) return <Navigate to="/admin/login" state={{ from: location }} replace />
+  if (!token) return <Navigate to={ADMIN_LOGIN_PATH} state={{ from: location }} replace />
   if (isPending) return <AdminAuthPending />
   if (isError || !principal) {
     return (
@@ -125,16 +131,33 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
     )
   }
   if (onboarding.isPending) return <AdminAuthPending />
-  if (onboarding.data?.status === 'not_started' && location.pathname !== '/admin/connect') {
-    return <Navigate to="/admin/connect?new=1" replace />
+  if (onboarding.data?.status === 'not_started' && location.pathname !== getAdminRouteHref('connect') && location.pathname !== getAdminRouteHref('account') && !resolveAdminRoute(location.pathname)?.requiresAdmin) {
+    return <Navigate to={`${getAdminRouteHref('connect')}?new=1`} replace />
   }
   return <>{children}</>
+}
+
+function SystemAccessDenied() {
+  const { t } = useTranslation()
+  const section = useRef<HTMLElement>(null)
+  useEffect(() => { section.current?.focus() }, [])
+  return <section ref={section} tabIndex={-1} aria-labelledby="system-access-title" data-admin-access="denied" className="programmatic-focus-target max-w-2xl space-y-4 py-6">
+    <h1 id="system-access-title" className="text-2xl font-semibold">{t('nav.systemAccessTitle')}</h1>
+    <p className="text-sm leading-6 text-muted-foreground">{t('nav.systemAccessHint')}</p>
+    <Button render={<Link to={getAdminRouteHref('dashboard')} />} nativeButton={false} role="link">{t('nav.backToOverview')}</Button>
+  </section>
+}
+
+function RequireAdministrator({ children }: { children: React.ReactNode }) {
+  const { principal } = usePrincipal()
+  return principal?.role === 'admin' ? <>{children}</> : <SystemAccessDenied />
 }
 
 export default function AdminApp() {
   return (
     <Routes>
-      <Route path="login" element={<Login />} />
+      <Route path={adminAuthRoutes.login} element={<Login />} />
+      <Route path={adminAuthRoutes.complete} element={<AuthComplete />} />
       <Route
         element={
           <RequireAuth>
@@ -144,7 +167,7 @@ export default function AdminApp() {
       >
         {adminRouteManifest.map(route => route.index
           ? <Route key={route.id} index element={routeElements[route.id]} />
-          : <Route key={route.id} path={route.path} element={routeElements[route.id]} />)}
+          : <Route key={route.id} path={route.path} element={route.requiresAdmin ? <RequireAdministrator>{routeElements[route.id]}</RequireAdministrator> : routeElements[route.id]} />)}
         {/* Bandwidth reporting merged into the Dashboard; keep the legacy URL working. */}
         <Route path="bandwidth" element={<Navigate to="/admin" replace />} />
         <Route path="*" element={<RouteNotFound area="admin" />} />

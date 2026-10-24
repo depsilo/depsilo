@@ -10,6 +10,7 @@ import {
 
 const expectedRoutes = {
   dashboard: '/admin',
+  account: '/admin/account',
   connect: '/admin/connect',
   attention: '/admin/attention',
   accessLogs: '/admin/logs',
@@ -26,6 +27,7 @@ const expectedRoutes = {
   rules: '/admin/rules',
   security: '/admin/security',
   projects: '/admin/projects',
+  authentication: '/admin/authentication',
   settings: '/admin/settings',
 } as const
 
@@ -36,7 +38,7 @@ const expectedGroups = [
   { id: 'logs', routes: ['accessLogs', 'upstreamUpdates', 'auditLogs'] },
   { id: 'security', routes: ['security', 'quarantine', 'rules'] },
   { id: 'projects', routes: ['projects'] },
-  { id: 'instance', routes: ['users', 'settings', 'license'] },
+  { id: 'instance', routes: ['users', 'authentication', 'settings', 'license'] },
 ] as const
 
 describe('Admin route manifest', () => {
@@ -73,6 +75,11 @@ describe('Admin route manifest', () => {
     expect(adminNavigationGroups.flatMap(group => group.routes).some(route => route.id === 'connect')).toBe(false)
   })
 
+  it('restricts system destinations without restricting personal account management', () => {
+    expect(adminRouteManifest.filter(route => route.requiresAdmin).map(route => route.id)).toEqual(['users', 'authentication', 'settings', 'license'])
+    expect(resolveAdminRoute('/admin/account')?.requiresAdmin).toBe(false)
+  })
+
   it('normalizes case and trailing slashes without masking unknown paths', () => {
     expect(getAdminRouteHref('dashboard')).toBe('/admin')
     expect(resolveAdminRoute('/ADMIN/SECURITY/')?.id).toBe('security')
@@ -95,6 +102,7 @@ describe('Admin route manifest', () => {
 
     // Hidden onboarding and attention routes are not sibling destinations.
     expect(resolveWorkspaceNavigation('/admin/connect')).toBeUndefined()
+    expect(resolveWorkspaceNavigation('/admin/account')).toBeUndefined()
     expect(resolveWorkspaceNavigation('/admin/attention')).toBeUndefined()
     expect(resolveWorkspaceNavigation('/admin/does-not-exist')).toBeUndefined()
   })

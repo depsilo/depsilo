@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { authApi } from '@/lib/api'
+import { canManageCredentials } from '@/lib/principalPermissions'
 import type { Principal } from '@/lib/adminApi.types'
 
 const principalQueryKey = ['auth', 'principal'] as const
@@ -16,5 +17,5 @@ export function usePrincipal(enabled = true) {
     retry: false,
     staleTime: 30_000,
   })
-  return { ...query, principal: query.data, canWrite: canWrite(query.data) }
+  return { ...query, principal: query.data, canWrite: canWrite(query.data), canManageCredentials: canManageCredentials(query.data) }
 }
