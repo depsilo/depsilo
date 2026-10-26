@@ -2402,7 +2402,7 @@ const zh = {
       packageCount: '包数量',
       lastActivity: '最后活跃',
       noProjects: '暂无项目',
-      noProjectsHint: '创建项目后，可绑定独立 Token 并按项目导出 SBOM。',
+      noProjectsHint: '创建项目后，使用项目地址或 Token 归集依赖活动。',
       overview: '项目信息',
       regenerateToken: '重新生成 Token',
       confirmDelete: '删除项目？',
@@ -2415,9 +2415,12 @@ const zh = {
       noPackages: '暂无包记录',
       detail: '项目详情',
       ecosystemBreakdown: '生态分布',
-      proRequired: '多项目工作区是 Depsilo Pro 功能',
-      proDesc: '按项目归集依赖活动并导出 SBOM；缓存与安全策略由实例统一管理。请联系 Depsilo 团队了解当前可用的授权方式。',
-      upgrade: '咨询 Pro 授权',
+      freeAllowance: '免费版包含 {{limit}} 个项目 · 已使用 {{used}} 个',
+      moreRequiresPro: '创建更多项目需要 Pro。现有项目可继续使用和管理。',
+      managePro: '管理 Pro 授权',
+      contactAdminForPro: '请联系管理员启用 Pro。',
+      sbomProRequired: '项目级 SBOM 导出（含 CRA 模式与技术文件）需要 Pro。查看项目与依赖记录不受影响。',
+      capabilitiesUnavailable: '项目额度暂不可用，请刷新后再创建项目或导出 SBOM。',
     },
 
     // SBOM
@@ -2708,6 +2711,7 @@ const zh = {
           f4: '安全情报 dashboard（OSV · CVE · 决策工作流）',
           f5: 'Depsilo 发布制品 SBOM（CycloneDX + SPDX）',
           f6: '本地 / S3 存储 · Webhook · Prometheus · 监控',
+          f7: '1 个项目：独立地址、Token 与依赖活动归集',
         },
         pro: {
           f1: '多项目依赖活动归集',

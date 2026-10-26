@@ -15,6 +15,7 @@ import type {
   OnboardingStatusResponse,
   PolicyStatus,
   ProjectListResponse,
+  ProjectCapabilities,
   ComplianceProfile,
   SnapshotListResponse,
   AuditExporterListResponse,
@@ -42,6 +43,9 @@ export type AdminApiOverride = JsonValue
 export type AdminApiOverrides = Record<string, AdminApiOverride>
 export type UiLocale = 'zh' | 'en'
 export type UiTheme = 'light' | 'dark'
+
+export const freeProjectCapabilities: ProjectCapabilities = { project_limit: 1, can_create: true, can_export_sbom: false }
+export const proProjectCapabilities: ProjectCapabilities = { project_limit: null, can_create: true, can_export_sbom: true }
 
 const configuredSettings: AdminSettingsSnapshot = {
   server: { host: '127.0.0.1', port: 23333, log_level: 'info' },
@@ -287,7 +291,7 @@ const canonicalAdminApiDefaults = {
   'GET /api/v1/admin/security/vulnerabilities': { items: [], total: 0, page: 1 } satisfies SecurityVulnerabilityPage,
   'GET /api/v1/admin/security/packages': { items: [], total: 0, page: 1 } satisfies SecurityPackagePage,
   'GET /api/v1/admin/security/suggestions': { items: [], total: 0, page: 1 } satisfies SecuritySuggestionPage,
-  'GET /api/v1/admin/projects': { items: [], total: 0 } satisfies ProjectListResponse,
+  'GET /api/v1/admin/projects': { items: [], total: 0, capabilities: freeProjectCapabilities } satisfies ProjectListResponse,
   'GET /api/v1/admin/compliance/profile': {
     organization: '',
     contact: '',

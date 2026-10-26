@@ -15,6 +15,8 @@ package integration
 // cache the token for the rest of the test run.
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -29,6 +31,7 @@ import (
 func TestLicenseTrial_FullLifecycle(t *testing.T) {
 	// State precondition: this must be the first test that touches
 	// /admin/license/trial, because the DB is shared for the whole run.
+	var projectID uint
 
 	t.Run("status starts as free with trial available", func(t *testing.T) {
 		resp := adminGet(t, depsiloURL+"/api/v1/admin/license/status")
@@ -49,17 +52,38 @@ func TestLicenseTrial_FullLifecycle(t *testing.T) {
 		}
 	})
 
-	t.Run("paywall returns 402 with trial_available=true before activation", func(t *testing.T) {
-		// /admin/projects is behind entitlement.RequirePro (router.go line ~183).
+	t.Run("free edition can list and create its first project", func(t *testing.T) {
 		resp := adminGet(t, depsiloURL+"/api/v1/admin/projects")
 		defer resp.Body.Close()
-		assertStatus(t, resp, http.StatusPaymentRequired)
+		assertStatus(t, resp, http.StatusOK)
 		body := readBody(t, resp)
-		if !strings.Contains(body, `"code":"PRO_REQUIRED"`) {
-			t.Errorf("expected code=PRO_REQUIRED, got body: %s", body)
+		if !strings.Contains(body, `"project_limit":1`) || !strings.Contains(body, `"can_create":true`) || !strings.Contains(body, `"can_export_sbom":false`) {
+			t.Fatalf("unexpected free project capabilities: %s", body)
 		}
-		if !strings.Contains(body, `"trial_available":true`) {
-			t.Errorf("expected trial_available=true in paywall body, got: %s", body)
+		created := adminPost(t, depsiloURL+"/api/v1/admin/projects", strings.NewReader(`{"name":"Free integration project"}`))
+		defer created.Body.Close()
+		assertStatus(t, created, http.StatusCreated)
+		var project struct {
+			ID uint `json:"id"`
+		}
+		if err := json.NewDecoder(created.Body).Decode(&project); err != nil || project.ID == 0 {
+			t.Fatalf("decode created project: id=%d err=%v", project.ID, err)
+		}
+		projectID = project.ID
+	})
+
+	t.Run("additional project and SBOM require Pro before activation", func(t *testing.T) {
+		responses := []*http.Response{
+			adminPost(t, depsiloURL+"/api/v1/admin/projects", strings.NewReader(`{"name":"Second integration project"}`)),
+			adminGet(t, fmt.Sprintf("%s/api/v1/admin/projects/%d/sbom", depsiloURL, projectID)),
+		}
+		for _, resp := range responses {
+			assertStatus(t, resp, http.StatusPaymentRequired)
+			body := readBody(t, resp)
+			resp.Body.Close()
+			if !strings.Contains(body, `"code":"PRO_REQUIRED"`) || !strings.Contains(body, `"trial_available":true`) {
+				t.Errorf("expected Pro requirement with trial available: %s", body)
+			}
 		}
 	})
 
@@ -95,15 +119,20 @@ func TestLicenseTrial_FullLifecycle(t *testing.T) {
 		}
 	})
 
-	t.Run("pro endpoint no longer returns 402 after trial activation", func(t *testing.T) {
+	t.Run("trial unlocks additional projects and SBOM", func(t *testing.T) {
+		created := adminPost(t, depsiloURL+"/api/v1/admin/projects", strings.NewReader(`{"name":"Second integration project"}`))
+		defer created.Body.Close()
+		assertStatus(t, created, http.StatusCreated)
 		resp := adminGet(t, depsiloURL+"/api/v1/admin/projects")
 		defer resp.Body.Close()
-		// After activation IsPro == true, so RequirePro must pass.
-		// Response can be 200 (empty list) or any non-402.
-		if resp.StatusCode == http.StatusPaymentRequired {
-			body := readBody(t, resp)
-			t.Errorf("expected non-402 after trial activation, got 402. Body: %s", body)
+		assertStatus(t, resp, http.StatusOK)
+		body := readBody(t, resp)
+		if !strings.Contains(body, `"project_limit":null`) || !strings.Contains(body, `"can_export_sbom":true`) {
+			t.Errorf("unexpected trial project capabilities: %s", body)
 		}
+		exported := adminGet(t, fmt.Sprintf("%s/api/v1/admin/projects/%d/sbom", depsiloURL, projectID))
+		defer exported.Body.Close()
+		assertStatus(t, exported, http.StatusOK)
 	})
 
 	t.Run("re-activating trial returns 409 TRIAL_ALREADY_USED", func(t *testing.T) {

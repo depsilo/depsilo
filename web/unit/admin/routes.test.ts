@@ -46,7 +46,7 @@ describe('Admin route manifest', () => {
     expect(new Set(adminRouteManifest.map(route => route.id)).size).toBe(adminRouteManifest.length)
     expect(new Set(adminRouteManifest.map(route => route.path)).size).toBe(adminRouteManifest.length)
     expect(Object.fromEntries(adminRouteManifest.map(route => [route.id, route.href]))).toEqual(expectedRoutes)
-    expect(adminRouteManifest.find(route => route.id === 'projects')?.pro).toBe(true)
+    expect(adminRouteManifest.find(route => route.id === 'projects')?.pro).toBe(false)
   })
 
   it('covers every visible route once in stable Operator-task order', () => {

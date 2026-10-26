@@ -37,14 +37,23 @@ The latest manual results are retained in the open page, not across navigation.
 ## Permissions
 
 Principal capability groups allow both `admin` and `readonly` principals to call every
-Admin `GET` route, including CSV exports. Project list/detail/package and SBOM `GET`
-routes additionally require an active Pro entitlement and otherwise return
-`402 PRO_REQUIRED`. `POST /api/v1/admin/rules/test` is also read-only. Every other Admin
+Admin `GET` route, including CSV exports. Project list/detail/package routes are
+available without Pro. Project SBOM exports require an active Pro entitlement and
+otherwise return `402 PRO_REQUIRED`. `POST /api/v1/admin/rules/test` is also read-only. Every other Admin
 `POST`, `PUT`, `PATCH`, and `DELETE` requires a write-capable Principal. API tokens cannot
 call `/api/v1/auth/refresh`. Readonly responses render credential-bearing URLs as
 `scheme://host[:port]/***`; userinfo, paths, queries, and fragments are never returned.
 Webhook URLs, proxy credentials, secrets, keys, and every other credential-bearing
 response field are masked by the server.
+
+The free edition allows one project per instance. Creating another requires an
+active Pro entitlement (trial or paid); the create endpoint enforces this limit
+atomically and returns `402 PRO_REQUIRED` when capacity is exhausted. The project
+list reports `capabilities.project_limit` (`1` for free, `null` for Pro),
+`can_create`, and `can_export_sbom`; role permissions still apply independently.
+Existing projects remain readable, editable, removable, and usable by clients
+after an entitlement expires. Deleting projects releases creation capacity;
+no project is automatically deleted, disabled, or created by this policy.
 
 The service rejects self-delete, self-disable, and self-demotion with `409 SELF_LOCKOUT`.
 It also rejects removing the final enabled **local password administrator** with

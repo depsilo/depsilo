@@ -3,6 +3,7 @@ import {
   adminApiDefaults,
   expect,
   mockAdminApi,
+  proProjectCapabilities,
   test,
   type AdminApiOverrides,
   type JsonValue,
@@ -90,13 +91,15 @@ for (const query of permissionQueries) {
   })
 }
 
-test('Projects 402 renders the Pro upgrade callout rather than empty or permission denied', async ({ page }) => {
+test('Projects list failures remain recoverable instead of inventing a free allowance', async ({ page }) => {
   await mockAdminApi(page, {
-    'GET /api/v1/admin/projects': { status: 402, body: { code: 'PRO_REQUIRED', message: 'Pro required' } },
+    'GET /api/v1/admin/projects': { status: 503, body: { code: 'PROJECTS_UNAVAILABLE', message: 'fixture project limits unavailable' } },
   })
   await page.goto('/admin/projects')
-  await expect(page.getByText(/多项目工作区.*Pro/)).toBeVisible()
-  await expect(page.getByRole('link', { name: /咨询 Pro 授权|Ask about Pro access/ })).toBeVisible()
+  await expect(page.getByRole('alert')).toContainText('fixture project limits unavailable')
+  await expect(page.getByRole('button', { name: /重试|Retry/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /创建项目|Create Project/ })).toHaveCount(0)
+  await expect(page.locator('[data-project-capacity]')).toHaveCount(0)
   await expect(page.getByText(/暂无项目|no projects/i)).toHaveCount(0)
   await expect(page.getByText(/权限不足|permission denied/i)).toHaveCount(0)
 })
@@ -378,7 +381,7 @@ const projectSummary = {
 
 test('Project package failure never renders the successful empty state', async ({ page }) => {
   await mockAdminApi(page, {
-    'GET /api/v1/admin/projects': { items: [projectSummary], total: 1 },
+    'GET /api/v1/admin/projects': { items: [projectSummary], total: 1, capabilities: proProjectCapabilities },
     'GET /api/v1/admin/projects/1': { ...projectSummary, proxy_url: 'https://example.test/p/fixture-project', ecosystem_breakdown: { pypi: 1 } },
     'GET /api/v1/admin/projects/1/packages': { status: 500, body: { code: 'FAILED', message: 'fixture packages failure' } },
   })

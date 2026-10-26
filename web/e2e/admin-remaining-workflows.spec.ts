@@ -1,9 +1,9 @@
 import type { Request } from '@playwright/test'
-import { test, expect, mockAdminApi, setUiPreferences } from './fixtures/admin-api'
+import { test, expect, mockAdminApi, setUiPreferences, proProjectCapabilities } from './fixtures/admin-api'
 
 const project = { id: 7, name: 'homelab', slug: 'homelab', description: '', package_count: 21, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z', last_activity_at: '2026-10-21T00:00:00Z' }
 const projectMocks = {
-  'GET /api/v1/admin/projects': { items: [project], total: 1 },
+  'GET /api/v1/admin/projects': { items: [project], total: 1, capabilities: proProjectCapabilities },
   'GET /api/v1/admin/projects/7': { ...project, proxy_url: 'https://wrong-origin.example/p/homelab', ecosystem_breakdown: { pypi: 21 } },
   'GET /api/v1/admin/projects/7/packages': { items: [], total: 21, page: 2 },
 }

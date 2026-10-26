@@ -29,8 +29,15 @@ type projectSummaryResponse struct {
 }
 
 type projectListResponse struct {
-	Items []projectSummaryResponse `json:"items"`
-	Total int                      `json:"total"`
+	Items        []projectSummaryResponse    `json:"items"`
+	Total        int                         `json:"total"`
+	Capabilities projectCapabilitiesResponse `json:"capabilities"`
+}
+
+type projectCapabilitiesResponse struct {
+	ProjectLimit  *int `json:"project_limit"`
+	CanCreate     bool `json:"can_create"`
+	CanExportSBOM bool `json:"can_export_sbom"`
 }
 
 type createProjectResponse struct {

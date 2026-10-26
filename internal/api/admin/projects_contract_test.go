@@ -31,7 +31,7 @@ func newProjectsContractRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 	if err := database.AutoMigrate(&db.Project{}, &db.ProjectPackage{}, &db.TamperRecord{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	h := NewProjectsHandler(database)
+	h := NewProjectsHandler(database, nil)
 	r := gin.New()
 	r.GET("/projects", h.List)
 	r.POST("/projects", h.Create)
@@ -388,7 +388,7 @@ func TestDeleteProjectChecksCommitFailure(t *testing.T) {
 	}
 	failingDB := database.Session(&gorm.Session{NewDB: true})
 	failingDB.Statement.ConnPool = failingCommitPool{ConnPool: sqlDB, beginner: sqlDB}
-	h := NewProjectsHandler(failingDB)
+	h := NewProjectsHandler(failingDB, nil)
 	r = gin.New()
 	r.DELETE("/projects/:id", h.Delete)
 

@@ -18,7 +18,7 @@ import type {
   UpdateSecurityPolicyRequest,
   UpstreamMutationRequest,
 } from '../src/lib/adminApi.types'
-import { expect, mockAdminApi, setUiPreferences, test } from './fixtures/admin-api'
+import { expect, mockAdminApi, setUiPreferences, test, proProjectCapabilities } from './fixtures/admin-api'
 
 type AdminOperation =
   | 'getSettings' | 'updateSettings'
@@ -194,6 +194,7 @@ const audit = {
 } satisfies AuditLogListResponse
 
 const projects = {
+  capabilities: proProjectCapabilities,
   items: [{
     id: 41, name: 'Fixture', slug: 'fixture', description: 'contract fixture', package_count: 2,
     last_activity_at: '2026-07-10T00:00:00Z', created_at: '2026-07-01T00:00:00Z', updated_at: '2026-07-10T00:00:00Z',

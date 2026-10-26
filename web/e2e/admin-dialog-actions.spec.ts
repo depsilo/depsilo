@@ -1,4 +1,4 @@
-import { test, expect, mockAdminApi, setUiPreferences } from './fixtures/admin-api'
+import { test, expect, mockAdminApi, setUiPreferences, proProjectCapabilities } from './fixtures/admin-api'
 
 test('dialog traps focus and restores its trigger', async ({ page }) => {
   await page.goto('/admin/users')
@@ -122,6 +122,7 @@ const deleteRecoveryCases = [
     listEndpoint: 'GET /api/v1/admin/projects',
     deleteEndpoint: 'DELETE /api/v1/admin/projects/11',
     listResponse: {
+      capabilities: proProjectCapabilities,
       items: [{
         id: 11,
         name: 'release-service',

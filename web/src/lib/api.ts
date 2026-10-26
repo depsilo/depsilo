@@ -143,10 +143,8 @@ api.interceptors.response.use(
         window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT))
       }
     }
-    // 402 PRO_REQUIRED is left to each Pro-gated page to render an
-    // inline ProRequiredCallout — the previous app-wide modal popup
-    // proved too interruptive for users casually clicking around the
-    // admin sidebar.
+    // Keep 402 PRO_REQUIRED local to the affected action so unrelated
+    // capabilities remain usable without an app-wide modal.
     return Promise.reject(error)
   }
 )

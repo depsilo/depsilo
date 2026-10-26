@@ -17,17 +17,32 @@ import (
 
 	"depsilo/internal/config"
 	"depsilo/internal/db"
+	"depsilo/internal/entitlement"
 	"depsilo/internal/middleware"
 	"depsilo/internal/sbom"
 )
 
 type ProjectsHandler struct {
-	db         *gorm.DB
-	compliance config.ComplianceConfig
+	db          *gorm.DB
+	entitlement *entitlement.Checker
+	compliance  config.ComplianceConfig
 }
 
-func NewProjectsHandler(database *gorm.DB) *ProjectsHandler {
-	return &ProjectsHandler{db: database}
+func NewProjectsHandler(database *gorm.DB, checker *entitlement.Checker) *ProjectsHandler {
+	if checker == nil {
+		checker = entitlement.NewChecker(nil, nil)
+	}
+	return &ProjectsHandler{db: database, entitlement: checker}
+}
+
+const freeProjectLimit = 1
+
+func (h *ProjectsHandler) capabilities(projectCount int) projectCapabilitiesResponse {
+	if h.entitlement.IsPro() {
+		return projectCapabilitiesResponse{CanCreate: true, CanExportSBOM: true}
+	}
+	limit := freeProjectLimit
+	return projectCapabilitiesResponse{ProjectLimit: &limit, CanCreate: projectCount < limit}
 }
 
 // SetCompliance supplies the operator-declared CRA facts used by SBOM
@@ -105,7 +120,7 @@ func (h *ProjectsHandler) List(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, projectListResponse{Items: items, Total: len(items)})
+	c.JSON(http.StatusOK, projectListResponse{Items: items, Total: len(items), Capabilities: h.capabilities(len(items))})
 }
 
 // Create creates a new project and returns its token (shown once).
@@ -138,8 +153,26 @@ func (h *ProjectsHandler) Create(c *gin.Context) {
 		TokenHash:   tokenHash,
 		CreatedBy:   "admin",
 	}
-	if err := h.db.Create(&project).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "CREATE_FAILED", "message": err.Error()})
+	// The count and insert are one SQLite write statement. A count followed by
+	// Create (even in a deferred transaction) can race another connection or
+	// handler. Existing projects remain accessible when an entitlement expires;
+	// only creation above the free allowance is restricted.
+	now := h.db.NowFunc()
+	result := h.db.WithContext(c.Request.Context()).Raw(`
+		INSERT INTO projects (name, slug, description, token_hash, created_by, created_at, updated_at)
+		SELECT ?, ?, ?, ?, ?, ?, ?
+		WHERE ? OR (SELECT COUNT(*) FROM projects) < ?
+		RETURNING *`, project.Name, project.Slug, project.Description, project.TokenHash,
+		project.CreatedBy, now, now, h.entitlement.IsPro(), freeProjectLimit).Scan(&project)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "CREATE_FAILED", "message": result.Error.Error()})
+		return
+	}
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusPaymentRequired, gin.H{
+			"code": "PRO_REQUIRED", "message": "The free edition includes one project. Additional projects require Depsilo Pro.",
+			"upgrade": "https://depsilo.com/#pricing", "trial_available": h.entitlement.TrialAvailable(),
+		})
 		return
 	}
 

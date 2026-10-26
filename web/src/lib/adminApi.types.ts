@@ -758,7 +758,13 @@ export interface Project {
 }
 
 export interface ProjectSummary extends Project { package_count: number; last_activity_at: string | null }
-export interface ProjectListResponse { items: ProjectSummary[]; total: number }
+export interface ProjectCapabilities {
+  /** null means the active entitlement does not limit project count. */
+  project_limit: number | null
+  can_create: boolean
+  can_export_sbom: boolean
+}
+export interface ProjectListResponse { items: ProjectSummary[]; total: number; capabilities: ProjectCapabilities }
 export interface CreateProjectRequest { name: string; description: string }
 export interface UpdateProjectRequest { name?: string; description?: string }
 export interface CreateProjectResponse { id: number; name: string; slug: string; description: string; token: string; proxy_url: string; created_at: string }

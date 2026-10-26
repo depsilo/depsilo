@@ -34,7 +34,7 @@ func newProjectsCRAHandler(t *testing.T, compliance config.ComplianceConfig) (*g
 	if err := database.AutoMigrate(&db.Project{}, &db.ProjectPackage{}, &db.TamperRecord{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	handler := NewProjectsHandler(database)
+	handler := NewProjectsHandler(database, nil)
 	handler.SetCompliance(compliance)
 	r := gin.New()
 	r.GET("/projects/:id/sbom", handler.ExportSBOM)

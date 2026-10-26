@@ -1,4 +1,4 @@
-import type { Locator, Page } from '@playwright/test'
+import type { Locator, Page, Request } from '@playwright/test'
 import type {
   ComplianceProfile,
   ProjectDetail,
@@ -6,7 +6,7 @@ import type {
   ProjectPackagesResponse,
   ProjectSummary,
 } from '../src/lib/adminApi.types'
-import { expect, mockAdminApi, setUiPreferences, test } from './fixtures/admin-api'
+import { expect, mockAdminApi, setUiPreferences, test, freeProjectCapabilities, proProjectCapabilities } from './fixtures/admin-api'
 
 const projectName = 'critical-platform'
 
@@ -60,7 +60,7 @@ const operatorEcosystemIds = [
 
 async function mockPopulatedProject(page: Page, summary: ProjectSummary = project) {
   await mockAdminApi(page, {
-    'GET /api/v1/admin/projects': { items: [summary], total: 1 } satisfies ProjectListResponse,
+    'GET /api/v1/admin/projects': { items: [summary], total: 1, capabilities: proProjectCapabilities } satisfies ProjectListResponse,
     [`GET /api/v1/admin/projects/${summary.id}`]: {
       ...projectDetail,
       ...summary,
@@ -108,18 +108,13 @@ async function expectNoRootOverflow(page: Page, width: number) {
 
 const initialStates = [
   {
-    name: 'Pro-required',
-    response: { status: 402, body: { code: 'PRO_REQUIRED', message: 'Pro required' } },
-    content: /多项目工作区是 Depsilo Pro 功能/,
-  },
-  {
     name: 'failed',
     response: { status: 500, body: { code: 'PROJECTS_UNAVAILABLE', message: 'fixture projects failure' } },
     content: /fixture projects failure/,
   },
   {
     name: 'empty',
-    response: { items: [], total: 0 } satisfies ProjectListResponse,
+    response: { items: [], total: 0, capabilities: freeProjectCapabilities } satisfies ProjectListResponse,
     content: /^暂无项目$/,
   },
 ] as const
@@ -150,6 +145,153 @@ test('project creation belongs only to list page actions and disappears in detai
   await expect(page.getByRole('heading', { name: projectName, exact: true })).toBeVisible()
   await expect(page.locator('[data-admin-page-actions]')).toHaveCount(0)
   await expect(createProject).toHaveCount(0)
+})
+
+test('free users create their first project and deletion restores the allowance', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 900 })
+  let items: ProjectSummary[] = []
+  let creations = 0
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/projects': () => ({ items, total: items.length, capabilities: { ...freeProjectCapabilities, can_create: items.length === 0 } }),
+    'POST /api/v1/admin/projects': (request: Request) => {
+      creations++
+      expect(request.postDataJSON()).toEqual({ name: projectName, description: '' })
+      items = [project]
+      return { ...project, token: 'fixture-first-project-token', proxy_url: `/p/${project.slug}` }
+    },
+    'DELETE /api/v1/admin/projects/7': () => { items = []; return { status: 'deleted' } },
+  })
+  await page.goto('/admin/projects')
+  await expect(page.locator('[data-project-capacity]')).toHaveText('免费版包含 1 个项目 · 已使用 0 个')
+  await page.getByRole('button', { name: '创建项目', exact: true }).click()
+  await page.getByRole('dialog').getByLabel('项目名称', { exact: true }).fill(projectName)
+  await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click()
+  const tokenDialog = page.getByRole('dialog', { name: '项目 Token' })
+  await expect(tokenDialog).toContainText('fixture-first-project-token')
+  await tokenDialog.getByRole('button', { name: '确定', exact: true }).click()
+  await expect(page.getByRole('button', { name: '创建项目', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: '管理 Pro 授权', exact: true })).toHaveAttribute('href', '/admin/license')
+  await expect(page.locator('[data-project-capacity]')).toContainText('已使用 1 个')
+  await expectNoRootOverflow(page, 320)
+  await page.getByRole('button', { name: `删除 ${projectName}`, exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '删除', exact: true }).click()
+  await expect(page.getByRole('button', { name: '创建项目', exact: true })).toBeEnabled()
+  await expect(page.locator('[data-project-capacity]')).toHaveText('免费版包含 1 个项目 · 已使用 0 个')
+  expect(creations).toBe(1)
+})
+
+for (const count of [1, 2]) test(`free instances retain ${count} existing project(s), with SBOM clearly Pro`, async ({ page }) => {
+  await mockPopulatedProject(page)
+  let exports = 0
+  let complianceRequests = 0
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/projects': {
+      items: Array.from({ length: count }, (_, index) => ({ ...project, id: 7 + index, name: index ? 'retained-project' : projectName })),
+      total: count,
+      capabilities: { ...freeProjectCapabilities, can_create: false },
+    },
+    'GET /api/v1/admin/projects/7/sbom': () => { exports++; return {} },
+    'GET /api/v1/admin/compliance/profile': () => { complianceRequests++; return {} },
+  })
+  await page.goto('/admin/projects')
+  await expect(page.getByRole('button', { name: /^查看 / })).toHaveCount(count)
+  await expect(page.getByRole('button', { name: /^删除 / })).toHaveCount(count)
+  await expect(page.getByRole('button', { name: '创建项目', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: `查看 ${projectName}`, exact: true }).click()
+  await expect(page.getByRole('button', { name: '编辑项目', exact: true })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '重新生成 Token', exact: true })).toBeEnabled()
+  await page.getByRole('button', { name: '导出 SBOM Pro', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: '导出 SBOM', exact: true })
+  await expect(dialog).toContainText('项目级 SBOM 导出（含 CRA 模式与技术文件）需要 Pro')
+  await expect(dialog.getByRole('link', { name: '管理 Pro 授权', exact: true })).toHaveAttribute('href', '/admin/license')
+  await expect(dialog.getByRole('button', { name: '下载 SBOM' })).toHaveCount(0)
+  expect(exports).toBe(0)
+  expect(complianceRequests).toBe(0)
+})
+
+test('Pro instances can add projects beyond the free allowance', async ({ page }) => {
+  await setUiPreferences(page, 'dark', 'en')
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/projects': { items: [project, { ...project, id: 8, name: 'second-project' }], total: 2, capabilities: proProjectCapabilities },
+  })
+  await page.goto('/admin/projects')
+  await expect(page.locator('[data-project-capacity]')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Create Project', exact: true }).click()
+  await expect(page.getByRole('dialog').getByRole('button', { name: 'Save', exact: true })).toBeEnabled()
+  await expect(page.getByRole('dialog').getByRole('link', { name: 'Manage Pro access', exact: true })).toHaveCount(0)
+})
+
+test('a concurrent creation limit preserves the draft and offers Pro without hiding projects', async ({ page }) => {
+  let occupied = false
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/projects': () => ({ items: occupied ? [project] : [], total: occupied ? 1 : 0, capabilities: { ...freeProjectCapabilities, can_create: !occupied } }),
+    'POST /api/v1/admin/projects': () => {
+      occupied = true
+      return { status: 402, body: { code: 'PRO_REQUIRED', message: 'raw backend entitlement detail', trial_available: true } }
+    },
+  })
+  await page.goto('/admin/projects')
+  await page.getByRole('button', { name: '创建项目', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('项目名称', { exact: true }).fill('my-project-draft')
+  await dialog.getByRole('button', { name: '保存', exact: true }).click()
+  await expect(dialog.getByRole('alert')).toContainText('创建更多项目需要 Pro')
+  await expect(dialog.getByLabel('项目名称', { exact: true })).toHaveValue('my-project-draft')
+  await expect(dialog.getByRole('link', { name: '管理 Pro 授权', exact: true })).toHaveAttribute('href', '/admin/license')
+  await expect(dialog.getByRole('button', { name: '保存', exact: true })).toBeDisabled()
+  await expect(dialog).not.toContainText('raw backend entitlement detail')
+  await dialog.getByRole('button', { name: '取消', exact: true }).click()
+  await expect(page.getByRole('button', { name: `查看 ${projectName}`, exact: true })).toBeVisible()
+})
+
+test('a readonly free user sees project details without write or system-management actions', async ({ page }) => {
+  await mockPopulatedProject(page)
+  await mockAdminApi(page, {
+    'GET /api/v1/auth/me': { id: 2, username: 'viewer', role: 'readonly', enabled: true, auth_method: 'jwt', token_permissions: null, can_write: false },
+    'GET /api/v1/admin/projects': { items: [project], total: 1, capabilities: { ...freeProjectCapabilities, can_create: false } },
+  })
+  await page.goto('/admin/projects')
+  await expect(page.getByRole('button', { name: '创建项目', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^删除 / })).toHaveCount(0)
+  await page.getByRole('button', { name: `查看 ${projectName}`, exact: true }).click()
+  await expect(page.getByRole('button', { name: '编辑项目', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '重新生成 Token', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: '导出 SBOM Pro', exact: true }).click()
+  await expect(page.getByRole('dialog')).toContainText('请联系管理员启用 Pro')
+  await expect(page.getByRole('link', { name: '管理 Pro 授权', exact: true })).toHaveCount(0)
+})
+
+test('loading and missing capabilities do not invent a free or Pro allowance', async ({ page }) => {
+  let release: () => void = () => {}
+  const pending = new Promise<void>(resolve => { release = resolve })
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/projects': async () => { await pending; return { items: [project], total: 1 } },
+  })
+  await page.goto('/admin/projects')
+  try {
+    await expect(page.locator('[data-admin-page-content] [aria-busy="true"]')).toBeVisible()
+    await expect(page.getByRole('button', { name: '创建项目', exact: true })).toHaveCount(0)
+    await expect(page.locator('[data-project-capacity]')).toHaveCount(0)
+  } finally { release() }
+  await expect(page.getByRole('alert')).toContainText('项目额度暂不可用')
+  await expect(page.getByRole('button', { name: '创建项目', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: `查看 ${projectName}`, exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: '管理 Pro 授权', exact: true })).toHaveCount(0)
+  await expect(page.locator('[data-project-capacity]')).toHaveCount(0)
+})
+
+test('an expired entitlement during SBOM export shows an actionable Pro explanation', async ({ page }) => {
+  await mockPopulatedProject(page)
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/projects/7/sbom': { status: 402, body: { code: 'PRO_REQUIRED', message: 'fixture expired' } },
+  })
+  await page.goto('/admin/projects?project=7')
+  await page.getByRole('button', { name: '导出 SBOM', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('button', { name: '下载 SBOM', exact: true }).click()
+  await expect(dialog).toContainText('项目级 SBOM 导出（含 CRA 模式与技术文件）需要 Pro')
+  await expect(dialog.getByRole('link', { name: '管理 Pro 授权', exact: true })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: '下载 SBOM', exact: true })).toHaveCount(0)
 })
 
 test('project ecosystem filters expose all Operator surfaces without internal aliases', async ({ page }) => {

@@ -22,7 +22,6 @@ import EcosystemIcon from '@/components/EcosystemIcon'
 import SectionHeader from '@/components/SectionHeader'
 
 import QueryErrorState from '@/components/QueryErrorState'
-import ProRequiredCallout from '@/admin/components/ProRequiredCallout'
 import AdminPage from '@/admin/components/AdminPage'
 import AdminPagination from '@/admin/components/AdminPagination'
 import ConfirmActionDialog from '@/admin/components/ConfirmActionDialog'
@@ -66,7 +65,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 export default function Projects() {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
-  const { canWrite } = usePrincipal()
+  const { canWrite, principal } = usePrincipal()
 
   const [searchParams, setSearchParams] = useSearchParams()
   const projectParam = Number(searchParams.get('project'))
@@ -96,6 +95,7 @@ export default function Projects() {
   const [sbomTechnicalFile, setSbomTechnicalFile] = useState(false)
   const [sbomSign, setSbomSign] = useState(false)
   const [sbomError, setSbomError] = useState('')
+  const [sbomProRequired, setSbomProRequired] = useState(false)
   const [sbomLoading, setSbomLoading] = useState(false)
   const exportController = useRef<AbortController | null>(null)
   const [viewProjectId, setViewProjectId] = useState(projectId)
@@ -106,6 +106,7 @@ export default function Projects() {
     setRotateOpen(false)
     setTokenData(null)
     setSbomError('')
+    setSbomProRequired(false)
     setSbomLoading(false)
   }
   useEffect(() => () => { exportController.current?.abort() }, [projectId])
@@ -132,6 +133,9 @@ export default function Projects() {
   })
   const { data } = query
   const projects = data?.data.items ?? []
+  const capabilities = data?.data.capabilities
+  const canCreate = capabilities?.can_create === true
+  const canExportSbom = capabilities?.can_export_sbom === true
   const selectedProject = projects.find(project => project.id === projectId) ?? null
 
   const detailQuery = useQuery({
@@ -153,7 +157,7 @@ export default function Projects() {
   const complianceQuery = useQuery({
     queryKey: ['admin', 'compliance', 'profile'],
     queryFn: ({ signal }) => adminApi.complianceProfile({ signal }),
-    enabled: projectId !== null && exportOpen,
+    enabled: projectId !== null && exportOpen && canExportSbom && !sbomProRequired,
     retry: false,
     staleTime: 5 * 60 * 1000,
   })
@@ -172,6 +176,9 @@ export default function Projects() {
       setCreateOpen(false)
       setCreateForm({ name: '', description: '' })
 
+    },
+    onError: error => {
+      if (getApiError(error).status === 402) void queryClient.invalidateQueries({ queryKey: ['admin', 'projects'] })
     },
   })
 
@@ -211,7 +218,7 @@ export default function Projects() {
 
   function handleCreate(e: React.FormEvent) {
     e.preventDefault()
-    if (!canWrite) return
+    if (!canWrite || !canCreate) return
     createMutation.mutate(createForm)
   }
 
@@ -241,7 +248,7 @@ export default function Projects() {
   }
 
   async function handleSbomDownload() {
-    if (!projectId) return
+    if (!projectId || !canExportSbom || sbomProRequired) return
     const controller = new AbortController()
     exportController.current = controller
     setSbomLoading(true)
@@ -271,7 +278,12 @@ export default function Projects() {
         downloadBlob(new Blob([JSON.stringify(sidecar, null, 2)], { type: 'application/json' }), `${filename}.sig.json`)
       }
     } catch (error) {
-      if (!controller.signal.aborted) setSbomError(await sbomFailureMessage(error))
+      if (!controller.signal.aborted) {
+        if (getApiError(error).status === 402) {
+          setSbomProRequired(true)
+          void queryClient.invalidateQueries({ queryKey: ['admin', 'projects'] })
+        } else setSbomError(await sbomFailureMessage(error))
+      }
     } finally {
       if (exportController.current === controller) setSbomLoading(false)
     }
@@ -318,18 +330,6 @@ export default function Projects() {
   </>
 
   const apiError = getApiError(query.error)
-  if (query.isError && !data && apiError.status === 402) {
-    return (
-      <AdminPage description={t('projects.subtitle')}>
-        <ProRequiredCallout
-          icon="folder_managed"
-          title={t('projects.proRequired')}
-          description={t('projects.proDesc')}
-          upgradeLabel={t('projects.upgrade')}
-        />
-      </AdminPage>
-    )
-  }
 
   if (query.isPending) {
     return (
@@ -346,6 +346,16 @@ export default function Projects() {
       </AdminPage>
     )
   }
+
+  const createProRequired = createMutation.isError && getApiError(createMutation.error).status === 402
+  const proAccessAction = principal?.role === 'admin'
+    ? <Button variant="outline" render={<Link to={getAdminRouteHref('license')} />} nativeButton={false} role="link">{t('projects.managePro')}</Button>
+    : <p className="text-sm text-muted-foreground">{t('projects.contactAdminForPro')}</p>
+  const capabilitiesNotice = data && !capabilities
+    ? <QueryErrorState message={t('projects.capabilitiesUnavailable')} onRetry={() => { void query.refetch() }} />
+    : data && query.isRefetchError
+      ? <StaleDataNotice refreshing={query.isFetching} onRefresh={() => query.refetch()} />
+      : null
 
   // ── Detail view ────────────────────────────────────────────────
   if (projectId) {
@@ -373,6 +383,7 @@ export default function Projects() {
     return (
       <AdminPage description={t('projects.subtitle')}>
       <div className="space-y-6">
+        {capabilitiesNotice}
         {/* Detail header */}
         <div className="flex min-w-0 flex-wrap items-center gap-3">
             <Tooltip>
@@ -392,7 +403,7 @@ export default function Projects() {
             </Tooltip>
           <h2 className="min-w-0 break-words text-[20px] font-[600] [overflow-wrap:anywhere]" style={{ color: 'var(--text)' }}>{projectDetail?.name}</h2>
           <div className="ml-auto flex flex-wrap gap-2">
-            <Button variant="outline" disabled={!detailData} onClick={() => { setSbomError(''); setExportOpen(true) }}><Icon name="download" size="sm" />{t('sbom.export')}</Button>
+            <Button variant="outline" disabled={!detailData || !capabilities} onClick={() => { setSbomError(''); setSbomProRequired(false); setExportOpen(true) }}><Icon name="download" size="sm" />{t('sbom.export')}{capabilities && !canExportSbom && <Badge variant="pro">Pro</Badge>}</Button>
             {canWrite && <>
               <Button variant="outline" disabled={!detailData} onClick={() => { editMutation.reset(); setEditForm({ name: projectDetail?.name ?? '', description: projectDetail?.description ?? '' }) }}>{t('projects.editTitle')}</Button>
               <Button variant="outline" disabled={!detailData} onClick={() => { rotateMutation.reset(); setRotateOpen(true) }}>{t('projects.regenerateToken')}</Button>
@@ -460,6 +471,12 @@ export default function Projects() {
           <DialogContent className="sm:max-w-[640px]" closeDisabled={sbomLoading}>
           <DialogTitle>{t('sbom.export')}</DialogTitle>
           <p className="min-w-0 break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">{projectDetail?.name}</p>
+          {!canExportSbom || sbomProRequired ? (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">{t('projects.sbomProRequired')}</p>
+              {proAccessAction}
+            </div>
+          ) : <>
           {complianceQuery.isPending && <p role="status">{t('loading')}</p>}
           {complianceQuery.isError && <QueryErrorState message={t('sbom.profileUnavailable')} onRetry={() => { void complianceQuery.refetch() }} />}
           {complianceQuery.isRefetchError && compliance && <StaleDataNotice onRefresh={() => { void complianceQuery.refetch() }} />}
@@ -516,6 +533,7 @@ export default function Projects() {
             )}
             {sbomError && <Alert variant={"destructive"}><AlertDescription>{sbomError}</AlertDescription></Alert>}
           </div>
+          </>}
           </DialogContent>
         </Dialog>
 
@@ -626,16 +644,19 @@ export default function Projects() {
     <AdminPage
       description={t('projects.subtitle')}
       actions={canWrite ? (
-        <Button onClick={() => { createMutation.reset(); setCreateOpen(true) }}>
+        canCreate ? <Button onClick={() => { createMutation.reset(); setCreateOpen(true) }}>
           <Icon name="add" size="sm" />{t('projects.create')}
-        </Button>
+        </Button> : capabilities ? proAccessAction : <Button disabled><Icon name="add" size="sm" />{t('projects.create')}</Button>
       ) : undefined}
     >
     <div className="space-y-6">
-      {data && query.isRefetchError && (
-        <StaleDataNotice refreshing={query.isFetching} onRefresh={() => query.refetch()} />
+      {capabilitiesNotice}
+      {data && capabilities && capabilities.project_limit !== null && (
+        <div className="space-y-1 text-sm text-muted-foreground" data-project-capacity>
+          <p>{t('projects.freeAllowance', { limit: capabilities.project_limit, used: data.data.total })}</p>
+          {!canCreate && <p>{t('projects.moreRequiresPro')}</p>}
+        </div>
       )}
-
       {projects.length === 0 ? (
         <Empty style={{ minHeight: 240 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"folder_managed"} size="sm" /></EmptyMedia><EmptyTitle>{t('projects.noProjects')}</EmptyTitle>{t('projects.noProjectsHint') && <EmptyDescription>{t('projects.noProjectsHint')}</EmptyDescription>}</EmptyHeader></Empty>
       ) : (
@@ -670,10 +691,12 @@ export default function Projects() {
                   placeholder={t('projects.descPlaceholder')}
                 />
               </Field>
-              {createMutation.isError && <Alert variant={"destructive"}><AlertDescription>{getApiError(createMutation.error).message}</AlertDescription></Alert>}
+              {createProRequired || (capabilities && !canCreate) ? (
+                <Alert role="alert"><AlertDescription className="space-y-3"><p>{t('projects.moreRequiresPro')}</p>{proAccessAction}</AlertDescription></Alert>
+              ) : createMutation.isError && <Alert variant="destructive"><AlertDescription>{getApiError(createMutation.error).message}</AlertDescription></Alert>}
               <div className="flex justify-end gap-3 pt-2">
                 <Button type="button" variant="outline" disabled={createMutation.isPending} onClick={() => setCreateOpen(false)}>{t('cancel')}</Button>
-                <Button type="submit" aria-busy={createMutation.isPending || undefined} disabled={createMutation.isPending || !canWrite}>
+                <Button type="submit" aria-busy={createMutation.isPending || undefined} disabled={createMutation.isPending || !canWrite || !canCreate || createProRequired}>
                   {createMutation.isPending ? t('saving') : t('save')}
                 </Button>
               </div>

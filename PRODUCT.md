@@ -139,9 +139,13 @@ ADR-0004.
   are not part of the current product.
 - The entitlement boundary is decided: governance primitives (minimum release
   age, known-malicious blocklist, OSV scanning, package rules, quarantine,
-  audit logs, and webhooks) are open source; multi-project workspaces and the
-  runtime per-project SBOM export — including its CRA mode and technical-file
-  preset — are Pro features with a 14-day trial.
+  audit logs, and webhooks) are open source. Without a license, an operator can
+  create and use one project, including its connection URL, package inventory,
+  and project token. Creating additional projects and the runtime per-project
+  SBOM export — including its CRA mode and technical-file preset — require Pro
+  or the 14-day trial. When entitlement expires, existing projects and their
+  dependency traffic remain available; further creation is limited until the
+  instance has no projects or Pro is restored.
   Pricing, packaging, and support terms remain undecided. Do not present
   `$99 lifetime Pro` or Enterprise contract licensing as durable product
   truth.

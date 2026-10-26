@@ -5,7 +5,7 @@ import type {
   AdminUpstreamListResponse,
   AuditLogListResponse,
 } from '../src/lib/adminApi.types'
-import { expect, mockAdminApi, test } from './fixtures/admin-api'
+import { expect, mockAdminApi, test, proProjectCapabilities } from './fixtures/admin-api'
 
 const populated = {
   'GET /api/v1/admin/logs': {
@@ -247,6 +247,7 @@ test('project and security data use accessible mobile actions and named local ta
   await page.setViewportSize({ width: 390, height: 844 })
   await mockAdminApi(page, {
     'GET /api/v1/admin/projects': {
+      capabilities: proProjectCapabilities,
       items: [{ id: 7, name: 'api', slug: 'api', description: 'API', package_count: 3, last_activity_at: '2026-07-10T00:00:00Z', created_at: '2026-07-10T00:00:00Z', updated_at: '2026-07-10T00:00:00Z' }],
       total: 1,
     },

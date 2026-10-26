@@ -38,7 +38,7 @@ const routeDefinitions = [
   { id: 'security', path: 'security', titleKey: 'nav.security', icon: 'security', navGroup: 'security' },
   { id: 'quarantine', path: 'quarantine', titleKey: 'nav.quarantine', icon: 'shield_lock', navGroup: 'security' },
   { id: 'rules', path: 'rules', titleKey: 'nav.rules', icon: 'shield', navGroup: 'security' },
-  { id: 'projects', path: 'projects', titleKey: 'nav.projects', icon: 'folder_managed', navGroup: 'projects', pro: true },
+  { id: 'projects', path: 'projects', titleKey: 'nav.projects', icon: 'folder_managed', navGroup: 'projects' },
   { id: 'users', path: 'users', titleKey: 'nav.userManage', icon: 'group', navGroup: 'instance' },
   { id: 'authentication', path: 'authentication', titleKey: 'nav.authentication', icon: 'security', navGroup: 'instance' },
   { id: 'settings', path: 'settings', titleKey: 'nav.settings', icon: 'settings', navGroup: 'instance' },
