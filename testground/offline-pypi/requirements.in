@@ -1,0 +1,5 @@
+# Roots: transitive dependencies, an extra, a native wheel and environment markers.
+requests[socks]==2.32.3
+MarkupSafe==3.0.2
+typing-extensions==4.12.2 ; python_version < "3.12"
+colorama==0.4.6 ; sys_platform == "win32"

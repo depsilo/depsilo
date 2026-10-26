@@ -39,6 +39,7 @@ type Meter struct {
 	now       func() time.Time
 	startedAt time.Time
 	slots     [WindowSeconds]slot
+	totals    Totals
 }
 
 // NewMeter returns a meter anchored at the current instant.
@@ -86,8 +87,10 @@ func (m *Meter) ObserveServiceRequest(bytesSent int64) {
 	m.mu.Lock()
 	s := m.slotLocked(m.now())
 	s.serviceRequests++
+	m.totals.ServiceRequests++
 	if bytesSent > 0 {
 		s.serviceBytes += bytesSent
+		m.totals.ServiceBytes += bytesSent
 	}
 	m.mu.Unlock()
 }

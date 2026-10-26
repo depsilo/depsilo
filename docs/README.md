@@ -14,6 +14,7 @@ Use the guides below for the task at hand.
 | Connect ccache or sccache | [Compiler cache](compile-cache.md) |
 | Connect coding agents or MCP clients | [AI coding agents](deployment.md#ai-coding-agents) |
 | Share cached downloads between instances | [Cascade](cascade.md) |
+| Verify cache reuse and cascade traffic | [Controlled benchmark](../testground/README.md#controlled-cache-and-cascade-evidence) |
 | Evaluate an isolated installation | [Trial guide](trial-guide.md) |
 
 ## Operate and secure
@@ -36,6 +37,7 @@ Use the guides below for the task at hand.
 | Understand runtime ownership | [Architecture](development/architecture.md) |
 | Find the files for a change | [Change map](development/change-map.md) |
 | Choose the right checks | [Testing](development/testing.md) |
+| Implement planned Python offline delivery | [First milestone specification](specs/2026-10-26-python-offline-distribution.md) · [Acceptance fixture](../testground/offline-pypi/README.md) |
 | Work on shared UI components | [Frontend component ownership](development/frontend-components.md) |
 | Contribute a change | [Contributing](../CONTRIBUTING.md) |
 
@@ -47,6 +49,9 @@ Coding agents should begin at [AGENTS.md](../AGENTS.md). Product scope lives in
 
 - [Architecture decisions](adr/) record accepted choices. Read the decisions
   relevant to the module being changed.
+- [Cache and distribution direction](adr/0008-dependency-cache-and-distribution.md)
+  records the current priorities: bandwidth reuse, cascade, and planned offline
+  dependency delivery, with current runtime and entitlement boundaries preserved.
 - [Specs](specs/) and [research](research/) are dated evidence, not current
   implementation instructions. The running code and current guides may have
   evolved since they were written.

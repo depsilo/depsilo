@@ -13,6 +13,14 @@ statements.
 - Competitive record:
   [`docs/research/2026-06-30-competitive-landscape.md`](../research/2026-06-30-competitive-landscape.md)
 
+> **2026-10-26 amendment:** [ADR-0008](0008-dependency-cache-and-distribution.md)
+> replaces Decision 1's enforcement-first criterion and Decision 6's build order
+> with shared caching, cascade reuse, and planned offline delivery. Decision 5's
+> security and release-evidence requirements remain; snapshot export is not
+> offline artifact delivery. Current entitlement includes one free project as
+> recorded in [PRODUCT.md](../../PRODUCT.md); ADR-0007 separately amends the SSO
+> non-goal. The original decision text below is retained for its historical scope.
+
 ## Context
 
 Three unresolved questions were taxing every roadmap decision:

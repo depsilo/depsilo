@@ -1,27 +1,31 @@
 # Depsilo
 
-A lightweight, single-binary supply-chain enforcement layer for package installs.
-It exposes 14 standard ecosystem routes plus the separate Docker OCI route (15
-install surfaces total), caches artifacts locally, and refuses to serve packages
-that violate operator policy.
+A self-hosted dependency cache and distribution service for reuse across
+machines and networks. Current capabilities and planned work are recorded in
+[PRODUCT.md](PRODUCT.md); this glossary defines their vocabulary.
 
 ## Language
 
 ### Customer & user roles
 
 **Operator**:
-The hands-on person who installs and runs Depsilo. Typically an individual developer, technical founder, or DevOps/platform engineer in a small team. The product's UX is optimised for this persona without assuming dedicated artifact-infrastructure staff.
+The hands-on person who deploys and operates Depsilo, including its cache,
+Upstreams, delivery workflows, and policy. Typically a Homelab operator,
+technical founder, or DevOps/platform engineer without dedicated artifact staff.
 _Avoid_: User (ambiguous with End User), Admin (technical role, not persona), 小李
 
 **End User**:
-Anyone whose `pip install` / `npm install` / `mvn` resolves through Depsilo. Never touches the UI. Cares only that the proxy is fast and doesn't break their build.
+A developer or CI worker whose dependencies are delivered through Depsilo.
+They need dependable installs and may use connection guidance without managing
+the service.
 _Avoid_: Developer (too broad), Consumer
 
 **Buyer**:
 When a team, rather than an individual, adopts Depsilo, the person who signs off
 on adoption. This may be a technical founder, engineering lead, or
 infrastructure/security owner. Their motivations differ from the Operator's
-(risk, cost control, auditability), even when one person holds both roles.
+(bandwidth cost, build continuity, transfer effort, and auditability), even when
+one person holds both roles.
 _Avoid_: Client, customer (ambiguous with org-level "customer")
 
 ### Operator access
@@ -52,29 +56,16 @@ or its identity provider. Adding or removing a Login Identity does not transfer
 that authority.
 _Avoid_: Login method, group membership, project role
 
-### Distribution posture
-
-User-facing documentation should describe Depsilo as MIT-licensed,
-self-hosted, and open-source. Do not invent product tiers; when a current
-entitlement boundary matters, state it precisely. The
-current product story is the enforcement layer itself: cache, upstream
-management, audit logs, package allow/deny rules, security intelligence,
-release SBOMs, webhook alerts, Prometheus metrics, and supply-chain policy
-primitives. Use `CHANGELOG.md` and the current code for release status rather
-than copying a version snapshot into this glossary.
-
 ### Product surface
 
 **Ecosystem**:
-A package manager protocol that Depsilo proxies — `pypi`, `apt`, `npm`, `go`,
-`cargo`, `maven`, `rubygems`, `composer`, `nuget`, `conda`, `cran`, `helm`,
-`alpine`, `docker`, and `huggingface`. Product copy groups these as 14 standard
-path-prefixed ecosystems plus Docker's separate OCI `/v2/` route: 15 install
-surfaces in total.
+A package-manager protocol whose metadata and artifacts Depsilo serves, such
+as PyPI, npm, or Maven.
 _Avoid_: Registry (overloaded with "Docker Registry"), Repo (overloaded with `apt` repo concept), Adapter (that's the code, not the product surface)
 
 **Adapter**:
-The Go implementation under `internal/adapter/<name>/` that translates an Ecosystem's protocol into Depsilo's unified cache flow. An Operator never sees this word; an Adapter is purely an internal artefact.
+The internal translator between an Ecosystem's protocol and Depsilo's shared
+dependency-delivery behavior. Operators work with Ecosystems rather than Adapters.
 _Avoid_: Driver, Plugin (we don't have a plugin system)
 
 **Upstream**:
@@ -82,14 +73,49 @@ A remote mirror Depsilo proxies for an Ecosystem (e.g. `tuna.tsinghua` for PyPI)
 _Avoid_: Mirror (Operator-facing the UI uses 上游源), Origin, Source
 
 **Cascade Peer**:
-A parent Depsilo node that a local Upstream may egress through (`via`). The peer fetches the raw upstream exchange, serves it from its own cache when fresh, and never sees client-facing protocol rewrites; the child keeps its own policy, provenance, and cache keys. Peers are configured in `[cascade]`; the per-upstream binding is Admin state.
+A parent Depsilo node that another node can use to reach an Upstream and reuse
+cached responses. Each node retains its own cache and policy authority.
 _Avoid_: Upstream (a peer is a Depsilo node, not a mirror), Proxy (that is the per-upstream HTTP proxy), Cluster (no shared control plane)
 
 **Portal**:
-The public-facing web UI at `/` — anonymous, shows Quick Start and live service status. Targets first-time Operators in the 10-minute deploy window.
+The anonymous web surface for client connection guidance and service status.
 
 **Admin**:
-The authenticated web UI at `/admin` — for Operators after deployment. Hosts cache management, upstream config, project/security/audit views.
+The authenticated web surface where Operators manage the service, inspect
+dependency activity, and make policy decisions.
+
+### Dependency distribution
+
+**Dependency Set**:
+The artifacts and metadata required for a declared workload and target
+environment. Its scope includes relevant dependency versions and platform
+requirements.
+_Avoid_: Cache Snapshot, SBOM, entire cache
+
+**Transfer Bundle**:
+A verifiable delivery unit containing artifacts, metadata, and a manifest for
+moving a Dependency Set, or an increment to one, between nodes.
+_Avoid_: Instance Backup, Cache Snapshot, SBOM
+
+**Baseline Inventory**:
+The inventory of content a target node is confirmed to hold for a transfer.
+It provides the basis for identifying content missing from that target.
+_Avoid_: Latest export, source cache, file modification time
+
+**Incremental Transfer**:
+Delivery of the content needed beyond a target's Baseline Inventory, together
+with the metadata needed for the resulting Dependency Set.
+_Avoid_: Binary patch, complete cache copy, Cascade Peer
+
+**Cache Snapshot**:
+A named manifest of observed artifact identities and hashes used to select
+approved versions. It does not contain the artifact bytes needed for transfer.
+_Avoid_: Transfer Bundle, Instance Backup, complete Dependency Set
+
+**Isolated Network**:
+A target network that cannot reach public Upstreams and receives dependencies
+through an approved offline transfer process.
+_Avoid_: Slow network, temporarily unavailable Upstream, Cascade Peer
 
 ## Relationships
 
@@ -101,19 +127,18 @@ The authenticated web UI at `/admin` — for Operators after deployment. Hosts c
 - An **Operator Account** may have more than one **Login Identity** while retaining
   one **Permission Source**; using an external identity does not elevate a locally
   managed account's permissions.
+- A **Transfer Bundle** carries content for a **Dependency Set**; an
+  **Incremental Transfer** accounts for the target's **Baseline Inventory**.
+- A **Cascade Peer** requires a network path between nodes; transfer into an
+  **Isolated Network** uses an approved offline process.
 
 ## Example dialogue
 
 > **Designer:** "Should the audit log filter live on the Portal?"
 > **Domain expert:** "No — the Portal is anonymous, and audit log review is Operator work. Audit UI lives in Admin because that's where Operators do work."
 
-> **Engineer:** "Can we make OSV scanning optional or hidden?"
-> **Domain expert:** "No — OSV scanning, the rules engine, and the security intelligence dashboard are part of the self-hosted control surface. Governance primitives stay open so the proxy itself is the buyer's compliance instrument."
+> **Engineer:** "Does exporting a Cache Snapshot move the dependencies to another network?"
+> **Domain expert:** "A Cache Snapshot carries a manifest. A Transfer Bundle must also carry the artifacts and metadata needed for the declared Dependency Set."
 
 > **Engineer:** "Does binding a company login make the company directory authoritative for this account?"
 > **Domain expert:** "No. Binding adds a Login Identity. The account's Permission Source is a separate choice, so its local permissions and recovery password remain local."
-
-## Flagged ambiguities
-
-- "User" was used to mean both **Operator** and **End User** — resolved: these are distinct personas with different needs. Code in `internal/db/models.go` uses `User` to mean DB user records (Operators); UI strings should say "Operator" or 运维 in copy that targets the persona.
-- "Customer" was used loosely to mean the org, the Buyer, and the Operator interchangeably — resolved: org-level = "customer org", money person = **Buyer**, hands-on person = **Operator**.

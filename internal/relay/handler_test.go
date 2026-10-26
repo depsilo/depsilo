@@ -5,7 +5,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -14,6 +16,7 @@ import (
 	"depsilo/internal/cache"
 	"depsilo/internal/cascade"
 	"depsilo/internal/db"
+	"depsilo/internal/traffic"
 	"depsilo/internal/upstream"
 )
 
@@ -89,6 +92,9 @@ func relayRequest(t *testing.T, origin *httptest.Server, mutate func(*http.Reque
 }
 
 func TestHandlerCachesOriginResponse(t *testing.T) {
+	meter := traffic.NewMeter()
+	upstream.SetTrafficMeter(meter)
+	t.Cleanup(func() { upstream.SetTrafficMeter(nil) })
 	fixture := newRelayFixture(t, func(writer http.ResponseWriter, _ *http.Request) {
 		writer.Header().Set("ETag", `"v1"`)
 		writer.WriteHeader(http.StatusOK)
@@ -120,6 +126,9 @@ func TestHandlerCachesOriginResponse(t *testing.T) {
 	}
 	if got := fixture.hits.Load(); got != 1 {
 		t.Fatalf("origin hits = %d, want 1", got)
+	}
+	if got := meter.Totals(); got.Direct != (traffic.UpstreamTotals{Exchanges: 1, Bytes: 7}) || got.Peer != (traffic.UpstreamTotals{}) {
+		t.Fatalf("parent traffic must count only the cold fetch: %+v", got)
 	}
 }
 
@@ -192,9 +201,14 @@ func TestHandlerRevalidatesStaleEntry(t *testing.T) {
 }
 
 func TestHandlerBypassesRedirects(t *testing.T) {
+	meter := traffic.NewMeter()
+	upstream.SetTrafficMeter(meter)
+	t.Cleanup(func() { upstream.SetTrafficMeter(nil) })
+	const body = "redirect payload"
 	fixture := newRelayFixture(t, func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Location", "http://127.0.0.1:1/final")
 		writer.WriteHeader(http.StatusFound)
+		_, _ = io.WriteString(writer, body)
 	})
 
 	recorder := httptest.NewRecorder()
@@ -210,6 +224,15 @@ func TestHandlerBypassesRedirects(t *testing.T) {
 	}
 	if got := fixture.hits.Load(); got != 2 {
 		t.Fatalf("origin hits = %d, want 2 (cache attempt + bypass attempt)", got)
+	}
+	if recorder.Body.String() != body {
+		t.Fatalf("redirect body = %q, want %q", recorder.Body.String(), body)
+	}
+	// Both requests genuinely read a redirect body: the cache attempt drains
+	// it and the bypass attempt forwards it. Preserve that cost in totals.
+	want := traffic.UpstreamTotals{Exchanges: 2, Bytes: 2 * int64(len(body)), RedirectExchanges: 2, RedirectBytes: 2 * int64(len(body))}
+	if got := meter.Totals().Direct; got != want {
+		t.Fatalf("redirect traffic = %+v, want %+v", got, want)
 	}
 }
 
@@ -259,6 +282,9 @@ func TestHandlerDoesNotServeStaleBytesAfterAuthoritativeRemoval(t *testing.T) {
 }
 
 func TestHandlerBypassesCacheWithoutTTL(t *testing.T) {
+	meter := traffic.NewMeter()
+	upstream.SetTrafficMeter(meter)
+	t.Cleanup(func() { upstream.SetTrafficMeter(nil) })
 	fixture := newRelayFixture(t, func(writer http.ResponseWriter, _ *http.Request) {
 		writer.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(writer, "payload")
@@ -277,6 +303,70 @@ func TestHandlerBypassesCacheWithoutTTL(t *testing.T) {
 	}
 	if got := fixture.hits.Load(); got != 2 {
 		t.Fatalf("origin hits = %d, want 2", got)
+	}
+	if got := meter.Totals().Direct; got != (traffic.UpstreamTotals{Exchanges: 2, Bytes: 14}) {
+		t.Fatalf("parent bypass traffic = %+v", got)
+	}
+}
+
+func TestHandlerMetersResolvedPeerWithoutCountingProbesOrErrors(t *testing.T) {
+	meter := traffic.NewMeter()
+	upstream.SetTrafficMeter(meter)
+	t.Cleanup(func() { upstream.SetTrafficMeter(nil) })
+	fixture := newRelayFixture(t, func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != cascade.RelayPath {
+			t.Errorf("configured peer received direct request: %s", request.URL.Path)
+		}
+		if strings.HasSuffix(request.Header.Get(cascade.HeaderTarget), "/error") {
+			writer.WriteHeader(http.StatusBadGateway)
+		}
+		_, _ = io.WriteString(writer, "payload")
+	})
+	peerURL, err := url.Parse(fixture.origin.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const source = "https://packages.example/simple"
+	record := db.UpstreamRecord{
+		AdapterType: "pypi", Name: "mirror", URL: source, Via: "grandparent",
+		Priority: 1, ProbeMode: "passive", ProbeInterval: "30m", Healthy: true,
+	}
+	if err := fixture.handler.DB.Create(&record).Error; err != nil {
+		t.Fatal(err)
+	}
+	registry, err := upstream.NewRegistryWithOptions(fixture.handler.DB, []string{"pypi"}, upstream.PoolOptions{
+		Peers: upstream.NewPeerSet([]upstream.PeerEgress{{
+			Name: "grandparent", URL: peerURL, Token: "shared-token", LocalInstanceID: "parent-node", MaxHops: 4,
+		}}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.handler.ResolveEgress = registry.RelayEgress
+	for _, item := range []struct {
+		method string
+		path   string
+		status int
+	}{
+		{http.MethodGet, "/pkg", http.StatusOK},
+		{http.MethodGet, "/pkg", http.StatusOK}, // Parent cache hit.
+		{http.MethodHead, "/probe", http.StatusOK},
+		{http.MethodGet, "/error", http.StatusBadGateway},
+	} {
+		recorder := httptest.NewRecorder()
+		request := relayRequest(t, fixture.origin, func(request *http.Request) {
+			request.Method = item.method
+			request.Header.Set(cascade.HeaderSource, source)
+			request.Header.Set(cascade.HeaderTarget, source+item.path)
+			request.Header.Set(cascade.HeaderKind, cascade.KindIndex)
+		})
+		fixture.handler.ServeHTTP(recorder, request)
+		if recorder.Code != item.status {
+			t.Fatalf("%s %s: status = %d, want %d", item.method, item.path, recorder.Code, item.status)
+		}
+	}
+	if got := meter.Totals(); got.Peer != (traffic.UpstreamTotals{Exchanges: 1, Bytes: 7}) || got.Direct != (traffic.UpstreamTotals{}) {
+		t.Fatalf("resolved peer traffic = %+v", got)
 	}
 }
 

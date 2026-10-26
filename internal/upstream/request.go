@@ -164,6 +164,7 @@ func (u *Upstream) request(
 		recovery,
 		resp.StatusCode < http.StatusInternalServerError,
 	)
+	MeterResponse(&client, req, resp)
 	return resp, nil
 }
 

@@ -1,0 +1,19 @@
+{
+  "format": "depsilo/offline-pypi-fixture/v1",
+  "platform": "linux/amd64",
+  "python_version": "3.11.15",
+  "pip_version": "24.0",
+  "client_image": "python:3.11-slim@sha256:db3ff2e1800a8581e2c48a27c3995339d47bdf046da21c7627accd3d51053a93",
+  "packages": {
+    "requests": "2.32.3",
+    "charset-normalizer": "3.4.0",
+    "idna": "3.10",
+    "urllib3": "2.2.3",
+    "certifi": "2024.8.30",
+    "PySocks": "1.7.1",
+    "MarkupSafe": "3.0.2",
+    "typing-extensions": "4.12.2"
+  },
+  "excluded_by_marker": ["colorama"],
+  "note": "Historical fixed test inputs, not recommended production dependency versions. Only this Linux/amd64 Python target is qualified by this fixture."
+}

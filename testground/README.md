@@ -135,6 +135,56 @@ SHA-256、每个样本的命令输出和耗时中位数、最小值、最大值�
 执行完成尚不能满足四周计划 T04 的全部测量条件。正式结果还需记录服务端版本、
 隔离与缓存重置步骤、实际命中和上游读取字节；一次 smoke 不输出提速比例。
 
+### Controlled cache and cascade evidence
+
+`scripts/benchmark-cascade.py` provides a separate, controlled npm/PyPI check.
+It starts four disposable nodes (single, parent, child A, child B), with fresh
+container filesystems for every round. It never accepts an existing service
+address, mounts a host database, or publishes a service port.
+Proxied clients and children use an internal Docker network; only the single
+node and parent also join an egress network. The direct baseline client uses
+that egress network. A client following a leaked public artifact URL cannot
+silently bypass the proxy and make a cache-reuse sample pass.
+
+Build a candidate runtime image, then run:
+
+```bash
+docker build --platform linux/amd64 -t depsilo-benchmark:local .
+python3 scripts/benchmark-cascade.py --server-image depsilo-benchmark:local \
+  --ecosystem npm --runs 5 --out /tmp/depsilo-npm-evidence
+python3 scripts/benchmark-cascade.py --server-image depsilo-benchmark:local \
+  --ecosystem pypi --runs 5 --out /tmp/depsilo-pypi-evidence
+```
+
+The output directory must not exist. Client images are pinned to repository
+digests, resolved to immutable image references, and recorded with the server
+image/version and input hashes. Each install uses an empty client cache and
+installation directory. Fixtures contain historical pinned dependencies for
+measurement, not production version recommendations. Use a native Linux amd64
+host for performance evidence; emulation is suitable for functional checks only.
+
+Each round checks direct installation, a cold single node, the same warm node,
+the first cold cascade child, and a second independent cold child. The warm
+single node must deliver bytes without an upstream exchange. The second child
+must receive bytes through the parent, while neither it nor the parent opens
+a new direct content fetch. PyPI may still perform uncached redirects to locate
+an already cached wheel; these exchanges and bytes remain in the totals and
+are reported separately as redirect subsets. A 304 revalidation is not a
+redirect. Missing metrics, a counter reset, an installation error,
+or failed cache evidence make the run fail and retain its diagnostic report.
+
+`report.json` contains per-node direct/peer response-body byte and exchange
+deltas, client delivery bytes, installation status, and timing. Raw metric
+snapshots and server/client logs remain alongside it; disposable containers and
+the network are removed. Direct-client upstream bytes are uninstrumented and
+reported as null. Wall time includes container startup and installation, not
+image pulls, server startup, or cleanup. Public registry/network conditions can
+vary; the tool does not calculate a guaranteed speedup or ISP-billed savings.
+Release-age and malware blocklist checks are disabled in these fixtures;
+provenance and tamper checks remain enabled. Read the [metric scope](../docs/cascade.md#measure-reuse-across-nodes)
+before interpreting results. The local integration suite separately verifies
+concurrent fills and explicit fallback behavior without public-network variance.
+
 ### PyTorch 与 vLLM 固定场景
 
 目前准备了三个历史发布版的固定安装输入，不代表推荐生产使用这些版本：

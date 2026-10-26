@@ -16,8 +16,10 @@ guides only when the current task needs them; do not preload historical plans.
 
 ## Current project shape
 
-- Depsilo is a self-hosted, single-instance dependency proxy, cache, and
-  supply-chain enforcement service for individuals and small teams.
+- Depsilo is a self-hosted dependency cache and distribution service for company
+  networks and Homelabs. Shared caching and cascade are implemented; offline
+  artifact transfer and incremental delivery are planned. For product scope or
+  roadmap work, read [ADR-0008](docs/adr/0008-dependency-cache-and-distribution.md).
 - The supported deployment authority is SQLite plus local or S3 object
   storage. Shared-database multi-instance/HA is not shipped.
 - The anonymous Portal handles connection guidance and status. Authenticated
@@ -26,9 +28,9 @@ guides only when the current task needs them; do not preload historical plans.
   timestamp provenance is bound; the shipped state and each binding's
   strength live in
   [docs/specs/2026-10-06-min-release-age-provenance.md](docs/specs/2026-10-06-min-release-age-provenance.md).
-- General-purpose artifact repository support is a future direction, not a
-  current capability. Architectural work in that direction requires an ADR
-  update because ADR-0004 records an older non-goal.
+- General-purpose hosted repositories remain outside pre-1.0 scope. Planned
+  offline dependency transfer does not add private artifact publishing; that
+  expansion requires a separate ADR.
 
 ## Sources of truth
 

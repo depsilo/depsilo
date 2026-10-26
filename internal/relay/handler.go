@@ -27,6 +27,7 @@ import (
 	"depsilo/internal/cache"
 	"depsilo/internal/cascade"
 	"depsilo/internal/db"
+	"depsilo/internal/upstream"
 )
 
 const (
@@ -274,7 +275,8 @@ func (h *Handler) serveUncached(writer http.ResponseWriter, request *http.Reques
 		writeRelayError(writer, http.StatusBadRequest, "INVALID_RELAY_REQUEST", "relay request could not be built")
 		return
 	}
-	response, err := h.clientFor(exchange).Do(originRequest)
+	client := h.clientFor(exchange)
+	response, err := client.Do(originRequest)
 	if err != nil {
 		zap.L().Warn("relay upstream fetch failed",
 			zap.String("target_host", exchange.target.Hostname()),
@@ -283,6 +285,7 @@ func (h *Handler) serveUncached(writer http.ResponseWriter, request *http.Reques
 		writeRelayError(writer, http.StatusBadGateway, "RELAY_UPSTREAM_UNAVAILABLE", "relay could not reach the origin")
 		return
 	}
+	upstream.MeterResponse(client, originRequest, response)
 	defer response.Body.Close()
 
 	copyRelayResponseHeaders(writer.Header(), response)
@@ -319,10 +322,12 @@ func (h *Handler) fetch(
 			}
 		}
 	}
-	response, err := h.clientFor(exchange).Do(originRequest)
+	client := h.clientFor(exchange)
+	response, err := client.Do(originRequest)
 	if err != nil {
 		return nil, "", 0, "", err
 	}
+	upstream.MeterResponse(client, originRequest, response)
 	switch {
 	case response.StatusCode == http.StatusNotModified:
 		_ = response.Body.Close()

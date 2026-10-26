@@ -11,6 +11,11 @@ The design and its boundaries are recorded in
 [ADR-0006](adr/0006-cascade-cache-peering.md). This page is the operator
 guide.
 
+Cascade requires a network path to a parent. Offline artifact transfer is
+planned separately in [ADR-0008](adr/0008-dependency-cache-and-distribution.md).
+The direct-upstream fallback below applies only where public internet access
+is permitted; it is not a way to connect an isolated network.
+
 ## Topology
 
 ```text
@@ -131,7 +136,9 @@ with `508`.
 - **Observability.** Relayed entries appear in the cache tables with adapter
   type `relay` (`relay-v1/index/...`, `relay-v1/artifact/...`). The
   `X-Depsilo-Relay-Cache` response header reports `HIT`, `MISS`, or
-  `BYPASS`; `X-Depsilo-Instance` identifies the relaying node.
+  `BYPASS`; `X-Depsilo-Instance` identifies the relaying node. Prometheus
+  counters distinguish direct and peer transport; see the measurement scope
+  below.
 - **Credentials.** Upstream credentials are stripped before crossing a peer.
   If a peer must forward them, set `forward_credentials = true` on that peer
   and treat the peer as fully trusted; it can read every forwarded credential.
@@ -159,3 +166,45 @@ with `508`.
    `X-Depsilo-Relay-Cache: HIT`.
 4. Misconfigure a loop (bind the parent's upstream back to the child) and
    confirm the request fails with `508` instead of recursing.
+
+## Measure reuse across nodes
+
+`/metrics` exposes process-lifetime counters:
+
+| Metric | Meaning |
+| --- | --- |
+| `depsilo_upstream_response_bytes_total{route="direct"}` | Upstream response-body bytes read through a direct transport |
+| `depsilo_upstream_response_bytes_total{route="peer"}` | Response-body bytes received through a cascade peer |
+| `depsilo_upstream_exchanges_total{route="direct"\|"peer"}` | Eligible upstream GET responses on each transport |
+| `depsilo_upstream_redirect_response_bytes_total{route="direct"\|"peer"}` | Subset of upstream bytes from observed 3xx redirects, excluding 304 |
+| `depsilo_upstream_redirect_exchanges_total{route="direct"\|"peer"}` | Subset of exchanges that returned an observed redirect |
+| `depsilo_service_response_bytes_total` | Bytes reported delivered to dependency clients; excludes relay responses |
+
+Upstream counters cover GET responses with status below 400 and count actual
+body reads, including partial transfers. They exclude HEAD/health probes,
+error responses, automatically followed intermediate redirects, headers, and
+TCP/TLS overhead. Reads can be after HTTP transport decompression, so these
+are not encoded wire-byte measurements. They reset on process restart. A cache hit adds no upstream
+exchange or bytes. The parent's relay fetch is included, even when no ordinary
+package request reaches that parent.
+
+A fresh PyPI child may still look up an upstream redirect before reaching a
+wheel already held by its parent. Relay deliberately does not cache Location
+responses; its cache-fetch and pass-through paths can each contact that URL.
+Those real exchanges remain counted. Redirect counters are subsets of the
+totals, not additional bytes to add to them. Reusing artifact content therefore
+does not guarantee zero origin requests or disconnected operation.
+
+`direct` describes the configured transport, not the public internet: it can
+also be a private mirror or a configured HTTP proxy. For a public-bandwidth
+claim, identify the internet edge in the actual topology and measure there.
+Do not add together each node's cache-savings estimate. Existing Dashboard
+`origin` statistics remain the aggregate of both routes; historical rows do
+not gain a retroactive direct/peer split.
+
+For repeatable native npm/PyPI verification, use the
+[controlled benchmark](../testground/README.md#controlled-cache-and-cascade-evidence).
+It creates fresh disposable nodes, proves that a second cold child reuses the
+parent, and retains per-node counters and install logs. No existing instance
+or cache is reset. This verifies online cache reuse; it does not establish
+offline dependency completeness.

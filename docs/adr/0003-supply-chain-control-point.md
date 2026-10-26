@@ -4,6 +4,12 @@
 **Date:** 2026-06-28
 **Companion document:** [docs/DIRECTION.md](../DIRECTION.md)
 
+> **2026-10-26 amendment:** [ADR-0008](0008-dependency-cache-and-distribution.md)
+> supersedes this document's supply-chain-first positioning and roadmap
+> priorities with dependency caching and distribution across networks. Its
+> current scope and the decisions retained from later ADRs are stated there.
+> The original reasoning below is retained as historical context.
+
 ## Context
 
 Depsilo today reads as *"a fast, lightweight, self-hosted multi-ecosystem package

@@ -420,6 +420,8 @@ verify-scripts:                 # 内部：安装、开发与发布脚本回归�
 	bash scripts/test-prepare-v090-compose-upgrade.sh
 	bash scripts/test-release-workflow.sh
 	bash scripts/test-benchmark-install.sh
+	python3 scripts/test-benchmark-cascade.py
+	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s testground/offline-pypi -p 'test_*.py'
 
 verify-installer: verify-scripts # 兼容别名
 

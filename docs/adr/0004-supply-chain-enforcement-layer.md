@@ -11,6 +11,12 @@ boundary.
 - Research: [`docs/research/2026-06-30-competitive-landscape.md`](../research/2026-06-30-competitive-landscape.md)
 - North star: [`docs/DIRECTION.md`](../DIRECTION.md)
 
+> **2026-10-26 amendment:** [ADR-0008](0008-dependency-cache-and-distribution.md)
+> supersedes this document's enforcement-first positioning and exclusive
+> request-path roadmap criterion. The general-purpose-repository non-goal
+> remains, as scoped by ADR-0005; ADR-0007 separately amends the SSO non-goal.
+> The original reasoning below is retained as historical context.
+
 ## Context
 
 ADR-0003 (2 days ago) repositioned depsilo from "fast multi-eco cache"

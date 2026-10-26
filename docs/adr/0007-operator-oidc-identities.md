@@ -3,6 +3,10 @@
 **Status:** accepted
 **Date:** 2026-10-22
 
+**Subsequent product direction:** [ADR-0008](0008-dependency-cache-and-distribution.md)
+changes the product positioning retained below at the time of this decision.
+The identity, permission, and recovery decisions in this ADR remain in force.
+
 Operators asked to use an existing identity system such as Casdoor and to bind
 that login to an existing local account. Depsilo will support a narrow OIDC
 Admin integration with explicit account linking and the existing two roles,

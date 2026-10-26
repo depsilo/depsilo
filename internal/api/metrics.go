@@ -393,6 +393,7 @@ func init() {
 		M.CompileCacheEntries,
 		M.CompileCacheEvictions,
 		M.policyCollector,
+		newTrafficMetricsCollector(M),
 	)
 }
 

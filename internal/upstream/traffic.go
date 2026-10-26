@@ -3,6 +3,7 @@ package upstream
 import (
 	"context"
 	"io"
+	"net/http"
 	"sync/atomic"
 
 	"depsilo/internal/traffic"
@@ -15,6 +16,14 @@ import (
 type TrafficMeter interface {
 	ObserveOriginExchange()
 	ObserveOriginBytes(n int64)
+}
+
+// routedTrafficMeter adds transport attribution without requiring legacy
+// origin-only observers to change. Historical origin remains an aggregate of
+// direct and cascade fetches, while these counters distinguish the two paths.
+type routedTrafficMeter interface {
+	ObserveUpstreamExchange(traffic.Route, bool)
+	ObserveUpstreamBytes(traffic.Route, int64, bool)
 }
 
 var trafficMeter atomic.Pointer[TrafficMeter]
@@ -41,8 +50,11 @@ func currentTrafficMeter() TrafficMeter {
 // or abandoned transfer is not reported as a full download.
 type originBody struct {
 	io.ReadCloser
-	meter TrafficMeter
-	attr  *traffic.Attribution
+	meter    TrafficMeter
+	routed   routedTrafficMeter
+	route    traffic.Route
+	redirect bool
+	attr     *traffic.Attribution
 }
 
 func (b *originBody) Read(p []byte) (int, error) {
@@ -50,6 +62,9 @@ func (b *originBody) Read(p []byte) (int, error) {
 	if n > 0 {
 		if b.meter != nil {
 			b.meter.ObserveOriginBytes(int64(n))
+		}
+		if b.routed != nil {
+			b.routed.ObserveUpstreamBytes(b.route, int64(n), b.redirect)
 		}
 		b.attr.AddOriginBytes(int64(n))
 	}
@@ -60,7 +75,7 @@ func (b *originBody) Read(p []byte) (int, error) {
 // It only wraps successful (<400) responses: error responses and health probes
 // are not origin traffic. The per-request attribution is optional and lets the
 // access-log row carry the same real totals for later range aggregation.
-func wrapOriginBody(ctx context.Context, body io.ReadCloser) io.ReadCloser {
+func wrapOriginBody(ctx context.Context, body io.ReadCloser, route traffic.Route, redirect bool) io.ReadCloser {
 	if body == nil {
 		return body
 	}
@@ -72,6 +87,29 @@ func wrapOriginBody(ctx context.Context, body io.ReadCloser) io.ReadCloser {
 	if meter != nil {
 		meter.ObserveOriginExchange()
 	}
+	routed, _ := meter.(routedTrafficMeter)
+	if routed != nil {
+		routed.ObserveUpstreamExchange(route, redirect)
+	}
 	attr.AddOriginExchange()
-	return &originBody{ReadCloser: body, meter: meter, attr: attr}
+	return &originBody{ReadCloser: body, meter: meter, routed: routed, route: route, redirect: redirect, attr: attr}
+}
+
+// MeterResponse instruments an eligible GET response at the upstream read
+// seam. Relay uses the same seam as ordinary fetches because it calls a
+// resolved HTTP client directly. HEAD probes and HTTP errors remain excluded.
+// A peer is identified by its configured transport, never by response headers
+// or a hostname guess. The caller retains ownership of the response body.
+func MeterResponse(client *http.Client, request *http.Request, response *http.Response) {
+	if request == nil || request.Method != http.MethodGet || response == nil || response.StatusCode >= 400 {
+		return
+	}
+	route := traffic.RouteDirect
+	if client != nil {
+		if _, peer := client.Transport.(*peerTransport); peer {
+			route = traffic.RoutePeer
+		}
+	}
+	redirect := response.StatusCode >= 300 && response.StatusCode != http.StatusNotModified
+	response.Body = wrapOriginBody(request.Context(), response.Body, route, redirect)
 }

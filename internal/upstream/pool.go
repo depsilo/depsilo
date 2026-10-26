@@ -442,8 +442,9 @@ func (u *Upstream) doWithHeaders(ctx context.Context, reqURL string, report bool
 		return nil, fmt.Errorf("upstream %s returned %d for %s", u.Name, resp.StatusCode, safeURLOrigin(reqURL))
 	}
 
+	MeterResponse(&client, req, resp)
 	return &FetchResult{
-		Body:            wrapOriginBody(ctx, resp.Body),
+		Body:            resp.Body,
 		ContentType:     resp.Header.Get("Content-Type"),
 		Size:            resp.ContentLength,
 		StatusCode:      resp.StatusCode,
@@ -503,8 +504,9 @@ func (u *Upstream) FetchWithHeaders(ctx context.Context, path string, headers ma
 		return nil, fmt.Errorf("upstream %s returned %d for %s", u.Name, resp.StatusCode, safeURLOrigin(reqURL))
 	}
 
+	MeterResponse(&client, req, resp)
 	return &FetchResult{
-		Body:            wrapOriginBody(ctx, resp.Body),
+		Body:            resp.Body,
 		ContentType:     resp.Header.Get("Content-Type"),
 		Size:            resp.ContentLength,
 		StatusCode:      resp.StatusCode,

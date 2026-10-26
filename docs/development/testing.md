@@ -84,6 +84,14 @@ weekly run keeps the smaller all-package-client matrix.
   `make test-clean` before retrying, otherwise the next attempt can talk to
   the stale server and report misleading client errors.
 
+The [controlled npm/PyPI benchmark](../../testground/README.md#controlled-cache-and-cascade-evidence)
+owns disposable nodes and verifies direct/peer traffic with native clients;
+it does not reset existing services. Its script contracts run in `verify-scripts`.
+The [Python offline acceptance fixture](../../testground/offline-pypi/README.md)
+also has offline guard tests in that gate. Its disconnected native install
+requires a separately prepared isolated target and is not part of `make verify`;
+artifact transfer/activation remain planned.
+
 For changes to local hot reload, run the focused lifecycle and route contracts
 before the aggregate script gate:
 
