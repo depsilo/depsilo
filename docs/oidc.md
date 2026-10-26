@@ -1,7 +1,8 @@
 # OIDC login and account binding
 
 Depsilo can use multiple named OIDC authentication sources for Admin login.
-Sources are added by protocol; OIDC is currently supported. Casdoor is one tested
+Sources are added by protocol. This guide covers OIDC; directory authentication
+is described in the [LDAP / LDAPS guide](ldap.md). Casdoor is one tested OIDC
 provider, not a default source or a required identity system.
 The integration keeps the existing `admin` and `readonly` roles. It is optional
 and disabled by default; package clients and the anonymous Portal do not need

@@ -3,394 +3,130 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/brand/logo-stacked-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/brand/logo-stacked-light.svg">
-  <img src="docs/brand/logo-stacked-light.svg" alt="Depsilo" width="200">
+  <img src="docs/brand/logo-stacked-light.svg" alt="Depsilo" width="180">
 </picture>
 
-**Self-hosted dependency proxy, cache, and supply-chain enforcement for
-individuals and small teams.**
+**A self-hosted dependency cache for homelabs and small teams.**
 
-Route 14 package ecosystems and Docker OCI through one service. Cache repeated
-downloads, manage Upstreams, inspect dependency traffic, and enforce policy on
-the package-install request path.
+Reuse package downloads, reduce upstream traffic, and apply supply-chain policies
+through one service. Keep using your existing package managers.
 
 [![Release](https://img.shields.io/github/v/release/depsilo/depsilo)](https://github.com/depsilo/depsilo/releases)
 [![Verify](https://github.com/depsilo/depsilo/actions/workflows/verify.yml/badge.svg)](https://github.com/depsilo/depsilo/actions/workflows/verify.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-[Website](https://depsilo.com) &bull;
 [Quick start](#quick-start) &bull;
-[Documentation](#documentation) &bull;
-[Container image](https://github.com/depsilo/depsilo/pkgs/container/depsilo) &bull;
+[Documentation](docs/README.md) &bull;
+[Website](https://depsilo.com) &bull;
 [中文](docs/README_zh.md)
 
 </div>
 
----
+## Why Depsilo?
 
-## What Depsilo does
+- **Download once, reuse across machines.** Cache dependencies for developers
+  and CI, with local or S3-backed artifact storage.
+- **See what is happening.** Monitor service health, cache hits, upstream traffic,
+  and recent requests in the web dashboard.
+- **Control what gets installed.** Apply malicious-package blocking, package
+  rules, release-age policies, and snapshots. Coverage varies by ecosystem;
+  see [supply-chain controls](docs/supply-chain.md).
+- **Use your team's login.** Connect multiple OIDC or LDAP authentication sources
+  and manage personal login bindings.
 
-```text
-Package managers / CI / coding agents
-                  │
-                  ▼
-               Depsilo
-    cache · enforce · verify · audit
-                  │
-                  ▼
-               Upstreams
-```
-
-- **Cache** — stream artifacts into local or S3-backed storage, coalesce
-  concurrent misses, and serve eligible cached artifacts when an Upstream is
-  unavailable.
-- **Enforce** — where a proxy request carries an authoritative package identity,
-  apply operator-defined rules according to the
-  [Package Rule capability matrix](docs/package-rules.md), and block
-  known-malicious versions for the ecosystems listed below.
-  Minimum-release-age enforcement is source-bound for npm, PyPI, Composer,
-  NuGet, Cargo, and RubyGems. PyPI requires an upstream that serves the PEP 691
-  JSON simple index with `upload-time`; HTML-only upstreams fail closed while
-  the gate is enabled. NuGet uses the v3 registration index's `published`
-  timestamp for the same package version. Cargo uses the sparse index's own
-  `pubtime` and `cksum` fields. RubyGems resolves the compact-index
-  `created_at` and checksum for the exact `.gem` artifact. Conda is supported
-  with approximate Last-Modified provenance, which the operator must
-  acknowledge through `supply_chain.approximate_sources`. CRAN uses the
-  DESCRIPTION `Date/Publication` for the current source tarball and falls back
-  to the artifact's Last-Modified for archives and binaries, so it also
-  requires the approximate acknowledgement. Maven and Alpine use the artifact's
-  Last-Modified under the same acknowledgement. Helm resolves the chart
-  identity from the same upstream's `index.yaml` because chart filenames cannot
-  be split into name and version safely, then HEADs the exact chart for its
-  Last-Modified. Composer uses the p2 metadata's own `time` field but remains
-  best-effort because Composer clients fall back to the original dist URL on a
-  451. Docker registries expose no usable publish time, so Docker uses
-  first-observation age instead, acknowledged through
-  `supply_chain.observation_sources = ["docker"]`: the tag is resolved to a
-  digest, the first time this instance saw that digest starts the clock, the
-  manifest is fetched pinned to the digest, and unseen digests stay quarantined
-  until the threshold passes. The capability summary labels it `observed`, not
-  `source_bound`. With the age gate enabled, positive thresholds without a
-  supported provenance path are rejected at startup.
-- **Verify** — record first-seen hashes and surface tamper alerts when immutable
-  artifacts change during a natural refresh.
-- **Audit** — keep requests, policy decisions, and Upstream health visible in
-  the Admin UI, API, logs, webhooks, and Prometheus metrics.
-
-Depsilo is MIT-licensed, has no telemetry, and is designed as a lightweight
-single-instance service backed by SQLite. It is not a multi-node artifact
-repository or an HA control plane.
-
-General-purpose artifact repository support is a future direction, not a
-shipped capability. Hosted publishing, repository management, retention, and
-their compatibility and migration rules remain to be defined separately.
-
-> This README documents the current `master` branch. For a tagged release, use
-> the README and configuration reference bundled with that release.
+Runs as a single binary or Docker container, backed by SQLite. MIT-licensed,
+with no telemetry.
 
 ## Quick start
 
-> **Release availability:** the unified state paths, startup summary, and
-> first-project onboarding below are available in `v0.9.1` and later. Use the
-> README bundled with `v0.9.0` when operating that older release.
+### Start with Docker
 
-Choose a binary or container install. A first run does not require a repository
-checkout, `config.toml`, or database and cache environment variables.
+No repository checkout or configuration file is needed for a new installation.
 
-### Binary (Linux / macOS)
+```bash
+docker run -d --name depsilo \
+  -p 23333:23333 \
+  -v depsilo-data:/root/.depsilo \
+  --restart unless-stopped \
+  ghcr.io/depsilo/depsilo:latest
+```
+
+Once the service starts, retrieve the setup token:
+
+```bash
+docker exec depsilo depsilo setup token
+```
+
+1. Open **<http://127.0.0.1:23333>**, enter the token, and create your administrator.
+   There is no default administrator password.
+2. Open **Connect a client**, choose your package manager, and apply the generated
+   configuration on the machine that will download dependencies.
+3. Run the suggested download command and confirm the request and cache results
+   on this page, then open the dashboard for statistics. You can reopen the guide anytime.
+
+The volume preserves configuration, credentials, database, and cache. For an
+ongoing deployment, pin a release tag instead of `latest` and keep the service
+on a trusted network. Use a TLS reverse proxy for remote access.
+
+<details>
+<summary>Prefer a binary? Linux / macOS</summary>
 
 ```bash
 curl -fsSL https://depsilo.com/install.sh | bash
 depsilo serve
 ```
 
-For a background process, use `depsilo start --daemon`; a later, independent
-terminal can run `depsilo stop`. Linux/macOS detach from the launching terminal,
-and Windows uses a per-start named shutdown event instead of relying on a shared
-console.
-
-Before replacing a v0.9.0 binary that is running in daemon mode, stop it with the
-v0.9.0 binary. v0.9.1 deliberately refuses the old unauthenticated PID-only
-record. If the binary was already replaced, first verify the recorded process
-has ended, then remove `~/.local/share/depsilo/depsilo.pid` manually before
-starting v0.9.1.
-
-Open <http://127.0.0.1:23333>. The installer verifies the release checksum and
-supports `DEPSILO_VERSION` and `DEPSILO_INSTALL_DIR` when you need to pin a
-version or choose another installation directory.
-
-You can also download an archive directly from
+Open <http://127.0.0.1:23333> and follow the same setup steps. The startup output
+shows the setup token; retrieve it again with `depsilo setup token` in another
+terminal. You can also download a binary from
 [GitHub Releases](https://github.com/depsilo/depsilo/releases).
 
-### Docker
+</details>
 
-```bash
-docker run -d \
-  --name depsilo \
-  -p 23333:23333 \
-  -v depsilo-data:/root/.depsilo \
-  --restart unless-stopped \
-  ghcr.io/depsilo/depsilo:latest
+For Compose, custom ports, persistent directories, or upgrades, follow the
+[deployment guide](docs/deployment.md). For background operation, see
+[binary installation](docs/deployment.md#binary-installation).
 
-docker logs depsilo
-```
+## Supported clients
 
-Open <http://127.0.0.1:23333>. The named volume keeps the generated
-configuration, SQLite database, cached artifacts, and other runtime state
-across container restarts and recreation.
-
-For a long-lived deployment, replace `latest` with a full `X.Y.Z` release tag.
-Release images are published to GHCR as the canonical registry; Docker Hub is
-maintained as a mirror.
-
-The official image runs as fixed non-root UID/GID `10001:10001`. The named
-volume above is the default because Docker initializes it with the image's
-state-directory ownership. If you need the state files on the host, use the
-[bind-mount Compose variant](compose.bind.yaml), prepare the directory
-ownership first, and keep the mount target at `/root/.depsilo`.
-
-### Docker Compose
-
-```bash
-curl -fsSLO https://raw.githubusercontent.com/depsilo/depsilo/master/compose.yaml
-docker compose up -d
-docker compose exec depsilo depsilo setup token
-```
-
-The official Compose file contains one service, one port, and one persistent
-volume. Set `DEPSILO_IMAGE=depsilo/depsilo:local` for a locally built image,
-`PORT=18080` to change the host port, or
-`DEPSILO_BIND_ADDRESS=127.0.0.1` to keep the service local to the host:
-
-```bash
-DEPSILO_IMAGE=depsilo/depsilo:local \
-DEPSILO_BIND_ADDRESS=127.0.0.1 \
-PORT=18080 \
-docker compose up -d --force-recreate
-```
-
-To persist state in a host directory instead of a Docker volume:
-
-```bash
-curl -fsSLO https://raw.githubusercontent.com/depsilo/depsilo/master/compose.bind.yaml
-export DEPSILO_IMAGE=depsilo/depsilo:local
-export DEPSILO_STATE_DIR="$HOME/.local/share/depsilo/state"
-docker compose -f compose.bind.yaml up -d
-```
-
-Prepare `$HOME/.local/share/depsilo/state` as described in the
-[deployment guide](docs/deployment.md#bind-mounted-state). The startup log
-reports the container listener; use the published host port in your browser
-and run `docker compose -f compose.bind.yaml exec depsilo depsilo setup token`
-to retrieve the bootstrap token.
-
-The image runs as fixed non-root UID/GID `10001:10001`. See the
-[deployment guide](docs/deployment.md) for the one-time ownership command when
-reusing a named volume created by a v0.9 root-running container or the separate
-compatibility path for v0.9's shipped bind-mount Compose layout.
-
-### Finish the first run
-
-The startup summary tells you whether the server, database, and cache are ready.
-It also shows the Portal URL and, for a new interactive installation, a
-one-time bootstrap token. Retrieve the current token directly with
-`depsilo setup token` from the configuration directory, or
-`docker compose exec depsilo depsilo setup token` in Docker Compose.
-For a custom configuration path, use `depsilo setup token --config PATH`.
-Paste the command output into the setup form; `jwt.key` is the persistent
-signing key, not the bootstrap token. Retrieval stops after setup completes.
-
-1. Open the Portal and enter the bootstrap token.
-2. Create the first administrator. Depsilo has no default administrator
-   password.
-3. Continue to **Connect your first project**.
-4. Choose an ecosystem and package manager, copy the generated configuration,
-   and run the suggested dependency command.
-5. Depsilo detects the real request automatically. Repeat the request when you
-   want to confirm a real cache hit, or continue to the Dashboard at any time.
-
-Configuration shown in the browser is generated from the URL you used to open
-Depsilo, including LAN hosts, reverse-proxy hostnames, custom ports, and HTTPS.
-The Portal never modifies package-manager configuration on your machine.
-
-Existing configured deployments are not forced into onboarding when an
-operator signs in to Admin. Operators can reopen the same flow later with
-**Connect a project**.
-
-## Supported ecosystems
-
-| Ecosystem | Common clients |
+| Area | Clients and ecosystems |
 | --- | --- |
 | Python | pip, uv, Poetry, Pipenv, PDM |
-| Debian / Ubuntu | apt |
-| Node.js | npm, pnpm, Yarn, Bun |
-| Go | `go` |
-| Rust | Cargo |
-| Java / Kotlin / Scala | Maven, Gradle, sbt |
-| Ruby | RubyGems, Bundler |
-| PHP | Composer |
-| .NET | `dotnet`, NuGet |
-| Data science | Conda, R / CRAN |
-| Infrastructure | Helm, Alpine apk |
-| Models and datasets | Hugging Face `hf`, Transformers |
-| Containers | Docker, containerd, Podman through the separate OCI `/v2/` route |
+| JavaScript | npm, pnpm, Yarn, Bun |
+| JVM | Maven, Gradle, sbt |
+| Other language packages | Go, Cargo, RubyGems / Bundler, Composer, NuGet |
+| Linux and Kubernetes | APT, Alpine apk, Helm |
+| Data and models | Conda, R / CRAN, Hugging Face |
+| Container images | Docker / OCI pulls, including containerd and Podman |
+| Compiler caches | ccache and sccache; [separate setup](docs/compile-cache.md) |
 
-This is 14 standard path-prefixed ecosystems plus Docker's separate OCI route:
-15 install surfaces in total.
+Package traffic uses 14 ecosystem routes plus Docker's separate OCI route.
+Docker and Hugging Face need [additional setup](docs/deployment.md#optional-ecosystems).
+Docker support is a pull-through cache, without image push or hosted repositories.
 
-The OCI route is a pull-through cache for client `GET` and `HEAD` requests, not
-a general-purpose registry for pushing or hosting images.
+Each instance owns its database and configuration; shared-database HA is not
+supported. See [product scope](PRODUCT.md) for capability boundaries.
 
-Docker Registry and Hugging Face client instructions are available in the
-Portal, but their Upstreams are not created by the initial setup wizard. Add
-them through [`config.example.toml`](config.example.toml) and restart Depsilo
-before sending those requests.
+## Find the next step
 
-## Supply-chain controls
-
-The controls are independent; enabling or disabling one does not silently
-change the others.
-
-| Control | Default | Behavior |
-| --- | --- | --- |
-| Known-malicious blocklist | On | Syncs explicit and all-version OSV MAL records for npm, PyPI, Cargo, RubyGems, Composer, NuGet, Go, and Maven, then blocks a match before serving it. PyPI legacy archive formats and RubyGems platform gems are resolved through their registry metadata; an artifact whose identity cannot be proven is refused while the dataset covers that ecosystem. |
-| Freeze / golden snapshot | Off | Promotes the cached artifacts into a named snapshot, exports/imports its manifest, and — when activated — serves only versions pinned by that snapshot (`451 SNAPSHOT_BLOCKED` otherwise). Items come from the first-seen hashes recorded by tamper detection. |
-| Minimum release age | Off by default | Enforced per ecosystem where artifact-source and timestamp provenance is bound (source-bound registries, the approximate Last-Modified ecosystems the operator acknowledges in `supply_chain.approximate_sources`, or Docker's first-observation age acknowledged in `supply_chain.observation_sources`); with the gate enabled, any positive threshold without supported provenance is rejected at startup. |
-| Tamper detection | On | Compares immutable artifacts against their first-seen SHA-256 during natural refreshes and emits an alert on mismatch. It is alert-only. |
-| Package allow / deny rules | Operator-defined | Applies and records only selectors supported by the [request-path capability matrix](docs/package-rules.md); unsupported surfaces do not guess package or version identity. |
-
-A new installation begins enforcing the malicious-package dataset after its
-first successful sync. Later sync failures keep using the last good dataset
-instead of interrupting package traffic.
-
-A policy block still means the dependency request reached and was handled by
-Depsilo. The Portal and Admin UI distinguish cache hits, misses, policy blocks,
-and Upstream errors instead of treating every non-install as the same failure.
-
-Composer may fall back from a refused mirrored distribution to its original
-distribution URL. Operators who require hard enforcement for Composer must
-also restrict direct client access to that origin.
-
-See [`config.example.toml`](config.example.toml) for the full policy schema and
-current ecosystem defaults. See the
-[Package Rule capability matrix](docs/package-rules.md) for exact per-ecosystem
-name, version, and range support.
-
-## State, configuration, and health
-
-Zero-config installs keep configuration, SQLite, and local caches under one
-state root: `~/.depsilo` for a binary install and `/root/.depsilo` in the
-official container. Exact paths, persistence rules, and overrides are in the
-[deployment defaults](docs/deployment.md).
-
-Advanced users can override the config, database, local or S3 storage,
-authentication, server, and policy settings. Precedence is:
-
-```text
-CLI flag → DEPSILO_* environment → config file → built-in default
-```
-
-Run the built-in diagnosis directly or through the container:
-
-```bash
-depsilo doctor
-docker exec depsilo /app/depsilo doctor
-```
-
-Write a local redacted report for sharing during support:
-
-```bash
-depsilo diagnose --out depsilo-diagnostic.json
-```
-
-The report is created with owner-only permissions and omits configuration,
-credentials, request samples, package identities, and client addresses.
-
-## Optional integrations
-
-### AI coding agents
-
-```bash
-cd my-project
-depsilo init-agent
-```
-
-`init-agent` updates the detected `AGENTS.md`, `CLAUDE.md`, or `.cursorrules`
-inside a marker-owned section. MCP-aware clients can connect to `POST /mcp`
-with a regular API token created in Admin. The bootstrap token is only for
-first-run setup and must not be reused as a package or MCP credential.
-
-### Compiler caches
-
-Depsilo includes an isolated remote cache for official ccache HTTP and sccache
-WebDAV clients. It is not an `sccache-dist` scheduler or a public S3 API. See
-the [compiler-cache guide (Chinese)](docs/compile-cache.md) for storage
-isolation, credentials, quotas, and client setup.
-
-## Security and release integrity
-
-- Interactive setup is protected by a one-time bootstrap token.
-- Administrator sessions use JWT authentication; API tokens are stored
-  hash-only.
-- Use a JWT signing secret of at least 32 random bytes even when Depsilo binds
-  to loopback behind a reverse proxy.
-- Put Internet-facing deployments behind a trusted reverse proxy for TLS and,
-  when needed, an external identity-aware access layer. Admin authentication
-  still uses Depsilo credentials.
-- A signed `checksums.txt` authenticates release archives. The installer and
-  SBOM attachments have their own signature bundles; container digests are
-  signed directly and carry a CycloneDX attestation.
-- Depsilo does not phone home or report package names, cache activity, or
-  onboarding progress to depsilo.com.
-
-Read [SECURITY.md](SECURITY.md) before an Internet-reachable deployment and use
-the [release-verification guide](docs/release-verification.md) to verify release
-artifacts and images.
-
-## Develop from source
-
-```bash
-git clone https://github.com/depsilo/depsilo.git
-cd depsilo
-make setup build
-./bin/depsilo serve
-```
-
-Current tool versions, hot reload, and testing are in the
-[development quick start](docs/development/quick-start.md). Run `make check`
-before a normal change; `make verify` is the complete offline gate.
-
-## Documentation
-
-| Goal | Read |
+| I want to… | Guide |
 | --- | --- |
-| Deploy and locate persistent state | [Deployment defaults](docs/deployment.md) |
-| Configure every available setting | [`config.example.toml`](config.example.toml) |
-| Verify a deployed instance | [Self-test checklist (Chinese)](docs/self-test-checklist.md) |
-| Understand Admin and live configuration ownership | [Admin control plane](docs/admin-control-plane.md) |
-| Configure ccache or sccache | [Compiler cache (Chinese)](docs/compile-cache.md) |
-| Verify signed releases, images, and SBOMs | [Release verification](docs/release-verification.md) |
-| Compatibility promises (API, config, schema, exports) | [Compatibility policy](docs/compatibility.md) |
-| Forward the audit stream to a SIEM, verify the tamper-evident chain | [SIEM audit routing](docs/siem-audit-routing.md) |
-| Threat model (assets, boundaries, mitigations, accepted risks) | [Threat model](docs/threat-model.md) |
-| Run an isolated pilot and collect feedback | [Trial guide](docs/trial-guide.md) |
-| See what changed in each release | [Changelog](CHANGELOG.md) · [GitHub Releases](https://github.com/depsilo/depsilo/releases) |
-| Understand current product scope and constraints | [Product](PRODUCT.md) |
-| Develop or contribute | [Documentation map](docs/README.md) · [Contributing](CONTRIBUTING.md) |
+| Deploy, upgrade, or troubleshoot | [Deployment](docs/deployment.md) · [Configuration reference](config.example.toml) |
+| Configure package policies | [Supply-chain controls](docs/supply-chain.md) · [Package rules](docs/package-rules.md) |
+| Connect an identity provider or directory | [OIDC](docs/oidc.md) · [LDAP / LDAPS](docs/ldap.md) |
+| Connect build machines or coding agents | [Compiler cache](docs/compile-cache.md) · [AI agents / MCP](docs/deployment.md#ai-coding-agents) |
+| Share caches between independent instances | [Cascade](docs/cascade.md) |
+| Secure an instance or verify a release | [Security](SECURITY.md) · [Release verification](docs/release-verification.md) |
+
+Browse the [documentation map](docs/README.md) for operations, APIs, and
+architecture, or the [changelog](CHANGELOG.md) for release history.
 
 ## Contributing
 
-Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the
-workflow. Coding agents should begin with [AGENTS.md](AGENTS.md).
+Start with the [development quick start](docs/development/quick-start.md) and
+[contribution guide](CONTRIBUTING.md). Coding agents should read [AGENTS.md](AGENTS.md).
 
 ## License
 
-[MIT License](LICENSE)
-
----
-
-<div align="center">
-
-[depsilo.com](https://depsilo.com)
-
-</div>
+[MIT](LICENSE). This README describes the current `master` branch; for an
+installed release, use the documentation bundled with that version.

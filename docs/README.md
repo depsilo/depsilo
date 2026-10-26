@@ -1,53 +1,57 @@
-# Documentation map
+# Documentation
 
-The documentation is organized by how often it should be read. Start with the
-smallest document that answers the current question.
+Start with the [project overview](../README.md) or [中文介绍](README_zh.md).
+Use the guides below for the task at hand.
 
-## Start and change the project
+## Deploy and use
 
-| Goal | Read |
+| Task | Guide |
 | --- | --- |
-| Install tools and start a local service | [Development quick start](development/quick-start.md) |
-| Understand the runtime and state owners | [Architecture](development/architecture.md) |
+| Install, initialize, or upgrade | [Deployment](deployment.md) |
+| Find configuration fields and defaults | [Configuration reference](../config.example.toml) |
+| Choose supply-chain controls | [Policy overview](supply-chain.md) · [Package rules and ecosystem coverage](package-rules.md) |
+| Connect a login provider or directory | [OIDC](oidc.md) · [LDAP / LDAPS](ldap.md) |
+| Connect ccache or sccache | [Compiler cache](compile-cache.md) |
+| Connect coding agents or MCP clients | [AI coding agents](deployment.md#ai-coding-agents) |
+| Share cached downloads between instances | [Cascade](cascade.md) |
+| Evaluate an isolated installation | [Trial guide](trial-guide.md) |
+
+## Operate and secure
+
+| Task | Guide |
+| --- | --- |
+| Check service health and diagnose failures | [Diagnostics](deployment.md#health-checks) · [Self-test checklist](self-test-checklist.md) |
+| Understand Admin APIs and configuration ownership | [Admin control plane](admin-control-plane.md) |
+| Forward audit events and verify the audit chain | [SIEM audit routing](siem-audit-routing.md) |
+| Verify signed releases, images, and SBOMs | [Release verification](release-verification.md) |
+| Check compatibility and migration promises | [Compatibility policy](compatibility.md) |
+| Review security boundaries or report a vulnerability | [Threat model](threat-model.md) · [Security policy](../SECURITY.md) |
+| See release changes | [Changelog](../CHANGELOG.md) |
+
+## Develop and contribute
+
+| Task | Guide |
+| --- | --- |
+| Install tools and run a local service | [Development quick start](development/quick-start.md) |
+| Understand runtime ownership | [Architecture](development/architecture.md) |
 | Find the files for a change | [Change map](development/change-map.md) |
-| Choose the right tests | [Testing](development/testing.md) |
+| Choose the right checks | [Testing](development/testing.md) |
+| Work on shared UI components | [Frontend component ownership](development/frontend-components.md) |
 | Contribute a change | [Contributing](../CONTRIBUTING.md) |
 
-Codex and other coding agents should begin at [AGENTS.md](../AGENTS.md), which
-contains the stable repository rules and links into these guides.
-
-## Current reference
-
-- [PRODUCT.md](../PRODUCT.md): current users, product intent, constraints, and
-  honest capability boundaries.
-- [CONTEXT.md](../CONTEXT.md): domain vocabulary.
-- [Deployment defaults](deployment.md): zero-config state paths, persistence,
-  and advanced overrides.
-- [Cascade deployment](cascade.md): multi-level cache peering between
-  Depsilo nodes, configuration, and trust boundaries (ADR-0006).
-- [Admin control plane](admin-control-plane.md): configuration/database
-  authority and Admin HTTP contracts.
-- [Package rules](package-rules.md): ecosystem-specific package identity,
-  version capabilities, migration behavior, and enforcement limitations.
-- [Compiler cache](compile-cache.md): ccache and sccache deployment contract.
-- [Self-test checklist](self-test-checklist.md): manual deployed-service checks.
-- [Release verification](release-verification.md): signed artifacts and
-  immutable release inputs.
-- [Trial guide](trial-guide.md): isolated installation, fault rehearsal, and
-  feedback fields.
-- [Security policy](../SECURITY.md): supported releases and reporting process.
+Coding agents should begin at [AGENTS.md](../AGENTS.md). Product scope lives in
+[PRODUCT.md](../PRODUCT.md); shared domain vocabulary lives in
+[CONTEXT.md](../CONTEXT.md).
 
 ## Decisions and historical evidence
 
-- `docs/adr/` contains accepted architectural decisions. Read only the ADRs
-  touching the module being changed.
-- `docs/specs/` contains dated design snapshots. A shipped implementation may
-  have evolved after its spec.
-- `docs/research/` contains dated research records, not evergreen guidance.
-- `docs/DIRECTION.md` is a historical strategy snapshot. `PRODUCT.md` is newer
-  where the two disagree.
+- [Architecture decisions](adr/) record accepted choices. Read the decisions
+  relevant to the module being changed.
+- [Specs](specs/) and [research](research/) are dated evidence, not current
+  implementation instructions. The running code and current guides may have
+  evolved since they were written.
+- [DIRECTION.md](DIRECTION.md) is a historical strategy snapshot;
+  [PRODUCT.md](../PRODUCT.md) is the current product authority.
 
-Completed task-by-task execution plans are intentionally not kept in the
-working tree. Git history already preserves them, while leaving them in the
-default search surface made fresh sessions follow obsolete file names,
-commands, and product decisions.
+Completed task plans stay in Git history rather than the default documentation
+path, so new contributors can find current guidance first.
