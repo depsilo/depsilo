@@ -71,6 +71,11 @@ func load(keyMode signingKeyLoadMode) (*Config, error) {
 		"compile_cache.storage.region",
 		"compile_cache.storage.access_key",
 		"compile_cache.storage.secret_key",
+		"distribution.storage.bucket",
+		"distribution.storage.endpoint",
+		"distribution.storage.region",
+		"distribution.storage.access_key",
+		"distribution.storage.secret_key",
 	} {
 		if err := v.BindEnv(key); err != nil {
 			return nil, fmt.Errorf("bind %s environment override: %w", key, err)
@@ -220,6 +225,7 @@ func setDefaultStatePaths(v *viper.Viper, depsiloDir string) {
 	v.SetDefault("database.dsn", filepath.Join(dataDir, "depsilo.db"))
 	v.SetDefault("storage.path", filepath.Join(dataDir, "cache"))
 	v.SetDefault("compile_cache.storage.path", filepath.Join(dataDir, "compile-cache"))
+	v.SetDefault("distribution.storage.path", filepath.Join(dataDir, "distribution"))
 }
 
 func isLoopbackHost(host string) bool {
@@ -357,6 +363,9 @@ func decodeViper(v *viper.Viper) (*Config, error) {
 	}
 	cfg.CompileCache.PublicURL = strings.TrimRight(strings.TrimSpace(cfg.CompileCache.PublicURL), "/")
 	if err := validateCompileCacheConfig(cfg.CompileCache); err != nil {
+		return nil, err
+	}
+	if err := ValidateDistributionConfig(cfg.Distribution, cfg.Storage, cfg.CompileCache.Storage); err != nil {
 		return nil, err
 	}
 	if err := validateCascadeConfig(cfg); err != nil {
@@ -570,6 +579,11 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("compile_cache.lru_threshold", 90)
 	v.SetDefault("compile_cache.storage.type", "local")
 	v.SetDefault("compile_cache.storage.path", "./data/compile-cache")
+	v.SetDefault("distribution.enabled", false)
+	v.SetDefault("distribution.max_size_bytes", int64(20)<<30)
+	v.SetDefault("distribution.max_object_bytes", int64(1)<<30)
+	v.SetDefault("distribution.storage.type", "local")
+	v.SetDefault("distribution.storage.path", "./data/distribution")
 	v.SetDefault("upstream_updates.enabled", true)
 	v.SetDefault("upstream_updates.check_interval", "1h")
 	v.SetDefault("auth.enabled", true)

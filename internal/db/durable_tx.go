@@ -88,6 +88,16 @@ func durableConnectionRelease(connection *sql.Conn, originalSynchronous int) fun
 	return func() error {
 		once.Do(func() {
 			var errs []error
+			// SQLite can keep a transaction open when COMMIT fails (for example,
+			// on a deferred foreign-key constraint). database/sql nevertheless
+			// marks *sql.Tx done, so its Rollback can no longer clear that state.
+			// Clean the still-pinned connection before restoring its pragma or
+			// returning it to the pool. A completed commit/rollback has nothing
+			// left to undo; SQLite reports that specific case as an error.
+			if _, err := connection.ExecContext(context.Background(), "ROLLBACK"); err != nil &&
+				!strings.Contains(err.Error(), "cannot rollback - no transaction is active") {
+				errs = append(errs, fmt.Errorf("clear durable transaction: %w", err))
+			}
 			pragma := "PRAGMA synchronous=" + strconv.Itoa(originalSynchronous)
 			if _, err := connection.ExecContext(context.Background(), pragma); err != nil {
 				errs = append(errs, fmt.Errorf("restore synchronous mode %d: %w", originalSynchronous, err))

@@ -17,6 +17,7 @@ import (
 	"depsilo/internal/cache"
 	"depsilo/internal/compilecache"
 	"depsilo/internal/config"
+	"depsilo/internal/distribution"
 	"depsilo/internal/entitlement"
 	"depsilo/internal/identity"
 	"depsilo/internal/license"
@@ -86,13 +87,14 @@ type Deps struct {
 	// BlocklistStore / BlocklistSyncer power the known-malicious
 	// blocklist admin endpoints (status / manual sync / overrides).
 	// Both nil when [supply_chain.blocklist] enabled = false.
-	BlocklistStore  *blocklist.Store
-	SnapshotStore   *snapshot.Store
-	AuditForwarder  *audit.Forwarder
-	AuditAnchor     *audit.Anchor
-	BlocklistSyncer *blocklist.Syncer
-	BlocklistMode   string
-	Tasks           asyncruntime.Submitter
+	BlocklistStore    *blocklist.Store
+	SnapshotStore     *snapshot.Store
+	DistributionStore *distribution.Store
+	AuditForwarder    *audit.Forwarder
+	AuditAnchor       *audit.Anchor
+	BlocklistSyncer   *blocklist.Syncer
+	BlocklistMode     string
+	Tasks             asyncruntime.Submitter
 
 	// TrafficMeter is the process-wide client/origin byte-rate meter. Nil in
 	// isolated tests; the /now response falls back to legacy client-side values.
@@ -223,6 +225,18 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminRead.Use(middleware.ReadRequired())
 	adminWrite := adminGroup.Group("")
 	adminWrite.Use(middleware.WriteRequired())
+
+	// Preparation catalog only: no package-serving route or transfer trust is
+	// implied by a content-verified draft. Keep disabled responses authenticated.
+	distributionHandler := admin.NewDistributionHandler(deps.DistributionStore, deps.DB)
+	adminRead.GET("/distribution/sets", distributionHandler.List)
+	adminRead.GET("/distribution/sets/:id", distributionHandler.Get)
+	distributionWrites := adminWrite.Group("/distribution", admin.AdminRoleRequired())
+	distributionWrites.POST("/sets", distributionHandler.Stage)
+	distributionWrites.PUT("/sets/:id/objects/:digest", distributionHandler.Put)
+	distributionWrites.POST("/sets/:id/verify", distributionHandler.Verify)
+	distributionWrites.DELETE("/sets/:id", distributionHandler.Delete)
+	distributionWrites.POST("/prune", distributionHandler.Prune)
 
 	// First-project onboarding is authenticated because its status exposes a
 	// narrow view of package request history. Existing deployments default to

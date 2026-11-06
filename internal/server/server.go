@@ -26,6 +26,7 @@ import (
 	"depsilo/internal/cascade"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
+	"depsilo/internal/distribution"
 	"depsilo/internal/entitlement"
 	"depsilo/internal/identity"
 	"depsilo/internal/license"
@@ -259,6 +260,22 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		}
 	default:
 		return nil, fmt.Errorf("unsupported storage type: %s", cfg.Storage.Type)
+	}
+
+	// Retained dependency drafts own independent storage and accounting. They
+	// never enter cache.Manager or ordinary expiry/LRU cleanup.
+	var distributionStore *distribution.Store
+	if cfg.Distribution.Enabled {
+		retainedStorage, err := distribution.NewStorage(cfg.Distribution, cfg.Storage, cfg.CompileCache.Storage)
+		if err != nil {
+			return nil, fmt.Errorf("initialize distribution storage: %w", err)
+		}
+		distributionStore, err = distribution.NewStore(database, retainedStorage, distribution.Limits{
+			MaxObjectBytes: cfg.Distribution.MaxObjectBytes, MaxStorageBytes: cfg.Distribution.MaxSizeBytes,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("initialize distribution catalog: %w", err)
+		}
 	}
 
 	// Initialize event bus and cache manager
@@ -708,6 +725,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		BlocklistSyncer:            blocklistSyncer,
 		BlocklistMode:              string(blocklistMode),
 		SnapshotStore:              snapshotStore,
+		DistributionStore:          distributionStore,
 		AuditForwarder:             auditForwarder,
 		AuditAnchor:                auditAnchor,
 		Tasks:                      background,

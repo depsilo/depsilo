@@ -48,4 +48,5 @@ DEPSILO_STORAGE_BUCKET="$bucket" \
 DEPSILO_STORAGE_REGION='us-east-1' \
 DEPSILO_STORAGE_ACCESS_KEY="$access_key" \
 DEPSILO_STORAGE_SECRET_KEY="$secret_key" \
-  go test -tags=s3integration ./internal/cache -run '^TestS3StorageContract$' -count=1
+DEPSILO_AUTH_JWT_SECRET='s3-contract-only-0123456789abcdef0123456789' \
+  go test -tags=s3integration ./internal/cache ./internal/distribution -run '^(TestS3StorageContract|TestDistributionS3StorageContract|TestDistributionS3StoreContract)$' -count=1

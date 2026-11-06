@@ -19,6 +19,7 @@ type Config struct {
 	Storage                    StorageConfig      `mapstructure:"storage"`
 	Cache                      CacheConfig        `mapstructure:"cache"`
 	CompileCache               CompileCacheConfig `mapstructure:"compile_cache"`
+	Distribution               DistributionConfig `mapstructure:"distribution"`
 	AccessLog                  AccessLogConfig    `mapstructure:"access_log"`
 	Auth                       AuthConfig         `mapstructure:"auth"`
 	Policy                     PolicyConfig       `mapstructure:"policy"`

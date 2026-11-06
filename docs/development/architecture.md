@@ -67,6 +67,7 @@ duplicating endpoint tables in new documentation.
 | Minimum-release-age thresholds, blocklist/tamper settings | `config.toml` | Loaded at startup; restart to change |
 | Package objects | Local filesystem or S3 | Coordinated by cache metadata in SQLite |
 | Compiler cache objects | Separate local/S3 area | Separate capacity and credentials |
+| Dependency-set drafts | SQLite catalog + dedicated local directory/S3 bucket | Explicit upload, verification, deletion, and reclamation; no package serving |
 
 See [Admin control plane](../admin-control-plane.md) before changing the
 configuration/database seam.
@@ -93,6 +94,8 @@ Admin and every other browser route to Portal.
   interfaces. Record the new seam and migration contract in an ADR first.
 - [ADR-0008](../adr/0008-dependency-cache-and-distribution.md) owns the current
   cache/distribution direction. Offline bundles and incremental delivery are
-  planned, with their interfaces still to be specified; existing snapshot and
-  backup formats do not transfer artifact bytes. ADR-0006's relay and ADR-0007's
+  planned. The opt-in [preparation catalog](../distribution.md) retains and
+  verifies declared content but does not expose offline package routes or
+  signed bundles. Existing snapshot and backup formats do not transfer artifact
+  bytes. ADR-0006's relay and ADR-0007's
   identity decisions remain in force.

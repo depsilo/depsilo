@@ -14,6 +14,7 @@ Use the guides below for the task at hand.
 | Connect ccache or sccache | [Compiler cache](compile-cache.md) |
 | Connect coding agents or MCP clients | [AI coding agents](deployment.md#ai-coding-agents) |
 | Share cached downloads between instances | [Cascade](cascade.md) |
+| Retain and verify a dependency-set draft | [Preparation catalog](distribution.md) (no offline serving yet) |
 | Verify cache reuse and cascade traffic | [Controlled benchmark](../testground/README.md#controlled-cache-and-cascade-evidence) |
 | Evaluate an isolated installation | [Trial guide](trial-guide.md) |
 

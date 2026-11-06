@@ -264,6 +264,10 @@ func currentSchemaModelsForTest() []any {
 		&TamperRecord{},
 		&Snapshot{},
 		&SnapshotItem{},
+		&DistributionSet{},
+		&DistributionObject{},
+		&DistributionSetObject{},
+		&DistributionActiveSet{},
 		&AuditExporter{},
 		&DockerImageObservation{},
 	}

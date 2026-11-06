@@ -33,6 +33,8 @@ func Run(cmd string, args []string) int {
 		return runBackup(args)
 	case "restore":
 		return runRestore(args)
+	case "distribution":
+		return runDistribution(args)
 	case "version":
 		return runVersion(args)
 	case "doctor":
@@ -77,6 +79,7 @@ Commands:
     flush                       Clear expired cache entries
     backup [--out file.tar.gz]  Online backup of config + SQLite state
     restore <backup.tar.gz>     Validated restore; target server must be stopped
+    distribution <command>     Prepare and verify durable dependency-set drafts
     audit verify [--json]       Recompute the tamper-evident audit hash chain
     help                        Show this message
 

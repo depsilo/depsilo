@@ -91,6 +91,26 @@ path = "./data/compile-cache"
 # access_key = ""
 # secret_key = ""
 
+# 可选：保存依赖集清单及其内容，独立于可淘汰的包缓存和编译缓存。
+# 本阶段提供保留与校验基础；尚未提供离线包导出、导入或安装端点。
+[distribution]
+enabled = false
+max_size_bytes = 21474836480       # 20 GiB；满额时拒绝新增内容，不自动淘汰
+max_object_bytes = 1073741824      # 1 GiB；单个对象的上传上限
+
+[distribution.storage]
+type = "local"                    # local | s3
+# 相对路径与其他 storage.path 一样，相对于服务的工作目录。
+# 必须是独立目录，不得与包缓存或编译缓存目录重叠、互相包含。
+path = "./data/distribution"
+# S3 bucket 名必须与包缓存和编译缓存不同，即使 endpoint 不同也不能同名。
+# 不能只靠前缀隔离；禁用 versioning 或配置版本生命周期。
+# bucket = "depsilo-distribution"
+# endpoint = "http://minio:9000"
+# region = "us-east-1"
+# access_key = ""
+# secret_key = ""
+
 # 对已缓存且具备 HTTP 验证器的 PyPI 兼容元数据主动执行条件检查。
 # 不支持可靠变更判定的生态继续依赖正常 TTL 刷新；此任务绝不预拉取制品。
 [upstream_updates]

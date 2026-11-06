@@ -17,7 +17,7 @@ func main() {
 		switch cmd {
 		case "serve", "server":
 			os.Exit(cli.RunServe(os.Args[2:]))
-		case "status", "setup", "doctor", "diagnose", "init-agent", "prompt", "activate", "start", "stop", "warmup", "flush", "backup", "restore", "version":
+		case "status", "setup", "doctor", "diagnose", "init-agent", "prompt", "activate", "start", "stop", "warmup", "flush", "backup", "restore", "version", "distribution":
 			os.Exit(cli.Run(cmd, os.Args[2:]))
 		case "--version", "-v":
 			os.Exit(cli.Run("version", os.Args[2:]))
