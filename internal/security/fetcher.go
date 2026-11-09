@@ -86,7 +86,8 @@ func (f *Fetcher) waitForRateLimit(ctx context.Context) error {
 }
 
 type osvQueryRequest struct {
-	Package *osvPackage `json:"package"`
+	Package   *osvPackage `json:"package"`
+	PageToken string      `json:"page_token,omitempty"`
 }
 
 type osvPackage struct {
@@ -109,6 +110,13 @@ type OSVVulnerability struct {
 	References []osvRef      `json:"references"`
 	Published  time.Time     `json:"published"`
 	Modified   time.Time     `json:"modified"`
+	// DatabaseSpecific is kept raw: its shape differs between advisory
+	// databases, and one unexpected field must not reject the whole record.
+	DatabaseSpecific json.RawMessage `json:"database_specific,omitempty"`
+
+	// idOnly marks a batch-query entry. OSV batch responses carry only the
+	// advisory ID and modification time, never its details.
+	idOnly bool
 }
 
 type osvSeverity struct {
@@ -138,7 +146,20 @@ type osvRef struct {
 }
 
 type osvQueryResponse struct {
-	Vulns []OSVVulnerability `json:"vulns"`
+	Vulns         []OSVVulnerability `json:"vulns"`
+	NextPageToken string             `json:"next_page_token,omitempty"`
+}
+
+// maxOSVQueryPages bounds one package query. OSV pages hold up to a thousand
+// advisories, far beyond any package Depsilo scans.
+const maxOSVQueryPages = 20
+
+// BatchResult is one package's entry in an OSV batch response. OSV returns
+// only advisory IDs and modification times there; Truncated reports that the
+// package has more advisories than the batch page listed.
+type BatchResult struct {
+	Advisories []OSVVulnerability
+	Truncated  bool
 }
 
 type osvBatchResponse struct {
@@ -151,29 +172,41 @@ type PackageRef struct {
 	Name      string
 }
 
-// Query fetches vulnerabilities for a single package.
+// Query fetches the complete vulnerability records for a single package,
+// following OSV result pages.
 func (f *Fetcher) Query(ctx context.Context, ecosystem, packageName string) ([]OSVVulnerability, error) {
 	osvEco := OSVEcosystem(ecosystem)
 	if osvEco == "" {
 		return nil, nil
 	}
-	if err := f.waitForRateLimit(ctx); err != nil {
-		return nil, err
+	var advisories []OSVVulnerability
+	pageToken := ""
+	for page := 0; page < maxOSVQueryPages; page++ {
+		if err := f.waitForRateLimit(ctx); err != nil {
+			return nil, err
+		}
+		body := osvQueryRequest{Package: &osvPackage{Name: packageName, Ecosystem: osvEco}, PageToken: pageToken}
+		data, err := json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("marshal query: %w", err)
+		}
+		var result osvQueryResponse
+		if err := f.doPost(ctx, "/v1/query", data, &result); err != nil {
+			return nil, err
+		}
+		advisories = append(advisories, result.Vulns...)
+		if result.NextPageToken == "" {
+			return advisories, nil
+		}
+		pageToken = result.NextPageToken
 	}
-	body := osvQueryRequest{Package: &osvPackage{Name: packageName, Ecosystem: osvEco}}
-	data, err := json.Marshal(body)
-	if err != nil {
-		return nil, fmt.Errorf("marshal query: %w", err)
-	}
-	var result osvQueryResponse
-	if err := f.doPost(ctx, "/v1/query", data, &result); err != nil {
-		return nil, err
-	}
-	return result.Vulns, nil
+	return nil, fmt.Errorf("OSV query for %s exceeded %d result pages", packageName, maxOSVQueryPages)
 }
 
-// QueryBatch fetches vulnerabilities for multiple packages in one request.
-func (f *Fetcher) QueryBatch(ctx context.Context, packages []PackageRef) ([][]OSVVulnerability, error) {
+// QueryBatch lists the advisory IDs affecting multiple packages in one
+// request. Each entry has only its ID and modification time; use Query for
+// the records themselves.
+func (f *Fetcher) QueryBatch(ctx context.Context, packages []PackageRef) ([]BatchResult, error) {
 	if len(packages) == 0 {
 		return nil, nil
 	}
@@ -197,9 +230,12 @@ func (f *Fetcher) QueryBatch(ctx context.Context, packages []PackageRef) ([][]OS
 	if err := f.doPost(ctx, "/v1/querybatch", data, &result); err != nil {
 		return nil, err
 	}
-	out := make([][]OSVVulnerability, len(result.Results))
+	out := make([]BatchResult, len(result.Results))
 	for i, r := range result.Results {
-		out[i] = r.Vulns
+		for j := range r.Vulns {
+			r.Vulns[j].idOnly = true
+		}
+		out[i] = BatchResult{Advisories: r.Vulns, Truncated: r.NextPageToken != ""}
 	}
 	return out, nil
 }

@@ -32,6 +32,9 @@ var (
 	ErrInvalidAdvisoryImport = errors.New("invalid advisory import")
 	// ErrAdvisoryImportTooLarge means an import exceeds the bounded JSON input.
 	ErrAdvisoryImportTooLarge = errors.New("advisory import exceeds 32 MiB")
+	// ErrAdvisoryDetailsMissing means a scan listed an advisory by ID only
+	// and its record was not fetched before storage.
+	ErrAdvisoryDetailsMissing = errors.New("advisory details missing")
 )
 
 // IngestReceipt reports committed work. Callers receive the zero value when
@@ -62,6 +65,9 @@ type advisoryIdentity struct {
 
 type normalizedAdvisory struct {
 	model db.Vulnerability
+	// idOnly entries come from an OSV batch listing and carry no details.
+	// They confirm that a stored advisory still applies but never replace it.
+	idOnly bool
 }
 
 type advisoryKey struct {
@@ -140,6 +146,39 @@ func (c *AdvisoryCatalog) RecordScan(
 
 // Import atomically ingests one OSV object or an array of OSV objects. The
 // complete file is decoded and validated before the write gate is acquired.
+// NeedsDetails reports whether a batch listing for pkg names an advisory
+// whose stored record is missing, older than the listing, or derived by an
+// older parser. The caller must then fetch the package's complete records,
+// because RecordScan never stores an ID-only entry in place of details.
+func (c *AdvisoryCatalog) NeedsDetails(
+	ctx context.Context,
+	pkg PackageRef,
+	advisories []OSVVulnerability,
+) (bool, error) {
+	ctx = nonNilContext(ctx)
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if c == nil || c.db == nil {
+		return false, errors.New("advisory catalog is not initialized")
+	}
+	_, normalized, _, err := normalizePackageScan(pkg, advisories)
+	if err != nil {
+		return false, err
+	}
+	stored, err := loadStoredAdvisories(c.db.WithContext(ctx), normalized)
+	if err != nil {
+		return false, err
+	}
+	for _, incoming := range normalized {
+		existing, exists := stored[incoming.key()]
+		if !exists || advisoryNeedsUpdate(existing, incoming.model) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (c *AdvisoryCatalog) Import(ctx context.Context, src io.Reader) (IngestReceipt, error) {
 	ctx = nonNilContext(ctx)
 	if err := ctx.Err(); err != nil {
@@ -253,10 +292,11 @@ func normalizePackageScan(
 		model.OSVID = advisory.ID
 		model.Ecosystem = identity.ecosystem
 		model.PackageName = identity.name
-		incoming := normalizedAdvisory{model: *model}
+		incoming := normalizedAdvisory{model: *model, idOnly: advisory.idOnly}
 		if existing, exists := byID[advisory.ID]; exists {
 			duplicates++
-			if shouldApplyAdvisory(existing.model.ModifiedAt, incoming.model.ModifiedAt) {
+			if (existing.idOnly && !incoming.idOnly) ||
+				(existing.idOnly == incoming.idOnly && shouldApplyAdvisory(existing.model.ModifiedAt, incoming.model.ModifiedAt)) {
 				byID[advisory.ID] = incoming
 			}
 			continue
@@ -417,6 +457,16 @@ func normalizeAdvisoryImport(
 	return normalized, duplicates, skipped, nil
 }
 
+// advisoryNeedsUpdate applies a newer record, and re-parses a record stored
+// by an older parser revision when the incoming copy is not older than it.
+func advisoryNeedsUpdate(existing, incoming db.Vulnerability) bool {
+	if shouldApplyAdvisory(existing.ModifiedAt, incoming.ModifiedAt) {
+		return true
+	}
+	return existing.DetailRevision < AdvisoryDetailRevision &&
+		!incoming.ModifiedAt.Before(existing.ModifiedAt)
+}
+
 func shouldApplyAdvisory(existing, incoming time.Time) bool {
 	if existing.IsZero() {
 		return true
@@ -525,10 +575,13 @@ func reconcileAdvisories(
 	effective := make([]normalizedAdvisory, 0, len(advisories))
 	for i := range advisories {
 		incoming := advisories[i]
-		if existing, exists := stored[incoming.key()]; exists &&
-			!shouldApplyAdvisory(existing.ModifiedAt, incoming.model.ModifiedAt) {
+		existing, exists := stored[incoming.key()]
+		if exists && (incoming.idOnly || !advisoryNeedsUpdate(existing, incoming.model)) {
 			effective = append(effective, normalizedAdvisory{model: existing})
 			continue
+		}
+		if incoming.idOnly {
+			return nil, fmt.Errorf("%w: %s", ErrAdvisoryDetailsMissing, incoming.model.OSVID)
 		}
 		model := incoming.model
 		if err := tx.Clauses(clause.OnConflict{
@@ -549,6 +602,7 @@ func reconcileAdvisories(
 				"references",
 				"published_at",
 				"modified_at",
+				"detail_revision",
 				"updated_at",
 			}),
 		}).Create(&model).Error; err != nil {

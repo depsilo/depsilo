@@ -9,9 +9,18 @@ import (
 	"depsilo/internal/ecosystem"
 )
 
+// AdvisoryDetailRevision identifies how stored advisory fields were derived
+// from OSV records. Raise it when parsing changes; rows from an older revision
+// are fetched and parsed again by the next scan of their package.
+//
+// Revision 1 scores CVSS v3 vectors and uses GitHub's qualitative rating when
+// no v3 vector exists. Revision 0 read the vector as a number, so every
+// OSV-sourced advisory was stored as "unknown" with score 0.
+const AdvisoryDetailRevision = 1
+
 // ParseVulnerability converts an OSV vulnerability into a DB model.
 func ParseVulnerability(v OSVVulnerability, ecosystemHint string) *db.Vulnerability {
-	severity, cvss := extractSeverity(v.Severity)
+	severity, cvss := extractSeverity(v)
 	ranges := extractAffectedRanges(v.Affected)
 	refs := extractReferences(v.References)
 	aliases := strings.Join(v.Aliases, ",")
@@ -38,24 +47,59 @@ func ParseVulnerability(v OSVVulnerability, ecosystemHint string) *db.Vulnerabil
 		References:     refs,
 		PublishedAt:    v.Published,
 		ModifiedAt:     v.Modified,
+		DetailRevision: AdvisoryDetailRevision,
 	}
 }
 
-func extractSeverity(severities []osvSeverity) (string, float32) {
-	for _, s := range severities {
-		if s.Type == "CVSS_V3" {
-			score := parseCVSSScore(s.Score)
-			return classifyCVSS(score), score
+// extractSeverity scores the record's CVSS v3 vector. OSV carries vectors,
+// not numbers, in severity scores; a bare number is still accepted because
+// operator imports from other tools sometimes contain one. Records scored only
+// with CVSS v4 fall back to the database's qualitative rating, leaving the
+// numeric score unknown instead of inventing one.
+func extractSeverity(v OSVVulnerability) (string, float32) {
+	for _, s := range v.Severity {
+		if s.Type != "CVSS_V3" {
+			continue
 		}
+		if score, ok := cvssV3BaseScore(s.Score); ok && score > 0 {
+			return classifyCVSS(float32(score)), float32(score)
+		}
+		if score, err := strconv.ParseFloat(strings.TrimSpace(s.Score), 32); err == nil && score > 0 && score <= 10 {
+			return classifyCVSS(float32(score)), float32(score)
+		}
+	}
+	if label := databaseSpecificSeverity(v.DatabaseSpecific); label != "" {
+		return label, 0
 	}
 	return "unknown", 0
 }
 
-func parseCVSSScore(scoreStr string) float32 {
-	if f, err := strconv.ParseFloat(scoreStr, 32); err == nil {
-		return float32(f)
+// databaseSpecificSeverity reads the qualitative rating GitHub advisories
+// publish as database_specific.severity. Other shapes are ignored.
+func databaseSpecificSeverity(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
 	}
-	return 0
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil {
+		return ""
+	}
+	var label string
+	if json.Unmarshal(fields["severity"], &label) != nil {
+		return ""
+	}
+	switch strings.ToUpper(strings.TrimSpace(label)) {
+	case "CRITICAL":
+		return "critical"
+	case "HIGH":
+		return "high"
+	case "MODERATE", "MEDIUM":
+		return "medium"
+	case "LOW":
+		return "low"
+	default:
+		return ""
+	}
 }
 
 func classifyCVSS(score float32) string {

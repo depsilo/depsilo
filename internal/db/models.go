@@ -309,6 +309,10 @@ type Vulnerability struct {
 	ModifiedAt     time.Time `json:"modified_at"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
+	// DetailRevision records which advisory parser derived these fields; an
+	// older revision is fetched and parsed again on the next package scan.
+	// It is last because schema v15 appends the column to existing tables.
+	DetailRevision int `gorm:"not null;default:0" json:"-"`
 }
 
 type VulnerabilityCheck struct {

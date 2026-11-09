@@ -578,7 +578,20 @@ func TestScannerCanonicalizesPyPIIdentityBeforeQueryAndPersistence(t *testing.T)
 	database := newScannerTestDB(t)
 	addCachedPackage(t, database, "pypi", "Django_rest.framework")
 
+	advisory := catalogTestAdvisory(
+		"OSV-PYPI-ALIAS", "PyPI", "django-rest-framework", 8.2,
+	)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/v1/query" {
+			var request osvQueryRequest
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil || request.Package == nil ||
+				request.Package.Name != "django-rest-framework" {
+				t.Errorf("OSV detail query = %+v (%v), want canonical PyPI name", request.Package, err)
+			}
+			_ = json.NewEncoder(w).Encode(osvQueryResponse{Vulns: []OSVVulnerability{advisory}})
+			return
+		}
 		var request osvBatchRequest
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -588,12 +601,8 @@ func TestScannerCanonicalizesPyPIIdentityBeforeQueryAndPersistence(t *testing.T)
 			request.Queries[0].Package.Name != "django-rest-framework" {
 			t.Fatalf("OSV query = %+v, want canonical PyPI name", request.Queries)
 		}
-		advisory := catalogTestAdvisory(
-			"OSV-PYPI-ALIAS", "PyPI", "django-rest-framework", 8.2,
-		)
-		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(osvBatchResponse{
-			Results: []osvQueryResponse{{Vulns: []OSVVulnerability{advisory}}},
+			Results: []osvQueryResponse{{Vulns: []OSVVulnerability{{ID: advisory.ID, Modified: advisory.Modified}}}},
 		})
 	}))
 	t.Cleanup(server.Close)
@@ -647,6 +656,19 @@ func TestScannerAggregatesProcessFailureAndContinues(t *testing.T) {
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/v1/query" {
+			var request osvQueryRequest
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil || request.Package == nil {
+				http.Error(w, "bad detail query", http.StatusBadRequest)
+				return
+			}
+			name := request.Package.Name
+			_ = json.NewEncoder(w).Encode(osvQueryResponse{Vulns: []OSVVulnerability{
+				catalogTestAdvisory("OSV-"+name, "PyPI", name, 5),
+			}})
+			return
+		}
 		var request osvBatchRequest
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -657,7 +679,6 @@ func TestScannerAggregatesProcessFailureAndContinues(t *testing.T) {
 			name := query.Package.Name
 			response.Results[i].Vulns = []OSVVulnerability{{ID: "OSV-" + name}}
 		}
-		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Errorf("encode response: %v", err)
 		}

@@ -426,10 +426,10 @@ func TestPackageRuleDialectMigrationInvalidatesLegacyNPMScannerIdentity(t *testi
 	alpineVulnerability := Vulnerability{
 		OSVID: "ALPINE-NPM-SENTINEL", Ecosystem: "alpine", PackageName: "preserved", CreatedAt: now,
 	}
-	if err := database.Create(&npmVulnerability).Error; err != nil {
+	if err := database.Omit("DetailRevision").Create(&npmVulnerability).Error; err != nil {
 		t.Fatalf("seed npm vulnerability: %v", err)
 	}
-	if err := database.Create(&alpineVulnerability).Error; err != nil {
+	if err := database.Omit("DetailRevision").Create(&alpineVulnerability).Error; err != nil {
 		t.Fatalf("seed Alpine vulnerability: %v", err)
 	}
 	for _, vulnerabilityID := range []uint{npmVulnerability.ID, alpineVulnerability.ID} {
@@ -523,10 +523,10 @@ func TestPackageRuleDialectMigrationClearsLegacyAPTScannerIdentity(t *testing.T)
 	alpineVulnerability := Vulnerability{
 		OSVID: "ALPINE-APT-SENTINEL", Ecosystem: "alpine", PackageName: "apt", CreatedAt: now,
 	}
-	if err := database.Create(&aptVulnerability).Error; err != nil {
+	if err := database.Omit("DetailRevision").Create(&aptVulnerability).Error; err != nil {
 		t.Fatalf("seed APT vulnerability advisory: %v", err)
 	}
-	if err := database.Create(&alpineVulnerability).Error; err != nil {
+	if err := database.Omit("DetailRevision").Create(&alpineVulnerability).Error; err != nil {
 		t.Fatalf("seed Alpine vulnerability advisory: %v", err)
 	}
 	for _, vulnerabilityID := range []uint{aptVulnerability.ID, alpineVulnerability.ID} {
@@ -646,10 +646,10 @@ func TestPackageRuleDialectMigrationRepairsLegacyGoScannerIdentity(t *testing.T)
 	alpineVulnerability := Vulnerability{
 		OSVID: "ALPINE-PRESERVED", Ecosystem: "alpine", PackageName: "py3-requests", CreatedAt: now,
 	}
-	if err := database.Create(&goVulnerability).Error; err != nil {
+	if err := database.Omit("DetailRevision").Create(&goVulnerability).Error; err != nil {
 		t.Fatalf("seed Go vulnerability advisory: %v", err)
 	}
-	if err := database.Create(&alpineVulnerability).Error; err != nil {
+	if err := database.Omit("DetailRevision").Create(&alpineVulnerability).Error; err != nil {
 		t.Fatalf("seed Alpine vulnerability advisory: %v", err)
 	}
 	for _, vulnerabilityID := range []uint{goVulnerability.ID, alpineVulnerability.ID} {
@@ -778,10 +778,10 @@ func TestPackageRuleDialectMigrationRepairsLegacyCRANScannerIdentity(t *testing.
 	alpineVulnerability := Vulnerability{
 		OSVID: "ALPINE-CRAN-SENTINEL", Ecosystem: "alpine", PackageName: "R", CreatedAt: now,
 	}
-	if err := database.Create(&cranVulnerability).Error; err != nil {
+	if err := database.Omit("DetailRevision").Create(&cranVulnerability).Error; err != nil {
 		t.Fatalf("seed CRAN vulnerability advisory: %v", err)
 	}
-	if err := database.Create(&alpineVulnerability).Error; err != nil {
+	if err := database.Omit("DetailRevision").Create(&alpineVulnerability).Error; err != nil {
 		t.Fatalf("seed Alpine vulnerability advisory: %v", err)
 	}
 	for _, vulnerabilityID := range []uint{cranVulnerability.ID, alpineVulnerability.ID} {
@@ -906,10 +906,10 @@ func TestPackageRuleDialectMigrationRepairsLegacyCargoScannerIdentity(t *testing
 	alpineVulnerability := Vulnerability{
 		OSVID: "ALPINE-CARGO-SENTINEL", Ecosystem: "alpine", PackageName: "cargo", CreatedAt: now,
 	}
-	if err := database.Create(&cargoVulnerability).Error; err != nil {
+	if err := database.Omit("DetailRevision").Create(&cargoVulnerability).Error; err != nil {
 		t.Fatalf("seed Cargo vulnerability advisory: %v", err)
 	}
-	if err := database.Create(&alpineVulnerability).Error; err != nil {
+	if err := database.Omit("DetailRevision").Create(&alpineVulnerability).Error; err != nil {
 		t.Fatalf("seed Alpine vulnerability advisory: %v", err)
 	}
 	for _, vulnerabilityID := range []uint{cargoVulnerability.ID, alpineVulnerability.ID} {
@@ -1027,10 +1027,10 @@ func TestPackageRuleDialectMigrationClearsLegacyNuGetScannerIdentity(t *testing.
 	alpineVulnerability := Vulnerability{
 		OSVID: "ALPINE-NUGET-SENTINEL", Ecosystem: "alpine", PackageName: "nuget", CreatedAt: now,
 	}
-	if err := database.Create(&nugetVulnerability).Error; err != nil {
+	if err := database.Omit("DetailRevision").Create(&nugetVulnerability).Error; err != nil {
 		t.Fatalf("seed NuGet vulnerability advisory: %v", err)
 	}
-	if err := database.Create(&alpineVulnerability).Error; err != nil {
+	if err := database.Omit("DetailRevision").Create(&alpineVulnerability).Error; err != nil {
 		t.Fatalf("seed Alpine vulnerability advisory: %v", err)
 	}
 	for _, vulnerabilityID := range []uint{nugetVulnerability.ID, alpineVulnerability.ID} {
@@ -1137,7 +1137,7 @@ func TestPackageRuleDialectMigrationInvalidatesLegacyRubyGemsScannerIdentity(t *
 		OSVID: "GHSA-RUBYGEMS-GUESSED", Ecosystem: "rubygems",
 		PackageName: cacheEntry.PackageName, CreatedAt: now,
 	}
-	if err := database.Create(&vulnerability).Error; err != nil {
+	if err := database.Omit("DetailRevision").Create(&vulnerability).Error; err != nil {
 		t.Fatalf("seed RubyGems vulnerability: %v", err)
 	}
 	if err := database.Create(&DismissedVuln{
@@ -1303,7 +1303,7 @@ func TestPackageRuleDialectMigrationRepairsMavenScannerIdentity(t *testing.T) {
 	mavenVulnerability := Vulnerability{
 		OSVID: "GHSA-MAVEN", Ecosystem: "maven", PackageName: "log4j-core", CreatedAt: now,
 	}
-	if err := database.Create(&mavenVulnerability).Error; err != nil {
+	if err := database.Omit("DetailRevision").Create(&mavenVulnerability).Error; err != nil {
 		t.Fatalf("seed Maven vulnerability: %v", err)
 	}
 	if err := database.Create(&DismissedVuln{
@@ -1407,7 +1407,7 @@ func TestPackageRuleDialectMigrationRepairsComposerScannerIdentity(t *testing.T)
 	composerVulnerability := Vulnerability{
 		OSVID: "GHSA-COMPOSER-LEGACY", Ecosystem: "composer", PackageName: "wrong/legacy", CreatedAt: now,
 	}
-	if err := database.Create(&composerVulnerability).Error; err != nil {
+	if err := database.Omit("DetailRevision").Create(&composerVulnerability).Error; err != nil {
 		t.Fatalf("seed Composer vulnerability: %v", err)
 	}
 	if err := database.Create(&DismissedVuln{
@@ -1429,7 +1429,7 @@ func TestPackageRuleDialectMigrationRepairsComposerScannerIdentity(t *testing.T)
 	otherVulnerability := Vulnerability{
 		OSVID: "GHSA-ALPINE-SENTINEL", Ecosystem: "alpine", PackageName: "curl", CreatedAt: now,
 	}
-	if err := database.Create(&otherVulnerability).Error; err != nil {
+	if err := database.Omit("DetailRevision").Create(&otherVulnerability).Error; err != nil {
 		t.Fatalf("seed non-Composer vulnerability: %v", err)
 	}
 	if err := database.Create(&DismissedVuln{
@@ -1517,7 +1517,7 @@ func TestPackageRuleDialectMigrationRepairsPyPIScannerIdentity(t *testing.T) {
 	pypiVulnerability := Vulnerability{
 		OSVID: "GHSA-PYPI-ALIAS", Ecosystem: "pypi", PackageName: "Django_REST.Framework", CreatedAt: now,
 	}
-	if err := database.Create(&pypiVulnerability).Error; err != nil {
+	if err := database.Omit("DetailRevision").Create(&pypiVulnerability).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := database.Create(&DismissedVuln{

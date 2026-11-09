@@ -1,10 +1,82 @@
 package security
 
 import (
+	"encoding/json"
 	"testing"
 )
 
+// realOSVRecord is shaped like the full records OSV returns from /v1/query:
+// CVSS scores are vectors, and GitHub advisories add a qualitative rating.
+const realOSVRecord = `{
+  "id": "GHSA-jjg7-2v4v-x38h",
+  "summary": "Internationalized Domain Names in Applications (IDNA) vulnerable to denial of service",
+  "modified": "2026-09-10T03:50:12.774088Z",
+  "published": "2024-04-11T16:54:35Z",
+  "aliases": ["CVE-2024-3651", "PYSEC-2024-60"],
+  "severity": [
+    {"type": "CVSS_V3", "score": "CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"},
+    {"type": "CVSS_V4", "score": "CVSS:4.0/AV:L/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N"}
+  ],
+  "affected": [{
+    "package": {"name": "idna", "ecosystem": "PyPI"},
+    "ranges": [{"type": "ECOSYSTEM", "events": [{"introduced": "0"}, {"fixed": "3.7"}]}],
+    "database_specific": {"source": "https://github.com/github/advisory-database"}
+  }],
+  "database_specific": {"severity": "MODERATE", "cwe_ids": ["CWE-400"], "github_reviewed": true},
+  "schema_version": "1.7.3"
+}`
+
+func decodeOSVRecord(t *testing.T, raw string) OSVVulnerability {
+	t.Helper()
+	var record OSVVulnerability
+	if err := json.Unmarshal([]byte(raw), &record); err != nil {
+		t.Fatal(err)
+	}
+	return record
+}
+
+func TestParseVulnerabilityScoresRealOSVVector(t *testing.T) {
+	parsed := ParseVulnerability(decodeOSVRecord(t, realOSVRecord), "pypi")
+	if parsed.Severity != "medium" || parsed.CVSSScore != 6.2 || parsed.DetailRevision != AdvisoryDetailRevision {
+		t.Fatalf("parsed severity = %q, score = %v, revision = %d; want medium 6.2 at revision %d",
+			parsed.Severity, parsed.CVSSScore, parsed.DetailRevision, AdvisoryDetailRevision)
+	}
+	if parsed.PackageName != "idna" || parsed.Summary == "" || fixedVersionForTest(t, parsed.AffectedRanges) != "3.7" {
+		t.Fatalf("parsed record lost details: %+v", parsed)
+	}
+}
+
+func TestParseVulnerabilityFallsBackToQualitativeRatingWithoutV3Vector(t *testing.T) {
+	record := decodeOSVRecord(t, realOSVRecord)
+	record.Severity = record.Severity[1:] // CVSS v4 only
+	for label, want := range map[string]string{
+		"CRITICAL": "critical", "HIGH": "high", "MODERATE": "medium", "medium": "medium", "LOW": "low",
+	} {
+		record.DatabaseSpecific = json.RawMessage(`{"severity":"` + label + `"}`)
+		parsed := ParseVulnerability(record, "pypi")
+		if parsed.Severity != want || parsed.CVSSScore != 0 {
+			t.Errorf("label %s: severity = %q, score = %v; want %s with no invented score", label, parsed.Severity, parsed.CVSSScore, want)
+		}
+	}
+}
+
+func TestParseVulnerabilityLeavesUnratedRecordsUnknown(t *testing.T) {
+	for name, raw := range map[string]string{
+		"no severity":               `{"id":"GO-2024-0001","affected":[{"package":{"name":"golang.org/x/text","ecosystem":"Go"}}]}`,
+		"malformed vector":          `{"id":"X-1","severity":[{"type":"CVSS_V3","score":"CVSS:3.1/AV:N"}]}`,
+		"unrecognized rating":       `{"id":"X-2","database_specific":{"severity":"IMPORTANT"}}`,
+		"non-string rating":         `{"id":"X-3","database_specific":{"severity":{"level":"HIGH"}}}`,
+		"non-object specific field": `{"id":"X-4","database_specific":["HIGH"]}`,
+	} {
+		parsed := ParseVulnerability(decodeOSVRecord(t, raw), "go")
+		if parsed.Severity != "unknown" || parsed.CVSSScore != 0 {
+			t.Errorf("%s: severity = %q, score = %v; want unknown", name, parsed.Severity, parsed.CVSSScore)
+		}
+	}
+}
+
 func TestParseVulnerability_CVSS(t *testing.T) {
+	// Operator imports from other tools may carry a bare numeric score.
 	vuln := OSVVulnerability{
 		ID:      "GHSA-test-1",
 		Summary: "Test vulnerability",

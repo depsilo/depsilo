@@ -116,6 +116,21 @@ OSV affected intervals into allow/deny selectors is
 [safety-disabled](package-rules.md#vulnerability-auto-block-policies), because
 the supported selector grammar cannot represent those intervals losslessly.
 
+Findings are matched by package, not by the cached version: a listed advisory
+may only affect versions this instance never served, so check its affected
+ranges before acting. Severity comes from the advisory's CVSS v3 vector, scored
+with the CVSS v3.1 base-score formula. Advisories without a v3 vector use
+GitHub's qualitative rating when present, without a numeric score (CVSS v4
+vectors are not scored); the remainder, such as Go vulnerability database
+entries, stay `unknown`. Severity suggestions list scored advisories only.
+
+The periodic scan lists advisory IDs through OSV's batch endpoint and fetches a
+package's complete records only when the listing names an advisory that is
+new, changed, or stored by an older parser. A failed fetch keeps the stored
+records and retries on the next scan. Releases before this behavior stored
+every advisory as `unknown` and could replace stored details with bare IDs;
+upgrading marks every package for a fresh scan.
+
 ## Snapshots and tamper detection
 
 A golden snapshot is a named set built from recorded artifact identities and

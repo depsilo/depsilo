@@ -273,7 +273,22 @@ scanBatches:
 			}
 			for j := 0; j < resultCount; j++ {
 				pkg := batch[j]
-				count, err := s.recordScan(ctx, pkg, results[j])
+				advisories, err := s.completeAdvisories(ctx, pkg, results[j])
+				if err != nil {
+					zap.L().Error("fetch advisory details failed",
+						zap.String("ecosystem", pkg.Ecosystem),
+						zap.String("package", pkg.Name),
+						zap.Error(err),
+					)
+					scanErrors = append(scanErrors, fmt.Errorf(
+						"fetch advisory details for %s/%s: %w", pkg.Ecosystem, pkg.Name, err,
+					))
+					if ctx.Err() != nil {
+						break scanBatches
+					}
+					continue
+				}
+				count, err := s.recordScan(ctx, pkg, advisories)
 				if err != nil {
 					zap.L().Error("store scan results failed",
 						zap.String("ecosystem", pkg.Ecosystem),
@@ -348,6 +363,23 @@ func (s *Scanner) ScanPackage(ctx context.Context, ecosystem, packageName string
 		return fmt.Errorf("store scan results for %s/%s: %w", ecosystem, packageName, err)
 	}
 	return nil
+}
+
+// completeAdvisories turns one package's batch listing into records fit for
+// storage. A batch listing names advisories by ID only, so the package is
+// queried in full when the listing is truncated or names an advisory whose
+// stored record is missing, outdated, or parsed by an older revision.
+func (s *Scanner) completeAdvisories(ctx context.Context, pkg PackageRef, listed BatchResult) ([]OSVVulnerability, error) {
+	if s.catalog == nil {
+		return nil, errNoAdvisoryCatalog
+	}
+	if !listed.Truncated {
+		needsDetails, err := s.catalog.NeedsDetails(ctx, pkg, listed.Advisories)
+		if err != nil || !needsDetails {
+			return listed.Advisories, err
+		}
+	}
+	return s.fetcher.Query(ctx, pkg.Ecosystem, pkg.Name)
 }
 
 func (s *Scanner) recordScan(ctx context.Context, pkg PackageRef, advisories []OSVVulnerability) (int, error) {
