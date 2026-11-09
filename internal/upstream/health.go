@@ -140,7 +140,7 @@ func probe(ctx context.Context, u *Upstream) ProbeResult {
 		resp.Body.Close()
 		result.Healthy = resp.StatusCode < 500
 		if !result.Healthy {
-			result.Err = fmt.Errorf("upstream returned status %d", resp.StatusCode)
+			result.Err = &StatusError{Code: resp.StatusCode}
 		}
 	}
 	return result

@@ -1,6 +1,6 @@
 import { Toggle } from '@/components/ui/toggle'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Field, FieldLabel, FieldDescription, FieldError } from '@/components/ui/field'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -39,6 +39,7 @@ import type {
 
 import { normalizeProbeInterval, probeIntervals } from '@/admin/upstreams/probeInterval'
 import { CheckResults, type CheckRecord } from '@/admin/upstreams/CheckResults'
+import { FailureReason } from '@/admin/upstreams/FailureReason'
 
 type UpstreamHealth = ReturnType<typeof upstreamStatus>
 type UpstreamStatusFilter = 'all' | 'attention' | UpstreamHealth
@@ -212,7 +213,15 @@ export default function Upstreams() {
     probeInterval: item.probe_interval,
     lastCheckedAt: item.last_checked_at,
     workerRunning: item.worker_running,
+    failure: item.last_failure,
+    proxySource: item.proxy_source,
   })), [allUpstreams])
+
+  // Fake-IP DNS affects every upstream at once; explain it once for the page.
+  const fakeIPFailureCount = useMemo(() => upstreamItems.filter(item => (
+    upstreamStatus(item) === 'failed' && item.failure?.code === 'egress_fake_ip'
+  )).length, [upstreamItems])
+  const sharedFakeIP = fakeIPFailureCount >= 2
 
   const statusCounts = useMemo(() => {
     const counts: Record<UpstreamHealth, number> = { healthy: 0, degraded: 0, failed: 0, unknown: 0 }
@@ -694,6 +703,18 @@ export default function Upstreams() {
               </div>
             )}
 
+            {sharedFakeIP && (
+              <div className="mb-4" data-upstream-shared-failure="egress_fake_ip">
+                <Alert variant="warning">
+                  <AlertTitle>{t('upstreams.sharedFailureTitle', { count: fakeIPFailureCount })}</AlertTitle>
+                  <AlertDescription>
+                    <p>{t('upstreams.failure.egress_fake_ip.shared')}</p>
+                    <p>{t('upstreams.failure.egress_fake_ip.action')}</p>
+                  </AlertDescription>
+                </Alert>
+              </div>
+            )}
+
             {upstreamItems.length === 0 ? (
               <Empty style={{ minHeight: 160 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"hub"} size="sm" /></EmptyMedia><EmptyTitle>{t('upstreams.emptyTitle')}</EmptyTitle><EmptyDescription>{canWrite ? t('upstreams.emptyHint') : t('upstreams.emptyReadonlyHint')}</EmptyDescription></EmptyHeader></Empty>
             ) : visibleUpstreams.length === 0 ? (
@@ -718,6 +739,7 @@ export default function Upstreams() {
                 renderMetadata={(upstream) => (
                   <div className="space-y-2 text-[13px] leading-relaxed">
                     <p className="break-all font-mono text-[12px]" title={upstreamEndpointLabel(upstream.url ?? '')}>{upstreamEndpointLabel(upstream.url ?? '')}</p>
+                    {upstream.failure && upstreamStatus(upstream) === 'failed' && <FailureReason failure={upstream.failure} short={sharedFakeIP} />}
                     <div className="flex flex-wrap gap-x-4 gap-y-1">
                       <span>{t('upstreams.priorityValue', { priority: upstream.priority ?? 1 })}</span>
                       <span>{upstream.probeMode === 'active' && upstream.workerRunning === false
@@ -732,7 +754,9 @@ export default function Upstreams() {
                       <div className="mt-2 space-y-1 text-[12px]">
                         <p>{upstream.has_observations === false ? t('upstreams.successRateUnknown') : t('upstreams.successRateValue', { rate: Math.round((upstream.success_rate ?? 0) * 100) })}</p>
                         <p>{t('upstreams.successRateHint')}</p>
-                        <p>{upstream.proxy ? t('upstreams.proxyEnabled') : t('upstreams.proxyNotConfigured')}</p>
+                        <p>{upstream.proxySource === 'default' ? t('upstreams.proxyDefault')
+                          : upstream.proxySource === 'upstream' || upstream.proxy ? t('upstreams.proxyEnabled')
+                          : t('upstreams.proxyNotConfigured')}</p>
                         <p>{!upstream.via ? t('upstreams.viaDirect')
                           : cascadePending || cascadeError ? t('upstreams.viaUnknown', { peer: upstream.via })
                           : !cascadeInfo?.enabled ? t('upstreams.viaDisabled', { peer: upstream.via })

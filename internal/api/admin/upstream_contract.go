@@ -177,8 +177,29 @@ type adminUpstreamResponse struct {
 	HasObservations    bool       `json:"has_observations"`
 	RuntimeSampleCount int64      `json:"runtime_sample_count"`
 	WorkerRunning      bool       `json:"worker_running"`
-	CreatedAt          time.Time  `json:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at"`
+	// ProxySource is "upstream" for the upstream's own proxy, "default" for
+	// egress.upstream_proxy, or "" for direct egress or a cascade parent.
+	ProxySource string `json:"proxy_source"`
+	// LastFailure explains the newest failed check; null after a passing one.
+	LastFailure *upstreamFailureResponse `json:"last_failure"`
+	CreatedAt   time.Time                `json:"created_at"`
+	UpdatedAt   time.Time                `json:"updated_at"`
+}
+
+// upstreamFailureResponse is a bounded explanation of a failed check. It
+// carries no URL or credential, so every Admin role may see it.
+type upstreamFailureResponse struct {
+	Code    string `json:"code"`
+	Address string `json:"address,omitempty"`
+	Range   string `json:"range,omitempty"`
+	Status  int    `json:"status,omitempty"`
+}
+
+func mapUpstreamFailure(failure *upstream.Failure) *upstreamFailureResponse {
+	if failure == nil {
+		return nil
+	}
+	return &upstreamFailureResponse{Code: failure.Code, Address: failure.Address, Range: failure.Range, Status: failure.Status}
 }
 
 type upstreamListResponse struct {
@@ -195,7 +216,9 @@ type checkResultResponse struct {
 	Healthy   bool      `json:"healthy"`
 	LatencyMS int64     `json:"latency_ms"`
 	CheckedAt time.Time `json:"checked_at"`
-	Error     *string   `json:"error"`
+	// Error is the raw failure text, shown only to credential viewers.
+	Error   *string                  `json:"error"`
+	Failure *upstreamFailureResponse `json:"failure"`
 }
 
 type checkUpstreamResponse struct {
@@ -233,6 +256,8 @@ func mapAdminUpstream(item upstream.RuntimeUpstream, canViewCredentials bool) ad
 		HasObservations:    item.HasObservations,
 		RuntimeSampleCount: item.RuntimeSampleCount,
 		WorkerRunning:      item.WorkerRunning,
+		ProxySource:        item.ProxySource,
+		LastFailure:        mapUpstreamFailure(item.LastFailure),
 		CreatedAt:          item.CreatedAt,
 		UpdatedAt:          item.UpdatedAt,
 	}

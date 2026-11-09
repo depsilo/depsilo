@@ -158,7 +158,11 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		return nil, fmt.Errorf("configure npm tarball provenance: %w", err)
 	}
 	definitions := standardEcosystemDefinitions(cfg, npmTarballSigningKey)
-	registryOptions := upstream.PoolOptions{}
+	egressPolicy, err := cfg.Egress.Policy()
+	if err != nil {
+		return nil, err
+	}
+	registryOptions := upstream.PoolOptions{Egress: egressPolicy}
 	var cascadeIdentity string
 	if cfg.Cascade.Enabled {
 		cascadeIdentity, err = resolveCascadeIdentity(database, cfg.Cascade.InstanceID)
@@ -798,7 +802,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		}
 	}
 	for _, idx := range cfg.ExtraIndexes {
-		idxPool, err := upstream.NewPool(idx.Upstreams)
+		idxPool, err := upstream.NewPoolWithOptions(idx.Upstreams, upstream.PoolOptions{Egress: egressPolicy})
 		if err != nil {
 			return nil, fmt.Errorf("create extra index %s pool: %w", idx.Name, err)
 		}

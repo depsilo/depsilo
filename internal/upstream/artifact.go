@@ -35,7 +35,7 @@ func (u *Upstream) FetchArtifactURL(ctx context.Context, target string) (*FetchR
 	}
 	parsed, _ := url.Parse(target)
 	origin, _ := url.Parse(u.URL)
-	if err := validateExternalTarget(origin, parsed, u.directNetworkGuard); err != nil {
+	if err := validateExternalTarget(origin, parsed, u.directNetworkGuard, u.egress); err != nil {
 		return nil, errors.New("artifact target rejected")
 	}
 	return u.fetchArtifact(ctx, target, false)

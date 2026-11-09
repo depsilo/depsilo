@@ -1367,6 +1367,55 @@ const en = {
       httpProxy: 'HTTP Proxy (optional)',
       proxyHint: 'Used only for this upstream; HTTP and HTTPS are supported.',
       proxyEnabled: 'Proxy enabled',
+      proxyDefault: 'Uses the default egress proxy ([egress] upstream_proxy)',
+      failureDetails: 'Error details',
+      sharedFailureTitle: '{{count}} upstreams cannot connect for the same reason',
+      failure: {
+        egress_fake_ip: {
+          title: 'DNS resolved this upstream to {{address}}, in the benchmarking range {{range}}. Proxy software in fake-IP mode answers with such addresses, and Depsilo does not connect to them by default.',
+          short: 'DNS returned the fake-IP address {{address}}; not connected.',
+          shared: 'DNS resolves the hosts of these upstreams into the benchmarking range 198.18.0.0/15. Proxy software in fake-IP mode answers this way, and Depsilo does not connect to such addresses by default.',
+          action: 'Set upstream_proxy under [egress] in config.toml to the proxy software\'s HTTP port (for example http://127.0.0.1:7890) and restart, or give Depsilo a DNS server that returns real addresses.',
+        },
+        egress_shared_address: {
+          title: 'This upstream resolved to {{address}}, in the shared address space {{range}} used by carrier-grade NAT and overlay networks such as Tailscale. Depsilo does not connect to it by default.',
+          action: 'If it is a node on your own network, declare its range under [egress] private_ranges in config.toml and restart. Declared addresses are treated as private, so public upstreams still cannot redirect into them.',
+        },
+        egress_reserved: {
+          title: 'This upstream resolved to the reserved address {{address}}, which Depsilo does not connect to.',
+          titleMixed: 'The DNS answer for this upstream contains a reserved address or mixes network scopes, so Depsilo does not connect.',
+          action: 'Check the DNS records and network configuration for this upstream host.',
+        },
+        egress_private: {
+          title: 'The request was directed to the private or loopback address {{address}}, but this upstream\'s configured origin is not private, so it was refused.',
+          titleNoAddress: 'The request was directed to a private or loopback address, but this upstream\'s configured origin is not private, so it was refused.',
+          action: 'Configure an upstream on your LAN with its LAN address as the URL. A public upstream cannot redirect into a private network.',
+        },
+        dns: {
+          title: 'The upstream host name could not be resolved.',
+          action: 'Check DNS settings and network connectivity on the machine running Depsilo.',
+        },
+        timeout: {
+          title: 'The connection or response timed out.',
+          action: 'Check network connectivity. If the upstream is only reachable through a proxy, set this upstream\'s HTTP proxy or upstream_proxy under [egress].',
+        },
+        tls: {
+          title: 'The TLS handshake or certificate verification failed.',
+          action: 'Check the upstream certificate and make sure no intermediate proxy replaces it.',
+        },
+        connection_refused: {
+          title: 'The connection was refused or reset.',
+          action: 'Check that the upstream address and port are correct and the service is running.',
+        },
+        http_status: {
+          title: 'The upstream returned HTTP {{status}}.',
+          action: 'This is a server-side error at the upstream. Retry later or adjust upstream priorities.',
+        },
+        network: {
+          title: 'The network request failed.',
+          action: 'See the error details, or look for this upstream in the service log.',
+        },
+      },
       via: 'Cascade egress',
       viaHint: 'Choose which parent Depsilo fetches and caches this upstream on a miss.',
       viaDirect: 'Direct (default)',

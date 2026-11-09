@@ -68,6 +68,9 @@ type Config struct {
 	// upstream fetches through one or more parent Depsilo nodes, and (when
 	// enabled) accepts authenticated relay requests from child nodes.
 	Cascade CascadeConfig `mapstructure:"cascade"`
+	// Egress holds outbound network declarations for package upstreams and
+	// cascade peers: a default proxy and declared private address ranges.
+	Egress EgressConfig `mapstructure:"egress"`
 }
 
 // CascadeConfig is the operator-facing shape of multi-level cache peering.

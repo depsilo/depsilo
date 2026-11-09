@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"depsilo/internal/egress"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -164,12 +166,12 @@ func TestBuildClientRejectsOriginQueryAndFragment(t *testing.T) {
 		"fragment": "https://example.test/base#fragment",
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := buildClient("", origin); err == nil {
+			if _, err := buildClient("", origin, egress.Policy{}); err == nil {
 				t.Errorf("buildClient accepted unusable origin %q", safeURLOrigin(origin))
 			}
 		})
 	}
-	if _, err := buildClient("", "https://example.test/base"); err != nil {
+	if _, err := buildClient("", "https://example.test/base", egress.Policy{}); err != nil {
 		t.Fatalf("buildClient rejected base-path origin: %v", err)
 	}
 }

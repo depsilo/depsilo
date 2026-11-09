@@ -13,6 +13,7 @@ owner.
 | Shared cache behavior | `internal/cache/` | adjacent cache tests | cache interfaces in source |
 | Retained dependency-set preparation | `internal/distribution/`, `internal/api/admin/distribution.go`, `internal/cli/distribution.go`, `internal/cli/distribution_transfer.go` | distribution Store/storage/transfer, API, and CLI tests; `make test-s3` for S3 | [Preparation catalog and transfer bundles](../distribution.md) |
 | Upstream selection/health | `internal/upstream/` | adjacent upstream tests | ADR-0001, Admin authority guide |
+| Upstream egress guard, default proxy, declared private ranges, check failure reasons | `internal/egress/`, `internal/upstream/request.go`, `internal/upstream/failure.go`, `internal/config/egress.go` | `internal/egress/*_test.go`, `internal/upstream/egress_failure_test.go`, `internal/upstream/request_test.go` | [Upstream network egress](../deployment.md#upstream-network-egress) |
 | Public/Admin HTTP contract | `internal/api/` | adjacent contract/handler tests | Admin authority guide |
 | Database model/migration | `internal/db/` | migration and repository tests | relevant ADR |
 | Supply-chain rule | `internal/quarantine/`, `internal/blocklist/`, `internal/tamper/`, `internal/rules/`, `internal/security/` | adjacent tests + tagged integration | PRODUCT, relevant ADR/spec |

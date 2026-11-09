@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"depsilo/internal/egress"
 )
 
 // NewRelayClient builds the default egress client used by the cascade relay
@@ -56,7 +58,8 @@ func (d *relayDialer) DialContext(ctx context.Context, network, address string) 
 	if err != nil {
 		return nil, fmt.Errorf("resolve relay target: %w", err)
 	}
-	if scope := resolvedNetworkScope(addresses); scope != networkPublic {
+	// Relay targets must be public; declared private ranges stay out of reach.
+	if scope := resolvedNetworkScope(egress.Policy{}, addresses); scope != networkPublic {
 		return nil, errors.New("relay target is not a public address")
 	}
 	inner := &guardedDialer{resolver: d.resolver, dialContext: d.dialContext}

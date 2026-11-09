@@ -371,6 +371,9 @@ func decodeViper(v *viper.Viper) (*Config, error) {
 	if err := validateCascadeConfig(cfg); err != nil {
 		return nil, err
 	}
+	if _, err := cfg.Egress.Policy(); err != nil {
+		return nil, err
+	}
 	if err := validatePolicyConfig(cfg.Policy); err != nil {
 		return nil, err
 	}

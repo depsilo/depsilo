@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"depsilo/internal/egress"
 )
 
 // HeadLastModified performs a HEAD exchange against the configured origin and
@@ -105,7 +107,7 @@ func (u *Upstream) RequestURL(ctx context.Context, reqURL string, opts RequestOp
 	}
 	target, _ := url.Parse(reqURL)
 	origin, _ := url.Parse(u.URL)
-	if err := validateExternalTarget(origin, target, u.directNetworkGuard); err != nil {
+	if err := validateExternalTarget(origin, target, u.directNetworkGuard, u.egress); err != nil {
 		return nil, fmt.Errorf("request %s: external target rejected", safeURLOrigin(reqURL))
 	}
 	return u.request(ctx, reqURL, opts, opts.FollowRedirects, false)
@@ -194,8 +196,9 @@ func (u *Upstream) secureRedirectCheck(
 			configuredOrigin,
 			request.URL,
 			u.directNetworkGuard,
+			u.egress,
 		); err != nil {
-			return errors.New("external redirect target rejected")
+			return redirectRejection(err)
 		}
 		if previousURL != nil &&
 			strings.EqualFold(previousURL.Scheme, "https") &&
@@ -252,6 +255,8 @@ type guardedDialer struct {
 	origin      *url.URL
 	resolver    ipResolver
 	dialContext func(context.Context, string, string) (net.Conn, error)
+	// policy carries the operator's declared private ranges.
+	policy egress.Policy
 
 	policyMu       sync.Mutex
 	originScope    networkScope
@@ -263,7 +268,7 @@ type guardedDialer struct {
 // origins may use private CDNs; loopback is permitted only for a loopback
 // origin (development/tests). Link-local, unspecified, and multicast targets
 // are never valid artifact hosts.
-func validateExternalTarget(origin, target *url.URL, directNetworkGuard bool) error {
+func validateExternalTarget(origin, target *url.URL, directNetworkGuard bool, policy egress.Policy) error {
 	if target == nil || (target.Scheme != "http" && target.Scheme != "https") || target.Host == "" ||
 		target.User != nil {
 		return errors.New("invalid external target")
@@ -279,14 +284,15 @@ func validateExternalTarget(origin, target *url.URL, directNetworkGuard bool) er
 	// they actually dial, closing the DNS-check/DNS-use race. A configured HTTP
 	// proxy owns hostname resolution, so its egress policy must enforce the same
 	// boundary for non-literal targets.
-	originScope, originKnown := literalHostNetworkScope(hostname(origin))
-	targetScope, targetKnown := literalHostNetworkScope(target.Hostname())
+	originScope, originKnown := literalHostNetworkScope(policy, hostname(origin))
+	targetScope, targetKnown := literalHostNetworkScope(policy, target.Hostname())
 	if !targetKnown {
 		return nil
 	}
+	literal := literalHostAddrs(target.Hostname())
 	switch targetScope {
 	case networkUnsafe:
-		return errors.New("unsafe network target")
+		return unsafeDenial(policy, literal, "unsafe network target")
 	case networkLoopback:
 		if originKnown && originScope == networkLoopback {
 			return nil
@@ -297,7 +303,7 @@ func validateExternalTarget(origin, target *url.URL, directNetworkGuard bool) er
 			return nil
 		}
 		if !originKnown || originScope != networkLoopback {
-			return errors.New("loopback target")
+			return scopeDenial(literal, "loopback target")
 		}
 	case networkPrivate:
 		if originKnown && (originScope == networkPrivate || originScope == networkLoopback) {
@@ -307,10 +313,30 @@ func validateExternalTarget(origin, target *url.URL, directNetworkGuard bool) er
 			return nil
 		}
 		if !originKnown || (originScope != networkPrivate && originScope != networkLoopback) {
-			return errors.New("private network target")
+			return scopeDenial(literal, "private network target")
 		}
 	}
 	return nil
+}
+
+// redirectRejection keeps the historical message while preserving the
+// guard's explanation for diagnostics.
+func redirectRejection(err error) error {
+	var denied *EgressDeniedError
+	if errors.As(err, &denied) {
+		wrapped := *denied
+		wrapped.message = "external redirect target rejected"
+		return &wrapped
+	}
+	return errors.New("external redirect target rejected")
+}
+
+func literalHostAddrs(host string) []netip.Addr {
+	address, err := netip.ParseAddr(strings.TrimSuffix(strings.TrimSpace(host), "."))
+	if err != nil {
+		return nil
+	}
+	return []netip.Addr{address.Unmap()}
 }
 
 func hostname(target *url.URL) string {
@@ -320,7 +346,7 @@ func hostname(target *url.URL) string {
 	return target.Hostname()
 }
 
-func literalHostNetworkScope(host string) (networkScope, bool) {
+func literalHostNetworkScope(policy egress.Policy, host string) (networkScope, bool) {
 	trimmed := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
 	if trimmed == "" {
 		return networkPublic, false
@@ -329,7 +355,7 @@ func literalHostNetworkScope(host string) (networkScope, bool) {
 		return networkLoopback, true
 	}
 	if ip := net.ParseIP(trimmed); ip != nil {
-		return ipNetworkScope(ip), true
+		return ipNetworkScope(policy, ip), true
 	}
 	return networkPublic, false
 }
@@ -348,27 +374,27 @@ func (d *guardedDialer) DialContext(
 	if err != nil {
 		return nil, fmt.Errorf("resolve dial target: %w", err)
 	}
-	targetScope := resolvedNetworkScope(targetAddresses)
+	targetScope := resolvedNetworkScope(d.policy, targetAddresses)
 
 	exactOrigin := sameDialAddress(address, d.origin)
 	if targetScope == networkUnsafe {
-		return nil, errors.New("unsafe dial target")
+		return nil, unsafeDenial(d.policy, ipAddrs(targetAddresses), "unsafe dial target")
 	}
 	if exactOrigin {
 		if originScope, known := d.pinnedOriginScope(); known && originScope != targetScope {
-			return nil, errors.New("configured origin changed network scope")
+			return nil, scopeDenial(ipAddrs(targetAddresses), "configured origin changed network scope")
 		}
 	} else {
 		switch targetScope {
 		case networkLoopback:
 			originScope, policyErr := d.originScopeForPolicy(ctx)
 			if policyErr != nil || originScope != networkLoopback {
-				return nil, errors.New("loopback dial target rejected")
+				return nil, scopeDenial(ipAddrs(targetAddresses), "loopback dial target rejected")
 			}
 		case networkPrivate:
 			originScope, policyErr := d.originScopeForPolicy(ctx)
 			if policyErr != nil || (originScope != networkPrivate && originScope != networkLoopback) {
-				return nil, errors.New("private dial target rejected")
+				return nil, scopeDenial(ipAddrs(targetAddresses), "private dial target rejected")
 			}
 		}
 	}
@@ -412,9 +438,9 @@ func (d *guardedDialer) originScopeForPolicy(ctx context.Context) (networkScope,
 	if err != nil {
 		return networkUnsafe, fmt.Errorf("resolve configured origin: %w", err)
 	}
-	scope := resolvedNetworkScope(addresses)
+	scope := resolvedNetworkScope(d.policy, addresses)
 	if scope == networkUnsafe {
-		return networkUnsafe, errors.New("configured origin resolved to unsafe scope")
+		return networkUnsafe, unsafeDenial(d.policy, ipAddrs(addresses), "configured origin resolved to unsafe scope")
 	}
 	if !d.pinOriginScope(scope) {
 		return networkUnsafe, errors.New("configured origin changed network scope")
@@ -639,13 +665,13 @@ func sameDialAddress(address string, origin *url.URL) bool {
 	) && targetPort == originPort
 }
 
-func resolvedNetworkScope(addresses []net.IPAddr) networkScope {
+func resolvedNetworkScope(policy egress.Policy, addresses []net.IPAddr) networkScope {
 	var (
 		scope networkScope
 		set   bool
 	)
 	for _, address := range addresses {
-		candidate := ipNetworkScope(address.IP)
+		candidate := ipNetworkScope(policy, address.IP)
 		if candidate == networkUnsafe {
 			return networkUnsafe
 		}
@@ -666,66 +692,32 @@ func resolvedNetworkScope(addresses []net.IPAddr) networkScope {
 	return scope
 }
 
-func ipNetworkScope(ip net.IP) networkScope {
-	switch {
-	case ip == nil:
-		return networkUnsafe
-	case ip.IsLoopback():
-		return networkLoopback
-	case ip.IsPrivate():
-		return networkPrivate
-	case ip.IsUnspecified(), ip.IsLinkLocalUnicast(), ip.IsLinkLocalMulticast(), ip.IsMulticast(),
-		isSpecialPurposeAddress(ip):
-		return networkUnsafe
-	default:
-		return networkPublic
-	}
-}
-
-var specialPurposeIPv4Prefixes = []netip.Prefix{
-	netip.MustParsePrefix("0.0.0.0/8"),
-	netip.MustParsePrefix("100.64.0.0/10"),
-	netip.MustParsePrefix("192.0.0.0/24"),
-	netip.MustParsePrefix("192.0.2.0/24"),
-	netip.MustParsePrefix("192.31.196.0/24"),
-	netip.MustParsePrefix("192.52.193.0/24"),
-	netip.MustParsePrefix("192.88.99.0/24"),
-	netip.MustParsePrefix("192.175.48.0/24"),
-	netip.MustParsePrefix("198.18.0.0/15"),
-	netip.MustParsePrefix("198.51.100.0/24"),
-	netip.MustParsePrefix("203.0.113.0/24"),
-	netip.MustParsePrefix("240.0.0.0/4"),
-}
-
-var specialPurposeIPv6Prefixes = []netip.Prefix{
-	netip.MustParsePrefix("64:ff9b::/96"),
-	netip.MustParsePrefix("64:ff9b:1::/48"),
-	netip.MustParsePrefix("100::/64"),
-	netip.MustParsePrefix("100:0:0:1::/64"),
-	netip.MustParsePrefix("2001::/23"),
-	netip.MustParsePrefix("2001:db8::/32"),
-	netip.MustParsePrefix("2002::/16"),
-	netip.MustParsePrefix("2620:4f:8000::/48"),
-	netip.MustParsePrefix("3fff::/20"),
-	netip.MustParsePrefix("5f00::/16"),
-}
-
-func isSpecialPurposeAddress(ip net.IP) bool {
+func ipNetworkScope(policy egress.Policy, ip net.IP) networkScope {
 	address, ok := netip.AddrFromSlice(ip)
 	if !ok {
-		return true
+		return networkUnsafe
 	}
-	address = address.Unmap()
-	prefixes := specialPurposeIPv6Prefixes
-	if address.Is4() {
-		prefixes = specialPurposeIPv4Prefixes
+	return addrNetworkScope(policy, address.Unmap())
+}
+
+// addrNetworkScope classifies one address. A range the operator declared
+// private (see egress.Policy) is a private network: reachable from a private
+// configured origin, never from a public one.
+func addrNetworkScope(policy egress.Policy, address netip.Addr) networkScope {
+	switch {
+	case !address.IsValid():
+		return networkUnsafe
+	case address.IsLoopback():
+		return networkLoopback
+	case address.IsPrivate(), policy.IsDeclaredPrivate(address):
+		return networkPrivate
+	case address.IsUnspecified(), address.IsLinkLocalUnicast(), address.IsLinkLocalMulticast(), address.IsMulticast():
+		return networkUnsafe
 	}
-	for _, prefix := range prefixes {
-		if prefix.Contains(address) {
-			return true
-		}
+	if _, special := egress.SpecialPurposePrefix(address); special {
+		return networkUnsafe
 	}
-	return false
+	return networkPublic
 }
 
 func originRequestURL(base, path string) (string, error) {

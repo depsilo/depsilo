@@ -3,6 +3,10 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import StatusDot from '@/components/StatusDot'
 import { upstreamStatus } from '@/lib/upstreamStatus'
 import type { AdminUpstream, CheckUpstreamResponse } from '@/lib/adminApi.types'
+import { FailureReason } from './FailureReason'
+
+/** The server withholds raw error text from roles that cannot view credentials. */
+const genericCheckError = 'upstream check failed'
 
 export interface CheckRecord {
   upstream: AdminUpstream
@@ -39,7 +43,17 @@ export function CheckResults({ open, onOpenChange, records }: {
                   {probe ? t(probe.healthy ? 'upstreams.probePassed' : 'upstreams.probeFailed') : t('upstreams.checkRequestFailedShort')}
                   {probe?.healthy && <span className="font-mono tabular-nums text-muted-foreground">{probe.latency_ms} ms</span>}
                 </p>
-                {(record.requestError || (probe && !probe.healthy)) && (
+                {probe && !probe.healthy && probe.failure ? (
+                  <>
+                    <FailureReason failure={probe.failure} />
+                    {probe.error && probe.error !== genericCheckError && (
+                      <details className="text-[12px] text-muted-foreground">
+                        <summary className="w-fit cursor-pointer rounded-sm focus-visible:outline-2 focus-visible:outline-ring">{t('upstreams.failureDetails')}</summary>
+                        <p className="mt-1 break-all font-mono">{probe.error}</p>
+                      </details>
+                    )}
+                  </>
+                ) : (record.requestError || (probe && !probe.healthy)) && (
                   <p className="break-words text-[13px] text-muted-foreground">{record.requestError || probe?.error || t('upstreams.checkReasonUnavailable')}</p>
                 )}
                 <p className="flex items-center gap-2 text-[13px] text-muted-foreground">

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"depsilo/internal/db"
+	"depsilo/internal/egress"
 )
 
 type resolverFunc func(context.Context, string) ([]net.IPAddr, error)
@@ -516,7 +517,7 @@ func TestIPNetworkScopeRejectsSpecialPurposeAddresses(t *testing.T) {
 		"3fff::1",
 		"5f00::1",
 	} {
-		if got := ipNetworkScope(net.ParseIP(raw)); got != networkUnsafe {
+		if got := ipNetworkScope(egress.Policy{}, net.ParseIP(raw)); got != networkUnsafe {
 			t.Errorf("scope(%s) = %d, want unsafe", raw, got)
 		}
 	}
@@ -526,7 +527,7 @@ func TestIPNetworkScopeRejectsSpecialPurposeAddresses(t *testing.T) {
 		"100.128.0.0",
 		"2001:4860:4860::8888",
 	} {
-		if got := ipNetworkScope(net.ParseIP(raw)); got != networkPublic {
+		if got := ipNetworkScope(egress.Policy{}, net.ParseIP(raw)); got != networkPublic {
 			t.Errorf("scope(%s) = %d, want public", raw, got)
 		}
 	}

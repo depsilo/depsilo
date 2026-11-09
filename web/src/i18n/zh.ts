@@ -1374,6 +1374,55 @@ const zh = {
       httpProxy: 'HTTP 代理（可选）',
       proxyHint: '仅该上游源使用；支持 HTTP 或 HTTPS。',
       proxyEnabled: '使用代理',
+      proxyDefault: '使用全局出站代理（[egress] upstream_proxy）',
+      failureDetails: '错误详情',
+      sharedFailureTitle: '{{count}} 个上游因同一原因无法连接',
+      failure: {
+        egress_fake_ip: {
+          title: 'DNS 把这个上游解析成了 {{address}}，属于基准测试保留地址段 {{range}}。代理软件的 fake-IP 模式会返回这类地址，Depsilo 默认不连接。',
+          short: 'DNS 返回了 fake-IP 地址 {{address}}，未连接。',
+          shared: '这些上游的域名都被解析到基准测试保留地址段 198.18.0.0/15。代理软件的 fake-IP 模式会这样返回，Depsilo 默认不连接这类地址。',
+          action: '在 config.toml 的 [egress] 中把 upstream_proxy 设为代理软件的 HTTP 端口（例如 http://127.0.0.1:7890）后重启，或让 Depsilo 使用返回真实地址的 DNS。',
+        },
+        egress_shared_address: {
+          title: '这个上游解析到 {{address}}，属于共享地址段 {{range}}（运营商 NAT 和 Tailscale 等组网使用），Depsilo 默认不连接。',
+          action: '如果它是你自己网络里的节点，在 config.toml 的 [egress] private_ranges 中声明对应网段后重启。声明后按私网地址处理，公网上游仍不能重定向进来。',
+        },
+        egress_reserved: {
+          title: '这个上游解析到保留地址 {{address}}，Depsilo 不连接这类地址。',
+          titleMixed: '这个上游的 DNS 结果包含保留地址，或混合了不同网络范围的地址，Depsilo 不连接。',
+          action: '检查这个上游域名的 DNS 解析和网络配置。',
+        },
+        egress_private: {
+          title: '请求被导向私网或本机地址 {{address}}，但这个上游配置的源站不在私网内，所以被拒绝。',
+          titleNoAddress: '请求被导向私网或本机地址，但这个上游配置的源站不在私网内，所以被拒绝。',
+          action: '局域网内的上游请直接用它的局域网地址作为上游 URL；公网上游不能重定向到私网。',
+        },
+        dns: {
+          title: '无法解析这个上游的域名。',
+          action: '检查 Depsilo 所在机器的 DNS 设置和网络连接。',
+        },
+        timeout: {
+          title: '连接或响应超时。',
+          action: '检查网络连通性。如果需要代理才能访问，为这个上游配置 HTTP 代理，或在 [egress] 中设置 upstream_proxy。',
+        },
+        tls: {
+          title: 'TLS 握手或证书验证失败。',
+          action: '检查上游证书，并确认中间代理没有替换证书。',
+        },
+        connection_refused: {
+          title: '连接被拒绝或被重置。',
+          action: '确认上游地址和端口正确，并且服务正在运行。',
+        },
+        http_status: {
+          title: '上游返回了 HTTP {{status}}。',
+          action: '这是上游服务端的错误，稍后重试或调整上游优先级。',
+        },
+        network: {
+          title: '网络请求失败。',
+          action: '查看错误详情，或在服务日志中查找这个上游。',
+        },
+      },
       via: '级联出口',
       viaHint: '选择通过哪台父级 Depsilo 下载；缓存未命中时会由该节点回源并缓存。',
       viaDirect: '直连上游（默认）',

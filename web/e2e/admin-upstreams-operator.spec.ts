@@ -375,6 +375,55 @@ test('a successful probe and an unhealthy runtime state remain separate in durab
   await expect(check).toContainText('Probe passed')
 })
 
+test('a fake-IP egress denial is explained on the card and in check results', async ({ page }) => {
+  const fakeIP = { code: 'egress_fake_ip' as const, address: '198.18.0.65', range: '198.18.0.0/15' }
+  const failed = makeUpstream(1, {
+    name: 'official', url: 'https://pypi.org', healthy: false, success_rate: 0, avg_latency_ms: 5, last_failure: fakeIP,
+  })
+  const proxied = makeUpstream(2, { name: 'tuna', url: 'https://pypi.tuna.tsinghua.edu.cn', proxy_source: 'default' })
+  const result = checkResponse(failed, false)
+  result.upstream.last_failure = fakeIP
+  result.check.error = 'upstream check failed'
+  result.check.failure = fakeIP
+  await setUiPreferences(page, 'light', 'en')
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/upstreams': listResponse([failed, proxied]),
+    'POST /api/v1/admin/upstreams/1/check': result,
+  })
+  await page.goto('/admin/upstreams')
+
+  const card = page.locator('[data-upstream-row][data-upstream-status="failed"]')
+  await expect(card.locator('[data-upstream-failure="egress_fake_ip"]')).toContainText('DNS resolved this upstream to 198.18.0.65')
+  await expect(card.locator('[data-upstream-failure="egress_fake_ip"]')).toContainText('upstream_proxy under [egress]')
+  // A failed upstream's average is not a response latency.
+  await expect(card).not.toContainText('5 ms')
+  await page.getByText('Connection details').nth(1).click()
+  await expect(page.getByText('Uses the default egress proxy ([egress] upstream_proxy)', { exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Check official', exact: true }).click()
+  await page.getByRole('button', { name: /^Check results/ }).click()
+  const check = page.getByRole('dialog', { name: 'Check results', exact: true }).locator('[data-upstream-check-result="1"]')
+  await expect(check.locator('[data-upstream-failure="egress_fake_ip"]')).toContainText('198.18.0.0/15')
+  // The withheld raw error is not repeated as a meaningless detail.
+  await expect(check).not.toContainText('upstream check failed')
+  await expect(check.getByText('Error details')).toHaveCount(0)
+})
+
+test('fake-IP DNS failing every upstream is explained once for the page', async ({ page }) => {
+  const items = [1, 2, 3].map(id => makeUpstream(id, {
+    healthy: false, success_rate: 0, last_failure: { code: 'egress_fake_ip', address: `198.18.0.${id}`, range: '198.18.0.0/15' },
+  }))
+  await setUiPreferences(page, 'light', 'en')
+  await mockAdminApi(page, { 'GET /api/v1/admin/upstreams': listResponse(items) })
+  await page.goto('/admin/upstreams')
+  const notice = page.locator('[data-upstream-shared-failure="egress_fake_ip"]')
+  await expect(notice).toContainText('3 upstreams cannot connect for the same reason')
+  await expect(notice).toContainText('upstream_proxy under [egress]')
+  const cardReasons = page.locator('[data-upstream-row] [data-upstream-failure="egress_fake_ip"]')
+  await expect(cardReasons).toHaveCount(3)
+  await expect(cardReasons.first()).toHaveText('DNS returned the fake-IP address 198.18.0.1; not connected.')
+})
+
 test('bulk checking is capped at four requests and leaves a durable outcome summary', async ({ page }) => {
   const upstreams = Array.from({ length: 6 }, (_, index) => makeUpstream(index + 1, {
     name: `bulk-${index + 1}`,

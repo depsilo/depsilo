@@ -966,8 +966,34 @@ export interface AdminUpstream extends UpstreamMutationRequest {
   success_rate: number
   last_checked_at: string | null
   worker_running: boolean
+  /** Where the effective proxy comes from; empty for direct egress or a cascade parent. */
+  proxy_source?: UpstreamProxySource
+  /** Explanation of the newest failed check; null after a passing check. */
+  last_failure?: UpstreamFailure | null
   created_at: string
   updated_at: string
+}
+
+export type UpstreamProxySource = '' | 'upstream' | 'default'
+
+export type UpstreamFailureCode =
+  | 'egress_fake_ip'
+  | 'egress_shared_address'
+  | 'egress_reserved'
+  | 'egress_private'
+  | 'dns'
+  | 'timeout'
+  | 'tls'
+  | 'connection_refused'
+  | 'http_status'
+  | 'network'
+
+/** Bounded check-failure explanation; never contains a URL or credential. */
+export interface UpstreamFailure {
+  code: UpstreamFailureCode
+  address?: string
+  range?: string
+  status?: number
 }
 
 export interface AdminUpstreamLatencyPoint {
@@ -1082,7 +1108,7 @@ export interface OnboardingStatusQuery {
 
 export interface AdminUpstreamListResponse { items: AdminUpstream[]; total: number }
 export interface DeleteUpstreamResponse { deleted_id: number; adapter_type: string }
-export interface UpstreamCheckResult { healthy: boolean; latency_ms: number; checked_at: string; error: string | null }
+export interface UpstreamCheckResult { healthy: boolean; latency_ms: number; checked_at: string; error: string | null; failure?: UpstreamFailure | null }
 export interface CheckUpstreamResponse { upstream: AdminUpstream; check: UpstreamCheckResult }
 
 

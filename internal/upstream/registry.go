@@ -35,7 +35,12 @@ type RuntimeUpstream struct {
 	HasObservations          bool
 	RuntimeSampleCount       int64
 	WorkerRunning            bool
-	CreatedAt, UpdatedAt     time.Time
+	// ProxySource is ProxyFromUpstream, ProxyFromDefault, or "" for direct
+	// egress or a cascade parent.
+	ProxySource string
+	// LastFailure explains the newest failed probe, nil after a passing one.
+	LastFailure          *Failure
+	CreatedAt, UpdatedAt time.Time
 }
 
 type workerHandle struct {
@@ -265,7 +270,8 @@ func (r *Registry) runtimeUpstream(u *Upstream) RuntimeUpstream {
 		Healthy: health.Healthy, AvgLatencyMS: health.AvgLatency.Milliseconds(),
 		SuccessRate: health.SuccessRate, LastCheckedAt: health.LastCheckedAt,
 		HasObservations: health.HasObservations, RuntimeSampleCount: health.RuntimeSampleCount,
-		WorkerRunning: r.WorkerRunning(u.ID), CreatedAt: u.CreatedAt, UpdatedAt: u.UpdatedAt,
+		WorkerRunning: r.WorkerRunning(u.ID), ProxySource: u.proxySource, LastFailure: health.LastFailure,
+		CreatedAt: u.CreatedAt, UpdatedAt: u.UpdatedAt,
 	}
 }
 

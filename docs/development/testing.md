@@ -35,9 +35,11 @@ unqualified Hub image and requires a higher Depsilo request count after the
 first pull and a higher cache-hit count after the second. On hosts that resolve
 public registries to reserved/private synthetic IPs (for example `198.18.0.0/15`),
 Depsilo's outbound safety policy rejects the mirror request; Docker may
-silently fall back to Hub and this check correctly fails. Use public DNS or a
-trusted egress proxy configured on the registry for this network-dependent
-test; do not weaken the outbound checks.
+silently fall back to Hub and this check correctly fails. Use public DNS for
+this network-dependent test; do not weaken the outbound checks. Package
+Upstreams on such hosts can use `[egress] upstream_proxy`
+([deployment](../deployment.md#upstream-network-egress)); Docker registries
+still preflight the registry address locally.
 
 The tag-triggered release workflow invokes the real-client workflow in release
 qualification mode. GitHub release assets wait for all 14 package clients,

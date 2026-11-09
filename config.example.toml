@@ -47,6 +47,17 @@ lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
 # token = ""                # 缺省复用 [cascade].token；可单独覆盖
 # forward_credentials = false  # 开启后上游 Authorization 会转发给该 peer
 
+# 上游出站网络（重启生效，详见 docs/deployment.md#upstream-network-egress）。
+# 本机代理软件开启 TUN/fake-IP 时，公网域名会被解析到 198.18.0.0/15，
+# Depsilo 默认不连接这类地址：把 upstream_proxy 设为代理软件的 HTTP 端口。
+# 它是所有未单独配置代理、也未走级联的包上游的默认代理；no_proxy 中的
+# 上游主机保持直连。Tailscale / Headscale / NetBird 节点地址在 100.64.0.0/10，
+# 需要在 private_ranges 中声明后才能作为上游或级联父节点。
+# [egress]
+# upstream_proxy = "http://127.0.0.1:7890"
+# no_proxy = ["mirror.lan", "192.168.0.0/16"]
+# private_ranges = ["100.64.0.0/10"]
+
 # Package-policy snapshot refresh behavior. A stale, last-known-good snapshot
 # is preferred when the policy store is temporarily unavailable; change to
 # use_stale_then_deny, allow, or deny for a different explicit fallback.

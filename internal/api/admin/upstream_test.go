@@ -384,3 +384,34 @@ func TestWritableUpstreamCheckRetainsOperationalError(t *testing.T) {
 		t.Fatalf("response=%s", recorder.Body.String())
 	}
 }
+
+func TestUpstreamCheckExplainsEgressDenialToEveryRole(t *testing.T) {
+	// A fake-IP DNS answer is refused before any connection; the bounded
+	// explanation is visible even where raw error text is withheld.
+	_, readonly := upstreamRouterFixtureWithPrincipal(t, 1, false, "http://198.18.0.65", "")
+	recorder := performJSON(readonly, http.MethodPost, "/upstreams/1/check", "")
+	var checked checkUpstreamResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &checked); err != nil {
+		t.Fatal(err)
+	}
+	want := upstreamFailureResponse{Code: "egress_fake_ip", Address: "198.18.0.65", Range: "198.18.0.0/15"}
+	if checked.Check.Healthy || checked.Check.Failure == nil || *checked.Check.Failure != want ||
+		checked.Check.Error == nil || *checked.Check.Error != "upstream check failed" {
+		t.Fatalf("check response = %s", recorder.Body.String())
+	}
+	if checked.Upstream.LastFailure == nil || *checked.Upstream.LastFailure != want {
+		t.Fatalf("upstream last_failure = %+v", checked.Upstream.LastFailure)
+	}
+
+	recorder = performJSON(readonly, http.MethodGet, "/upstreams", "")
+	var list upstreamListResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	if list.Items[0].LastFailure == nil || *list.Items[0].LastFailure != want || list.Items[0].ProxySource != "" {
+		t.Fatalf("listed upstream = %+v", list.Items[0])
+	}
+	if !strings.Contains(recorder.Body.String(), `"proxy_source":""`) || !strings.Contains(recorder.Body.String(), `"last_failure":{"code":"egress_fake_ip"`) {
+		t.Fatalf("list JSON lacks the failure contract: %s", recorder.Body.String())
+	}
+}

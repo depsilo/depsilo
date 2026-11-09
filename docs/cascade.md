@@ -80,6 +80,14 @@ url = "https://registry.npmjs.org"
 priority = 2
 ```
 
+A parent on an overlay network such as Tailscale, Headscale or NetBird has an
+address in `100.64.0.0/10`, which the child refuses until that range is
+declared private with `[egress] private_ranges`; see
+[upstream network egress](deployment.md#upstream-network-egress). A parent
+behind proxy software in fake-IP mode serves its own configured upstreams
+through `[egress] upstream_proxy`, but relayed targets outside those upstreams
+still need real DNS answers.
+
 Existing installations can bind an upstream to a peer in
 **Admin → Upstreams** instead of editing `config.toml`; the peer list itself
 stays in the configuration file because it carries addresses and secrets.

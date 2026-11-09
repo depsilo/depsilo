@@ -12,6 +12,7 @@ import { adminApi } from '@/lib/api'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import StatusDot from '@/components/StatusDot'
 import { isEcosystemType } from '@/lib/ecosystemTypes'
+import type { UpstreamFailure, UpstreamProxySource } from '@/lib/adminApi.types'
 import { upstreamStatus } from '@/lib/upstreamStatus'
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -34,6 +35,10 @@ export interface UpstreamItem {
   probeInterval?: string
   lastCheckedAt?: string | null
   workerRunning?: boolean
+  /** Admin only: explanation of the newest failed check. */
+  failure?: UpstreamFailure | null
+  /** Admin only: where the effective proxy comes from. */
+  proxySource?: UpstreamProxySource
 }
 
 // ── Heartbeat bar ──────────────────────────────────────────────────
@@ -290,7 +295,10 @@ function UpstreamRow({
   const { t } = useTranslation()
   const status = upstreamStatus(upstream)
   const hasActions = actions !== undefined && actions !== null && actions !== false
-  const latency = upstream.has_observations === false || (upstream.has_observations === undefined && upstream.avg_latency_ms <= 1)
+  // A failed upstream's average includes the time its failed attempts took,
+  // which is not a response latency.
+  const latency = status === 'failed' || upstream.has_observations === false ||
+    (upstream.has_observations === undefined && upstream.avg_latency_ms <= 1)
     ? '—'
     : `${upstream.avg_latency_ms} ms`
   const statusIndicator = (

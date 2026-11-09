@@ -440,6 +440,57 @@ Explicit settings keep their existing precedence:
 CLI flag → DEPSILO_* environment → config file → built-in default
 ```
 
+## Upstream network egress
+
+Depsilo connects to package Upstreams and cascade parents only after checking
+the addresses their host names resolve to. It never dials link-local,
+multicast, documentation, benchmarking or other special-purpose addresses, and
+a public Upstream cannot redirect into a private or loopback address. Two
+common networks resolve to such addresses; Admin → Upstreams names the case on
+the failing Upstream and in its check result.
+
+**Proxy software in fake-IP mode.** Clash, mihomo, Surge and sing-box in
+TUN/fake-IP mode answer DNS queries for public hosts with addresses from
+`198.18.0.0/15`. Depsilo refuses those addresses, so every Upstream fails its
+check. Route Upstreams through the proxy software's HTTP port instead, or give
+Depsilo a DNS server that returns real addresses:
+
+```toml
+[egress]
+upstream_proxy = "http://127.0.0.1:7890"   # the proxy software's HTTP or mixed port
+no_proxy = ["mirror.lan", "192.168.0.0/16"] # optional: Upstream hosts that stay direct
+```
+
+`upstream_proxy` is the default HTTP(S) proxy for every package Upstream and
+extra index that has neither its own proxy nor a cascade parent; it is chosen
+once per Upstream from its configured host. An Upstream's own proxy always
+wins, loopback hosts are never proxied, and `no_proxy` accepts host names,
+domains (a leading `.` matches subdomains only), IP addresses and CIDR ranges.
+Like an Upstream's own proxy, the proxy then resolves and connects to every
+host that Upstream uses, so its egress rules become part of the boundary.
+Docker registries, the cascade relay and vulnerability or blocklist sync keep
+their own settings; Docker registry requests still need real DNS answers (see
+below).
+
+**Overlay networks.** Tailscale, Headscale and NetBird assign node addresses
+from the shared address space `100.64.0.0/10`, which Depsilo also refuses by
+default. Declare the part your own nodes use:
+
+```toml
+[egress]
+private_ranges = ["100.64.0.0/10"]   # or narrower ranges, or single addresses
+```
+
+Declared addresses are treated as private networks: an Upstream or cascade
+parent configured with such an address (or a name resolving to it) is
+reachable, and it may reach other private addresses, but a public Upstream
+still cannot redirect into them. Only ranges inside `100.64.0.0/10` are
+accepted, `100.100.100.200` (the Alibaba Cloud instance-metadata endpoint)
+stays blocked, and `198.18.0.0/15` is rejected with a pointer to
+`upstream_proxy`, because treating fake-IP answers as private would let every
+public Upstream redirect into the local network. `[egress]` settings are read
+at startup; restart after changing them.
+
 ## Docker Registry forward-proxy boundary
 
 Before each Docker Registry request is handed to an explicitly configured

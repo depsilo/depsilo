@@ -106,6 +106,19 @@ func (h *UpstreamHandler) Check(c *gin.Context) {
 			LatencyMS: result.Latency.Milliseconds(),
 			CheckedAt: result.CheckedAt,
 			Error:     errorText,
+			Failure:   mapUpstreamFailure(failureOf(result)),
 		},
 	})
+}
+
+// failureOf explains an unhealthy check result, including one without an
+// error value, so the response never reports a failure without a reason.
+func failureOf(result upstream.ProbeResult) *upstream.Failure {
+	if result.Healthy {
+		return nil
+	}
+	if failure := upstream.ClassifyFailure(result.Err); failure != nil {
+		return failure
+	}
+	return &upstream.Failure{Code: upstream.FailureNetwork}
 }

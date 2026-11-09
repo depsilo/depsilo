@@ -16,6 +16,7 @@ import (
 
 	"depsilo/internal/config"
 	"depsilo/internal/db"
+	"depsilo/internal/egress"
 )
 
 // DefaultProbeInterval is the fallback periodic health-check interval used when
@@ -48,6 +49,12 @@ type Upstream struct {
 	// the guarded dialer before the exact resolved IP is used for the socket.
 	// Configured HTTP proxies own their DNS and egress boundary instead.
 	directNetworkGuard bool
+	// egress carries the operator's declared private ranges into every target
+	// check made for this upstream.
+	egress egress.Policy
+	// proxySource names where the effective proxy came from: ProxyFromUpstream,
+	// ProxyFromDefault, or "" for direct egress.
+	proxySource string
 
 	mu       sync.RWMutex
 	health   healthState
@@ -68,7 +75,15 @@ type healthState struct {
 	totalReqs              int64
 	successReqs            int64
 	lastCheckedAt          time.Time
+	// lastFailure explains the newest failed probe; a passing probe clears it.
+	lastFailure *Failure
 }
+
+// Proxy sources reported for an upstream's effective proxy.
+const (
+	ProxyFromUpstream = "upstream"
+	ProxyFromDefault  = "default"
+)
 
 // HealthSnapshot is one consistent sample of an upstream's mutable health.
 type HealthSnapshot struct {
@@ -82,6 +97,8 @@ type HealthSnapshot struct {
 	// RuntimeSampleCount counts request and probe outcomes for this runtime
 	// object, not a time window or the lifetime of the persisted Upstream.
 	RuntimeSampleCount int64
+	// LastFailure explains the newest failed probe of this runtime object.
+	LastFailure *Failure
 }
 
 // ProbeResult captures one active health-check outcome.
@@ -106,6 +123,13 @@ func (h *healthState) applyProbe(result ProbeResult) {
 	h.successRate = float64(h.successReqs) / float64(h.totalReqs)
 	h.healthy = result.Healthy && !h.criticalFailureLatched
 	h.lastCheckedAt = result.CheckedAt
+	h.lastFailure = nil
+	if !result.Healthy {
+		h.lastFailure = ClassifyFailure(result.Err)
+		if h.lastFailure == nil {
+			h.lastFailure = &Failure{Code: FailureNetwork}
+		}
+	}
 	if result.Latency > 0 {
 		if h.avgLatency == 0 {
 			h.avgLatency = result.Latency
@@ -146,6 +170,12 @@ type Pool struct {
 
 // NewPool creates an upstream pool from config.
 func NewPool(cfgs []config.UpstreamConfig) (*Pool, error) {
+	return NewPoolWithOptions(cfgs, PoolOptions{})
+}
+
+// NewPoolWithOptions creates a config-owned pool, such as an extra index,
+// with the instance's egress options.
+func NewPoolWithOptions(cfgs []config.UpstreamConfig, options PoolOptions) (*Pool, error) {
 	records := make([]db.UpstreamRecord, 0, len(cfgs))
 	for _, cfg := range cfgs {
 		records = append(records, db.UpstreamRecord{
@@ -154,7 +184,7 @@ func NewPool(cfgs []config.UpstreamConfig) (*Pool, error) {
 			Healthy: true, SuccessRate: 1,
 		})
 	}
-	pool, err := NewPoolFromRecords(records)
+	pool, err := NewPoolFromRecordsWithOptions(records, options)
 	if err != nil {
 		return nil, err
 	}
@@ -182,6 +212,9 @@ type PoolOptions struct {
 	// cascade transport is available: Via values are reported but ignored, and
 	// the upstream keeps direct egress.
 	Peers *PeerSet
+	// Egress supplies declared private ranges and the default upstream proxy.
+	// The zero value keeps the built-in guard and direct egress.
+	Egress egress.Policy
 }
 
 // NewPoolFromRecordsWithOptions creates a pool that can egress selected
@@ -276,10 +309,14 @@ func newUpstreamFromRecord(record db.UpstreamRecord, options PoolOptions) (*Upst
 		return nil, err
 	}
 	var client *http.Client
+	proxy, proxySource := record.Proxy, ""
+	if proxy != "" {
+		proxySource = ProxyFromUpstream
+	}
 	if record.Via != "" && options.Peers != nil {
 		peer, ok := options.Peers.Resolve(record.Via)
 		if ok {
-			client, err = buildPeerClient(record.Proxy, peer, record.URL)
+			client, err = buildPeerClient(record.Proxy, peer, record.URL, options.Egress)
 		} else {
 			zap.L().Warn("cascade peer is not configured; upstream keeps direct egress",
 				zap.String("upstream", record.Name),
@@ -293,7 +330,15 @@ func newUpstreamFromRecord(record db.UpstreamRecord, options PoolOptions) (*Upst
 		)
 	}
 	if client == nil {
-		client, err = buildClient(record.Proxy, record.URL)
+		// Direct egress uses the instance's default proxy unless the upstream
+		// has its own. It is chosen once per upstream, exactly as if the
+		// upstream had configured that proxy itself.
+		if proxy == "" {
+			if proxy = options.Egress.UpstreamProxyFor(record.URL); proxy != "" {
+				proxySource = ProxyFromDefault
+			}
+		}
+		client, err = buildClient(proxy, record.URL, options.Egress)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("build client for %s: %w", record.Name, err)
@@ -303,7 +348,9 @@ func newUpstreamFromRecord(record db.UpstreamRecord, options PoolOptions) (*Upst
 		Proxy: record.Proxy, Priority: record.Priority, ProbeMode: mode, ProbeInterval: interval,
 		Via:       record.Via,
 		CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt, client: client,
-		directNetworkGuard: record.Proxy == "",
+		directNetworkGuard: proxy == "",
+		egress:             options.Egress,
+		proxySource:        proxySource,
 		health: healthState{
 			healthy: record.Healthy, avgLatency: time.Duration(record.AvgLatencyMs) * time.Millisecond,
 			successRate: record.SuccessRate, lastCheckedAt: record.LastCheckedAt,
@@ -323,8 +370,8 @@ func (u *Upstream) sameConfig(record db.UpstreamRecord) bool {
 // every outbound exchange into an authenticated relay call. The guarded dialer
 // pins the peer origin, so private LAN peers work while relayed target URLs
 // never become direct dial targets on this hop.
-func buildPeerClient(proxy string, peer PeerEgress, source string) (*http.Client, error) {
-	client, err := buildClient(proxy, peer.URL.String())
+func buildPeerClient(proxy string, peer PeerEgress, source string, policy egress.Policy) (*http.Client, error) {
+	client, err := buildClient(proxy, peer.URL.String(), policy)
 	if err != nil {
 		return nil, err
 	}
@@ -387,7 +434,7 @@ func (u *Upstream) fetchURL(
 	}
 	target, _ := url.Parse(reqURL)
 	origin, _ := url.Parse(u.URL)
-	if err := validateExternalTarget(origin, target, u.directNetworkGuard); err != nil {
+	if err := validateExternalTarget(origin, target, u.directNetworkGuard, u.egress); err != nil {
 		return nil, fmt.Errorf("fetch %s: external target rejected", safeURLOrigin(reqURL))
 	}
 	if restoreOriginCredentials && sameHTTPOrigin(origin, target) && origin.User != nil {
@@ -612,6 +659,11 @@ func (u *Upstream) applyProbe(result ProbeResult) {
 func (u *Upstream) HealthSnapshot() HealthSnapshot {
 	u.mu.RLock()
 	defer u.mu.RUnlock()
+	var lastFailure *Failure
+	if u.health.lastFailure != nil {
+		copied := *u.health.lastFailure
+		lastFailure = &copied
+	}
 	return HealthSnapshot{
 		Healthy:            u.health.healthy,
 		AvgLatency:         u.health.avgLatency,
@@ -619,6 +671,7 @@ func (u *Upstream) HealthSnapshot() HealthSnapshot {
 		LastCheckedAt:      u.health.lastCheckedAt,
 		HasObservations:    u.health.totalReqs > 0 || !u.health.lastCheckedAt.IsZero(),
 		RuntimeSampleCount: u.health.totalReqs,
+		LastFailure:        lastFailure,
 	}
 }
 
@@ -637,7 +690,7 @@ func (u *Upstream) IsHealthy() bool {
 	return u.HealthSnapshot().Healthy
 }
 
-func buildClient(proxy, origin string) (*http.Client, error) {
+func buildClient(proxy, origin string, policy egress.Policy) (*http.Client, error) {
 	originURL, err := url.Parse(origin)
 	if err != nil || !validOriginURL(origin) {
 		return nil, fmt.Errorf("parse origin URL %s: invalid URL", safeURLOrigin(origin))
@@ -666,6 +719,7 @@ func buildClient(proxy, origin string) (*http.Client, error) {
 			origin:      originURL,
 			resolver:    net.DefaultResolver,
 			dialContext: dialer.DialContext,
+			policy:      policy,
 		}
 		transport.DialContext = guard.DialContext
 	}
