@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { statsApi } from '@/lib/api'
 import { copyText } from '@/lib/clipboard'
-import { formatVersion } from '@/lib/utils'
+import { buildVersionLabel } from '@/lib/buildVersion'
 import Logo from '@/components/Logo'
 import LangToggle from '@/components/LangToggle'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -300,7 +300,7 @@ export default function PortalApp() {
                 marginLeft: 2,
               }}
             >
-              {formatVersion(data?.service?.version)}
+              {buildVersionLabel({ version: data?.service?.version })}
             </span>
           </Link>
 

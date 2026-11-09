@@ -104,23 +104,6 @@ export function formatTime(ts: string, mode: FormatTimeMode = 'auto', locale?: s
 }
 
 /**
- * Format a service version string for compact pill display.
- * Examples:
- *   "0.2.3"                          → "v0.2.3"   (clean release)
- *   "0.2.0-126-g43ca7fe-dirty"       → "v0.2.0+dev" (in-progress build)
- *   "dev"                            → "dev"     (no ldflags injected)
- *   undefined / null                 → "—"
- * Pair with title={v} on the rendering element so the full string is
- * still discoverable via hover.
- */
-export function formatVersion(v?: string | null): string {
-  if (!v) return '—'
-  const semver = v.match(/^(\d+\.\d+\.\d+)/)
-  if (semver) return v === semver[1] ? `v${semver[1]}` : `v${semver[1]}+dev`
-  return v
-}
-
-/**
  * Format ISO timestamp as YYYY-MM-DD date string.
  */
 export function formatDate(ts: string): string {

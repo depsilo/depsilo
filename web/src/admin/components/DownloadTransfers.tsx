@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { operatorEcosystems } from '@/admin/operatorEcosystems'
 import { useTranslation } from 'react-i18next'
@@ -30,9 +30,20 @@ export default function DownloadTransfers() {
   }, [completed, query.isError, queryClient])
   const error = getApiError(query.error)
   const items = data?.items.slice(0, 12) ?? []
+  // Finished cache fills are history; only active or failed ones need the
+  // operator. The first successful read decides whether the list opens, a new
+  // active or failed fill opens it again, and nothing ever closes it on its own,
+  // so a fill being watched stays visible after it completes.
+  const needsAttention = items.some(item => item.status !== 'cached')
+  const [open, setOpen] = useState(true)
+  const [seen, setSeen] = useState<{ decided: boolean; attention: boolean }>({ decided: false, attention: false })
+  if (query.isSuccess && (!seen.decided || seen.attention !== needsAttention)) {
+    setSeen({ decided: true, attention: needsAttention })
+    if (!seen.decided || needsAttention) setOpen(needsAttention)
+  }
   return (
     <section aria-label={t('cache.transfers.title')} className="min-w-0">
-      <details open={items.length > 0 || query.isError || query.isPending}><summary className="cursor-pointer text-sm font-medium">{t('cache.transfers.title')} <span className="font-normal text-muted-foreground">· {items.length > 0 ? items.length : t('cache.transfers.noneActive')}</span></summary><p className="my-2 text-xs text-muted-foreground">{t('cache.transfers.scope')}</p>
+      <details open={open} onToggle={event => setOpen(event.currentTarget.open)}><summary className="cursor-pointer text-sm font-medium">{t('cache.transfers.title')} <span className="font-normal text-muted-foreground">· {items.length > 0 ? items.length : t('cache.transfers.noneActive')}</span></summary><p className="my-2 text-xs text-muted-foreground">{t('cache.transfers.scope')}</p>
       {query.isPending ? <p role="status" className="text-[13px] text-[var(--text-soft)]">{t('cache.transfers.loading')}</p>
         : query.isError && (!data || error.status === 403) ? <QueryErrorState message={t(error.status === 403 ? 'cache.transfers.permission' : 'cache.transfers.unavailable')} onRetry={() => { void query.refetch() }} />
           : <>
@@ -42,16 +53,16 @@ export default function DownloadTransfers() {
                 const ecosystem = item.ecosystem === 'extra:pytorch' ? 'PyTorch' : operatorEcosystems.find(ecosystem => ecosystem.id === item.ecosystem)?.label ?? item.ecosystem.replace(/^extra:/, '')
                 const percent = item.total_bytes > 0 ? Math.min(100, Math.max(0, Math.round(item.downloaded_bytes / item.total_bytes * 100))) : undefined
                 const size = `${formatBytes(item.downloaded_bytes)} / ${item.total_bytes > 0 ? formatBytes(item.total_bytes) : t('cache.transfers.unknown')}`
-                return <li key={item.id} className="min-w-0 space-y-2 py-4">
+                return <li key={item.id} className={`min-w-0 ${item.status === 'cached' ? 'space-y-1 py-2.5' : 'space-y-2 py-4'}`}>
                   <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
                     <p className="min-w-0 flex-1 break-all font-mono text-[12px] text-[var(--text)]">{item.name}</p>
                     <Badge variant={item.status === 'cached' ? 'success' : item.status === 'failed' ? "destructive" : item.status === 'resuming' ? 'warning' : 'neutral'}>{t(`cache.transfers.${item.status}`)}</Badge>
                   </div>
-                  <Progress value={percent ?? null} aria-label={t('cache.transfers.progress', { name: item.name })} aria-valuetext={size}>
+                  {item.status !== 'cached' && <Progress value={percent ?? null} aria-label={t('cache.transfers.progress', { name: item.name })} aria-valuetext={size}>
                     <ProgressTrack>
                       <ProgressIndicator style={item.finished_at ? { animation: 'none' } : undefined} />
                     </ProgressTrack>
-                  </Progress>
+                  </Progress>}
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-[var(--text-soft)]">
                     <span className="font-mono tabular-nums">{size}</span>
                     {percent !== undefined && <span>{percent}%</span>}

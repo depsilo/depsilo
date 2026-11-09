@@ -92,6 +92,21 @@ test('closed mobile drawer has no focusable offscreen links', async ({ page }) =
   await expect(page.getByRole('button', { name: /打开导航/ })).toBeFocused()
 })
 
+test('a development build label fits on one sidebar line', async ({ page }) => {
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/capabilities/summary': { version: '0.11.0-34-g1eb9578', commit: '1eb9578', build_date: '2026-11-09T09:13:51Z' },
+  })
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/admin')
+  const badge = page.locator('aside [data-admin-version]')
+  await expect(badge).toHaveText('dev·1eb9578')
+  expect(await badge.evaluate(element => {
+    const text = element.querySelector('span')!
+    // One line of text plus padding stays below two line heights.
+    return text.scrollHeight < 2 * parseFloat(getComputedStyle(text).lineHeight)
+  })).toBe(true)
+})
+
 test('sidebar release version remains readable and its complete build details are keyboard accessible', async ({ page }) => {
   const version = '1.12.30-rc.2'
   const commit = 'a1234567890bcdef1234567890bcdef1234567890b'

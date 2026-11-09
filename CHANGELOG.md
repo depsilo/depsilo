@@ -6,6 +6,60 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- `[egress]` declares upstream network egress (restart-managed):
+  `upstream_proxy` is the default HTTP(S) proxy for package Upstreams and extra
+  indexes without their own proxy or cascade parent, `no_proxy` keeps listed
+  Upstream hosts direct, and `private_ranges` declares parts of
+  `100.64.0.0/10` (Tailscale, Headscale, NetBird) private networks so such
+  Upstreams and cascade parents are reachable. Declared ranges are treated as
+  private, so public Upstreams still cannot redirect into them;
+  `100.100.100.200` stays blocked, and `198.18.0.0/15` is rejected in favor of
+  `upstream_proxy`. Docker registries keep their own proxy and DNS checks.
+- Dependency-set preparation catalog (opt-in `[distribution]`, schema v13):
+  authenticated CLI/API staging of PyPI wheels and metadata for a declared
+  Linux/amd64 Python target into retained storage that is separate from the
+  package and compiler caches, with independent capacity accounting and
+  streaming length/SHA-256 verification (`depsilo distribution stage`, `list`,
+  `inspect`, `verify`, `delete`, `prune`). Sets are not served to package
+  managers and have no Admin UI yet. See [docs/distribution.md](docs/distribution.md).
+- Signed full transfer bundles (schema v14): `depsilo distribution export`,
+  `import` and `keygen`, backed by `GET /api/v1/admin/distribution/sets/:id/bundle`
+  and `POST /api/v1/admin/distribution/import`. A bundle is a streaming USTAR
+  archive whose manifest carries a detached Ed25519 signature from a dedicated
+  transfer key (`distribution.transfer_signing_key_file` on the exporter,
+  `distribution.trusted_transfer_keys` on the importer). Import authenticates
+  the signer before writing, streams and verifies every object, never activates
+  or serves a set, and records `preparer_attested` provenance only after the
+  whole bundle verified; repeating an interrupted import reuses verified
+  content.
+- Multiple named Admin authentication sources (schema v12, ADR-0007): OIDC
+  sources with distinct issuers and LDAP over LDAPS or mandatory StartTLS, each
+  with isolated connection and sign-in tests, explicit account linking, and
+  bounded external sessions. Casdoor and OpenLDAP integration fixtures cover
+  the flows.
+- The free edition includes one project, with its connection URL, package
+  inventory, and project token. Creating more projects and per-project SBOM
+  export still require Pro or the trial; existing projects keep working after
+  entitlement expires.
+- Cascade traffic attribution: direct, cascade-peer and redirect origin traffic
+  are metered separately (`depsilo_upstream_response_bytes_total`,
+  `depsilo_upstream_exchanges_total`, and their `redirect` counterparts), and
+  `scripts/benchmark-cascade.py` measures isolated native-client cache reuse
+  across a parent and children.
+- Interrupted PyPI and PyTorch artifact downloads resume with bounded
+  same-source range retries on strong validators; Admin → Cache shows download
+  progress.
+- Admin can initialize the Docker Hub mirror, showing saved versus running
+  state and client connection guidance.
+- Lifetime dependency-usage evidence (schema v11) records completed response
+  delivery independently from the lossy request log.
+- Failed Upstream checks are explained. The Upstream list and check results
+  carry a bounded `last_failure` / `failure` (`egress_fake_ip`,
+  `egress_shared_address`, `egress_reserved`, `egress_private`, `dns`,
+  `timeout`, `tls`, `connection_refused`, `http_status`, `network`) with the
+  refused address and range, visible to every Admin role; Admin shows the
+  observed cause with the configuration that resolves it, and whether an
+  Upstream uses the default egress proxy (`proxy_source`).
 - Cascade cache peering (ADR-0006): a Depsilo node can egress selected
   upstreams through another authenticated Depsilo node
   (`[cascade]` + `[[cascade.peers]]` + per-upstream `via`, schema v10).
@@ -30,7 +84,45 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   as a live topology diagram, an inline configuration form, a tabbed
   quick-connect card, and the upstream bindings table.
 
+### Changed
+- An instance without an explicit JWT secret generates a 256-bit instance key
+  at `data/secrets/jwt.key` (mode 0600) and reuses it. The key also signs npm
+  and extra PyPI artifact URLs, so keep it with the database; CLI backups
+  include the effective key. `depsilo setup token` prints the current first-run
+  bootstrap token, which is removed after setup.
+- Admin Overview leads with cache benefits, shows activity as overlapping area
+  charts with explicit loading, empty and sample states, and verifies a new
+  client connection end to end (request detected, artifact delivered, cache
+  hit).
+- Admin management pages state loading, failure, permission and stale-data
+  conditions explicitly, with consistent retry and recovery flows across
+  workspaces. Shared controls are consolidated on shadcn `base-nova` and Base
+  UI without runtime dependency changes.
+- Admin → Cache folds finished download tasks when the page opens; an active or
+  failed download opens the list, and finished entries no longer repeat a full
+  progress bar.
+- Docker image builds accept a `GOPROXY` build argument for restricted networks.
+
 ### Fixed
+- Vulnerability severity is scored from OSV's CVSS v3 vectors. The parser read
+  the vector as a number, so every OSV-sourced advisory was stored as
+  `unknown` with score 0: the critical count stayed 0 and severity suggestions
+  stayed empty. Advisories without a v3 vector use GitHub's qualitative rating
+  when present, without a numeric score.
+- Periodic vulnerability scans no longer replace stored advisory details with
+  bare IDs. OSV's batch endpoint lists only IDs and modification times; a
+  package's complete records are now fetched whenever its listing names a new,
+  changed, or previously misparsed advisory, and a failed fetch keeps the
+  stored records. Schema v15 records each advisory's parser revision and makes
+  every package due for a fresh scan after upgrading.
+- A failed Upstream no longer shows the duration of its failed attempts as its
+  average response time in Admin or the Portal monitor.
+- The Admin sidebar keeps a development build label such as `dev·1eb9578` on
+  one line, and the Portal shows the same build label as Admin instead of
+  `v0.11.0+dev`.
+- Audit chain appends retry transient SQLite busy and stale-snapshot conflicts.
+- Upstream probe intervals are normalized, status refreshes stay synchronized,
+  and a binding to a removed cascade peer can be cleared.
 - The installer resolves the newest release through the
   `github.com/depsilo/depsilo/releases/latest` redirect instead of the
   unauthenticated GitHub REST API, which allows only 60 requests per hour per

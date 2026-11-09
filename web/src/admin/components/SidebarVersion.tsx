@@ -32,8 +32,10 @@ export default function SidebarVersion({ version }: { version?: string }) {
         aria-busy={pending || undefined}
         className="ml-auto min-h-[40px] min-w-[40px] max-w-[88px] whitespace-normal px-0"
       >
+        {/* Release identifiers stay complete and may wrap; the tight metrics
+            keep the common "dev·<7-hex>" label on one line. */}
         <span
-          className="block min-w-0 break-all rounded-sm border px-1.5 py-1 font-mono text-[11px] leading-tight tabular-nums"
+          className="block min-w-0 break-all rounded-sm border px-1 py-1 font-mono text-[11px] leading-tight tracking-tight tabular-nums"
           style={{ background: 'var(--bg-hover)', color: 'var(--text-soft)', borderColor: 'var(--border)' }}
         >
           {label}

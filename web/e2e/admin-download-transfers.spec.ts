@@ -99,3 +99,22 @@ test('download status failures can be retried and failed fills never claim a com
   await expect(section.getByText('Complete cache entry', { exact: true })).toHaveCount(0)
   await expect(section.getByText('The cache fill did not complete. Check access logs for details.')).toBeVisible()
 })
+
+test('finished cache fills stay folded on load while a new fill opens the list', async ({ page }) => {
+  await page.clock.install()
+  await setUiPreferences(page, 'light', 'en')
+  let items: CacheTransfer[] = Array.from({ length: 8 }, (_, index) => ({
+    ...transfer, id: String(index), name: `wheel-${index}.whl`, status: 'cached', downloaded_bytes: transfer.total_bytes,
+    finished_at: '2026-10-16T10:00:03Z',
+  }))
+  await mockAdminApi(page, { 'GET /api/v1/admin/cache/transfers': () => ({ items, limit: 64 }) })
+  await page.goto('/admin/cache')
+  const section = page.getByRole('region', { name: 'Download tasks' })
+  await expect(section.locator('summary')).toContainText('8')
+  await expect(section.getByText('wheel-0.whl')).toBeHidden()
+  items = [{ ...transfer, id: 'new', name: 'fresh.whl' }, ...items]
+  await page.clock.runFor(2100)
+  await expect(section.getByText('fresh.whl')).toBeVisible()
+  // Finished entries no longer repeat a full progress bar.
+  await expect(section.getByRole('progressbar')).toHaveCount(1)
+})
