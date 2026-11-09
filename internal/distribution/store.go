@@ -3,6 +3,7 @@ package distribution
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -26,6 +27,7 @@ type Store struct {
 	storage  cache.Storage
 	limits   Limits
 	gate     chan struct{}
+	keys     TransferKeys
 }
 
 func NewStore(database *gorm.DB, storage cache.Storage, limits Limits) (*Store, error) {
@@ -33,6 +35,12 @@ func NewStore(database *gorm.DB, storage cache.Storage, limits Limits) (*Store, 
 		return nil, fmt.Errorf("%w: store dependencies or limits", ErrInvalid)
 	}
 	return &Store{database: database, storage: storage, limits: limits, gate: make(chan struct{}, 1)}, nil
+}
+
+// ConfigureTransfer installs startup-loaded transfer keys. Call it before the
+// store serves requests; trust changes are restart-managed configuration.
+func (s *Store) ConfigureTransfer(keys TransferKeys) {
+	s.keys = TransferKeys{Signer: keys.Signer, Trusted: append([]ed25519.PublicKey(nil), keys.Trusted...)}
 }
 
 func (s *Store) lock(ctx context.Context) error {
@@ -81,7 +89,7 @@ func (s *Store) Stage(ctx context.Context, raw []byte, actor string) (*Set, erro
 		if existing.ID != id || !bytes.Equal(existing.Manifest, raw) {
 			return nil, ErrConflict
 		}
-		return setView(existing)
+		return s.view(ctx, existing)
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
@@ -109,10 +117,21 @@ func (s *Store) Stage(ctx context.Context, raw []byte, actor string) (*Set, erro
 	if err != nil {
 		return nil, err
 	}
-	return setView(record)
+	return setView(record, nil)
 }
 
-func setView(record db.DistributionSet) (*Set, error) {
+func (s *Store) view(ctx context.Context, record db.DistributionSet) (*Set, error) {
+	var rows []db.DistributionSetProvenance
+	if err := s.database.WithContext(ctx).Where("set_id = ?", record.ID).Limit(1).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return setView(record, nil)
+	}
+	return setView(record, &rows[0])
+}
+
+func setView(record db.DistributionSet, provenance *db.DistributionSetProvenance) (*Set, error) {
 	m, err := ParseManifest(record.Manifest)
 	if err != nil {
 		return nil, fmt.Errorf("stored manifest: %w", err)
@@ -127,21 +146,34 @@ func setView(record db.DistributionSet) (*Set, error) {
 	} else if record.CheckedAt != nil {
 		status = "incomplete"
 	}
-	return &Set{ID: record.ID, Name: record.Name, Revision: record.Revision, CreatedAt: record.CreatedAt, VerifiedAt: record.VerifiedAt, CheckedAt: record.CheckedAt, Manifest: m, ContentStatus: status, ProvenanceStatus: "operator_declared", InstallValidation: "not_run", Serving: false}, nil
+	view := &Set{ID: record.ID, Name: record.Name, Revision: record.Revision, CreatedAt: record.CreatedAt, VerifiedAt: record.VerifiedAt, CheckedAt: record.CheckedAt, Manifest: m, ContentStatus: status, ProvenanceStatus: "operator_declared", InstallValidation: "not_run", Serving: false}
+	if provenance != nil {
+		view.ProvenanceStatus = "preparer_attested"
+		view.Provenance = &Provenance{Origin: provenance.Origin, SignerKeyID: provenance.SignerKeyID, ImportedBy: provenance.ImportedBy, ImportedAt: provenance.ImportedAt}
+	}
+	return view, nil
 }
 
 func (s *Store) Get(ctx context.Context, id string) (*Set, error) {
-	if !validDigest(id) {
-		return nil, ErrNotFound
-	}
-	var record db.DistributionSet
-	if err := s.database.WithContext(ctx).First(&record, "id = ?", id).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrNotFound
-		}
+	record, err := s.record(ctx, id)
+	if err != nil {
 		return nil, err
 	}
-	return setView(record)
+	return s.view(ctx, record)
+}
+
+func (s *Store) record(ctx context.Context, id string) (db.DistributionSet, error) {
+	var record db.DistributionSet
+	if !validDigest(id) {
+		return record, ErrNotFound
+	}
+	if err := s.database.WithContext(ctx).First(&record, "id = ?", id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return record, ErrNotFound
+		}
+		return record, err
+	}
+	return record, nil
 }
 
 func (s *Store) List(ctx context.Context, limit, offset int) ([]Set, int64, error) {
@@ -156,9 +188,23 @@ func (s *Store) List(ctx context.Context, limit, offset int) ([]Set, int64, erro
 	if err := s.database.WithContext(ctx).Order("created_at DESC, id").Limit(limit).Offset(offset).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.ID)
+	}
+	var provenance []db.DistributionSetProvenance
+	if len(ids) > 0 {
+		if err := s.database.WithContext(ctx).Where("set_id IN ?", ids).Find(&provenance).Error; err != nil {
+			return nil, 0, err
+		}
+	}
+	byID := make(map[string]*db.DistributionSetProvenance, len(provenance))
+	for i := range provenance {
+		byID[provenance[i].SetID] = &provenance[i]
+	}
 	sets := make([]Set, 0, len(rows))
 	for _, row := range rows {
-		view, err := setView(row)
+		view, err := setView(row, byID[row.ID])
 		if err != nil {
 			return nil, 0, err
 		}
@@ -341,7 +387,7 @@ func (s *Store) verify(ctx context.Context, id string) (*Verification, error) {
 	if err != nil {
 		return nil, err
 	}
-	result := &Verification{SetID: id, ContentStatus: "content_verified", Issues: []Issue{}, ProvenanceStatus: "operator_declared", InstallValidation: "not_run", Serving: false}
+	result := &Verification{SetID: id, ContentStatus: "content_verified", Issues: []Issue{}, ProvenanceStatus: set.ProvenanceStatus, InstallValidation: "not_run", Serving: false}
 	for _, o := range set.Manifest.Objects {
 		issue, err := s.checkObject(ctx, o)
 		if err != nil {
@@ -445,6 +491,9 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 			return ErrActive
 		}
 		if err := tx.Where("set_id = ?", id).Delete(&db.DistributionSetObject{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("set_id = ?", id).Delete(&db.DistributionSetProvenance{}).Error; err != nil {
 			return err
 		}
 		return tx.Where("id = ?", id).Delete(&db.DistributionSet{}).Error

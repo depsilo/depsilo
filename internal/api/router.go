@@ -237,6 +237,10 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	distributionWrites.POST("/sets/:id/verify", distributionHandler.Verify)
 	distributionWrites.DELETE("/sets/:id", distributionHandler.Delete)
 	distributionWrites.POST("/prune", distributionHandler.Prune)
+	// Export signs with the instance transfer key, so it is admin-only even
+	// though it does not mutate the catalog.
+	distributionWrites.GET("/sets/:id/bundle", distributionHandler.Export)
+	distributionWrites.POST("/import", distributionHandler.Import)
 
 	// First-project onboarding is authenticated because its status exposes a
 	// narrow view of package request history. Existing deployments default to

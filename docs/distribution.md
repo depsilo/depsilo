@@ -3,8 +3,10 @@
 Depsilo can retain a dependency-set draft and verify its declared content,
 independently of the ordinary package and compiler caches. This is an opt-in
 foundation for [offline delivery](specs/2026-10-26-python-offline-distribution.md),
-not an offline repository: there is no bundle export/import, signature trust,
-dependency resolver, installation endpoint, or Admin UI for it yet.
+not an offline repository. It can export and import signed full
+[transfer bundles](#transfer-bundles), but there is no dependency resolver,
+offline package-serving or installation endpoint, incremental transfer, or
+Admin UI for it yet.
 
 The current draft format accepts PyPI wheels and wheel metadata for an explicit
 Linux/amd64 Python target. The target and source URL are operator declarations;
@@ -134,7 +136,8 @@ unreferenced owned content and abandoned local staging files; content referenced
 by any remaining draft is retained. It can be retried after an interruption.
 Neither action deletes package-cache or compiler-cache entries.
 
-The catalog is in the instance SQLite database (schema 13); object bytes are in
+The catalog is in the instance SQLite database (schema 13, with import
+provenance added in schema 14); object bytes are in
 the dedicated directory/bucket. Back up both while writes are stopped. The
 existing `depsilo backup` includes database metadata but **does not include these
 retained object bytes**. Restore the matching content separately, then verify.
@@ -146,6 +149,101 @@ catalog updates. This does not promise filesystem durability across power loss.
 The internal active-version pointer is reverified before switching and reading,
 but is deliberately unavailable through CLI/HTTP until offline serving and
 policy checks exist. It does not change existing Snapshot behavior.
+
+## Transfer bundles
+
+A transfer bundle moves one content-verified set between instances. Export and
+import are full transfers: every object is carried, and no baseline or
+increment is negotiated. Import never activates or serves the set; it ends in
+the same `content_verified` / `serving: false` state as a local `stage`.
+
+### Keys and trust
+
+Transfer signing uses a dedicated Ed25519 key, separate from Admin login, JWT,
+URL-signing, and SBOM compliance keys. Generate one on a trusted machine:
+
+```bash
+depsilo distribution keygen --out /etc/depsilo/transfer-signing-key.pem
+```
+
+The command refuses to replace an existing file, writes it with mode `0600`,
+and prints the public key (`ed25519:<base64>`) and its key ID (the SHA-256 of
+the raw public key). Configure each instance and restart:
+
+```toml
+# Exporting (connected) instance
+[distribution]
+transfer_signing_key_file = "/etc/depsilo/transfer-signing-key.pem"
+
+# Importing (isolated) instance
+[distribution]
+trusted_transfer_keys = ["ed25519:..."]
+```
+
+Trust is restart-managed configuration. Startup fails on a malformed or
+duplicate trusted key or an unreadable signing key. The key ID inside a bundle
+only selects a configured key; it never makes a signer trusted. To revoke a
+signer, remove its key and restart. Sets already imported keep the record of
+the signer that was trusted at import time.
+
+### Export
+
+```bash
+depsilo distribution export <set-id> --out python-v1.depsilo-bundle.tar --json
+```
+
+The set must be `content_verified`. The server signs a transfer manifest and
+streams the bundle with an exact `Content-Length`, verifying each object's
+length and SHA-256 again while reading. If content fails mid-stream, the body
+ends short. The CLI writes to a private temporary file beside the destination,
+checks the archive structure and every object hash, compares the received
+length, and publishes the file only if all checks pass. It never replaces an
+existing file. Where the destination filesystem lacks hard links, as on
+exFAT/FAT32 removable media and many network shares, it publishes by rename
+after rechecking that the destination is still absent. The server audits
+`dist_export` when streaming begins, because signed material leaves with the
+first bytes, and `dist_export_incomplete` if the stream fails. Its `signature_verified: false` output is expected: only the
+importing instance makes a trust decision.
+
+### Import
+
+```bash
+depsilo distribution import --bundle python-v1.depsilo-bundle.tar --json
+```
+
+The importer authenticates the signature before reading any object, then
+checks that `set.json` matches the signed set identity and declarations, and
+that the declared size fits the current storage and object limits. Objects are
+then streamed into storage through the same length and SHA-256 verification
+as an upload. A failed import reports the set identity, object counts, and any
+verification issues when they are known (the CLI prints them as `import`), and
+is audited as `dist_import_failed`. The set remains `staged` or `incomplete`,
+never becomes active, and is not attributed to the signer. Repeat the same
+import to resume; objects already verified are reused by digest. Only after
+every object arrived, the archive ended exactly, and stored content verified
+does the set report `provenance_status: preparer_attested` and a `provenance`
+record with the signer key ID. This attests what a trusted preparer declared; it is
+not an upstream signature, a release timestamp, or install evidence.
+
+### Format v1
+
+A bundle is an uncompressed tar archive. Its members appear in this exact
+order, as regular USTAR files:
+
+| Member | Content |
+| --- | --- |
+| `transfer.json` | Signed transfer manifest, at most 64 KiB: `format` (`depsilo/transfer-bundle/v1`), `required_capabilities` (must be empty in v1), `kind` (`full`), `set_id`, `name`, `revision`, `set_manifest_size`, `object_count`, `total_bytes`, `created_at` |
+| `transfer.sig` | Detached signature, at most 4 KiB: `format` (`depsilo/transfer-signature/v1`), `algorithm` (`ed25519`), `key_id`, base64 `signature` over the exact `transfer.json` bytes |
+| `set.json` | The exact dependency-set manifest bytes; their SHA-256 is `set_id` |
+| `objects/<sha256>` | One member per declared object, in manifest order, containing the original bytes |
+
+The importer rejects unknown formats, required capabilities, or fields; any
+reordered, missing, duplicate, or undeclared member; non-regular entries such
+as links, devices, and directories; PAX extended records; size mismatches; a
+missing end-of-archive marker; and anything other than zero padding after it.
+Bundles never contain instance configuration, credentials, signing keys,
+access tokens, or unrelated cache objects. A single object must be smaller
+than 8 GiB, the USTAR member limit.
 
 ## Admin API
 
@@ -162,6 +260,8 @@ is denied. There are no public package-download routes for this catalog.
 | `POST /sets/:id/verify` | Re-read and verify every declared object |
 | `DELETE /sets/:id` | Remove catalog references |
 | `POST /prune` | Reclaim unreferenced owned bytes |
+| `GET /sets/:id/bundle` | Stream a signed full transfer bundle (`admin` role) |
+| `POST /import` | Stream a transfer bundle as the request body (`application/x-tar`) |
 
 The server records successful mutations in the existing audit stream. Request
 bodies, credentials, and local storage paths are not included in these entries.

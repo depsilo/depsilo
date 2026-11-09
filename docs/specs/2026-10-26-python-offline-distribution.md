@@ -2,7 +2,12 @@
 
 **Date:** 2026-10-26
 
-**Status:** implementation plan and acceptance fixture; artifact transfer is not shipped
+**Status:** implementation plan and acceptance fixture. The catalog and the
+full signed bundle export/import are implemented on `master` and documented in
+[distribution.md](../distribution.md); offline serving, disconnected install,
+and incremental transfer are not shipped. The implemented v1 format binds the
+exact set manifest instead of the separate target, input, and source-evidence
+field groups proposed below; those remain open for a later format version.
 
 **Authority:** [ADR-0008](../adr/0008-dependency-cache-and-distribution.md)
 

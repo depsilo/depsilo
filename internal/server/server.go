@@ -276,6 +276,18 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		if err != nil {
 			return nil, fmt.Errorf("initialize distribution catalog: %w", err)
 		}
+		// Transfer trust is explicit configuration. Fail startup on a malformed
+		// key rather than serving with a smaller trusted set than declared.
+		var keys distribution.TransferKeys
+		if keys.Trusted, err = distribution.ParseTrustedKeys(cfg.Distribution.TrustedTransferKeys); err != nil {
+			return nil, err
+		}
+		if cfg.Distribution.TransferSigningKeyFile != "" {
+			if keys.Signer, err = distribution.LoadSigningKey(cfg.Distribution.TransferSigningKeyFile); err != nil {
+				return nil, fmt.Errorf("distribution.transfer_signing_key_file: %w", err)
+			}
+		}
+		distributionStore.ConfigureTransfer(keys)
 	}
 
 	// Initialize event bus and cache manager

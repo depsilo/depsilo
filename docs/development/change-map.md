@@ -11,7 +11,7 @@ owner.
 | Config field or precedence | `internal/config/`, `config.example.toml` | `internal/config/*_test.go` | Admin authority guide |
 | Package protocol | `internal/adapter/<ecosystem>/` | adjacent adapter tests | relevant dated spec only if needed |
 | Shared cache behavior | `internal/cache/` | adjacent cache tests | cache interfaces in source |
-| Retained dependency-set preparation | `internal/distribution/`, `internal/api/admin/distribution.go`, `internal/cli/distribution.go` | distribution Store/storage, API, and CLI tests | [Preparation catalog](../distribution.md) |
+| Retained dependency-set preparation | `internal/distribution/`, `internal/api/admin/distribution.go`, `internal/cli/distribution.go`, `internal/cli/distribution_transfer.go` | distribution Store/storage/transfer, API, and CLI tests; `make test-s3` for S3 | [Preparation catalog and transfer bundles](../distribution.md) |
 | Upstream selection/health | `internal/upstream/` | adjacent upstream tests | ADR-0001, Admin authority guide |
 | Public/Admin HTTP contract | `internal/api/` | adjacent contract/handler tests | Admin authority guide |
 | Database model/migration | `internal/db/` | migration and repository tests | relevant ADR |

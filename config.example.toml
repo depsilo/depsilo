@@ -92,11 +92,17 @@ path = "./data/compile-cache"
 # secret_key = ""
 
 # 可选：保存依赖集清单及其内容，独立于可淘汰的包缓存和编译缓存。
-# 本阶段提供保留与校验基础；尚未提供离线包导出、导入或安装端点。
+# 可导出、导入签名的完整传输包（docs/distribution.md）；导入不会激活依赖集，
+# 尚未提供离线包服务、安装端点或增量传输。
 [distribution]
 enabled = false
 max_size_bytes = 21474836480       # 20 GiB；满额时拒绝新增内容，不自动淘汰
 max_object_bytes = 1073741824      # 1 GiB；单个对象的上传上限
+# 导出端：专用的 Ed25519 传输签名私钥（PKCS#8 PEM），与 SBOM/JWT/URL 签名密钥分开。
+# 用 `depsilo distribution keygen --out FILE` 生成。
+# transfer_signing_key_file = "/etc/depsilo/transfer-signing-key.pem"
+# 导入端：只接受这些公钥签名的传输包。修改后需重启；格式错误或重复会导致启动失败。
+# trusted_transfer_keys = ["ed25519:..."]
 
 [distribution.storage]
 type = "local"                    # local | s3

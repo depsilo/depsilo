@@ -5,6 +5,7 @@ package distribution_test
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"io"
@@ -282,4 +283,78 @@ func pendingDistributionMultipart(t *testing.T, ctx context.Context, client *s3.
 		count += len(page.Uploads)
 	}
 	return count
+}
+
+// Transfer import streams bundle members straight into multipart S3 uploads.
+// A corrupt member must not publish an object, and S3-held content must
+// re-export as a bundle that passes the same structural and hash checks.
+func TestDistributionS3TransferRoundTrip(t *testing.T) {
+	for _, key := range []string{"ENDPOINT", "REGION", "ACCESS_KEY", "SECRET_KEY"} {
+		if os.Getenv("DEPSILO_STORAGE_"+key) == "" {
+			t.Fatalf("S3 contract requires DEPSILO_STORAGE_%s", key)
+		}
+	}
+	limits := distribution.Limits{MaxObjectBytes: 32 << 20, MaxStorageBytes: 64 << 20}
+	source := newCatalogFixture(t, limits)
+	signer := newTransferKey(t)
+	source.store.ConfigureTransfer(distribution.TransferKeys{Signer: signer})
+	large := bytes.Repeat([]byte("multipart transfer member "), (12<<20)/26)
+	small := []byte("small transfer member")
+	objects := []distribution.Object{contentObject(large, "large"), contentObject(small, "small")}
+	set := stageSet(t, source, "python", "v1", objects...)
+	putContent(t, source, set, objects[0], large)
+	putContent(t, source, set, objects[1], small)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	if _, err := source.store.Verify(ctx, set.ID); err != nil {
+		t.Fatal(err)
+	}
+	export, err := source.store.PrepareExport(ctx, set.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bundle bytes.Buffer
+	if err := export.Write(ctx, &bundle); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := config.DistributionConfig{Enabled: true, MaxSizeBytes: limits.MaxStorageBytes, MaxObjectBytes: limits.MaxObjectBytes, Storage: config.StorageConfig{
+		Type: "s3", Endpoint: os.Getenv("DEPSILO_STORAGE_ENDPOINT"), Bucket: fmt.Sprintf("depsilo-transfer-%d", time.Now().UnixNano()),
+		Region: os.Getenv("DEPSILO_STORAGE_REGION"), AccessKey: os.Getenv("DEPSILO_STORAGE_ACCESS_KEY"), SecretKey: os.Getenv("DEPSILO_STORAGE_SECRET_KEY"),
+	}}
+	retained, err := distribution.NewStorage(cfg, config.StorageConfig{}, config.StorageConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := &catalogFixture{dbPath: filepath.Join(t.TempDir(), "catalog.db"), limits: limits}
+	target.openDatabase(t)
+	target.store = target.newStore(t, retained)
+	target.store.ConfigureTransfer(distribution.TransferKeys{Signer: newTransferKey(t), Trusted: []ed25519.PublicKey{publicOf(signer)}})
+
+	corrupt := rewriteBundle(t, bundle.Bytes(), signer, func(m []member) []member {
+		m[3].data = append([]byte(nil), m[3].data...)
+		m[3].data[len(m[3].data)-1] ^= 0xff
+		return m
+	})
+	if _, err := target.store.Import(ctx, bytes.NewReader(corrupt), "s3-contract"); !errors.Is(err, distribution.ErrIntegrity) {
+		t.Fatalf("corrupt S3 import = %v", err)
+	}
+	if exists, err := retained.Exists(ctx, storageKey(objects[0].SHA256)); err != nil || exists {
+		t.Fatalf("corrupt member published to S3: exists=%v err=%v", exists, err)
+	}
+	result, err := target.store.Import(ctx, bytes.NewReader(bundle.Bytes()), "s3-contract")
+	if err != nil || result.WrittenObjects != 2 || result.Verification.ContentStatus != "content_verified" {
+		t.Fatalf("S3 import: %+v %v", result, err)
+	}
+	reexport, err := target.store.PrepareExport(ctx, set.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var again bytes.Buffer
+	if err := reexport.Write(ctx, &again); err != nil || int64(again.Len()) != reexport.Size {
+		t.Fatalf("S3 re-export wrote %d/%d: %v", again.Len(), reexport.Size, err)
+	}
+	if summary, err := distribution.InspectBundle(ctx, bytes.NewReader(again.Bytes())); err != nil || summary.SetID != set.ID {
+		t.Fatalf("S3 re-export inspect: %+v %v", summary, err)
+	}
 }

@@ -3,12 +3,10 @@
 package distribution
 
 import (
-	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/url"
 	"regexp"
 	"strings"
@@ -65,17 +63,28 @@ type Manifest struct {
 }
 
 type Set struct {
-	ID                string     `json:"id"`
-	Name              string     `json:"name"`
-	Revision          string     `json:"revision"`
-	CreatedAt         time.Time  `json:"created_at"`
-	VerifiedAt        *time.Time `json:"verified_at"`
-	CheckedAt         *time.Time `json:"checked_at"`
-	Manifest          Manifest   `json:"manifest"`
-	ContentStatus     string     `json:"content_status"`
-	ProvenanceStatus  string     `json:"provenance_status"`
-	InstallValidation string     `json:"install_validation"`
-	Serving           bool       `json:"serving"`
+	ID                string      `json:"id"`
+	Name              string      `json:"name"`
+	Revision          string      `json:"revision"`
+	CreatedAt         time.Time   `json:"created_at"`
+	VerifiedAt        *time.Time  `json:"verified_at"`
+	CheckedAt         *time.Time  `json:"checked_at"`
+	Manifest          Manifest    `json:"manifest"`
+	ContentStatus     string      `json:"content_status"`
+	ProvenanceStatus  string      `json:"provenance_status"`
+	InstallValidation string      `json:"install_validation"`
+	Serving           bool        `json:"serving"`
+	Provenance        *Provenance `json:"provenance,omitempty"`
+}
+
+// Provenance identifies the trusted preparer whose signed transfer manifest
+// delivered a set. Trust was decided at import time with the then-configured
+// keys; removing a key later does not rewrite this historical record.
+type Provenance struct {
+	Origin      string    `json:"origin"`
+	SignerKeyID string    `json:"signer_key_id"`
+	ImportedBy  string    `json:"imported_by"`
+	ImportedAt  time.Time `json:"imported_at"`
 }
 
 type UploadResult struct {
@@ -125,17 +134,8 @@ func ParseManifest(raw []byte) (Manifest, error) {
 	if len(raw) == 0 || len(raw) > MaxManifestBytes {
 		return m, fmt.Errorf("%w: manifest size", ErrInvalid)
 	}
-	d := json.NewDecoder(bytes.NewReader(raw))
-	if err := uniqueJSON(d, 0); err != nil {
-		return m, fmt.Errorf("%w: malformed or duplicate JSON fields", ErrInvalid)
-	}
-	if _, err := d.Token(); err != io.EOF {
-		return m, fmt.Errorf("%w: trailing JSON", ErrInvalid)
-	}
-	d = json.NewDecoder(bytes.NewReader(raw))
-	d.DisallowUnknownFields()
-	if err := d.Decode(&m); err != nil {
-		return m, fmt.Errorf("%w: manifest fields", ErrInvalid)
+	if err := decodeStrict(raw, &m); err != nil {
+		return m, fmt.Errorf("%w: malformed, duplicate, trailing, or unknown JSON fields", ErrInvalid)
 	}
 	if m.Format != ManifestFormat || !identifier.MatchString(m.Name) || !identifier.MatchString(m.Revision) || m.Ecosystem != "pypi" {
 		return m, fmt.Errorf("%w: format, name, revision or ecosystem", ErrInvalid)

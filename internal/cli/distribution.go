@@ -31,9 +31,14 @@ func runDistribution(args []string) int {
 		fmt.Println("Usage: depsilo distribution stage --manifest FILE --objects DIR [--url URL] [--json]\n" +
 			"       depsilo distribution list [--page N] [--per-page N] [--url URL] [--json]\n" +
 			"       depsilo distribution prune [--url URL] [--json]\n" +
-			"       depsilo distribution inspect|verify|delete ID [--url URL] [--json]\n\n" +
+			"       depsilo distribution inspect|verify|delete ID [--url URL] [--json]\n" +
+			"       depsilo distribution export ID --out FILE [--url URL] [--json]\n" +
+			"       depsilo distribution import --bundle FILE [--url URL] [--json]\n" +
+			"       depsilo distribution keygen --out FILE [--json]\n\n" +
 			"Objects are regular files named by their SHA-256 in DIR. Stage is repeatable.\n" +
 			"Delete removes the catalog entry; prune reclaims unreferenced object bytes.\n" +
+			"Export writes a signed full transfer bundle; import accepts it only from a\n" +
+			"configured trusted transfer key and never activates or serves the set.\n" +
 			"This prepares a content-verified catalog only; it does not provide offline package serving.")
 		if len(args) == 0 {
 			return 1
@@ -41,12 +46,12 @@ func runDistribution(args []string) int {
 		return 0
 	}
 	command := args[0]
-	serverURL, manifestPath, objectsPath, id := getServerURL(), "", "", ""
+	serverURL, manifestPath, objectsPath, id, outPath, bundlePath := getServerURL(), "", "", "", "", ""
 	page, perPage := 1, 20
 	paginationSet := false
 	for i := 1; i < len(args); i++ {
 		switch args[i] {
-		case "--url", "--manifest", "--objects", "--page", "--per-page":
+		case "--url", "--manifest", "--objects", "--page", "--per-page", "--out", "--bundle":
 			option := args[i]
 			i++
 			if i >= len(args) || strings.TrimSpace(args[i]) == "" {
@@ -59,6 +64,10 @@ func runDistribution(args []string) int {
 				manifestPath = args[i]
 			case "--objects":
 				objectsPath = args[i]
+			case "--out":
+				outPath = args[i]
+			case "--bundle":
+				bundlePath = args[i]
 			case "--page", "--per-page":
 				value, err := strconv.Atoi(args[i])
 				if err != nil || value < 1 || (option == "--page" && value > 1_000_000) || (option == "--per-page" && value > 100) {
@@ -81,6 +90,15 @@ func runDistribution(args []string) int {
 	if command != "list" && paginationSet {
 		return distributionCLIError(jsonMode, errors.New("pagination options are only available for list"))
 	}
+	if (outPath != "" && command != "export" && command != "keygen") || (bundlePath != "" && command != "import") {
+		return distributionCLIError(jsonMode, errors.New("--out is only for export and keygen; --bundle is only for import"))
+	}
+	if command == "keygen" {
+		if id != "" || manifestPath != "" || objectsPath != "" || outPath == "" {
+			return distributionCLIError(jsonMode, errors.New("keygen requires --out"))
+		}
+		return distributionKeygen(jsonMode, outPath)
+	}
 	if command == "stage" {
 		if id != "" || manifestPath == "" || objectsPath == "" {
 			return distributionCLIError(jsonMode, errors.New("stage requires --manifest and --objects"))
@@ -88,6 +106,14 @@ func runDistribution(args []string) int {
 	} else if command == "list" || command == "prune" {
 		if id != "" || manifestPath != "" || objectsPath != "" {
 			return distributionCLIError(jsonMode, errors.New("list and prune do not accept a manifest, objects, or identifier"))
+		}
+	} else if command == "export" {
+		if !distributionSHA256(id) || manifestPath != "" || objectsPath != "" || outPath == "" {
+			return distributionCLIError(jsonMode, errors.New("export requires one lowercase SHA-256 identifier and --out"))
+		}
+	} else if command == "import" {
+		if id != "" || manifestPath != "" || objectsPath != "" || bundlePath == "" {
+			return distributionCLIError(jsonMode, errors.New("import requires --bundle"))
 		}
 	} else if command == "inspect" || command == "verify" || command == "delete" {
 		if !distributionSHA256(id) || manifestPath != "" || objectsPath != "" {
@@ -125,6 +151,10 @@ func runDistribution(args []string) int {
 		result, err = request(http.MethodDelete, "/"+id, nil)
 	case "prune":
 		result, err = distributionRequest(ctx, client, http.MethodPost, strings.TrimSuffix(base, "/sets")+"/prune", nil)
+	case "export":
+		result, err = exportDistribution(ctx, client, base+"/"+id+"/bundle", outPath)
+	case "import":
+		result, err = importDistribution(ctx, client, strings.TrimSuffix(base, "/sets")+"/import", bundlePath)
 	}
 	if err != nil {
 		return distributionCLIError(jsonMode, err)
@@ -140,7 +170,7 @@ func runDistribution(args []string) int {
 		return distributionCLIError(jsonMode, errors.New("server returned an invalid JSON response"))
 	}
 	fmt.Println(formatted.String())
-	if command == "stage" || command == "verify" {
+	if command == "stage" || command == "verify" || command == "import" {
 		var report struct {
 			ContentStatus string `json:"content_status"`
 			Verification  struct {
@@ -155,7 +185,29 @@ func runDistribution(args []string) int {
 	return 0
 }
 
+// distributionDetailError keeps server diagnostics, such as a failed import's
+// signed identity and verification issues, so the operator can inspect and retry.
+type distributionDetailError struct {
+	message string
+	detail  json.RawMessage
+}
+
+func (e *distributionDetailError) Error() string { return e.message }
+
 func distributionCLIError(jsonMode bool, err error) int {
+	var detailed *distributionDetailError
+	if errors.As(err, &detailed) {
+		if jsonMode {
+			_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"error": detailed.message, "import": detailed.detail})
+			return 1
+		}
+		var formatted bytes.Buffer
+		_ = json.Indent(&formatted, detailed.detail, "", "  ")
+		fmt.Fprintln(os.Stderr, "Error:", detailed.message)
+		fmt.Fprintln(os.Stderr, "Import state (retry the same bundle to resume):")
+		fmt.Fprintln(os.Stderr, formatted.String())
+		return 1
+	}
 	if jsonMode {
 		_ = json.NewEncoder(os.Stdout).Encode(map[string]string{"error": err.Error()})
 	} else {
@@ -175,29 +227,53 @@ func distributionServerURL(raw string) (string, error) {
 }
 
 func distributionRequest(ctx context.Context, client *http.Client, method, endpoint string, body io.Reader) ([]byte, error) {
+	contentType := "application/json"
+	if method == http.MethodPut {
+		contentType = "application/octet-stream"
+	}
+	resp, err := distributionSend(ctx, client, method, endpoint, contentType, body, -1)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return distributionResponse(resp)
+}
+
+// distributionSend never follows redirects (see the client) and only reports
+// fixed transport messages, so credentials and local paths stay local.
+func distributionSend(ctx context.Context, client *http.Client, method, endpoint, contentType string, body io.Reader, length int64) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, endpoint, body)
 	if err != nil {
 		return nil, errors.New("cannot create dependency-set request")
 	}
-	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(getToken()))
-	if method == http.MethodPut {
-		req.Header.Set("Content-Type", "application/octet-stream")
-	} else {
-		req.Header.Set("Content-Type", "application/json")
+	if length >= 0 {
+		req.ContentLength = length
 	}
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(getToken()))
+	req.Header.Set("Content-Type", contentType)
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, errors.New("dependency-set request failed or timed out; retry stage to resume the same manifest")
+		return nil, errors.New("dependency-set request failed or timed out; retry the same command to resume")
 	}
-	defer resp.Body.Close()
+	return resp, nil
+}
+
+func distributionResponse(resp *http.Response) ([]byte, error) {
 	data, err := io.ReadAll(io.LimitReader(resp.Body, distributionResponseLimit+1))
 	if err != nil || len(data) > distributionResponseLimit {
 		return nil, errors.New("server response could not be read within the response limit")
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		var failure apiError
+		var failure struct {
+			apiError
+			Import json.RawMessage `json:"import"`
+		}
 		if json.Unmarshal(data, &failure) == nil && failure.Message != "" {
-			return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, failure.Message)
+			message := fmt.Sprintf("HTTP %d: %s", resp.StatusCode, failure.Message)
+			if len(failure.Import) > 0 && json.Valid(failure.Import) {
+				return nil, &distributionDetailError{message: message, detail: failure.Import}
+			}
+			return nil, errors.New(message)
 		}
 		return nil, fmt.Errorf("HTTP %d; redirects are not followed", resp.StatusCode)
 	}

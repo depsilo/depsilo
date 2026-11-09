@@ -18,6 +18,12 @@ type DistributionConfig struct {
 	MaxSizeBytes   int64         `mapstructure:"max_size_bytes"`
 	MaxObjectBytes int64         `mapstructure:"max_object_bytes"`
 	Storage        StorageConfig `mapstructure:"storage"`
+	// TransferSigningKeyFile signs exported transfer bundles. It is a dedicated
+	// PKCS#8 Ed25519 key, separate from SBOM, JWT and URL-signing keys.
+	TransferSigningKeyFile string `mapstructure:"transfer_signing_key_file"`
+	// TrustedTransferKeys are the only signers whose bundles may be imported.
+	// They are restart-managed; the distribution module parses them.
+	TrustedTransferKeys []string `mapstructure:"trusted_transfer_keys"`
 }
 
 // ValidateDistributionConfig is shared by config loading and storage creation.

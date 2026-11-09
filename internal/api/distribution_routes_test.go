@@ -18,6 +18,7 @@ func TestDistributionRoutesRequireAuthenticationAndWriteCapability(t *testing.T)
 		{http.MethodPost, "/sets", true}, {http.MethodPut, "/sets/" + id + "/objects/" + id, true},
 		{http.MethodPost, "/sets/" + id + "/verify", true}, {http.MethodDelete, "/sets/" + id, true},
 		{http.MethodPost, "/prune", true},
+		{http.MethodGet, "/sets/" + id + "/bundle", true}, {http.MethodPost, "/import", true},
 	} {
 		for _, auth := range []struct{ name, token string }{{"anonymous", ""}, {"readonly", readToken}, {"admin", jwtToken}} {
 			t.Run(route.method+route.path+auth.name, func(t *testing.T) {

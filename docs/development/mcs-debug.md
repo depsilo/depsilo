@@ -17,7 +17,7 @@ periodic upgrade job is configured by this instruction.
 
 | Setting | Value |
 | --- | --- |
-| SSH target | `mcs` (`nxd@192.168.50.102`) |
+| SSH target | `nxd@10.77.77.2` (host `mlab-cpu`; the earlier `mcs` alias for `192.168.50.102` stopped accepting SSH on 2026-11-09) |
 | Platform | Linux `amd64`, Docker Compose |
 | Deployment directory | `/data/dev_server/depsilo` |
 | Compose project / container | `depsilo-dev-server` |
@@ -27,8 +27,8 @@ periodic upgrade job is configured by this instruction.
 | Restart policy | `unless-stopped` |
 | Bind mount | Deployment directory at the same container path |
 | Server arguments | `serve --config /data/dev_server/depsilo/config.toml` |
-| Service URL | `http://192.168.50.102:23333` |
-| Admin URL | `http://192.168.50.102:23333/admin` |
+| Service URL | `http://10.77.77.2:23333` |
+| Admin URL | `http://10.77.77.2:23333/admin` |
 
 The deployment directory contains `start.sh`, `status.sh`, `stop.sh`,
 `logs.sh`, and `setup-token.sh`. Read their current contents and the deployed
@@ -62,7 +62,7 @@ that needs setup; an ordinary upgrade continues using the initialized instance.
    `docker compose up -d --no-deps --wait --wait-timeout 90 depsilo`.
    Preserve its bind mount, port, restart policy, and container user.
 5. Confirm that the container remains running and
-   `http://192.168.50.102:23333/ready` returns HTTP 200 with `status: "ready"`.
+   `http://10.77.77.2:23333/ready` returns HTTP 200 with `status: "ready"`.
    Check the reported version against the deployed build; for non-unique
    development version strings, also verify the running image identity. Review
    startup logs and check the changed user flow.
@@ -98,10 +98,10 @@ run the candidate image's `version` command before stopping the old service.
 ### Operations and validation
 
 ```bash
-ssh mcs 'cd /data/dev_server/depsilo && ./status.sh'
-ssh mcs 'cd /data/dev_server/depsilo && ./logs.sh'
-ssh mcs 'cd /data/dev_server/depsilo && docker compose exec -T depsilo depsilo version'
-curl --noproxy '*' --fail http://192.168.50.102:23333/ready
+ssh nxd@10.77.77.2 'cd /data/dev_server/depsilo && ./status.sh'
+ssh nxd@10.77.77.2 'cd /data/dev_server/depsilo && ./logs.sh'
+ssh nxd@10.77.77.2 'cd /data/dev_server/depsilo && docker compose exec -T depsilo depsilo version'
+curl --noproxy '*' --fail http://10.77.77.2:23333/ready
 ```
 
 Use browser navigation or `Accept: text/html` when checking Admin document

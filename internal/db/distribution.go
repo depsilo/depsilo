@@ -50,3 +50,18 @@ type DistributionActiveSet struct {
 }
 
 func (DistributionActiveSet) TableName() string { return "distribution_active_sets" }
+
+// DistributionSetProvenance records the signed transfer manifest through which
+// a set arrived. It attests that a trusted preparer declared these bytes; it is
+// not an upstream-native signature, a release timestamp, or install evidence.
+type DistributionSetProvenance struct {
+	SetID            string    `gorm:"primaryKey;size:64;not null" json:"set_id"`
+	Origin           string    `gorm:"size:32;not null" json:"origin"`
+	SignerKeyID      string    `gorm:"size:64;not null;index:idx_distribution_provenance_signer" json:"signer_key_id"`
+	TransferManifest []byte    `gorm:"not null" json:"-"`
+	Signature        []byte    `gorm:"not null" json:"-"`
+	ImportedBy       string    `gorm:"size:128;not null" json:"imported_by"`
+	ImportedAt       time.Time `gorm:"not null" json:"imported_at"`
+}
+
+func (DistributionSetProvenance) TableName() string { return "distribution_set_provenances" }

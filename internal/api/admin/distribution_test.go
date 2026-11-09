@@ -3,6 +3,8 @@ package admin
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -10,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -49,6 +52,8 @@ func distributionAPIFixture(t *testing.T) (*gin.Engine, *distribution.Store, *go
 	router.POST("/sets/:id/verify", h.Verify)
 	router.DELETE("/sets/:id", h.Delete)
 	router.POST("/prune", h.Prune)
+	router.GET("/sets/:id/bundle", h.Export)
+	router.POST("/import", h.Import)
 	sum := sha256.Sum256([]byte("wheel"))
 	digest := hex.EncodeToString(sum[:])
 	raw, err := json.Marshal(distribution.Manifest{Format: distribution.ManifestFormat, Name: "fixture", Revision: "v1", Ecosystem: "pypi",
@@ -165,5 +170,72 @@ func TestDistributionAPIBoundedInputAndSanitizedFailures(t *testing.T) {
 	r := distributionAPIRequest(router, http.MethodGet, "/sets", nil)
 	if r.Code != 500 || strings.Contains(r.Body.String(), "sql:") || strings.Contains(r.Body.String(), "catalog.db") {
 		t.Fatalf("unsafe backend error %d %s", r.Code, r.Body)
+	}
+}
+
+func TestDistributionAPITransfersSignedBundles(t *testing.T) {
+	source, sourceStore, sourceDB, raw, _ := distributionAPIFixture(t)
+	target, targetStore, targetDB, _, _ := distributionAPIFixture(t)
+	_, signer, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := distributionAPIRequest(source, http.MethodPost, "/sets", raw)
+	var set distribution.Set
+	if err := json.Unmarshal(created.Body.Bytes(), &set); err != nil {
+		t.Fatal(err)
+	}
+	base := "/sets/" + set.ID
+	if r := distributionAPIRequest(source, http.MethodGet, base+"/bundle", nil); r.Code != 503 || !strings.Contains(r.Body.String(), "TRANSFER_SIGNING_NOT_CONFIGURED") {
+		t.Fatalf("export without signer %d %s", r.Code, r.Body)
+	}
+	sourceStore.ConfigureTransfer(distribution.TransferKeys{Signer: signer})
+	if r := distributionAPIRequest(source, http.MethodGet, base+"/bundle", nil); r.Code != 409 || !strings.Contains(r.Body.String(), "SET_INCOMPLETE") {
+		t.Fatalf("export of incomplete set %d %s", r.Code, r.Body)
+	}
+	distributionAPIRequest(source, http.MethodPut, base+"/objects/"+set.Manifest.Objects[0].SHA256, []byte("wheel"))
+	distributionAPIRequest(source, http.MethodPost, base+"/verify", nil)
+	exported := distributionAPIRequest(source, http.MethodGet, base+"/bundle", nil)
+	if exported.Code != 200 || exported.Header().Get("Content-Type") != "application/x-tar" ||
+		exported.Header().Get("Content-Length") != strconv.Itoa(exported.Body.Len()) || exported.Header().Get("X-Depsilo-Set-ID") != set.ID ||
+		!strings.Contains(exported.Header().Get("Content-Disposition"), "fixture-v1.depsilo-bundle.tar") {
+		t.Fatalf("export %d headers=%v", exported.Code, exported.Header())
+	}
+	bundle := exported.Body.Bytes()
+	var exports int64
+	if err := sourceDB.Model(&db.AuditLog{}).Where("action = ? AND version = ?", "dist_export", set.ID).Count(&exports).Error; err != nil || exports != 1 {
+		t.Fatalf("export audit count=%d err=%v", exports, err)
+	}
+
+	untrusted := distributionAPIRequest(target, http.MethodPost, "/import", bundle)
+	if untrusted.Code != 422 || !strings.Contains(untrusted.Body.String(), "UNTRUSTED_SIGNER") || strings.Contains(untrusted.Body.String(), `"import"`) {
+		t.Fatalf("untrusted import %d %s", untrusted.Code, untrusted.Body)
+	}
+	targetStore.ConfigureTransfer(distribution.TransferKeys{Trusted: []ed25519.PublicKey{signer.Public().(ed25519.PublicKey)}})
+	if r := distributionAPIRequest(target, http.MethodPost, "/import", []byte("not a bundle")); r.Code != 400 || !strings.Contains(r.Body.String(), "INVALID_BUNDLE") {
+		t.Fatalf("malformed import %d %s", r.Code, r.Body)
+	}
+	truncated := distributionAPIRequest(target, http.MethodPost, "/import", bundle[:len(bundle)-1500])
+	if truncated.Code == 200 || !strings.Contains(truncated.Body.String(), `"import"`) || !strings.Contains(truncated.Body.String(), set.ID) {
+		t.Fatalf("truncated import should report the signed identity: %d %s", truncated.Code, truncated.Body)
+	}
+	imported := distributionAPIRequest(target, http.MethodPost, "/import", bundle)
+	if imported.Code != 200 || !strings.Contains(imported.Body.String(), `"provenance_status":"preparer_attested"`) || !strings.Contains(imported.Body.String(), `"content_status":"content_verified"`) {
+		t.Fatalf("import %d %s", imported.Code, imported.Body)
+	}
+	var actions []string
+	if err := targetDB.Model(&db.AuditLog{}).Order("id").Pluck("action", &actions).Error; err != nil {
+		t.Fatal(err)
+	}
+	counts := map[string]int{}
+	for _, action := range actions {
+		counts[action]++
+	}
+	if counts["dist_import"] != 1 || counts["dist_import_failed"] != 1 {
+		t.Fatalf("want one successful and one failed import audit, got %v", actions)
+	}
+	var failed db.AuditLog
+	if err := targetDB.Where("action = ?", "dist_import_failed").First(&failed).Error; err != nil || failed.Version != set.ID || failed.StatusCode == 200 {
+		t.Fatalf("failed import audit: %+v %v", failed, err)
 	}
 }

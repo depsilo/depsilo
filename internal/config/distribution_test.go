@@ -5,6 +5,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -42,7 +43,7 @@ func TestDistributionConfigDefaultsAndEnvironment(t *testing.T) {
 		Type: "s3", Path: filepath.Join(home, ".depsilo", "data", "distribution"), Bucket: "retained",
 		Endpoint: "https://objects.example.test", Region: "custom-region", AccessKey: "test-access", SecretKey: "test-secret",
 	}}
-	if cfg.Distribution != want {
+	if !reflect.DeepEqual(cfg.Distribution, want) {
 		t.Fatal("distribution environment overrides were not composed")
 	}
 	if _, err := os.Stat(filepath.Join(home, ".depsilo", "data", "distribution")); !os.IsNotExist(err) {
@@ -61,6 +62,20 @@ func TestDistributionConfigDocumentPreservesRelativePathAndValidatesLimits(t *te
 	}
 	if _, err := decodeConfigDocument([]byte(strings.ReplaceAll(string(data), "max_object_bytes = 1024", "max_object_bytes = 8192"))); err == nil {
 		t.Fatal("config document accepted object size above retained-content capacity")
+	}
+}
+
+func TestDistributionConfigDocumentLoadsTransferKeys(t *testing.T) {
+	data := []byte("[distribution]\nenabled = true\nmax_size_bytes = 4096\nmax_object_bytes = 1024\n" +
+		"transfer_signing_key_file = '/etc/depsilo/transfer.pem'\ntrusted_transfer_keys = ['ed25519:one', 'ed25519:two']\n" +
+		"[distribution.storage]\ntype = 'local'\npath = './data/distribution'\n")
+	cfg, err := decodeConfigDocument(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Distribution.TransferSigningKeyFile != "/etc/depsilo/transfer.pem" ||
+		!reflect.DeepEqual(cfg.Distribution.TrustedTransferKeys, []string{"ed25519:one", "ed25519:two"}) {
+		t.Fatalf("transfer keys not loaded: %+v", cfg.Distribution)
 	}
 }
 

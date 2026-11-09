@@ -67,7 +67,8 @@ duplicating endpoint tables in new documentation.
 | Minimum-release-age thresholds, blocklist/tamper settings | `config.toml` | Loaded at startup; restart to change |
 | Package objects | Local filesystem or S3 | Coordinated by cache metadata in SQLite |
 | Compiler cache objects | Separate local/S3 area | Separate capacity and credentials |
-| Dependency-set drafts | SQLite catalog + dedicated local directory/S3 bucket | Explicit upload, verification, deletion, and reclamation; no package serving |
+| Dependency-set drafts | SQLite catalog + dedicated local directory/S3 bucket | Explicit upload, verification, signed bundle export/import, deletion, and reclamation; no package serving |
+| Transfer signing key, trusted transfer keys | `config.toml` | Loaded at startup; restart to change |
 
 See [Admin control plane](../admin-control-plane.md) before changing the
 configuration/database seam.

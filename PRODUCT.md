@@ -81,9 +81,11 @@ pre-1.0 scope; reopening that candidate direction requires a separate ADR.
 
 An opt-in [dependency-set preparation catalog](docs/distribution.md) now provides
 authenticated CLI/API staging, independent content retention, and streaming
-length/SHA-256 verification. Its drafts remain operator-declared and are not
-served to package managers. Signed bundles, offline installation, dependency
-closure verification, and incremental transfer are still planned.
+length/SHA-256 verification. It can also export a signed full transfer bundle
+and import it on an instance that trusts the signer's dedicated Ed25519 key.
+Imported sets are not activated or served to package managers. Offline
+package serving and installation, dependency closure verification, and
+incremental transfer are still planned.
 
 The next sequence is to validate shared/cascade reuse, complete one scoped
 offline workflow, then add baseline-based incremental transfer before expanding

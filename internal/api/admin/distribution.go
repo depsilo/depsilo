@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"time"
 
 	"depsilo/internal/audit"
@@ -26,6 +27,8 @@ type distributionStore interface {
 	Delete(context.Context, string) error
 	Usage(context.Context) (*distribution.Usage, error)
 	Prune(context.Context) (int64, error)
+	PrepareExport(context.Context, string) (*distribution.Export, error)
+	Import(context.Context, io.Reader, string) (*distribution.ImportResult, error)
 }
 
 // DistributionHandler exposes an operator-owned preparation catalog. It does
@@ -170,6 +173,66 @@ func (h *DistributionHandler) Prune(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"removed_bytes": removed, "scope": "catalog_only", "serving": false})
 }
 
+// Export streams a signed full bundle with an exact Content-Length. If content
+// fails verification mid-stream the body ends short, which HTTP clients report
+// as an unexpected EOF instead of a complete download.
+func (h *DistributionHandler) Export(c *gin.Context) {
+	if !h.enabled(c) || !distributionID(c, "id") {
+		return
+	}
+	export, err := h.store.PrepareExport(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		writeDistributionError(c, err)
+		return
+	}
+	c.Header("Content-Type", "application/x-tar")
+	c.Header("Content-Length", strconv.FormatInt(export.Size, 10))
+	c.Header("Content-Disposition", `attachment; filename="`+export.Filename+`"`)
+	c.Header("X-Depsilo-Set-ID", export.SetID)
+	c.Header("X-Depsilo-Signer-Key-ID", export.SignerKeyID)
+	// Signed material leaves with the first bytes, so record the export before
+	// streaming and record an incomplete stream separately.
+	h.audit(c, "dist_export", export.SetID)
+	c.Status(http.StatusOK)
+	if err := export.Write(c.Request.Context(), c.Writer); err != nil {
+		zap.L().Warn("distribution: bundle export ended before completion", zap.String("set_id", export.SetID), zap.Error(distributionLogError(err)))
+		h.auditStatus(c, "dist_export_incomplete", export.SetID, http.StatusInternalServerError)
+	}
+}
+
+// Import accepts a streamed bundle body. Its size is bounded by the signed
+// declarations and the configured storage limit, not by a request body cap.
+func (h *DistributionHandler) Import(c *gin.Context) {
+	if !h.enabled(c) {
+		return
+	}
+	result, err := h.store.Import(c.Request.Context(), c.Request.Body, requestUsername(c))
+	if err != nil {
+		status, code, message := distributionErrorResponse(err)
+		body := gin.H{"code": code, "message": message}
+		if result != nil {
+			// The signed identity is known and Stage may already have created a
+			// catalog entry, so the attempt is audited and returned for retry.
+			body["import"] = result
+			h.auditStatus(c, "dist_import_failed", result.SetID, status)
+		}
+		c.JSON(status, body)
+		return
+	}
+	h.audit(c, "dist_import", result.SetID)
+	c.JSON(http.StatusOK, result)
+}
+
+// Storage and archive errors can contain paths; log only the error class.
+func distributionLogError(err error) error {
+	for _, known := range []error{distribution.ErrIntegrity, distribution.ErrIncomplete, context.Canceled, context.DeadlineExceeded} {
+		if errors.Is(err, known) {
+			return known
+		}
+	}
+	return errors.New("write failed")
+}
+
 var distributionDigest = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 func distributionID(c *gin.Context, parameter string) bool {
@@ -181,8 +244,19 @@ func distributionID(c *gin.Context, parameter string) bool {
 }
 
 func writeDistributionError(c *gin.Context, err error) {
+	status, code, message := distributionErrorResponse(err)
+	c.JSON(status, gin.H{"code": code, "message": message})
+}
+
+func distributionErrorResponse(err error) (int, string, string) {
 	status, code, message := http.StatusInternalServerError, "DISTRIBUTION_UNAVAILABLE", "dependency-set operation could not be completed"
 	switch {
+	case errors.Is(err, distribution.ErrBundle):
+		status, code, message = http.StatusBadRequest, "INVALID_BUNDLE", "transfer bundle is malformed, reordered, or contains undeclared members"
+	case errors.Is(err, distribution.ErrUntrusted):
+		status, code, message = http.StatusUnprocessableEntity, "UNTRUSTED_SIGNER", "transfer bundle is not signed by a configured trusted transfer key"
+	case errors.Is(err, distribution.ErrSigningUnavailable):
+		status, code, message = http.StatusServiceUnavailable, "TRANSFER_SIGNING_NOT_CONFIGURED", "distribution.transfer_signing_key_file is not configured"
 	case errors.Is(err, distribution.ErrInvalid):
 		status, code, message = http.StatusBadRequest, "INVALID_MANIFEST", "invalid dependency-set manifest, identifier, or object declaration"
 	case errors.Is(err, distribution.ErrNotFound):
@@ -202,10 +276,14 @@ func writeDistributionError(c *gin.Context, err error) {
 	}
 	// Storage errors can contain local paths, signed URLs or credential details.
 	// Only fixed messages cross this HTTP interface.
-	c.JSON(status, gin.H{"code": code, "message": message})
+	return status, code, message
 }
 
 func (h *DistributionHandler) audit(c *gin.Context, action, id string) {
+	h.auditStatus(c, action, id, http.StatusOK)
+}
+
+func (h *DistributionHandler) auditStatus(c *gin.Context, action, id string, status int) {
 	if h.db == nil {
 		return
 	}
@@ -214,7 +292,7 @@ func (h *DistributionHandler) audit(c *gin.Context, action, id string) {
 		userAgent = userAgent[:256]
 	}
 	entry := db.AuditLog{Action: action, PackageName: "distribution", Version: id,
-		ClientIP: c.ClientIP(), UserAgent: userAgent, StatusCode: http.StatusOK, CreatedAt: time.Now().UTC()}
+		ClientIP: c.ClientIP(), UserAgent: userAgent, StatusCode: status, CreatedAt: time.Now().UTC()}
 	if err := audit.AppendAuditRows(c.Request.Context(), h.db, []db.AuditLog{entry}); err != nil {
 		zap.L().Warn("distribution: could not append lifecycle audit", zap.String("action", action))
 	}
