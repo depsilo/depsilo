@@ -5,7 +5,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [0.12.0] - 2026-11-10
+## [0.12.1] - 2026-11-10
+
+The `v0.12.0` tag was not published: its release qualification failed on a
+Docker mirror check that read request counters before the batched access log
+flushed them. 0.12.1 contains the same changes and the corrected check, which
+now verifies that two clean Docker clients pull through Depsilo and that the
+second is served from its cache.
 
 ### Added
 - `[egress]` declares upstream network egress (restart-managed):
