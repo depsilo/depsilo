@@ -92,7 +92,7 @@ test('closed mobile drawer has no focusable offscreen links', async ({ page }) =
   await expect(page.getByRole('button', { name: /打开导航/ })).toBeFocused()
 })
 
-test('a development build label fits on one sidebar line', async ({ page }) => {
+test('a development build label never splits its commit ID', async ({ page }) => {
   await mockAdminApi(page, {
     'GET /api/v1/admin/capabilities/summary': { version: '0.11.0-34-g1eb9578', commit: '1eb9578', build_date: '2026-11-09T09:13:51Z' },
   })
@@ -100,11 +100,25 @@ test('a development build label fits on one sidebar line', async ({ page }) => {
   await page.goto('/admin')
   const badge = page.locator('aside [data-admin-version]')
   await expect(badge).toHaveText('dev·1eb9578')
-  expect(await badge.evaluate(element => {
-    const text = element.querySelector('span')!
-    // One line of text plus padding stays below two line heights.
-    return text.scrollHeight < 2 * parseFloat(getComputedStyle(text).lineHeight)
-  })).toBe(true)
+  await page.evaluate(() => document.fonts.ready)
+  const commitLines = (maxWidth?: string) => badge.evaluate((element, width) => {
+    const label = element.querySelector('span')!
+    if (width) label.style.maxWidth = width
+    const walker = document.createTreeWalker(label, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const start = node.textContent!.indexOf('1eb9578')
+      if (start < 0) continue
+      const range = document.createRange()
+      range.setStart(node, start)
+      range.setEnd(node, start + 7)
+      return { lines: range.getClientRects().length, wrapped: label.getClientRects()[0].height > 2 * parseFloat(getComputedStyle(label).lineHeight) }
+    }
+    return { lines: 0, wrapped: false }
+  }, maxWidth)
+  // Font metrics vary by platform: on one line or not, the commit ID stays whole.
+  expect((await commitLines()).lines).toBe(1)
+  // Too narrow for one line, the label breaks after its separator.
+  expect(await commitLines('64px')).toEqual({ lines: 1, wrapped: true })
 })
 
 test('sidebar release version remains readable and its complete build details are keyboard accessible', async ({ page }) => {
