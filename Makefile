@@ -255,16 +255,23 @@ test-docker-docker: test-e2e-server  # opt-in：Docker Registry dind E2E
 	@echo "=== [docker] two clean dind clients via Docker Hub mirror ==="
 	docker build $(DOCKER_E2E_BUILD_FLAGS) --build-arg DEPSILO_URL=$(DEPSILO_URL) \
 		-t depsilo-test-docker $(TEST_DIR)/docker-docker
+	@# Request counters come from access-log rollups flushed in batches
+	@# (access_log.batch_interval is 5s in config.example.toml), so each check
+	@# waits for its counter instead of reading it once right after the pull.
 	@set -eu; \
 		command -v jq >/dev/null; \
-		before=$$(curl -fsS "$(DEV_URL)/api/v1/stats" | jq -r '.today.total_requests'); \
+		counter() { curl -fsS "$(DEV_URL)/api/v1/stats" | jq -r "$$1"; }; \
+		await_above() { value=$$(counter "$$1"); for attempt in $$(seq 1 30); do [ "$$value" -gt "$$2" ] && break; sleep 1; value=$$(counter "$$1"); done; echo "$$value"; }; \
+		explain() { echo "$$1" >&2; grep -E '/v2/|docker' "$(E2E_LOG)" | tail -n 40 >&2 || true; exit 1; }; \
+		before=$$(counter '.today.total_requests'); \
 		docker run --rm --privileged --add-host=$(DOCKER_HOST_ALIAS):host-gateway depsilo-test-docker; \
-		first=$$(curl -fsS "$(DEV_URL)/api/v1/stats" | jq -r '.today.total_requests'); \
-		test "$$first" -gt "$$before" || { echo 'Docker Hub pull bypassed Depsilo' >&2; exit 1; }; \
-		first_hits=$$(curl -fsS "$(DEV_URL)/api/v1/stats" | jq -r '.today.hit_count'); \
+		first=$$(await_above '.today.total_requests' "$$before"); \
+		test "$$first" -gt "$$before" || explain 'Docker Hub pull bypassed Depsilo'; \
+		sleep 6; \
+		first_hits=$$(counter '.today.hit_count'); \
 		docker run --rm --privileged --add-host=$(DOCKER_HOST_ALIAS):host-gateway depsilo-test-docker; \
-		second_hits=$$(curl -fsS "$(DEV_URL)/api/v1/stats" | jq -r '.today.hit_count'); \
-		test "$$second_hits" -gt "$$first_hits" || { echo 'second clean Docker client did not hit Depsilo cache' >&2; exit 1; }; \
+		second_hits=$$(await_above '.today.hit_count' "$$first_hits"); \
+		test "$$second_hits" -gt "$$first_hits" || explain 'second clean Docker client did not hit Depsilo cache'; \
 		echo "Docker proxy verified: requests $$before -> $$first, hits $$first_hits -> $$second_hits"
 
 test-e2e: $(TEST_DOCKER_ALL_TARGETS)  ## 运行 14 个真实客户端 E2E

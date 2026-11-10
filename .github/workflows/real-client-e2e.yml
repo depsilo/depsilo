@@ -13,6 +13,12 @@ on:
     # intentionally outside the ordinary push/pull_request path.
     - cron: '17 19 * * 0'
   workflow_dispatch:
+    inputs:
+      release_qualification:
+        description: Include OCI, compiler-cache, S3, and pinned release-upgrade contracts
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -68,6 +74,16 @@ jobs:
 
       - name: Run Docker Registry client
         run: make test-docker-docker
+
+      - name: Upload server log
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: docker-registry-server-log
+          path: .test-e2e-state/.dev.log
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Clean up
         if: always()

@@ -32,7 +32,8 @@ the changed interface.
 Docker Registry remains a separate privileged dind check:
 `make test-docker-docker`. It runs two clean Docker daemons against an
 unqualified Hub image and requires a higher Depsilo request count after the
-first pull and a higher cache-hit count after the second. On hosts that resolve
+first pull and a higher cache-hit count after the second, waiting up to 30
+seconds for the batched access-log counters. On hosts that resolve
 public registries to reserved/private synthetic IPs (for example `198.18.0.0/15`),
 Depsilo's outbound safety policy rejects the mirror request; Docker may
 silently fall back to Hub and this check correctly fails. Use public DNS for

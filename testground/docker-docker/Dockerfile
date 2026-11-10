@@ -21,7 +21,8 @@ RUN registry_host="${DEPSILO_URL#*://}" \
     && printf '{\n  "registry-mirrors": ["%s"],\n  "insecure-registries": ["%s"]\n}\n' "${DEPSILO_URL}" "${registry_host}" > /etc/docker/daemon.json
 
 # A fresh daemon pulls by an unqualified Docker Hub name. The Make target
-# checks Depsilo counters so daemon fallback to Docker Hub cannot pass unseen.
-RUN printf '#!/bin/sh\nset -e\nexport DOCKER_HOST=unix:///var/run/docker.sock\nimage="alpine:3.18"\ndockerd >/var/log/dockerd.log 2>&1 &\nfor i in $(seq 1 30); do\n  docker info >/dev/null 2>&1 && break\n  sleep 1\ndone\ndocker info >/dev/null || (echo "dockerd failed to start"; tail /var/log/dockerd.log; exit 1)\ndocker pull "$image"\ndocker image inspect "$image" >/dev/null\necho "docker: unqualified Docker Hub pull completed"\n' > /smoke.sh && chmod +x /smoke.sh
+# checks Depsilo counters so daemon fallback to Docker Hub cannot pass unseen;
+# the daemon's mirror and endpoint log lines show which endpoint served it.
+RUN printf '#!/bin/sh\nset -e\nexport DOCKER_HOST=unix:///var/run/docker.sock\nimage="alpine:3.18"\ndockerd >/var/log/dockerd.log 2>&1 &\nfor i in $(seq 1 30); do\n  docker info >/dev/null 2>&1 && break\n  sleep 1\ndone\ndocker info >/dev/null || (echo "dockerd failed to start"; tail /var/log/dockerd.log; exit 1)\ndocker pull "$image"\ndocker image inspect "$image" >/dev/null\ngrep -i -E "mirror|endpoint|fallback|error" /var/log/dockerd.log | tail -n 20 || true\necho "docker: unqualified Docker Hub pull completed"\n' > /smoke.sh && chmod +x /smoke.sh
 
 CMD ["/smoke.sh"]
