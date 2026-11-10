@@ -89,17 +89,21 @@ async function expectStableProjectsPage(page: Page) {
 
 async function expectInViewport(page: Page, locator: Locator) {
   await expect(locator).toBeVisible()
-  await locator.scrollIntoViewIfNeeded()
-  const box = await locator.evaluate(element => {
-    const rect = element.getBoundingClientRect()
-    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom }
-  })
-  const viewport = page.viewportSize()
-  expect(viewport).not.toBeNull()
-  expect(box.left).toBeGreaterThanOrEqual(-1)
-  expect(box.right).toBeLessThanOrEqual(viewport!.width + 1)
-  expect(box.top).toBeGreaterThanOrEqual(-1)
-  expect(box.bottom).toBeLessThanOrEqual(viewport!.height + 1)
+  // A refetch can replace the element between resolving and scrolling it, so
+  // the scroll and measurement retry together against the current element.
+  await expect(async () => {
+    await locator.scrollIntoViewIfNeeded({ timeout: 2_000 })
+    const box = await locator.evaluate(element => {
+      const rect = element.getBoundingClientRect()
+      return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom }
+    })
+    const viewport = page.viewportSize()
+    expect(viewport).not.toBeNull()
+    expect(box.left).toBeGreaterThanOrEqual(-1)
+    expect(box.right).toBeLessThanOrEqual(viewport!.width + 1)
+    expect(box.top).toBeGreaterThanOrEqual(-1)
+    expect(box.bottom).toBeLessThanOrEqual(viewport!.height + 1)
+  }).toPass()
 }
 
 async function expectNoRootOverflow(page: Page, width: number) {
@@ -363,7 +367,13 @@ test('long project detail, SBOM controls, package filter, and pagination remain 
   await expect(page.getByRole('dialog')).toHaveCount(0)
   const packageFilter = page.getByLabel('筛选生态', { exact: true })
   await expectInViewport(page, packageFilter)
+  // Filtering refetches the package page; the pagination remounts once it lands.
+  const filteredPackages = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === `/api/v1/admin/projects/${longProject.id}/packages` && url.searchParams.get('ecosystem') === 'docker'
+  })
   await packageFilter.selectOption('docker')
+  await filteredPackages
 
   const pagination = page.getByRole('navigation', { name: '分页' })
   await expectInViewport(page, pagination)
