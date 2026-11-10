@@ -514,6 +514,25 @@ resolved network scope is safe, while removing registry credentials from later
 cross-origin redirects. Configuring registry credentials means trusting that
 registry to nominate its authentication service.
 
+## When Upstreams are unreachable
+
+Expiry never deletes cached content. When a package index expires, Depsilo
+refreshes it before answering; if the refresh fails, or is still waiting after
+10 seconds, the cached index is served while the refresh continues. Cached
+artifacts are served directly, so only content that was never cached needs a
+reachable Upstream.
+
+An actively probed Upstream whose requests fail slowly twice in a row, each
+waiting at least 10 seconds as on a link that drops packets, leaves selection
+until a probe succeeds. Depsilo re-probes it after 30 seconds and then at
+doubling delays of up to 5 minutes rather than its regular probe interval.
+Failures that return at once, such as a refused connection, do not count:
+the cached copy already answers them immediately.
+
+While the known-malicious dataset covers PyPI, a legacy archive such as a
+`.zip` sdist proves its identity from the cached project index, so it stays
+available after a restart without network.
+
 ## Health checks
 
 `status` reports service health and available statistics; `doctor` performs
