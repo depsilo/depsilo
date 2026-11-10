@@ -5,6 +5,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-10
+
 ### Added
 - `[egress]` declares upstream network egress (restart-managed):
   `upstream_proxy` is the default HTTP(S) proxy for package Upstreams and extra
@@ -117,9 +119,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   every package due for a fresh scan after upgrading.
 - A failed Upstream no longer shows the duration of its failed attempts as its
   average response time in Admin or the Portal monitor.
-- The Admin sidebar keeps a development build label such as `dev·1eb9578` on
-  one line, and the Portal shows the same build label as Admin instead of
-  `v0.11.0+dev`.
+- The Admin sidebar wraps a development build label such as `dev·1eb9578`
+  only after its separator, so the commit ID is never split, and the Portal
+  shows the same build label as Admin instead of `v0.11.0+dev`.
 - Audit chain appends retry transient SQLite busy and stale-snapshot conflicts.
 - Upstream probe intervals are normalized, status refreshes stay synchronized,
   and a binding to a removed cascade peer can be cleared.
@@ -130,6 +132,24 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   `curl -fsSL https://depsilo.com/install.sh | bash` fail with "Could not
   fetch the latest release metadata"; the API remains the fallback for
   downloaders or networks where the redirect is unavailable.
+
+### Security
+- Frontend dependencies flagged by npm audit are updated: follow-redirects
+  1.16.3 (GHSA-mrwp-f3q8-3g9p, through axios) and, in the build toolchain,
+  zod 4.6.7 (GHSA-mrhx-c7xc-m3w5) and minimatch 11.0.5 for the typescript-eslint
+  parser (GHSA-g3hv-75wg-m249).
+
+### Upgrade notes
+- Schema migrations v11 to v15 run automatically on first start and are
+  forward-only: an older binary cannot open the upgraded database. Take a
+  backup first (`depsilo backup`), and keep `data/secrets/jwt.key` with the
+  database if the instance generated one.
+- After upgrading, every vulnerability check is due. The next scan fetches
+  complete OSV records again, at most one package request per second, so
+  severity counts and suggestions fill in gradually.
+- `[egress]` and `[distribution]` are optional. Without `[egress]`, Upstreams
+  keep direct egress and the built-in address rules; dependency-set
+  distribution stays disabled until `[distribution]` enables it.
 
 ## [0.11.0] - 2026-10-06
 
