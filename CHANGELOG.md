@@ -5,21 +5,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-### Fixed
-- pip and uv installs failed with `451 QUARANTINED` when a PyPI Upstream
-  published PEP 658 core metadata (pypi.org does) while the known-malicious
-  dataset covered PyPI, which is the default since 0.11.0: the `.metadata`
-  file carried no recognizable package identity. It now shares the identity
-  and policy decision of the artifact it describes, so a blocked release is
-  refused through its metadata as well.
+## [0.12.2] - 2026-11-10
 
-## [0.12.1] - 2026-11-10
-
-The `v0.12.0` tag was not published: its release qualification failed on a
-Docker mirror check that read request counters before the batched access log
-flushed them. 0.12.1 contains the same changes and the corrected check, which
-now verifies that two clean Docker clients pull through Depsilo and that the
-second is served from its cache.
+The `v0.12.0` and `v0.12.1` tags were not published. Release qualification of
+`v0.12.0` failed on a Docker mirror check that read request counters before the
+batched access log flushed them; the corrected check verifies that two clean
+Docker clients pull through Depsilo and that the second is served from its
+cache. Qualification of `v0.12.1` then caught the PyPI core-metadata defect
+fixed below. 0.12.2 contains the same changes and both corrections.
 
 ### Added
 - `[egress]` declares upstream network egress (restart-managed):
@@ -120,6 +113,12 @@ second is served from its cache.
 - Docker image builds accept a `GOPROXY` build argument for restricted networks.
 
 ### Fixed
+- pip and uv installs failed with `451 QUARANTINED` when a PyPI Upstream
+  published PEP 658 core metadata (pypi.org does) while the known-malicious
+  dataset covered PyPI, which is the default since 0.11.0: the `.metadata`
+  file carried no recognizable package identity. It now shares the identity
+  and policy decision of the artifact it describes, so a blocked release is
+  refused through its metadata as well.
 - Vulnerability severity is scored from OSV's CVSS v3 vectors. The parser read
   the vector as a number, so every OSV-sourced advisory was stored as
   `unknown` with score 0: the critical count stayed 0 and severity suggestions
