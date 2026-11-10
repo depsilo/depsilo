@@ -25,7 +25,7 @@ path = "./data/cache"
 
 [cache]
 max_size_gb  = 20
-ttl_index    = "1h"         # 索引元数据刷新间隔（过期后同步刷新；上游失败时返回旧索引）
+ttl_index    = "1h"         # 索引元数据刷新间隔（过期后同步刷新，最多等 10 秒；上游失败或超时时返回旧索引）
 ttl_blob     = "72h"        # wheel / .deb 文件
 lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
 

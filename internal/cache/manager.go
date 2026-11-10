@@ -68,7 +68,8 @@ type SecurityScanner interface {
 //   - Cache entries are NEVER deleted by TTL expiration.
 //   - If cache exists and is fresh (< TTL): serve immediately (HIT).
 //   - If mutable metadata is stale: synchronously refresh so resolvers see
-//     newly published versions; fall back to stale bytes on upstream failure.
+//     newly published versions; fall back to stale bytes on upstream failure,
+//     or when the refresh outlasts staleRefreshBudget while it continues.
 //   - If an immutable artifact is stale: serve immediately (HIT), then
 //     trigger background verification/refresh.
 //   - If cache miss: open upstream, stream bytes to the client AND to storage
@@ -91,6 +92,9 @@ type Manager struct {
 	mutations           *keyMutationGate
 	invalidations       *cacheInvalidationRegistry
 	invalidationTimeout time.Duration
+	// staleRefreshBudget bounds how long an ordinary request waits for a stale
+	// metadata entry's refresh before it receives the stale copy.
+	staleRefreshBudget time.Duration
 
 	lifecycleCtx    context.Context
 	lifecycleCancel context.CancelFunc
@@ -167,6 +171,7 @@ func NewManager(storage Storage, database *gorm.DB, eventBus *EventBus, immutabl
 		mutations:           newKeyMutationGate(lifecycleCtx),
 		invalidations:       newCacheInvalidationRegistry(),
 		invalidationTimeout: 10 * time.Second,
+		staleRefreshBudget:  defaultStaleRefreshBudget,
 		immutableThreshold:  immutableThreshold,
 		lifecycleCtx:        lifecycleCtx,
 		lifecycleCancel:     lifecycleCancel,
@@ -844,7 +849,15 @@ func (m *Manager) get(ctx context.Context, key string, adapterType string, ttl t
 			flight.trackers = append(flight.trackers, tracker)
 		}
 		m.inflightMu.Unlock()
-		result, err = m.followInflight(ctx, m.lifecycleCtx, key, flight)
+		result, err = m.followInflightWithin(ctx, m.lifecycleCtx, key, flight, m.staleWaitBudget(ctx, adapterType, key))
+		if errors.Is(err, errStaleRefreshPending) {
+			if stale, staleErr := m.serveStale(ctx, key, adapterType); staleErr == nil {
+				logSlowRefresh(key)
+				return stale, nil
+			}
+			// Without a stale copy this flight is a first fill: keep waiting.
+			result, err = m.followInflight(ctx, m.lifecycleCtx, key, flight)
+		}
 		joined = true
 		// A refresh flight may have started from an existing entry. Let the
 		// common error path attempt a stale snapshot without requiring another
@@ -940,7 +953,11 @@ func (m *Manager) get(ctx context.Context, key string, adapterType string, ttl t
 
 	// Cache miss — fetch from upstream via singleflight
 	if !joined {
-		result, err = m.fetchAndStore(ctx, key, adapterType, ttl, fetchFn)
+		if budget := m.staleWaitBudget(ctx, adapterType, key); exists && budget > 0 {
+			result, err = m.refreshWithin(ctx, budget, key, adapterType, ttl, fetchFn)
+		} else {
+			result, err = m.fetchAndStore(ctx, key, adapterType, ttl, fetchFn)
+		}
 	}
 	if err != nil {
 		if errors.Is(err, ErrNotModified) && (exists || forced) {
@@ -1275,12 +1292,27 @@ func (m *Manager) fetchAndStore(ctx context.Context, key string, adapterType str
 
 // followInflight waits for the leader to commit storage, then serves from cache.
 func (m *Manager) followInflight(ctx, lifecycleCtx context.Context, key string, flight *inflightFetch) (*GetResult, error) {
+	return m.followInflightWithin(ctx, lifecycleCtx, key, flight, 0)
+}
+
+// followInflightWithin waits for flight to commit and then reads its entry. A
+// positive budget bounds only the wait, never the read that follows, and
+// reports errStaleRefreshPending when it expires first.
+func (m *Manager) followInflightWithin(ctx, lifecycleCtx context.Context, key string, flight *inflightFetch, budget time.Duration) (*GetResult, error) {
+	var expired <-chan time.Time
+	if budget > 0 {
+		timer := time.NewTimer(budget)
+		defer timer.Stop()
+		expired = timer.C
+	}
 	select {
 	case <-flight.done:
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-lifecycleCtx.Done():
 		return nil, lifecycleCtx.Err()
+	case <-expired:
+		return nil, errStaleRefreshPending
 	}
 	if flight.err != nil {
 		return nil, flight.err

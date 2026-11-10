@@ -19,6 +19,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   delays of up to 5 minutes. Previously only its next regular probe, 30 minutes
   later by default, or a collapse of its lifetime success rate removed it, so
   every request kept waiting for the connection timeout.
+- An expired package index whose refresh is still waiting after 10 seconds is
+  served from cache while the refresh continues, instead of holding the
+  request for up to the 60-second response timeout. pip gives up after 15
+  seconds by default, so it no longer times out and retries while an Upstream
+  is not answering. Prefetch and operator-forced refreshes still wait for the
+  refresh itself.
 
 ## [0.12.2] - 2026-11-10
 
