@@ -198,15 +198,56 @@ func (h *Handler) handlePackageRedirect(c *gin.Context) {
 // handlePackageIndex proxies and caches a package's simple index, rewriting URLs.
 func (h *Handler) handlePackageIndex(c *gin.Context) {
 	pkg := c.Param("package")
-	cacheKey := IndexCacheKey(h.cacheIdentity(), pkg)
-	if len(h.artifactSigningKey) > 0 {
-		cacheKey = signedIndexCacheKey(h.cacheIdentity(), pkg, h.artifactSigningKey)
-	}
 	start := time.Now()
 
 	baseURL := getBaseURL(c)
 
-	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, h.adapterID, h.cfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
+	result, cacheKey, err := h.projectIndex(c.Request.Context(), pkg)
+	if err != nil {
+		zap.L().Error("failed to get package index", zap.String("package", pkg), zap.Error(err))
+		status := http.StatusBadGateway
+		code := "UPSTREAM_UNAVAILABLE"
+		if strings.Contains(err.Error(), "returned 404") {
+			status = http.StatusNotFound
+			code = "NOT_FOUND"
+		}
+		adapter.LogAccess(c.Request.Context(), h.db, h.adapterID, c.Request.Method, cacheKey, false, "", time.Since(start), status, c.ClientIP(), 0)
+		c.JSON(status, gin.H{"code": code, "message": err.Error()})
+		return
+	}
+	defer result.Reader.Close()
+
+	// Read the cached representation and apply the client-facing URL shape.
+	body, err := io.ReadAll(result.Reader)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL_ERROR", "message": "read cache"})
+		return
+	}
+
+	ct := result.ContentType
+	if ct == "" {
+		ct = "text/html"
+	}
+	body, ct, err = h.withClientRepresentation(cacheKey, body, ct, baseURL, c.GetHeader("Accept"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL_ERROR", "message": "render index"})
+		return
+	}
+	c.Header("Content-Type", ct)
+	c.String(http.StatusOK, string(body))
+
+	adapter.LogAccess(c.Request.Context(), h.db, h.adapterID, c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), int64(len(body)))
+}
+
+// projectIndex reads a package's rewritten simple index through the index
+// cache, so page requests and artifact identity checks share its freshness,
+// request coalescing and stale fallback. It also returns the cache key.
+func (h *Handler) projectIndex(ctx context.Context, pkg string) (*cache.GetResult, string, error) {
+	cacheKey := IndexCacheKey(h.cacheIdentity(), pkg)
+	if len(h.artifactSigningKey) > 0 {
+		cacheKey = signedIndexCacheKey(h.cacheIdentity(), pkg, h.artifactSigningKey)
+	}
+	result, err := h.cacheMgr.Get(ctx, cacheKey, h.adapterID, h.cfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
 		// This closure only runs after TTL expiry, on a miss, or for an
 		// operator-triggered refresh. Fresh hits therefore do not even query
 		// validators locally, let alone contact upstream.
@@ -255,41 +296,7 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 		bodyReader := io.NopCloser(bytes.NewReader(rewritten))
 		return cache.WithResponseValidators(bodyReader, fetchResult.ETag, fetchResult.LastModified), contentType, int64(len(rewritten)), ups.Name, nil
 	})
-
-	if err != nil {
-		zap.L().Error("failed to get package index", zap.String("package", pkg), zap.Error(err))
-		status := http.StatusBadGateway
-		code := "UPSTREAM_UNAVAILABLE"
-		if strings.Contains(err.Error(), "returned 404") {
-			status = http.StatusNotFound
-			code = "NOT_FOUND"
-		}
-		adapter.LogAccess(c.Request.Context(), h.db, h.adapterID, c.Request.Method, cacheKey, false, "", time.Since(start), status, c.ClientIP(), 0)
-		c.JSON(status, gin.H{"code": code, "message": err.Error()})
-		return
-	}
-	defer result.Reader.Close()
-
-	// Read the cached representation and apply the client-facing URL shape.
-	body, err := io.ReadAll(result.Reader)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL_ERROR", "message": "read cache"})
-		return
-	}
-
-	ct := result.ContentType
-	if ct == "" {
-		ct = "text/html"
-	}
-	body, ct, err = h.withClientRepresentation(cacheKey, body, ct, baseURL, c.GetHeader("Accept"))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL_ERROR", "message": "render index"})
-		return
-	}
-	c.Header("Content-Type", ct)
-	c.String(http.StatusOK, string(body))
-
-	adapter.LogAccess(c.Request.Context(), h.db, h.adapterID, c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), int64(len(body)))
+	return result, cacheKey, err
 }
 
 // rewriteIndex converts the upstream simple index into cache-stable local

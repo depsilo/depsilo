@@ -70,7 +70,8 @@ func pypiIdentityFixture(t *testing.T) (*httptest.Server, *atomic.Int64) {
 			indexHits.Add(1)
 			w.Header().Set("Content-Type", "application/vnd.pypi.simple.v1+json")
 			_, _ = io.WriteString(w, pypiIdentityJSONIndex)
-		case r.URL.Path == "/simple/acme-demo-1.0.0/":
+		// Candidate projects are requested by their normalized name.
+		case r.URL.Path == "/simple/acme-demo-1.0.0/", r.URL.Path == "/simple/acme-demo-1-0-0/":
 			indexHits.Add(1)
 			w.Header().Set("Content-Type", "application/vnd.pypi.simple.v1+json")
 			_, _ = io.WriteString(w, pypiAmbiguousIndex)
@@ -312,5 +313,34 @@ func TestPypiCoreMetadataSharesArtifactIdentity(t *testing.T) {
 				t.Fatalf("blocked metadata status=%d body=%s", blocked.Code, blocked.Body.String())
 			}
 		})
+	}
+}
+
+// After a restart without network, the cached project index still proves a
+// legacy artifact's identity, so the cached artifact keeps being served.
+func TestPypiLegacyArtifactIdentityComesFromTheCachedIndexOffline(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	upstreamServer, indexHits := pypiIdentityFixture(t)
+	handler, scoped, checker := newIdentityTestHandler(t, upstreamServer.URL)
+	handler.SetBlocklistCovered(true)
+	const path = "packages/ab/cd/acme-demo-1.0.0.zip"
+	if response := requestPypiFile(t, scoped, path); response.Code != http.StatusOK {
+		t.Fatalf("online legacy zip status=%d body=%s", response.Code, response.Body.String())
+	}
+
+	handler.identityMemo.mu.Lock()
+	handler.identityMemo.cache = nil
+	handler.identityMemo.mu.Unlock()
+	upstreamServer.Close()
+
+	response := requestPypiFile(t, scoped, path)
+	if response.Code != http.StatusOK || response.Body.String() != "pypi-bytes:acme-demo-1.0.0.zip" {
+		t.Fatalf("offline legacy zip status=%d body=%q", response.Code, response.Body.String())
+	}
+	if got := indexHits.Load(); got != 1 {
+		t.Fatalf("index fetches = %d, want the cached index to answer offline", got)
+	}
+	if len(checker.calls) != 2 || checker.calls[1] != (artifactIdentity{pkg: "acme-demo", version: "1.0.0"}) {
+		t.Fatalf("gate identities = %+v", checker.calls)
 	}
 }

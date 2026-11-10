@@ -42,7 +42,9 @@ where necessary.
 PyPI legacy archives and RubyGems platform gems resolve identity through their
 registry indexes. When the dataset covers that ecosystem, an artifact whose
 identity cannot be proven is refused rather than guessed. Those upstreams
-must therefore serve the corresponding index metadata.
+must therefore serve the corresponding index metadata. PyPI reads the project
+index through its cache, so an archive that is already cached stays available
+while the upstream is unreachable.
 
 The blocklist has its own `block` / `warn` mode. `warn` serves matching requests
 and records `malware_warned`. In block mode, neither the release-age allow-list

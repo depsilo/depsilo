@@ -18,6 +18,7 @@ import (
 
 	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/packagepolicy"
+	"depsilo/internal/upstream"
 )
 
 // errArtifactIdentityUnavailable marks /files artifacts whose package and
@@ -172,27 +173,20 @@ func (h *Handler) lookupArtifactIdentity(ctx context.Context, filename string) (
 	return matches[0], nil
 }
 
-// simpleIndexDeclaresFile fetches one project index page through the selected
-// upstream and reports whether it declares exactly this artifact filename.
+// simpleIndexDeclaresFile reads one project index through the index cache and
+// reports whether it declares exactly this artifact filename. A cached index
+// answers while the upstream is unreachable: an artifact filename names the
+// same project and version for as long as it exists.
 func (h *Handler) simpleIndexDeclaresFile(ctx context.Context, pkg, filename string) (bool, error) {
-	selected, err := h.selector.Select(ctx)
+	result, _, err := h.projectIndex(ctx, pkg)
 	if err != nil {
-		return false, fmt.Errorf("%w: select upstream: %v", errArtifactIdentityUnavailable, err)
+		if upstream.IsNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("%w: simple index for %s: %v", errArtifactIdentityUnavailable, pkg, err)
 	}
-	result, err := selected.FetchWithHeaders(ctx, h.upstreamProjectPath(pkg), map[string]string{
-		"Accept": "application/vnd.pypi.simple.v1+json, application/vnd.pypi.simple.v1+html;q=0.5, text/html;q=0.2",
-	})
-	if err != nil {
-		return false, fmt.Errorf("%w: fetch simple index for %s: %v", errArtifactIdentityUnavailable, pkg, err)
-	}
-	defer result.Body.Close()
-	if result.StatusCode == 404 {
-		return false, nil
-	}
-	if result.StatusCode != 200 {
-		return false, fmt.Errorf("%w: simple index for %s returned HTTP %d", errArtifactIdentityUnavailable, pkg, result.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(result.Body, artifactIndexBodyLimit+1))
+	defer result.Reader.Close()
+	body, err := io.ReadAll(io.LimitReader(result.Reader, artifactIndexBodyLimit+1))
 	if err != nil {
 		return false, fmt.Errorf("%w: read simple index for %s: %v", errArtifactIdentityUnavailable, pkg, err)
 	}

@@ -25,6 +25,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   seconds by default, so it no longer times out and retries while an Upstream
   is not answering. Prefetch and operator-forced refreshes still wait for the
   refresh itself.
+- While the known-malicious dataset covers PyPI, a legacy archive (such as a
+  `.zip` sdist) proves its identity from the cached project index. After a
+  restart without network such archives were refused with `451` even when
+  cached, because identity checks always asked the upstream. A candidate
+  project whose index does not exist (404) now counts as not declaring the
+  archive instead of failing the whole identity check.
 
 ## [0.12.2] - 2026-11-10
 
