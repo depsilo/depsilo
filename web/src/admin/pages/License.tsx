@@ -382,7 +382,7 @@ export default function License() {
               {t('license.status.free')}
             </p>
             <ul className="space-y-2">
-              {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
                 <li key={i} className="flex items-center gap-2 text-[13px]" style={{ color: 'var(--text-soft)' }}>
                   <Icon name="check_circle" size="sm" style={{ color: 'var(--text-subtle)' }} />
                   {t(`license.features.free.f${i}`)}

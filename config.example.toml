@@ -557,7 +557,7 @@ sync_interval = "6h"
 # proxy       = "http://127.0.0.1:7890"   # required in mainland China
 
 # ── Compliance (CRA-mode SBOM technical file) ─────────────────────────
-# The per-project SBOM export (Pro) always emits purl and version. Adding
+# The per-project SBOM export always emits purl and version. Adding
 # ?cra=true, or the "CRA technical file" option in the Admin UI, adds the
 # NTIA/CRA minimum elements: SHA-256 checksums from tamper detection,
 # supplier/license fields, and explicit dependency relationships from the

@@ -42,7 +42,7 @@ func (h *ProjectsHandler) capabilities(projectCount int) projectCapabilitiesResp
 		return projectCapabilitiesResponse{CanCreate: true, CanExportSBOM: true}
 	}
 	limit := freeProjectLimit
-	return projectCapabilitiesResponse{ProjectLimit: &limit, CanCreate: projectCount < limit}
+	return projectCapabilitiesResponse{ProjectLimit: &limit, CanCreate: projectCount < limit, CanExportSBOM: true}
 }
 
 // SetCompliance supplies the operator-declared CRA facts used by SBOM

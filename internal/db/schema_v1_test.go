@@ -269,6 +269,7 @@ func currentSchemaModelsForTest() []any {
 		&DistributionSetObject{},
 		&DistributionActiveSet{},
 		&DistributionSetProvenance{},
+		&DistributionExport{},
 		&AuditExporter{},
 		&DockerImageObservation{},
 	}

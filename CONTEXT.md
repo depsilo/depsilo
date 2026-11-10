@@ -97,6 +97,11 @@ A verifiable delivery unit containing artifacts, metadata, and a manifest for
 moving a Dependency Set, or an increment to one, between nodes.
 _Avoid_: Instance Backup, Cache Snapshot, SBOM
 
+**Export Allowance**:
+The bounded Transfer Bundle export volume of the free edition: a largest bundle
+size and a total per UTC calendar month. Pro removes it; imports never consume it.
+_Avoid_: Bandwidth limit, rate limit, import quota
+
 **Baseline Inventory**:
 The inventory of content a target node is confirmed to hold for a transfer.
 It provides the basis for identifying content missing from that target.

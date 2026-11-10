@@ -205,6 +205,24 @@ after rechecking that the destination is still absent. The server audits
 first bytes, and `dist_export_incomplete` if the stream fails. Its `signature_verified: false` output is expected: only the
 importing instance makes a trust decision.
 
+#### Export allowance
+
+Without Pro or an active trial, each bundle may be at most 500 MiB, and the
+bundles exported in one UTC calendar month may total at most 5 GiB
+([ADR-0009](adr/0009-usage-limited-free-edition.md)). The check runs before
+any byte streams: a bundle beyond either limit returns `402` with
+`EXPORT_BUNDLE_LIMIT` or `EXPORT_MONTHLY_LIMIT`, its size, the limits, the bytes
+already used, and the renewal time. Only completely streamed bundles count; an
+interrupted download is not charged. Exports made under Pro or a trial are not
+metered. Imports are never limited.
+
+```bash
+depsilo distribution usage --json
+```
+
+reports `used_bytes`, `bundle_limit_bytes`, `monthly_limit_bytes`, and
+`resets_at`, or `"unlimited": true` under Pro.
+
 ### Import
 
 ```bash
@@ -260,7 +278,8 @@ is denied. There are no public package-download routes for this catalog.
 | `POST /sets/:id/verify` | Re-read and verify every declared object |
 | `DELETE /sets/:id` | Remove catalog references |
 | `POST /prune` | Reclaim unreferenced owned bytes |
-| `GET /sets/:id/bundle` | Stream a signed full transfer bundle (`admin` role) |
+| `GET /sets/:id/bundle` | Stream a signed full transfer bundle (`admin` role; metered without Pro) |
+| `GET /usage` | This UTC month's export allowance |
 | `POST /import` | Stream a transfer bundle as the request body (`application/x-tar`) |
 
 The server records successful mutations in the existing audit stream. Request

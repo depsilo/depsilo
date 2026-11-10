@@ -182,6 +182,8 @@ func TestDistributionCLIOperatorCommandsAndIncompleteExit(t *testing.T) {
 			w.WriteHeader(204)
 		case "POST /api/v1/admin/distribution/prune":
 			_, _ = io.WriteString(w, `{"removed_bytes":5,"serving":false}`)
+		case "GET /api/v1/admin/distribution/usage":
+			_, _ = io.WriteString(w, `{"unlimited":false,"bundle_limit_bytes":524288000,"monthly_limit_bytes":5368709120,"used_bytes":0,"resets_at":"2026-12-01T00:00:00Z"}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 			http.NotFound(w, r)
@@ -192,9 +194,9 @@ func TestDistributionCLIOperatorCommandsAndIncompleteExit(t *testing.T) {
 		command  string
 		want     int
 		contains string
-	}{{"list", 0, "items"}, {"inspect", 0, "staged"}, {"verify", 1, "incomplete"}, {"delete", 0, "deleted"}, {"prune", 0, "removed_bytes"}} {
+	}{{"list", 0, "items"}, {"inspect", 0, "staged"}, {"verify", 1, "incomplete"}, {"delete", 0, "deleted"}, {"prune", 0, "removed_bytes"}, {"usage", 0, "monthly_limit_bytes"}} {
 		args := []string{tc.command, "--url", server.URL, "--json"}
-		if tc.command != "list" && tc.command != "prune" {
+		if tc.command != "list" && tc.command != "prune" && tc.command != "usage" {
 			args = append(args, id)
 		}
 		out, code := captureCLIStdout(t, func() int { return Run("distribution", args) })

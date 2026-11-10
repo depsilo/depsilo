@@ -5,6 +5,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+- Free-edition export allowance for signed transfer bundles
+  ([ADR-0009](docs/adr/0009-usage-limited-free-edition.md), schema v16):
+  without Pro or an active trial, each bundle may be at most 500 MiB and the
+  bundles exported in one UTC month at most 5 GiB. A bundle beyond either limit
+  is refused with `402 EXPORT_BUNDLE_LIMIT` or `402 EXPORT_MONTHLY_LIMIT` before
+  any byte streams. Only completely streamed bundles count, exports under Pro
+  or a trial are not metered, and imports are never limited.
+  `GET /api/v1/admin/distribution/usage` and `depsilo distribution usage`
+  report the current allowance.
+
+### Changed
+- Project SBOM export, including CRA mode, the technical-file preset, and
+  signing, is part of the free edition for its one project. The Admin Projects
+  page no longer shows a Pro badge or paywall for it, and the License page lists
+  the free edition's export allowance.
+
 ### Fixed
 - A PyPI artifact missing on the selected Upstream is fetched from the other
   Upstreams of the ecosystem before a 404 reaches the client. A mirror such as

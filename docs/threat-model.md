@@ -68,7 +68,7 @@ Assumptions, all operator-controlled:
 | Boundary | Enforcement |
 | --- | --- |
 | Package client → proxy routes | **Open by design.** Package managers cannot present Depsilo credentials on every fetch, so proxy routes are not access-controlled. A `Bearer depsilo_proj_*` token is optional and only attributes usage; a missing or unknown token still serves, untracked. `SECURITY.md` therefore requires restricting *network reachability* of the proxy. |
-| Admin browser/API → control plane | JWT bearer sessions; read/write and local credential-management capability groups; `RequirePro` for the multi-project and SBOM surfaces. OIDC sessions retain their independent expiry/revocation checks. |
+| Admin browser/API → control plane | JWT bearer sessions; read/write and local credential-management capability groups; free-edition project and export allowances enforced in their handlers. OIDC sessions retain their independent expiry/revocation checks. |
 | Depsilo → configured identity provider | Authorization Code + PKCE, state/nonce, signed ID-token verification and matching UserInfo subject; HTTPS and same-issuer-origin endpoints. Explicit isolated loopback HTTP is development-only. |
 | MCP client → `/mcp` | JWT + read capability, read-only tools, and resource reads never fetch caller-supplied hosts (SSRF contract test). |
 | Portal → anonymous status | Public by design; exposes service health and guidance only. |
@@ -307,7 +307,7 @@ the place to make that concrete.
 
 ### 5.11 Multi-project data isolation
 
-**Not provided.** Projects attribute usage and scope the Pro SBOM export;
+**Not provided.** Projects attribute usage and scope the SBOM export;
 they do not partition the cache. Any client that can reach the proxy can
 fetch any cached artifact through the normal package routes. Treat a Depsilo
 instance as one trust/tenant domain.

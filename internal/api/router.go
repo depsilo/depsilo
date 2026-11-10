@@ -90,6 +90,8 @@ type Deps struct {
 	BlocklistStore    *blocklist.Store
 	SnapshotStore     *snapshot.Store
 	DistributionStore *distribution.Store
+	// DistributionQuota meters transfer-bundle exports for the free edition.
+	DistributionQuota *distribution.ExportQuota
 	AuditForwarder    *audit.Forwarder
 	AuditAnchor       *audit.Anchor
 	BlocklistSyncer   *blocklist.Syncer
@@ -229,7 +231,9 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	// Preparation catalog only: no package-serving route or transfer trust is
 	// implied by a content-verified draft. Keep disabled responses authenticated.
 	distributionHandler := admin.NewDistributionHandler(deps.DistributionStore, deps.DB)
+	distributionHandler.SetExportQuota(deps.DistributionQuota)
 	adminRead.GET("/distribution/sets", distributionHandler.List)
+	adminRead.GET("/distribution/usage", distributionHandler.Usage)
 	adminRead.GET("/distribution/sets/:id", distributionHandler.Get)
 	distributionWrites := adminWrite.Group("/distribution", admin.AdminRoleRequired())
 	distributionWrites.POST("/sets", distributionHandler.Stage)
@@ -483,12 +487,9 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 		adminWrite.DELETE("/snapshots/:id", snapshotsHandler.Delete)
 	}
 
-	// Basic project management includes one free project. Additional creation
-	// is enforced atomically by the handler; existing project access survives
-	// entitlement expiry. Runtime SBOM export remains a separate Pro feature.
-	proRead := adminRead.Group("")
-	proRead.Use(entitlement.RequirePro(deps.Entitlement))
-
+	// The free edition includes every project feature, including SBOM export,
+	// for one project. Additional creation is enforced atomically by the
+	// handler; existing project access survives entitlement expiry.
 	projectsHandler := admin.NewProjectsHandler(deps.DB, deps.Entitlement)
 	if deps.Config != nil {
 		projectsHandler.SetCompliance(deps.Config.Compliance)
@@ -497,7 +498,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminRead.GET("/projects", projectsHandler.List)
 	adminRead.GET("/projects/:id", projectsHandler.Detail)
 	adminRead.GET("/projects/:id/packages", projectsHandler.ListPackages)
-	proRead.GET("/projects/:id/sbom", projectsHandler.ExportSBOM)
+	adminRead.GET("/projects/:id/sbom", projectsHandler.ExportSBOM)
 	adminWrite.POST("/projects", projectsHandler.Create)
 	adminWrite.PUT("/projects/:id", projectsHandler.Update)
 	adminWrite.DELETE("/projects/:id", projectsHandler.Delete)

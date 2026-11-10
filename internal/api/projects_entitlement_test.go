@@ -119,7 +119,7 @@ func requireProjectResponse(t *testing.T, response *httptest.ResponseRecorder, s
 	}
 }
 
-func assertProjectCapabilities(t *testing.T, fixture projectEntitlementFixture, total int, limit *int, canCreate, canExport bool) {
+func assertProjectCapabilities(t *testing.T, fixture projectEntitlementFixture, total int, limit *int, canCreate bool) {
 	t.Helper()
 	response := projectEntitlementRequest(fixture.router, http.MethodGet, "", "", fixture.admin)
 	requireProjectResponse(t, response, http.StatusOK)
@@ -134,7 +134,7 @@ func assertProjectCapabilities(t *testing.T, fixture projectEntitlementFixture, 
 	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body.Total != total || body.Capabilities == nil || body.Capabilities.CanCreate != canCreate || body.Capabilities.CanExportSBOM != canExport {
+	if body.Total != total || body.Capabilities == nil || body.Capabilities.CanCreate != canCreate || !body.Capabilities.CanExportSBOM {
 		t.Fatalf("unexpected project capabilities: %s", response.Body.String())
 	}
 	gotLimit := body.Capabilities.ProjectLimit
@@ -146,7 +146,7 @@ func assertProjectCapabilities(t *testing.T, fixture projectEntitlementFixture, 
 func TestFreeProjectLifecycleAndRoutePermissions(t *testing.T) {
 	fixture := newProjectEntitlementFixture(t, "free")
 	limit := 1
-	assertProjectCapabilities(t, fixture, 0, &limit, true, false)
+	assertProjectCapabilities(t, fixture, 0, &limit, true)
 	created := projectEntitlementRequest(fixture.router, http.MethodPost, "", `{"name":"First project"}`, fixture.admin)
 	requireProjectResponse(t, created, http.StatusCreated)
 	var project struct {
@@ -161,7 +161,7 @@ func TestFreeProjectLifecycleAndRoutePermissions(t *testing.T) {
 		t.Fatalf("invalid creation response: %s", created.Body.String())
 	}
 	path := fmt.Sprintf("/%d", project.ID)
-	assertProjectCapabilities(t, fixture, 1, &limit, false, false)
+	assertProjectCapabilities(t, fixture, 1, &limit, false)
 	for _, route := range []struct{ method, path, body string }{
 		{http.MethodGet, "", ""}, {http.MethodGet, path, ""}, {http.MethodGet, path + "/packages", ""},
 		{http.MethodGet, path + "/sbom", ""}, {http.MethodPost, "", `{"name":"Second"}`},
@@ -170,10 +170,8 @@ func TestFreeProjectLifecycleAndRoutePermissions(t *testing.T) {
 		requireProjectResponse(t, projectEntitlementRequest(fixture.router, route.method, route.path, route.body, ""), http.StatusUnauthorized)
 		want := http.StatusForbidden
 		if route.method == http.MethodGet {
+			// Reading a project, including its SBOM, is free for every role.
 			want = http.StatusOK
-			if strings.HasSuffix(route.path, "/sbom") {
-				want = http.StatusPaymentRequired
-			}
 		}
 		requireProjectResponse(t, projectEntitlementRequest(fixture.router, route.method, route.path, route.body, fixture.readonly), want)
 	}
@@ -184,9 +182,9 @@ func TestFreeProjectLifecycleAndRoutePermissions(t *testing.T) {
 	}
 	requireProjectResponse(t, projectEntitlementRequest(fixture.router, http.MethodPut, path, `{"description":"changed"}`, fixture.admin), http.StatusOK)
 	requireProjectResponse(t, projectEntitlementRequest(fixture.router, http.MethodPost, path+"/token", "", fixture.admin), http.StatusOK)
-	requireProjectResponse(t, projectEntitlementRequest(fixture.router, http.MethodGet, path+"/sbom", "", fixture.admin), http.StatusPaymentRequired)
+	requireProjectResponse(t, projectEntitlementRequest(fixture.router, http.MethodGet, path+"/sbom", "", fixture.admin), http.StatusOK)
 	requireProjectResponse(t, projectEntitlementRequest(fixture.router, http.MethodDelete, path, "", fixture.admin), http.StatusOK)
-	assertProjectCapabilities(t, fixture, 0, &limit, true, false)
+	assertProjectCapabilities(t, fixture, 0, &limit, true)
 	requireProjectResponse(t, projectEntitlementRequest(fixture.router, http.MethodPost, "", `{"name":"Replacement"}`, fixture.admin), http.StatusCreated)
 }
 
@@ -203,7 +201,7 @@ func TestProjectEntitlementGrantsAndExpiry(t *testing.T) {
 					}
 				}
 				limit := 1
-				assertProjectCapabilities(t, fixture, 2, &limit, false, false)
+				assertProjectCapabilities(t, fixture, 2, &limit, false)
 				for _, path := range []string{"/1", "/2", "/1/packages", "/2/packages"} {
 					requireProjectResponse(t, projectEntitlementRequest(fixture.router, http.MethodGet, path, "", fixture.admin), http.StatusOK)
 				}
@@ -214,13 +212,14 @@ func TestProjectEntitlementGrantsAndExpiry(t *testing.T) {
 				if !strings.Contains(response.Body.String(), `"trial_available":false`) {
 					t.Fatalf("expired trial offered again: %s", response.Body.String())
 				}
-				requireProjectResponse(t, projectEntitlementRequest(fixture.router, http.MethodGet, "/2/sbom", "", fixture.admin), http.StatusPaymentRequired)
+				// Retained projects keep every free feature, including SBOM export.
+				requireProjectResponse(t, projectEntitlementRequest(fixture.router, http.MethodGet, "/2/sbom", "", fixture.admin), http.StatusOK)
 				return
 			}
 			for i := range 3 {
 				requireProjectResponse(t, projectEntitlementRequest(fixture.router, http.MethodPost, "", fmt.Sprintf(`{"name":"Project %d"}`, i), fixture.admin), http.StatusCreated)
 			}
-			assertProjectCapabilities(t, fixture, 3, nil, true, true)
+			assertProjectCapabilities(t, fixture, 3, nil, true)
 			requireProjectResponse(t, projectEntitlementRequest(fixture.router, http.MethodGet, "/1/sbom", "", fixture.admin), http.StatusOK)
 		})
 	}
@@ -256,7 +255,7 @@ func TestFreeProjectConcurrentCreationCannotExceedAllowance(t *testing.T) {
 		t.Fatalf("created %d projects concurrently; want 1", created)
 	}
 	limit := 1
-	assertProjectCapabilities(t, fixture, 1, &limit, false, false)
+	assertProjectCapabilities(t, fixture, 1, &limit, false)
 }
 
 func TestFreeProjectFailedWriteDoesNotConsumeAllowanceOrReturnToken(t *testing.T) {
@@ -271,7 +270,7 @@ func TestFreeProjectFailedWriteDoesNotConsumeAllowanceOrReturnToken(t *testing.T
 		t.Fatalf("failed write returned a token or a quota error: %s", response.Body.String())
 	}
 	limit := 1
-	assertProjectCapabilities(t, fixture, 0, &limit, true, false)
+	assertProjectCapabilities(t, fixture, 0, &limit, true)
 	if err := fixture.database.Exec("DROP TRIGGER reject_project").Error; err != nil {
 		t.Fatal(err)
 	}

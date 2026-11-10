@@ -198,22 +198,25 @@ telemetry.
   positioning while retaining this identity model and the repository limits.
 - The web product is bilingual in Chinese and English. Native mobile clients
   are not part of the current product.
-- The entitlement boundary is decided: governance primitives (minimum release
-  age, known-malicious blocklist, OSV scanning, package rules, quarantine,
-  audit logs, and webhooks) are open source. Without a license, an operator can
-  create and use one project, including its connection URL, package inventory,
-  and project token. Creating additional projects and the runtime per-project
-  SBOM export — including its CRA mode and technical-file preset — require Pro
-  or the 14-day trial. When entitlement expires, existing projects and their
-  dependency traffic remain available; further creation is limited until the
-  instance has no projects or Pro is restored.
+- The entitlement boundary is decided
+  ([ADR-0009](docs/adr/0009-usage-limited-free-edition.md)): the free edition
+  includes every feature at a bounded scale, and Pro or the 14-day trial removes
+  the limits. Governance primitives (minimum release age, known-malicious
+  blocklist, OSV scanning, package rules, quarantine, audit logs, and webhooks)
+  are open source. Without a license, an operator can create and use one
+  project, including its connection URL, package inventory, project token, and
+  runtime SBOM export with its CRA mode and technical-file preset. Transfer
+  bundle export is limited to 500 MiB per bundle and 5 GiB per UTC month;
+  imports are not limited. Creating additional projects requires Pro. When
+  entitlement expires, existing projects and their dependency traffic remain
+  available; further creation is limited until the instance has no projects or
+  Pro is restored.
   This project limit concerns attribution records, not the number of code
   projects or clients allowed to use the shared cache. Projects share instance
   cache and policy; they do not provide tenant or package-access isolation.
   Pricing, packaging, and support terms remain undecided. Do not present
   `$99 lifetime Pro` or Enterprise contract licensing as durable product
-  truth. Packaging for planned offline delivery is also undecided; ADR-0008
-  does not add paywalls or change current entitlements.
+  truth.
 - General-purpose artifact repository support is a candidate post-1.0
   direction recorded in ADR-0005, not a shipped capability or a pre-1.0
   commitment. Its formats, hosted-repository workflows, permissions,

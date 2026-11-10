@@ -52,12 +52,12 @@ func TestLicenseTrial_FullLifecycle(t *testing.T) {
 		}
 	})
 
-	t.Run("free edition can list and create its first project", func(t *testing.T) {
+	t.Run("free edition can create its first project and export its SBOM", func(t *testing.T) {
 		resp := adminGet(t, depsiloURL+"/api/v1/admin/projects")
 		defer resp.Body.Close()
 		assertStatus(t, resp, http.StatusOK)
 		body := readBody(t, resp)
-		if !strings.Contains(body, `"project_limit":1`) || !strings.Contains(body, `"can_create":true`) || !strings.Contains(body, `"can_export_sbom":false`) {
+		if !strings.Contains(body, `"project_limit":1`) || !strings.Contains(body, `"can_create":true`) || !strings.Contains(body, `"can_export_sbom":true`) {
 			t.Fatalf("unexpected free project capabilities: %s", body)
 		}
 		created := adminPost(t, depsiloURL+"/api/v1/admin/projects", strings.NewReader(`{"name":"Free integration project"}`))
@@ -70,20 +70,17 @@ func TestLicenseTrial_FullLifecycle(t *testing.T) {
 			t.Fatalf("decode created project: id=%d err=%v", project.ID, err)
 		}
 		projectID = project.ID
+		exported := adminGet(t, fmt.Sprintf("%s/api/v1/admin/projects/%d/sbom", depsiloURL, projectID))
+		defer exported.Body.Close()
+		assertStatus(t, exported, http.StatusOK)
 	})
 
-	t.Run("additional project and SBOM require Pro before activation", func(t *testing.T) {
-		responses := []*http.Response{
-			adminPost(t, depsiloURL+"/api/v1/admin/projects", strings.NewReader(`{"name":"Second integration project"}`)),
-			adminGet(t, fmt.Sprintf("%s/api/v1/admin/projects/%d/sbom", depsiloURL, projectID)),
-		}
-		for _, resp := range responses {
-			assertStatus(t, resp, http.StatusPaymentRequired)
-			body := readBody(t, resp)
-			resp.Body.Close()
-			if !strings.Contains(body, `"code":"PRO_REQUIRED"`) || !strings.Contains(body, `"trial_available":true`) {
-				t.Errorf("expected Pro requirement with trial available: %s", body)
-			}
+	t.Run("an additional project requires Pro before activation", func(t *testing.T) {
+		resp := adminPost(t, depsiloURL+"/api/v1/admin/projects", strings.NewReader(`{"name":"Second integration project"}`))
+		defer resp.Body.Close()
+		assertStatus(t, resp, http.StatusPaymentRequired)
+		if body := readBody(t, resp); !strings.Contains(body, `"code":"PRO_REQUIRED"`) || !strings.Contains(body, `"trial_available":true`) {
+			t.Errorf("expected Pro requirement with trial available: %s", body)
 		}
 	})
 
@@ -119,7 +116,7 @@ func TestLicenseTrial_FullLifecycle(t *testing.T) {
 		}
 	})
 
-	t.Run("trial unlocks additional projects and SBOM", func(t *testing.T) {
+	t.Run("trial unlocks additional projects", func(t *testing.T) {
 		created := adminPost(t, depsiloURL+"/api/v1/admin/projects", strings.NewReader(`{"name":"Second integration project"}`))
 		defer created.Body.Close()
 		assertStatus(t, created, http.StatusCreated)
@@ -127,12 +124,9 @@ func TestLicenseTrial_FullLifecycle(t *testing.T) {
 		defer resp.Body.Close()
 		assertStatus(t, resp, http.StatusOK)
 		body := readBody(t, resp)
-		if !strings.Contains(body, `"project_limit":null`) || !strings.Contains(body, `"can_export_sbom":true`) {
+		if !strings.Contains(body, `"project_limit":null`) || !strings.Contains(body, `"can_create":true`) {
 			t.Errorf("unexpected trial project capabilities: %s", body)
 		}
-		exported := adminGet(t, fmt.Sprintf("%s/api/v1/admin/projects/%d/sbom", depsiloURL, projectID))
-		defer exported.Body.Close()
-		assertStatus(t, exported, http.StatusOK)
 	})
 
 	t.Run("re-activating trial returns 409 TRIAL_ALREADY_USED", func(t *testing.T) {

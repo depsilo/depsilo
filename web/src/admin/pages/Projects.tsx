@@ -95,7 +95,6 @@ export default function Projects() {
   const [sbomTechnicalFile, setSbomTechnicalFile] = useState(false)
   const [sbomSign, setSbomSign] = useState(false)
   const [sbomError, setSbomError] = useState('')
-  const [sbomProRequired, setSbomProRequired] = useState(false)
   const [sbomLoading, setSbomLoading] = useState(false)
   const exportController = useRef<AbortController | null>(null)
   const [viewProjectId, setViewProjectId] = useState(projectId)
@@ -106,7 +105,6 @@ export default function Projects() {
     setRotateOpen(false)
     setTokenData(null)
     setSbomError('')
-    setSbomProRequired(false)
     setSbomLoading(false)
   }
   useEffect(() => () => { exportController.current?.abort() }, [projectId])
@@ -135,7 +133,6 @@ export default function Projects() {
   const projects = data?.data.items ?? []
   const capabilities = data?.data.capabilities
   const canCreate = capabilities?.can_create === true
-  const canExportSbom = capabilities?.can_export_sbom === true
   const selectedProject = projects.find(project => project.id === projectId) ?? null
 
   const detailQuery = useQuery({
@@ -157,7 +154,7 @@ export default function Projects() {
   const complianceQuery = useQuery({
     queryKey: ['admin', 'compliance', 'profile'],
     queryFn: ({ signal }) => adminApi.complianceProfile({ signal }),
-    enabled: projectId !== null && exportOpen && canExportSbom && !sbomProRequired,
+    enabled: projectId !== null && exportOpen,
     retry: false,
     staleTime: 5 * 60 * 1000,
   })
@@ -248,7 +245,7 @@ export default function Projects() {
   }
 
   async function handleSbomDownload() {
-    if (!projectId || !canExportSbom || sbomProRequired) return
+    if (!projectId) return
     const controller = new AbortController()
     exportController.current = controller
     setSbomLoading(true)
@@ -278,12 +275,7 @@ export default function Projects() {
         downloadBlob(new Blob([JSON.stringify(sidecar, null, 2)], { type: 'application/json' }), `${filename}.sig.json`)
       }
     } catch (error) {
-      if (!controller.signal.aborted) {
-        if (getApiError(error).status === 402) {
-          setSbomProRequired(true)
-          void queryClient.invalidateQueries({ queryKey: ['admin', 'projects'] })
-        } else setSbomError(await sbomFailureMessage(error))
-      }
+      if (!controller.signal.aborted) setSbomError(await sbomFailureMessage(error))
     } finally {
       if (exportController.current === controller) setSbomLoading(false)
     }
@@ -403,7 +395,7 @@ export default function Projects() {
             </Tooltip>
           <h2 className="min-w-0 break-words text-[20px] font-[600] [overflow-wrap:anywhere]" style={{ color: 'var(--text)' }}>{projectDetail?.name}</h2>
           <div className="ml-auto flex flex-wrap gap-2">
-            <Button variant="outline" disabled={!detailData || !capabilities} onClick={() => { setSbomError(''); setSbomProRequired(false); setExportOpen(true) }}><Icon name="download" size="sm" />{t('sbom.export')}{capabilities && !canExportSbom && <Badge variant="pro">Pro</Badge>}</Button>
+            <Button variant="outline" disabled={!detailData} onClick={() => { setSbomError(''); setExportOpen(true) }}><Icon name="download" size="sm" />{t('sbom.export')}</Button>
             {canWrite && <>
               <Button variant="outline" disabled={!detailData} onClick={() => { editMutation.reset(); setEditForm({ name: projectDetail?.name ?? '', description: projectDetail?.description ?? '' }) }}>{t('projects.editTitle')}</Button>
               <Button variant="outline" disabled={!detailData} onClick={() => { rotateMutation.reset(); setRotateOpen(true) }}>{t('projects.regenerateToken')}</Button>
@@ -471,12 +463,6 @@ export default function Projects() {
           <DialogContent className="sm:max-w-[640px]" closeDisabled={sbomLoading}>
           <DialogTitle>{t('sbom.export')}</DialogTitle>
           <p className="min-w-0 break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">{projectDetail?.name}</p>
-          {!canExportSbom || sbomProRequired ? (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">{t('projects.sbomProRequired')}</p>
-              {proAccessAction}
-            </div>
-          ) : <>
           {complianceQuery.isPending && <p role="status">{t('loading')}</p>}
           {complianceQuery.isError && <QueryErrorState message={t('sbom.profileUnavailable')} onRetry={() => { void complianceQuery.refetch() }} />}
           {complianceQuery.isRefetchError && compliance && <StaleDataNotice onRefresh={() => { void complianceQuery.refetch() }} />}
@@ -533,7 +519,6 @@ export default function Projects() {
             )}
             {sbomError && <Alert variant={"destructive"}><AlertDescription>{sbomError}</AlertDescription></Alert>}
           </div>
-          </>}
           </DialogContent>
         </Dialog>
 

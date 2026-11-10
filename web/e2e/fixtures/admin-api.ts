@@ -44,7 +44,7 @@ export type AdminApiOverrides = Record<string, AdminApiOverride>
 export type UiLocale = 'zh' | 'en'
 export type UiTheme = 'light' | 'dark'
 
-export const freeProjectCapabilities: ProjectCapabilities = { project_limit: 1, can_create: true, can_export_sbom: false }
+export const freeProjectCapabilities: ProjectCapabilities = { project_limit: 1, can_create: true, can_export_sbom: true }
 export const proProjectCapabilities: ProjectCapabilities = { project_limit: null, can_create: true, can_export_sbom: true }
 
 const configuredSettings: AdminSettingsSnapshot = {

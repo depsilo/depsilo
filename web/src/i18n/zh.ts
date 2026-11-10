@@ -2243,7 +2243,7 @@ const zh = {
       licenseRevalidate: '重新验证',
       licenseRevalidating: '验证中...',
       licenseCommunityTitle: '当前为社区版',
-      licenseCommunityDesc: '升级到 Pro 解锁多项目工作区。',
+      licenseCommunityDesc: '升级到 Pro 解锁多项目工作区与不限量的离线包导出。',
       licenseFeature12eco: '14 种生态代理 + Docker OCI',
       licenseFeatureWebUI: 'Web UI + Prometheus 指标',
       licenseFeatureAudit: '审计日志',
@@ -2468,7 +2468,6 @@ const zh = {
       moreRequiresPro: '创建更多项目需要 Pro。现有项目可继续使用和管理。',
       managePro: '管理 Pro 授权',
       contactAdminForPro: '请联系管理员启用 Pro。',
-      sbomProRequired: '项目级 SBOM 导出（含 CRA 模式与技术文件）需要 Pro。查看项目与依赖记录不受影响。',
       capabilitiesUnavailable: '项目额度暂不可用，请刷新后再创建项目或导出 SBOM。',
     },
 
@@ -2740,7 +2739,7 @@ const zh = {
 
       paywall: {
         title: '此功能在 Pro 版本提供',
-        body: '多项目工作区可归集各项目的依赖活动并导出项目级 SBOM。缓存与安全策略由实例统一管理。请联系 Depsilo 团队了解当前可用的 Pro 授权方式。',
+        body: '多项目工作区可归集各项目的依赖活动，离线交付包导出不受单包大小与月度总量限制。缓存与安全策略由实例统一管理。请联系 Depsilo 团队了解当前可用的 Pro 授权方式。',
         start_trial: '开始试用',
         buy_lifetime: '咨询 Pro 授权',
         learn_more: '了解更多',
@@ -2760,11 +2759,12 @@ const zh = {
           f4: '安全情报 dashboard（OSV · CVE · 决策工作流）',
           f5: 'Depsilo 发布制品 SBOM（CycloneDX + SPDX）',
           f6: '本地 / S3 存储 · Webhook · Prometheus · 监控',
-          f7: '1 个项目：独立地址、Token 与依赖活动归集',
+          f7: '1 个项目：独立地址、Token、依赖活动归集与 SBOM 导出（含 CRA 预设）',
+          f8: '离线交付包导出：单包 ≤ 500 MB，每月合计 ≤ 5 GB；导入不限',
         },
         pro: {
           f1: '多项目依赖活动归集',
-          f2: '项目级 SBOM 导出（含 CRA 模式与技术文件预设）',
+          f2: '离线交付包导出不限单包大小与月度总量',
           f3: '这里只列出当前已经交付的能力',
           f4: '不在此承诺未来的付费功能边界',
           f5: '授权条款以当前实际方案为准',

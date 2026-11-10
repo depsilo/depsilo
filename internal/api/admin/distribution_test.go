@@ -8,13 +8,16 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"depsilo/internal/cache"
 	"depsilo/internal/db"
@@ -237,5 +240,115 @@ func TestDistributionAPITransfersSignedBundles(t *testing.T) {
 	var failed db.AuditLog
 	if err := targetDB.Where("action = ?", "dist_import_failed").First(&failed).Error; err != nil || failed.Version != set.ID || failed.StatusCode == 200 {
 		t.Fatalf("failed import audit: %+v %v", failed, err)
+	}
+}
+
+// failAfterWriter models a client that disconnects after limit body bytes.
+type failAfterWriter struct {
+	header  http.Header
+	limit   int
+	written int
+}
+
+func (w *failAfterWriter) Header() http.Header { return w.header }
+func (w *failAfterWriter) WriteHeader(int)     {}
+func (w *failAfterWriter) Write(p []byte) (int, error) {
+	if w.written+len(p) > w.limit {
+		return 0, errors.New("client disconnected")
+	}
+	w.written += len(p)
+	return len(p), nil
+}
+
+func TestDistributionAPIMetersFreeExports(t *testing.T) {
+	source, store, database, raw, digest := distributionAPIFixture(t)
+	_, signer, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.ConfigureTransfer(distribution.TransferKeys{Signer: signer})
+	var set distribution.Set
+	if err := json.Unmarshal(distributionAPIRequest(source, http.MethodPost, "/sets", raw).Body.Bytes(), &set); err != nil {
+		t.Fatal(err)
+	}
+	distributionAPIRequest(source, http.MethodPut, "/sets/"+set.ID+"/objects/"+digest, []byte("wheel"))
+	distributionAPIRequest(source, http.MethodPost, "/sets/"+set.ID+"/verify", nil)
+	export, err := store.PrepareExport(context.Background(), set.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	size, bundlePath := export.Size, "/sets/"+set.ID+"/bundle"
+
+	var pro atomic.Bool
+	metered := func(limits distribution.ExportLimits) *gin.Engine {
+		quota, err := distribution.NewExportQuota(database, pro.Load, limits)
+		if err != nil {
+			t.Fatal(err)
+		}
+		h := NewDistributionHandler(store, database)
+		h.SetExportQuota(quota)
+		router := gin.New()
+		router.GET("/sets/:id/bundle", h.Export)
+		router.GET("/usage", h.Usage)
+		return router
+	}
+	type refusal struct {
+		Code              string    `json:"code"`
+		BundleBytes       int64     `json:"bundle_bytes"`
+		BundleLimitBytes  int64     `json:"bundle_limit_bytes"`
+		MonthlyLimitBytes int64     `json:"monthly_limit_bytes"`
+		UsedBytes         int64     `json:"used_bytes"`
+		ResetsAt          time.Time `json:"resets_at"`
+		Upgrade           string    `json:"upgrade"`
+	}
+	refused := func(r *httptest.ResponseRecorder, code string) refusal {
+		t.Helper()
+		var body refusal
+		if r.Code != http.StatusPaymentRequired || r.Header().Get("Content-Type") == "application/x-tar" ||
+			json.Unmarshal(r.Body.Bytes(), &body) != nil || body.Code != code || body.Upgrade == "" {
+			t.Fatalf("want a %s refusal, got %d %s", code, r.Code, r.Body)
+		}
+		return body
+	}
+	usage := func(router *gin.Engine) distribution.ExportUsage {
+		t.Helper()
+		r := distributionAPIRequest(router, http.MethodGet, "/usage", nil)
+		var body distribution.ExportUsage
+		if r.Code != http.StatusOK || json.Unmarshal(r.Body.Bytes(), &body) != nil {
+			t.Fatalf("usage %d %s", r.Code, r.Body)
+		}
+		return body
+	}
+
+	// A bundle over the size limit is refused before any byte streams.
+	small := metered(distribution.ExportLimits{BundleBytes: size - 1, MonthlyBytes: 4 * size})
+	if body := refused(distributionAPIRequest(small, http.MethodGet, bundlePath, nil), "EXPORT_BUNDLE_LIMIT"); body.BundleBytes != size || body.BundleLimitBytes != size-1 {
+		t.Fatalf("bundle refusal %+v", body)
+	}
+
+	// The month allows two bundles; an interrupted download does not count.
+	monthly := 2*size + size/2
+	router := metered(distribution.ExportLimits{BundleBytes: size, MonthlyBytes: monthly})
+	router.ServeHTTP(&failAfterWriter{header: http.Header{}, limit: int(size / 2)}, httptest.NewRequest(http.MethodGet, bundlePath, nil))
+	if got := usage(router); got.Unlimited || got.UsedBytes != 0 || got.BundleLimit != size || got.MonthlyLimit != monthly {
+		t.Fatalf("usage after an interrupted export %+v", got)
+	}
+	for i := range 2 {
+		if r := distributionAPIRequest(router, http.MethodGet, bundlePath, nil); r.Code != http.StatusOK || int64(r.Body.Len()) != size {
+			t.Fatalf("export %d within the allowance: %d", i+1, r.Code)
+		}
+	}
+	if body := refused(distributionAPIRequest(router, http.MethodGet, bundlePath, nil), "EXPORT_MONTHLY_LIMIT"); body.UsedBytes != 2*size ||
+		body.MonthlyLimitBytes != monthly || !body.ResetsAt.After(time.Now()) {
+		t.Fatalf("monthly refusal %+v", body)
+	}
+
+	// Pro exports are neither limited nor metered.
+	pro.Store(true)
+	if r := distributionAPIRequest(small, http.MethodGet, bundlePath, nil); r.Code != http.StatusOK {
+		t.Fatalf("Pro export %d %s", r.Code, r.Body)
+	}
+	if got := usage(router); !got.Unlimited || got.BundleLimit != 0 || got.MonthlyLimit != 0 || got.UsedBytes != 2*size {
+		t.Fatalf("Pro usage %+v", got)
 	}
 }

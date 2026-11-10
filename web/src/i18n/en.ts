@@ -2236,7 +2236,7 @@ const en = {
       licenseRevalidate: 'Re-verify',
       licenseRevalidating: 'Verifying...',
       licenseCommunityTitle: "You're on Community",
-      licenseCommunityDesc: 'Upgrade to Pro to unlock multi-project workspaces.',
+      licenseCommunityDesc: 'Upgrade to Pro to unlock multi-project workspaces and unlimited offline bundle exports.',
       licenseFeature12eco: 'All 14 ecosystems + Docker OCI',
       licenseFeatureWebUI: 'Web UI + Prometheus metrics',
       licenseFeatureAudit: 'Audit logs',
@@ -2461,7 +2461,6 @@ const en = {
       moreRequiresPro: 'Creating more projects requires Pro. Existing projects remain available to use and manage.',
       managePro: 'Manage Pro access',
       contactAdminForPro: 'Contact an administrator to enable Pro.',
-      sbomProRequired: 'Project SBOM exports, including CRA mode and technical files, require Pro. Projects and dependency records remain available.',
       capabilitiesUnavailable: 'Project limits are unavailable. Refresh before creating a project or exporting an SBOM.',
     },
 
@@ -2733,7 +2732,7 @@ const en = {
 
       paywall: {
         title: 'This feature is part of Pro',
-        body: 'Multi-project workspaces track each project’s dependency activity and export project SBOMs. Cache and security policies are managed for the whole instance. Contact the Depsilo team to ask about currently available Pro access.',
+        body: 'Multi-project workspaces track each project’s dependency activity, and offline bundle exports have no bundle-size or monthly limits. Cache and security policies are managed for the whole instance. Contact the Depsilo team to ask about currently available Pro access.',
         start_trial: 'Start trial',
         buy_lifetime: 'Ask about Pro access',
         learn_more: 'Learn more',
@@ -2753,11 +2752,12 @@ const en = {
           f4: 'Security intelligence dashboard (OSV · CVE · workflow)',
           f5: 'Depsilo release SBOMs (CycloneDX + SPDX)',
           f6: 'Local / S3 storage · webhooks · Prometheus · monitoring',
-          f7: '1 project: dedicated address, token, and dependency activity',
+          f7: '1 project: dedicated address, token, dependency activity, and SBOM export (including the CRA preset)',
+          f8: 'Offline bundle export: up to 500 MB per bundle and 5 GB per month in total; imports unlimited',
         },
         pro: {
           f1: 'Dependency activity grouped across multiple projects',
-          f2: 'Project SBOM exports, including CRA mode and technical-file presets',
+          f2: 'Offline bundle exports without bundle-size or monthly limits',
           f3: 'Only currently shipped capabilities are listed',
           f4: 'Future premium boundaries are not promised here',
           f5: 'License terms depend on the current offering',

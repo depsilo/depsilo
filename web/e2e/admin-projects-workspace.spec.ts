@@ -184,9 +184,8 @@ test('free users create their first project and deletion restores the allowance'
   expect(creations).toBe(1)
 })
 
-for (const count of [1, 2]) test(`free instances retain ${count} existing project(s), with SBOM clearly Pro`, async ({ page }) => {
+for (const count of [1, 2]) test(`free instances retain ${count} existing project(s) and export their SBOM`, async ({ page }) => {
   await mockPopulatedProject(page)
-  let exports = 0
   let complianceRequests = 0
   await mockAdminApi(page, {
     'GET /api/v1/admin/projects': {
@@ -194,7 +193,6 @@ for (const count of [1, 2]) test(`free instances retain ${count} existing projec
       total: count,
       capabilities: { ...freeProjectCapabilities, can_create: false },
     },
-    'GET /api/v1/admin/projects/7/sbom': () => { exports++; return {} },
     'GET /api/v1/admin/compliance/profile': () => { complianceRequests++; return {} },
   })
   await page.goto('/admin/projects')
@@ -204,13 +202,12 @@ for (const count of [1, 2]) test(`free instances retain ${count} existing projec
   await page.getByRole('button', { name: `查看 ${projectName}`, exact: true }).click()
   await expect(page.getByRole('button', { name: '编辑项目', exact: true })).toBeEnabled()
   await expect(page.getByRole('button', { name: '重新生成 Token', exact: true })).toBeEnabled()
-  await page.getByRole('button', { name: '导出 SBOM Pro', exact: true }).click()
+  // SBOM export, including the CRA technical file, is part of the free edition.
+  await page.getByRole('button', { name: '导出 SBOM', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: '导出 SBOM', exact: true })
-  await expect(dialog).toContainText('项目级 SBOM 导出（含 CRA 模式与技术文件）需要 Pro')
-  await expect(dialog.getByRole('link', { name: '管理 Pro 授权', exact: true })).toHaveAttribute('href', '/admin/license')
-  await expect(dialog.getByRole('button', { name: '下载 SBOM' })).toHaveCount(0)
-  expect(exports).toBe(0)
-  expect(complianceRequests).toBe(0)
+  await expect(dialog.getByRole('button', { name: '下载 SBOM', exact: true })).toBeEnabled()
+  await expect(dialog.getByRole('link', { name: '管理 Pro 授权', exact: true })).toHaveCount(0)
+  await expect.poll(() => complianceRequests).toBeGreaterThan(0)
 })
 
 test('Pro instances can add projects beyond the free allowance', async ({ page }) => {
@@ -260,8 +257,8 @@ test('a readonly free user sees project details without write or system-manageme
   await page.getByRole('button', { name: `查看 ${projectName}`, exact: true }).click()
   await expect(page.getByRole('button', { name: '编辑项目', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: '重新生成 Token', exact: true })).toHaveCount(0)
-  await page.getByRole('button', { name: '导出 SBOM Pro', exact: true }).click()
-  await expect(page.getByRole('dialog')).toContainText('请联系管理员启用 Pro')
+  await page.getByRole('button', { name: '导出 SBOM', exact: true }).click()
+  await expect(page.getByRole('dialog').getByRole('button', { name: '下载 SBOM', exact: true })).toBeEnabled()
   await expect(page.getByRole('link', { name: '管理 Pro 授权', exact: true })).toHaveCount(0)
 })
 
@@ -282,20 +279,6 @@ test('loading and missing capabilities do not invent a free or Pro allowance', a
   await expect(page.getByRole('button', { name: `查看 ${projectName}`, exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: '管理 Pro 授权', exact: true })).toHaveCount(0)
   await expect(page.locator('[data-project-capacity]')).toHaveCount(0)
-})
-
-test('an expired entitlement during SBOM export shows an actionable Pro explanation', async ({ page }) => {
-  await mockPopulatedProject(page)
-  await mockAdminApi(page, {
-    'GET /api/v1/admin/projects/7/sbom': { status: 402, body: { code: 'PRO_REQUIRED', message: 'fixture expired' } },
-  })
-  await page.goto('/admin/projects?project=7')
-  await page.getByRole('button', { name: '导出 SBOM', exact: true }).click()
-  const dialog = page.getByRole('dialog')
-  await dialog.getByRole('button', { name: '下载 SBOM', exact: true }).click()
-  await expect(dialog).toContainText('项目级 SBOM 导出（含 CRA 模式与技术文件）需要 Pro')
-  await expect(dialog.getByRole('link', { name: '管理 Pro 授权', exact: true })).toBeVisible()
-  await expect(dialog.getByRole('button', { name: '下载 SBOM', exact: true })).toHaveCount(0)
 })
 
 test('project ecosystem filters expose all Operator surfaces without internal aliases', async ({ page }) => {

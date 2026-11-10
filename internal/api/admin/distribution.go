@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"depsilo/internal/audit"
@@ -36,6 +37,13 @@ type distributionStore interface {
 type DistributionHandler struct {
 	store distributionStore
 	db    *gorm.DB
+	quota *distribution.ExportQuota
+}
+
+// SetExportQuota meters exports against the free edition's limits. Without a
+// quota, exports are not metered.
+func (h *DistributionHandler) SetExportQuota(quota *distribution.ExportQuota) {
+	h.quota = quota
 }
 
 func NewDistributionHandler(store *distribution.Store, database *gorm.DB) *DistributionHandler {
@@ -185,6 +193,19 @@ func (h *DistributionHandler) Export(c *gin.Context) {
 		writeDistributionError(c, err)
 		return
 	}
+	var reservation *distribution.ExportReservation
+	if h.quota != nil {
+		reservation, err = h.quota.Reserve(c.Request.Context(), export.SetID, export.Size, requestUsername(c))
+		var refusal *distribution.ExportLimitError
+		if errors.As(err, &refusal) {
+			writeExportLimit(c, refusal)
+			return
+		}
+		if err != nil {
+			writeDistributionError(c, err)
+			return
+		}
+	}
 	c.Header("Content-Type", "application/x-tar")
 	c.Header("Content-Length", strconv.FormatInt(export.Size, 10))
 	c.Header("Content-Disposition", `attachment; filename="`+export.Filename+`"`)
@@ -197,7 +218,65 @@ func (h *DistributionHandler) Export(c *gin.Context) {
 	if err := export.Write(c.Request.Context(), c.Writer); err != nil {
 		zap.L().Warn("distribution: bundle export ended before completion", zap.String("set_id", export.SetID), zap.Error(distributionLogError(err)))
 		h.auditStatus(c, "dist_export_incomplete", export.SetID, http.StatusInternalServerError)
+		if reservation != nil {
+			// The client already holds a short body; detach from its context.
+			if err := reservation.Release(context.WithoutCancel(c.Request.Context())); err != nil {
+				zap.L().Warn("distribution: release export reservation", zap.Error(err))
+			}
+		}
+		return
 	}
+	if reservation != nil {
+		if err := reservation.Complete(context.WithoutCancel(c.Request.Context())); err != nil {
+			zap.L().Warn("distribution: record completed export", zap.Error(err))
+		}
+	}
+}
+
+// Usage reports the current UTC month's transfer-bundle export allowance.
+func (h *DistributionHandler) Usage(c *gin.Context) {
+	if !h.enabled(c) {
+		return
+	}
+	if h.quota == nil {
+		c.JSON(http.StatusOK, distribution.ExportUsage{Unlimited: true})
+		return
+	}
+	usage, err := h.quota.Usage(c.Request.Context())
+	if err != nil {
+		writeDistributionError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, usage)
+}
+
+func writeExportLimit(c *gin.Context, refusal *distribution.ExportLimitError) {
+	code, message := "EXPORT_BUNDLE_LIMIT", fmt.Sprintf(
+		"The free edition exports transfer bundles up to %s; this bundle is %s. Depsilo Pro removes export limits.",
+		formatExportBytes(refusal.BundleLimit), formatExportBytes(refusal.BundleBytes))
+	if errors.Is(refusal, distribution.ErrExportMonthlyLimit) {
+		code, message = "EXPORT_MONTHLY_LIMIT", fmt.Sprintf(
+			"The free edition exports up to %s per month; %s is used and this bundle is %s. The allowance renews at %s. Depsilo Pro removes export limits.",
+			formatExportBytes(refusal.MonthlyLimit), formatExportBytes(refusal.UsedBytes), formatExportBytes(refusal.BundleBytes),
+			refusal.ResetsAt.UTC().Format(time.RFC3339))
+	}
+	c.JSON(http.StatusPaymentRequired, gin.H{
+		"code": code, "message": message,
+		"bundle_bytes": refusal.BundleBytes, "bundle_limit_bytes": refusal.BundleLimit,
+		"monthly_limit_bytes": refusal.MonthlyLimit, "used_bytes": refusal.UsedBytes,
+		"resets_at": refusal.ResetsAt.UTC(), "upgrade": "https://depsilo.com/#pricing",
+	})
+}
+
+// formatExportBytes uses binary units, matching how Admin displays sizes.
+func formatExportBytes(bytes int64) string {
+	units := []string{"B", "KB", "MB", "GB", "TB"}
+	value, unit := float64(bytes), 0
+	for value >= 1024 && unit < len(units)-1 {
+		value /= 1024
+		unit++
+	}
+	return strings.TrimSuffix(strconv.FormatFloat(value, 'f', 1, 64), ".0") + " " + units[unit]
 }
 
 // Import accepts a streamed bundle body. Its size is bounded by the signed

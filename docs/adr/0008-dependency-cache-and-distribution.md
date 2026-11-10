@@ -7,6 +7,8 @@
 [ADR-0004](0004-supply-chain-enforcement-layer.md), and Decision 1's
 enforcement-first criterion and Decision 6's build order in
 [ADR-0005](0005-enforcement-first-until-1-0.md).
+**Amended by:** [ADR-0009](0009-usage-limited-free-edition.md) (entitlement:
+free SBOM export and usage-limited offline delivery).
 **Companion documents:** [PRODUCT.md](../../PRODUCT.md),
 [CONTEXT.md](../../CONTEXT.md), [cascade design](0006-cascade-cache-peering.md).
 

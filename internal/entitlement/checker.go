@@ -17,8 +17,8 @@ const (
 	SourcePaid  Source = "paid"
 )
 
-// Status is the unified view used by frontend code, RequirePro 402 bodies,
-// and the GetStatus admin endpoint. See spec §7.2 for field semantics and
+// Status is the unified view used by frontend code and the GetStatus admin
+// endpoint. See spec §7.2 for field semantics and
 // §16.2 for the deprecated-alias compatibility window.
 type Status struct {
 	IsPro            bool       `json:"is_pro"`
@@ -37,8 +37,9 @@ type Status struct {
 }
 
 // Checker is the only abstraction the rest of the codebase reaches for
-// entitlement decisions. RequirePro middleware, audit.Logger, and rules.Engine
-// all depend on *Checker rather than directly on license.Manager or trial.Manager.
+// entitlement decisions. The project allowance, the export quota, audit.Logger,
+// and rules.Engine all depend on *Checker rather than directly on
+// license.Manager or trial.Manager.
 type Checker struct {
 	lic   *license.Manager
 	trial *trial.Manager
@@ -50,7 +51,7 @@ func NewChecker(lic *license.Manager, t *trial.Manager) *Checker {
 }
 
 // IsPro reports whether ANY entitlement source currently grants Pro access.
-// Hot path — called by RequirePro middleware on every Pro request.
+// Hot path — called for every metered export and project creation.
 func (c *Checker) IsPro() bool {
 	if c.lic != nil && c.lic.IsPro() {
 		return true

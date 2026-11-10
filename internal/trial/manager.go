@@ -43,7 +43,7 @@ func NewManager(database *gorm.DB) (*Manager, error) {
 }
 
 // IsActive reports whether a trial currently grants Pro access.
-// Hot path — called from RequirePro middleware on every Pro request.
+// Hot path — called through entitlement.Checker on every entitlement check.
 func (m *Manager) IsActive() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

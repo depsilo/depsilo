@@ -31,6 +31,7 @@ func runDistribution(args []string) int {
 		fmt.Println("Usage: depsilo distribution stage --manifest FILE --objects DIR [--url URL] [--json]\n" +
 			"       depsilo distribution list [--page N] [--per-page N] [--url URL] [--json]\n" +
 			"       depsilo distribution prune [--url URL] [--json]\n" +
+			"       depsilo distribution usage [--url URL] [--json]\n" +
 			"       depsilo distribution inspect|verify|delete ID [--url URL] [--json]\n" +
 			"       depsilo distribution export ID --out FILE [--url URL] [--json]\n" +
 			"       depsilo distribution import --bundle FILE [--url URL] [--json]\n" +
@@ -39,6 +40,8 @@ func runDistribution(args []string) int {
 			"Delete removes the catalog entry; prune reclaims unreferenced object bytes.\n" +
 			"Export writes a signed full transfer bundle; import accepts it only from a\n" +
 			"configured trusted transfer key and never activates or serves the set.\n" +
+			"Usage reports this UTC month's export allowance; the free edition exports\n" +
+			"bundles up to 500 MB and 5 GB per month, and Pro removes both limits.\n" +
 			"This prepares a content-verified catalog only; it does not provide offline package serving.")
 		if len(args) == 0 {
 			return 1
@@ -103,9 +106,9 @@ func runDistribution(args []string) int {
 		if id != "" || manifestPath == "" || objectsPath == "" {
 			return distributionCLIError(jsonMode, errors.New("stage requires --manifest and --objects"))
 		}
-	} else if command == "list" || command == "prune" {
+	} else if command == "list" || command == "prune" || command == "usage" {
 		if id != "" || manifestPath != "" || objectsPath != "" {
-			return distributionCLIError(jsonMode, errors.New("list and prune do not accept a manifest, objects, or identifier"))
+			return distributionCLIError(jsonMode, errors.New("list, prune, and usage do not accept a manifest, objects, or identifier"))
 		}
 	} else if command == "export" {
 		if !distributionSHA256(id) || manifestPath != "" || objectsPath != "" || outPath == "" {
@@ -151,6 +154,8 @@ func runDistribution(args []string) int {
 		result, err = request(http.MethodDelete, "/"+id, nil)
 	case "prune":
 		result, err = distributionRequest(ctx, client, http.MethodPost, strings.TrimSuffix(base, "/sets")+"/prune", nil)
+	case "usage":
+		result, err = distributionRequest(ctx, client, http.MethodGet, strings.TrimSuffix(base, "/sets")+"/usage", nil)
 	case "export":
 		result, err = exportDistribution(ctx, client, base+"/"+id+"/bundle", outPath)
 	case "import":

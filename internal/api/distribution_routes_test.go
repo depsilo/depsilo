@@ -14,7 +14,7 @@ func TestDistributionRoutesRequireAuthenticationAndWriteCapability(t *testing.T)
 		method, path string
 		write        bool
 	}{
-		{http.MethodGet, "/sets", false}, {http.MethodGet, "/sets/" + id, false},
+		{http.MethodGet, "/sets", false}, {http.MethodGet, "/sets/" + id, false}, {http.MethodGet, "/usage", false},
 		{http.MethodPost, "/sets", true}, {http.MethodPut, "/sets/" + id + "/objects/" + id, true},
 		{http.MethodPost, "/sets/" + id + "/verify", true}, {http.MethodDelete, "/sets/" + id, true},
 		{http.MethodPost, "/prune", true},

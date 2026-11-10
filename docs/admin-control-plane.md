@@ -37,9 +37,11 @@ The latest manual results are retained in the open page, not across navigation.
 ## Permissions
 
 Principal capability groups allow both `admin` and `readonly` principals to call every
-Admin `GET` route, including CSV exports. Project list/detail/package routes are
-available without Pro. Project SBOM exports require an active Pro entitlement and
-otherwise return `402 PRO_REQUIRED`. `POST /api/v1/admin/rules/test` is also read-only. Every other Admin
+Admin `GET` route, including CSV exports. Project list/detail/package routes and
+project SBOM exports are available without Pro. Without Pro, transfer bundle
+exports are metered ([ADR-0009](adr/0009-usage-limited-free-edition.md)) and a
+bundle beyond the allowance returns `402 EXPORT_BUNDLE_LIMIT` or
+`402 EXPORT_MONTHLY_LIMIT`. `POST /api/v1/admin/rules/test` is also read-only. Every other Admin
 `POST`, `PUT`, `PATCH`, and `DELETE` requires a write-capable Principal. API tokens cannot
 call `/api/v1/auth/refresh`. Readonly responses render credential-bearing URLs as
 `scheme://host[:port]/***`; userinfo, paths, queries, and fragments are never returned.

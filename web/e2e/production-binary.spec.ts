@@ -45,7 +45,7 @@ test('free project creation works through the embedded UI and enforces capacity 
   const headers = { Authorization: `Bearer ${await page.evaluate(() => localStorage.getItem('token'))}` }
   const before = await request.get('/api/v1/admin/projects', { headers })
   expect(before.status()).toBe(200)
-  expect((await before.json()).capabilities).toEqual({ project_limit: 1, can_create: true, can_export_sbom: false })
+  expect((await before.json()).capabilities).toEqual({ project_limit: 1, can_create: true, can_export_sbom: true })
 
   await create.click()
   const form = page.getByRole('dialog', { name: 'Create Project', exact: true })
@@ -57,13 +57,13 @@ test('free project creation works through the embedded UI and enforces capacity 
 
   const list: ProjectListResponse = await (await request.get('/api/v1/admin/projects', { headers })).json()
   expect(list.total).toBe(1)
-  expect(list.capabilities).toEqual({ project_limit: 1, can_create: false, can_export_sbom: false })
+  expect(list.capabilities).toEqual({ project_limit: 1, can_create: false, can_export_sbom: true })
   const project = list.items[0]
   try {
     const second = await request.post('/api/v1/admin/projects', { headers, data: { name: 'production-second-project' } })
     expect(second.status()).toBe(402)
     expect((await second.json()).code).toBe('PRO_REQUIRED')
-    expect((await request.get(`/api/v1/admin/projects/${project.id}/sbom`, { headers })).status()).toBe(402)
+    expect((await request.get(`/api/v1/admin/projects/${project.id}/sbom`, { headers })).status()).toBe(200)
     for (const width of [1440, 320]) {
       await page.setViewportSize({ width, height: 900 })
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)

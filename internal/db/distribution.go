@@ -65,3 +65,20 @@ type DistributionSetProvenance struct {
 }
 
 func (DistributionSetProvenance) TableName() string { return "distribution_set_provenances" }
+
+// DistributionExport is the export usage ledger. A reserved row is a transfer
+// bundle being streamed; it becomes completed when every byte was written and
+// is deleted when the export fails. Metered rows were subject to the free
+// edition's export limits and are the only ones counted against them.
+type DistributionExport struct {
+	ID         uint       `gorm:"primaryKey" json:"id"`
+	SetID      string     `gorm:"size:64;not null;index:idx_distribution_exports_set" json:"set_id"`
+	Bytes      int64      `gorm:"not null" json:"bytes"`
+	State      string     `gorm:"size:16;not null" json:"state"`
+	Metered    bool       `gorm:"not null;default:false" json:"metered"`
+	Actor      string     `gorm:"size:128;not null" json:"actor"`
+	StartedAt  time.Time  `gorm:"not null;index:idx_distribution_exports_started" json:"started_at"`
+	FinishedAt *time.Time `json:"finished_at,omitempty"`
+}
+
+func (DistributionExport) TableName() string { return "distribution_exports" }

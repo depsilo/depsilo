@@ -351,6 +351,14 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		// trialManager is nil but NewChecker handles that
 	}
 	checker := entitlement.NewChecker(licenseManager, trialManager)
+	// The free edition exports transfer bundles at a bounded scale; an active
+	// Pro license or trial removes the export limits.
+	var distributionQuota *distribution.ExportQuota
+	if distributionStore != nil {
+		if distributionQuota, err = distribution.NewExportQuota(database, checker.IsPro, distribution.FreeExportLimits()); err != nil {
+			return nil, fmt.Errorf("initialize distribution export quota: %w", err)
+		}
+	}
 
 	rulesStore := rules.NewStore(database)
 	policyOnLoadError, err := rules.ParseOnLoadErrorPolicy(cfg.Policy.OnLoadError)
@@ -742,6 +750,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		BlocklistMode:              string(blocklistMode),
 		SnapshotStore:              snapshotStore,
 		DistributionStore:          distributionStore,
+		DistributionQuota:          distributionQuota,
 		AuditForwarder:             auditForwarder,
 		AuditAnchor:                auditAnchor,
 		Tasks:                      background,

@@ -53,6 +53,9 @@ Coding agents should begin at [AGENTS.md](../AGENTS.md). Product scope lives in
 - [Cache and distribution direction](adr/0008-dependency-cache-and-distribution.md)
   records the current priorities: bandwidth reuse, cascade, and planned offline
   dependency delivery, with current runtime and entitlement boundaries preserved.
+- [Usage-limited free edition](adr/0009-usage-limited-free-edition.md) records
+  the entitlement model: every feature is free at a bounded scale, and Pro
+  removes the project and offline-export limits.
 - [Specs](specs/) and [research](research/) are dated evidence, not current
   implementation instructions. The running code and current guides may have
   evolved since they were written.
