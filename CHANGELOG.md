@@ -5,6 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+- A PyPI artifact missing on the selected Upstream is fetched from the other
+  Upstreams of the ecosystem before a 404 reaches the client. A mirror such as
+  TUNA publishes no PEP 658 core metadata and lags new releases, so after a
+  failover the package index cached from pypi.org could advertise files the
+  mirror then answered with 404, failing pip and uv installs. A 404 does not
+  mark an Upstream unhealthy, and signed external artifact references stay
+  bound to their source.
+
 ## [0.12.2] - 2026-11-10
 
 The `v0.12.0` and `v0.12.1` tags were not published. Release qualification of

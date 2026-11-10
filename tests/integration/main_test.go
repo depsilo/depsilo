@@ -20,7 +20,10 @@ import (
 var (
 	depsiloURL string
 	mockServer *mock.MockUpstream
-	testDir    string
+	// pypiOfficial is the second PyPI pool member; it publishes the core
+	// metadata that mockServer, like many mirrors, omits.
+	pypiOfficial *mock.MockUpstream
+	testDir      string
 )
 
 // integrationCascadeToken is shared by the parent config and the cascade
@@ -45,11 +48,14 @@ func runIntegrationTests(m *testing.M) int {
 	mockServer = mock.NewMockUpstream()
 	mockServer.RegisterAll()
 	defer mockServer.Close()
+	pypiOfficial = mock.NewMockUpstream()
+	pypiOfficial.RegisterPyPICoreMetadata()
+	defer pypiOfficial.Close()
 
 	// 3. Generate test config
 	port := getFreePort()
 	depsiloURL = fmt.Sprintf("http://127.0.0.1:%d", port)
-	writeTestConfig(testDir, mockServer.URL(), port)
+	writeTestConfig(testDir, mockServer.URL(), pypiOfficial.URL(), port)
 
 	// 4. Start Depsilo in background with cancellable context
 	ctx, cancel := context.WithCancel(context.Background())
@@ -83,7 +89,7 @@ func runIntegrationTests(m *testing.M) int {
 	return code
 }
 
-func writeTestConfig(dir, upstreamURL string, port int) {
+func writeTestConfig(dir, upstreamURL, pypiOfficialURL string, port int) {
 	cfg := fmt.Sprintf(`
 [server]
 host = "127.0.0.1"
@@ -136,6 +142,11 @@ immutable_threshold_seconds = 1
 name = "mock"
 url = "%s"
 priority = 1
+
+[[pypi.upstreams]]
+name = "official"
+url = "%s"
+priority = 2
 
 [[apt.upstreams]]
 name = "mock"
@@ -210,7 +221,7 @@ name = "mock"
 url = "%s"
 `, port, dir, dir, integrationCascadeToken,
 		upstreamURL, // blocklist mirror_url (mock OSV endpoint)
-		upstreamURL, upstreamURL, upstreamURL, upstreamURL,
+		upstreamURL, pypiOfficialURL, upstreamURL, upstreamURL, upstreamURL,
 		upstreamURL, upstreamURL, upstreamURL, upstreamURL,
 		upstreamURL, upstreamURL, upstreamURL, upstreamURL,
 		upstreamURL, upstreamURL, upstreamURL)

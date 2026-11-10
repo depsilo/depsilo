@@ -338,6 +338,11 @@ Active probe workers check once when they start and then continue on their confi
 interval. Request selection always prefers the highest-priority healthy Upstream.
 Only when none is healthy may an unhealthy passive Upstream receive one cooldown-limited
 half-open request. A critical protocol-failure latch is never eligible for recovery.
+A PyPI artifact that the selected Upstream answers with 404 is requested from each
+remaining Upstream of the same ecosystem once before the 404 reaches the client: a
+mirror can lack PEP 658 core metadata or a release it has not synchronized yet, which
+another member's index advertised. A 404 does not mark an Upstream unhealthy, and signed
+external artifact references stay bound to their source.
 
 `GET /api/v1/admin/upstreams` returns `{items,total}` runtime resources. Create and full
 Update return the resulting runtime resource; Delete returns `{deleted_id,adapter_type}`.

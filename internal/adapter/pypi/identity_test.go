@@ -90,6 +90,15 @@ func pypiIdentityFixture(t *testing.T) (*httptest.Server, *atomic.Int64) {
 
 func newIdentityTestHandler(t *testing.T, upstreamURL string) (*Handler, http.Handler, *recordingArtifactChecker) {
 	t.Helper()
+	handler, scoped, checker, _ := newPoolTestHandler(t, Options{PathPrefix: "/pypi", AdapterID: "pypi"},
+		config.UpstreamConfig{Name: "mock", URL: upstreamURL, Priority: 1, ProbeMode: "passive"})
+	return handler, scoped, checker
+}
+
+// newPoolTestHandler serves /pypi through a passive-recovery pool of members
+// behind the request-scoped policy gate.
+func newPoolTestHandler(t *testing.T, options Options, members ...config.UpstreamConfig) (*Handler, http.Handler, *recordingArtifactChecker, *upstream.Pool) {
+	t.Helper()
 	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "pypi-identity.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -109,23 +118,21 @@ func newIdentityTestHandler(t *testing.T, upstreamURL string) (*Handler, http.Ha
 			t.Errorf("close cache manager: %v", err)
 		}
 	})
-	pool, err := upstream.NewPool([]config.UpstreamConfig{{
-		Name: "mock", URL: upstreamURL, Priority: 1, ProbeMode: "passive",
-	}})
+	pool, err := upstream.NewPool(members)
 	if err != nil {
 		t.Fatal(err)
 	}
 	handler, err := NewWithOptions(manager, upstream.NewPassiveRecoverySelector(pool), config.CacheConfig{
 		TTLIndex: time.Hour,
 		TTLBlob:  time.Hour,
-	}, database, Options{PathPrefix: "/pypi", AdapterID: "pypi"})
+	}, database, options)
 	if err != nil {
 		t.Fatal(err)
 	}
 	checker := &recordingArtifactChecker{}
 	router := gin.New()
-	handler.Register(router.Group("/pypi"))
-	return handler, adapter.NewRequestScope(nil, nil, checker, nil).Wrap(router), checker
+	handler.Register(router.Group(options.PathPrefix))
+	return handler, adapter.NewRequestScope(nil, nil, checker, nil).Wrap(router), checker, pool
 }
 
 func requestPypiFile(t *testing.T, handler http.Handler, path string) *httptest.ResponseRecorder {

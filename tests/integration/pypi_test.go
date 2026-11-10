@@ -5,6 +5,8 @@ package integration
 import (
 	"strings"
 	"testing"
+
+	"depsilo/tests/mock"
 )
 
 func TestPyPI_SimpleIndex(t *testing.T) {
@@ -58,11 +60,28 @@ func TestPyPI_CacheHit(t *testing.T) {
 // pip and uv read a wheel's PEP 658 core metadata before downloading it. The
 // integration config enables the known-malicious dataset, which requires an
 // identity for every PyPI artifact, so the metadata file must take its wheel's
-// identity rather than be refused as unidentifiable.
+// identity rather than be refused as unidentifiable. The preferred member,
+// like many mirrors, publishes no core metadata, so the file comes from the
+// next member of the pool.
 func TestPyPI_CoreMetadataServedWhileBlocklistCoversPyPI(t *testing.T) {
-	resp := httpGet(t, depsiloURL+"/pypi/files/packages/ab/cd/testpkg-1.0.0-py3-none-any.whl.metadata")
+	const path = "/packages/ab/cd/testpkg-1.0.0-py3-none-any.whl.metadata"
+	resp := httpGet(t, depsiloURL+"/pypi/files"+path)
 	assertStatus(t, resp, 200)
-	if body := readBody(t, resp); body != "FAKE_PACKAGE_DATA_1234567890" {
+	if body := readBody(t, resp); !strings.HasPrefix(body, "Metadata-Version: 2.1") {
 		t.Errorf("unexpected body: %s", body)
 	}
+	for name, member := range map[string]*mock.MockUpstream{"mirror": mockServer, "official": pypiOfficial} {
+		if !requested(member, path) {
+			t.Errorf("the %s member was not asked for the core metadata", name)
+		}
+	}
+}
+
+func requested(member *mock.MockUpstream, path string) bool {
+	for _, request := range member.Requests() {
+		if request.Method == "GET" && request.Path == path {
+			return true
+		}
+	}
+	return false
 }

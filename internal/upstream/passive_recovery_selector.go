@@ -3,6 +3,7 @@ package upstream
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -36,7 +37,7 @@ func newPassiveRecoverySelector(pool *Pool, cooldown time.Duration, now func() t
 // Select returns the highest-priority healthy upstream, or an unhealthy
 // passive upstream when the pool has no healthy member.
 func (s *PassiveRecoverySelector) Select(ctx context.Context) (*Upstream, error) {
-	return s.selectCandidate(ctx, nil)
+	return s.selectCandidate(ctx)
 }
 
 // ResolveProvenanceSource returns the exact source named by authenticated
@@ -55,20 +56,26 @@ func (s *PassiveRecoverySelector) SelectExcluding(ctx context.Context, excluded 
 	return s.selectCandidate(ctx, excluded)
 }
 
-func (s *PassiveRecoverySelector) selectCandidate(_ context.Context, excluded *Upstream) (*Upstream, error) {
+// SelectExcludingAll is SelectExcluding for every source that already failed
+// the current request, so one request tries each pool member at most once.
+func (s *PassiveRecoverySelector) SelectExcludingAll(ctx context.Context, excluded ...*Upstream) (*Upstream, error) {
+	return s.selectCandidate(ctx, excluded...)
+}
+
+func (s *PassiveRecoverySelector) selectCandidate(_ context.Context, excluded ...*Upstream) (*Upstream, error) {
 	upstreams := orderedUpstreams(s.pool)
 
 	for _, candidate := range upstreams {
-		if candidate != excluded && candidate.IsHealthy() {
+		if !slices.Contains(excluded, candidate) && candidate.IsHealthy() {
 			return candidate, nil
 		}
 	}
 	for _, candidate := range upstreams {
-		if candidate != excluded && candidate.reservePassiveRecovery(s.now(), s.cooldown) {
+		if !slices.Contains(excluded, candidate) && candidate.reservePassiveRecovery(s.now(), s.cooldown) {
 			return candidate, nil
 		}
 	}
-	if excluded != nil {
+	if excludesAny(excluded) {
 		return nil, fmt.Errorf("no healthy alternate upstream")
 	}
 	return nil, fmt.Errorf("all upstreams are unhealthy")

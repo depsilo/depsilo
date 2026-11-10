@@ -3,6 +3,7 @@ package upstream
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 )
 
@@ -21,7 +22,7 @@ func NewPrioritySelector(pool *Pool) *PrioritySelector {
 }
 
 func (s *PrioritySelector) Select(ctx context.Context) (*Upstream, error) {
-	return s.selectHealthy(ctx, nil)
+	return s.selectHealthy(ctx)
 }
 
 // ResolveProvenanceSource returns the exact source named by authenticated
@@ -40,18 +41,29 @@ func (s *PrioritySelector) SelectExcluding(ctx context.Context, excluded *Upstre
 	return s.selectHealthy(ctx, excluded)
 }
 
-func (s *PrioritySelector) selectHealthy(_ context.Context, excluded *Upstream) (*Upstream, error) {
+// SelectExcludingAll is SelectExcluding for every source that already failed
+// the current request, so one request tries each pool member at most once.
+func (s *PrioritySelector) SelectExcludingAll(ctx context.Context, excluded ...*Upstream) (*Upstream, error) {
+	return s.selectHealthy(ctx, excluded...)
+}
+
+func (s *PrioritySelector) selectHealthy(_ context.Context, excluded ...*Upstream) (*Upstream, error) {
 	ups := orderedUpstreams(s.pool)
 
 	for _, u := range ups {
-		if u != excluded && u.IsHealthy() {
+		if !slices.Contains(excluded, u) && u.IsHealthy() {
 			return u, nil
 		}
 	}
-	if excluded != nil {
+	if excludesAny(excluded) {
 		return nil, fmt.Errorf("no healthy alternate upstream")
 	}
 	return nil, fmt.Errorf("all upstreams are unhealthy")
+}
+
+// excludesAny reports whether a request-local exclusion names a source.
+func excludesAny(excluded []*Upstream) bool {
+	return slices.ContainsFunc(excluded, func(u *Upstream) bool { return u != nil })
 }
 
 func orderedUpstreams(pool *Pool) []*Upstream {

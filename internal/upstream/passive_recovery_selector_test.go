@@ -277,3 +277,30 @@ func TestPassiveRecoverySelectorKeepsHalfOpenRequestExclusivePastCooldown(t *tes
 		t.Fatalf("successful recovery did not restore normal selection: %v", err)
 	}
 }
+
+func TestSelectorsSkipEverySourceThatFailedTheRequest(t *testing.T) {
+	pool, err := NewPoolFromRecords([]db.UpstreamRecord{
+		{ID: 1, AdapterType: "pypi", Name: "mirror", URL: "https://mirror.example", Priority: 1, ProbeMode: "passive", ProbeInterval: "30m", Healthy: true},
+		{ID: 2, AdapterType: "pypi", Name: "second", URL: "https://second.example", Priority: 2, ProbeMode: "passive", ProbeInterval: "30m", Healthy: true},
+		{ID: 3, AdapterType: "pypi", Name: "official", URL: "https://official.example", Priority: 3, ProbeMode: "passive", ProbeInterval: "30m", Healthy: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ordered := orderedUpstreams(pool)
+	ctx := context.Background()
+	for name, selector := range map[string]interface {
+		SelectExcludingAll(context.Context, ...*Upstream) (*Upstream, error)
+	}{"passive recovery": NewPassiveRecoverySelector(pool), "priority": NewPrioritySelector(pool)} {
+		if first, err := selector.SelectExcludingAll(ctx); err != nil || first != ordered[0] {
+			t.Fatalf("%s: unexcluded selection = %v, %v", name, first, err)
+		}
+		// Excluding only the most recent failure would bounce back to the mirror.
+		if next, err := selector.SelectExcludingAll(ctx, ordered[0], ordered[1]); err != nil || next.Name != "official" {
+			t.Fatalf("%s: selection after two failures = %v, %v", name, next, err)
+		}
+		if next, err := selector.SelectExcludingAll(ctx, ordered...); err == nil {
+			t.Fatalf("%s: selected %s after every member failed", name, next.Name)
+		}
+	}
+}

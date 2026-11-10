@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -173,5 +174,28 @@ func TestArtifactCloseCancelsBlockedResume(t *testing.T) {
 	case <-resumeStopped:
 	case <-ctx.Done():
 		t.Fatal("resume request leaked")
+	}
+}
+
+func TestFetchReportsUpstreamResponseStatus(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/missing.whl.metadata") {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, "busy", http.StatusServiceUnavailable)
+	}))
+	defer origin.Close()
+	u := newTestUpstream(t, origin.URL)
+
+	_, err := u.FetchArtifact(context.Background(), "/packages/missing.whl.metadata")
+	if !IsNotFound(err) || !strings.Contains(err.Error(), "returned 404") {
+		t.Fatalf("missing artifact error = %v", err)
+	}
+	if !u.IsHealthy() {
+		t.Fatal("a 404 response marked a reachable upstream unhealthy")
+	}
+	if _, err := u.FetchArtifact(context.Background(), "/packages/busy.whl"); err == nil || IsNotFound(err) {
+		t.Fatalf("unavailable upstream error = %v", err)
 	}
 }

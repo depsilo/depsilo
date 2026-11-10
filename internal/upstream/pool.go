@@ -486,7 +486,7 @@ func (u *Upstream) doWithHeaders(ctx context.Context, reqURL string, report bool
 		} else {
 			_ = resp.Body.Close()
 		}
-		return nil, fmt.Errorf("upstream %s returned %d for %s", u.Name, resp.StatusCode, safeURLOrigin(reqURL))
+		return nil, &ResponseError{Upstream: u.Name, Code: resp.StatusCode, Origin: safeURLOrigin(reqURL)}
 	}
 
 	MeterResponse(&client, req, resp)
@@ -548,7 +548,7 @@ func (u *Upstream) FetchWithHeaders(ctx context.Context, path string, headers ma
 		} else {
 			_ = resp.Body.Close()
 		}
-		return nil, fmt.Errorf("upstream %s returned %d for %s", u.Name, resp.StatusCode, safeURLOrigin(reqURL))
+		return nil, &ResponseError{Upstream: u.Name, Code: resp.StatusCode, Origin: safeURLOrigin(reqURL)}
 	}
 
 	MeterResponse(&client, req, resp)

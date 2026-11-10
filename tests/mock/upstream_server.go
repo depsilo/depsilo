@@ -78,8 +78,26 @@ func (m *MockUpstream) RegisterPyPI() {
 		fmt.Fprint(w, `<!DOCTYPE html><html><body><a href="https://files.pythonhosted.org/packages/ab/cd/testpkg-1.0.0.tar.gz#sha256=abcd1234">testpkg-1.0.0.tar.gz</a></body></html>`)
 	})
 	m.mux.HandleFunc("/packages/", func(w http.ResponseWriter, r *http.Request) {
+		// Like many mirrors, this index does not publish PEP 658 core metadata.
+		if strings.HasSuffix(r.URL.Path, ".metadata") {
+			http.NotFound(w, r)
+			return
+		}
 		w.Header().Set("Content-Type", "application/gzip")
 		w.Write([]byte("FAKE_PACKAGE_DATA_1234567890"))
+	})
+}
+
+// RegisterPyPICoreMetadata models the official index behind such a mirror:
+// it serves PEP 658 core metadata files and nothing else.
+func (m *MockUpstream) RegisterPyPICoreMetadata() {
+	m.mux.HandleFunc("/packages/", func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, ".metadata") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		fmt.Fprint(w, "Metadata-Version: 2.1\nName: testpkg\nVersion: 1.0.0\n")
 	})
 }
 
