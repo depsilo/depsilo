@@ -255,6 +255,16 @@ func strictArtifactIdentity(filename string) (artifactIdentity, bool) {
 	return artifactIdentity{pkg: pkg, version: version}, true
 }
 
+// coreMetadataArtifact returns the artifact whose PEP 658 core metadata is
+// served as filename (the artifact filename plus ".metadata"), or filename
+// itself when it is not a core-metadata file.
+func coreMetadataArtifact(filename string) string {
+	if artifact, ok := strings.CutSuffix(filename, ".metadata"); ok && artifact != "" {
+		return artifact
+	}
+	return filename
+}
+
 func stripLegacyArtifactSuffix(filename string) (string, bool) {
 	lower := strings.ToLower(filename)
 	for _, suffix := range legacyArtifactSuffixes {

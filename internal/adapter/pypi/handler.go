@@ -370,8 +370,9 @@ func (h *Handler) handleFileDownload(c *gin.Context) {
 	// covers PyPI, so no served artifact can bypass the blocklist. Keep
 	// adapterID as the policy identity: the blocklist layer canonicalizes
 	// extra:* to PyPI, while extra-index release-age resolution remains
-	// distinct from the public PyPI registry.
-	if base := lastPathSegment(artifactPath); base != "" {
+	// distinct from the public PyPI registry. A PEP 658 core-metadata file
+	// shares the identity, and so the decision, of the artifact it describes.
+	if base := coreMetadataArtifact(lastPathSegment(artifactPath)); base != "" {
 		identity := artifactIdentity{}
 		if pkg, version := packagekey.ParsePypiFilename(base); pkg != "" && version != "" {
 			identity = artifactIdentity{pkg: pkg, version: version}

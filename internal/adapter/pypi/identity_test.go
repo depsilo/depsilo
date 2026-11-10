@@ -272,3 +272,38 @@ func TestSimpleIndexDeclaresFileShape(t *testing.T) {
 		t.Fatalf("html other declared=%v err=%v", declared, err)
 	}
 }
+
+// PEP 658 serves an artifact's core metadata at the artifact URL plus
+// ".metadata". The file shares the artifact's identity, so installers that
+// read metadata first (pip, uv) keep working while the dataset covers PyPI,
+// and a blocked release cannot be read through its metadata either.
+func TestPypiCoreMetadataSharesArtifactIdentity(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tc := range []struct {
+		name, path string
+		want       artifactIdentity
+	}{
+		{"wheel", "packages/ab/cd/acme_demo-1.0.0-py3-none-any.whl.metadata", artifactIdentity{pkg: "acme_demo", version: "1.0.0"}},
+		{"legacy archive", "packages/ab/cd/acme-demo-1.0.0.zip.metadata", artifactIdentity{pkg: "acme-demo", version: "1.0.0"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			upstreamServer, _ := pypiIdentityFixture(t)
+			handler, scoped, checker := newIdentityTestHandler(t, upstreamServer.URL)
+			handler.SetBlocklistCovered(true)
+
+			response := requestPypiFile(t, scoped, tc.path)
+			if response.Code != http.StatusOK || response.Body.String() != "pypi-bytes:"+lastPathSegment(tc.path) {
+				t.Fatalf("metadata status=%d body=%q", response.Code, response.Body.String())
+			}
+			if len(checker.calls) != 1 || checker.calls[0] != tc.want {
+				t.Fatalf("gate identities = %+v", checker.calls)
+			}
+			// The gate runs before the cache, so cached metadata stays covered.
+			checker.block = true
+			if blocked := requestPypiFile(t, scoped, tc.path); blocked.Code != http.StatusUnavailableForLegalReasons ||
+				!strings.Contains(blocked.Body.String(), `"code":"MALICIOUS_BLOCKED"`) {
+				t.Fatalf("blocked metadata status=%d body=%s", blocked.Code, blocked.Body.String())
+			}
+		})
+	}
+}

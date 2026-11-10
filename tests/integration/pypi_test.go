@@ -54,3 +54,15 @@ func TestPyPI_CacheHit(t *testing.T) {
 		t.Error("expected no upstream request on cache hit")
 	}
 }
+
+// pip and uv read a wheel's PEP 658 core metadata before downloading it. The
+// integration config enables the known-malicious dataset, which requires an
+// identity for every PyPI artifact, so the metadata file must take its wheel's
+// identity rather than be refused as unidentifiable.
+func TestPyPI_CoreMetadataServedWhileBlocklistCoversPyPI(t *testing.T) {
+	resp := httpGet(t, depsiloURL+"/pypi/files/packages/ab/cd/testpkg-1.0.0-py3-none-any.whl.metadata")
+	assertStatus(t, resp, 200)
+	if body := readBody(t, resp); body != "FAKE_PACKAGE_DATA_1234567890" {
+		t.Errorf("unexpected body: %s", body)
+	}
+}

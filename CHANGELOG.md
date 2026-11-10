@@ -5,6 +5,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+- pip and uv installs failed with `451 QUARANTINED` when a PyPI Upstream
+  published PEP 658 core metadata (pypi.org does) while the known-malicious
+  dataset covered PyPI, which is the default since 0.11.0: the `.metadata`
+  file carried no recognizable package identity. It now shares the identity
+  and policy decision of the artifact it describes, so a blocked release is
+  refused through its metadata as well.
+
 ## [0.12.1] - 2026-11-10
 
 The `v0.12.0` tag was not published: its release qualification failed on a
