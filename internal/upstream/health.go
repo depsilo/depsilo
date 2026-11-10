@@ -80,7 +80,19 @@ func StartHealthCheck(ctx context.Context, pool *Pool, database *gorm.DB, defaul
 	workers.Wait()
 }
 
+// Probe delays while live traffic keeps an upstream out of selection: short
+// enough to readmit it soon after a link recovers, capped so an outage costs
+// one probe every few minutes.
+const (
+	breakerRecheckInitial = 30 * time.Second
+	breakerRecheckMax     = 5 * time.Minute
+)
+
 func runUpstreamHealthCheck(ctx context.Context, u *Upstream, database *gorm.DB, interval time.Duration) {
+	runUpstreamHealthCheckWithRecheck(ctx, u, database, interval, breakerRecheckInitial, breakerRecheckMax)
+}
+
+func runUpstreamHealthCheckWithRecheck(ctx context.Context, u *Upstream, database *gorm.DB, interval, recheckInitial, recheckMax time.Duration) {
 	zap.L().Info("starting health check goroutine",
 		zap.String("upstream", u.Name),
 		zap.Duration("interval", interval))
@@ -111,8 +123,30 @@ func runUpstreamHealthCheck(ctx context.Context, u *Upstream, database *gorm.DB,
 			return
 		case <-ticker.C:
 			check()
+		case <-u.recheck:
+			if !recheckUntilHealthy(ctx, u, check, recheckInitial, recheckMax) {
+				return
+			}
 		}
 	}
+}
+
+// recheckUntilHealthy probes on a doubling delay until the upstream is healthy
+// again, so traffic returns soon after the link recovers instead of after a
+// full probe interval. It reports false when ctx ends first.
+func recheckUntilHealthy(ctx context.Context, u *Upstream, check func(), delay, maxDelay time.Duration) bool {
+	for !u.IsHealthy() {
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return false
+		case <-timer.C:
+		}
+		check()
+		delay = min(2*delay, maxDelay)
+	}
+	return true
 }
 
 func probe(ctx context.Context, u *Upstream) ProbeResult {

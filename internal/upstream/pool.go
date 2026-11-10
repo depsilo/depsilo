@@ -59,7 +59,20 @@ type Upstream struct {
 	mu       sync.RWMutex
 	health   healthState
 	recovery passiveRecoveryState
+	// recheck asks this upstream's health worker to probe on a short backoff
+	// after live traffic tripped its slow-failure breaker.
+	recheck chan struct{}
 }
+
+const (
+	// slowFailureLatency separates failures that held a request (dial and
+	// response timeouts, a link that drops packets) from ones that return at
+	// once, such as a refused connection, which stale caches already absorb.
+	slowFailureLatency = 10 * time.Second
+	// slowFailureLimit consecutive slow failures take an actively probed
+	// upstream out of selection until one of its probes succeeds.
+	slowFailureLimit = 2
+)
 
 type passiveRecoveryState struct {
 	reserved    bool
@@ -77,6 +90,9 @@ type healthState struct {
 	lastCheckedAt          time.Time
 	// lastFailure explains the newest failed probe; a passing probe clears it.
 	lastFailure *Failure
+	// slowFailures counts consecutive slow failed exchanges since the last
+	// success or passing probe.
+	slowFailures int
 }
 
 // Proxy sources reported for an upstream's effective proxy.
@@ -119,6 +135,7 @@ func (h *healthState) applyProbe(result ProbeResult) {
 	h.totalReqs++
 	if result.Healthy {
 		h.successReqs++
+		h.slowFailures = 0
 	}
 	h.successRate = float64(h.successReqs) / float64(h.totalReqs)
 	h.healthy = result.Healthy && !h.criticalFailureLatched
@@ -355,6 +372,7 @@ func newUpstreamFromRecord(record db.UpstreamRecord, options PoolOptions) (*Upst
 			healthy: record.Healthy, avgLatency: time.Duration(record.AvgLatencyMs) * time.Millisecond,
 			successRate: record.SuccessRate, lastCheckedAt: record.LastCheckedAt,
 		},
+		recheck: make(chan struct{}, 1),
 	}, nil
 }
 
@@ -585,11 +603,26 @@ func responseURL(response *http.Response, fallback string) string {
 // Report records a request result for latency/health tracking.
 func (u *Upstream) Report(latency time.Duration, success bool) {
 	u.mu.Lock()
-	defer u.mu.Unlock()
-	u.reportLocked(latency, success)
+	tripped := u.reportLocked(latency, success)
+	u.mu.Unlock()
+	if !tripped {
+		return
+	}
+	zap.L().Warn("upstream stopped answering in time; routing around it until a probe succeeds",
+		zap.String("upstream", u.Name),
+		zap.Duration("latency", latency),
+	)
+	select {
+	case u.recheck <- struct{}{}:
+	default:
+	}
 }
 
-func (u *Upstream) reportLocked(latency time.Duration, success bool) {
+// reportLocked records one exchange and reports whether it tripped the
+// slow-failure breaker. The cumulative success rate barely moves once a
+// long-running instance has served many requests, so it cannot notice a link
+// that starts dropping packets; consecutive slow failures can.
+func (u *Upstream) reportLocked(latency time.Duration, success bool) (tripped bool) {
 	u.health.totalReqs++
 	if success {
 		u.health.successReqs++
@@ -603,10 +636,22 @@ func (u *Upstream) reportLocked(latency time.Duration, success bool) {
 		u.health.avgLatency = (u.health.avgLatency*7 + latency*3) / 10
 	}
 
+	switch {
+	case success:
+		u.health.slowFailures = 0
+	case latency >= slowFailureLatency:
+		u.health.slowFailures++
+	}
+	// Only an actively probed upstream has a probe to readmit it; a passive
+	// one keeps its request-time recovery.
+	breakerOpen := u.ProbeMode == "active" && u.health.slowFailures >= slowFailureLimit
+	wasHealthy := u.health.healthy
+
 	// Mark unhealthy if success rate drops too low. A protocol-integrity
 	// failure is intentionally sticky for this runtime object: routine traffic
 	// cannot re-admit it to selection.
-	u.health.healthy = !u.health.criticalFailureLatched && u.health.successRate > 0.3
+	u.health.healthy = !u.health.criticalFailureLatched && u.health.successRate > 0.3 && !breakerOpen
+	return wasHealthy && breakerOpen
 }
 
 // ReportCriticalFailure records a failed exchange and immediately removes the

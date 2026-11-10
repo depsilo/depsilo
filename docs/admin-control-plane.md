@@ -338,6 +338,11 @@ Active probe workers check once when they start and then continue on their confi
 interval. Request selection always prefers the highest-priority healthy Upstream.
 Only when none is healthy may an unhealthy passive Upstream receive one cooldown-limited
 half-open request. A critical protocol-failure latch is never eligible for recovery.
+An actively probed Upstream whose requests fail slowly twice in a row, each waiting at
+least 10 seconds as on a link that drops packets, leaves selection until a probe succeeds;
+it is re-probed after 30 seconds and then at doubling delays of up to 5 minutes instead of
+its regular interval. Failures that return at once do not count, and passive Upstreams keep
+their request-time recovery.
 A PyPI artifact that the selected Upstream answers with 404 is requested from each
 remaining Upstream of the same ecosystem once before the 404 reaches the client: a
 mirror can lack PEP 658 core metadata or a release it has not synchronized yet, which

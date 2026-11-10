@@ -13,6 +13,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   mirror then answered with 404, failing pip and uv installs. A 404 does not
   mark an Upstream unhealthy, and signed external artifact references stay
   bound to their source.
+- An actively probed Upstream whose requests fail slowly twice in a row, each
+  waiting at least 10 seconds as on a link that drops packets, leaves selection
+  until a probe succeeds; it is re-probed after 30 seconds and then at doubling
+  delays of up to 5 minutes. Previously only its next regular probe, 30 minutes
+  later by default, or a collapse of its lifetime success rate removed it, so
+  every request kept waiting for the connection timeout.
 
 ## [0.12.2] - 2026-11-10
 
