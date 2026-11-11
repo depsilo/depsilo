@@ -48,6 +48,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   cached, because identity checks always asked the upstream. A candidate
   project whose index does not exist (404) now counts as not declaring the
   archive instead of failing the whole identity check.
+- Recording dependency usage retries when another write commits between its
+  read and its write. SQLite rejected such a write at once with
+  `database is locked`, which could also make a clean shutdown report an error.
 
 ## [0.12.2] - 2026-11-10
 

@@ -134,7 +134,38 @@ func SaveDependencyUsage(ctx context.Context, database *gorm.DB, usage Dependenc
 	})
 }
 
-func withDurableUsageTransaction(ctx context.Context, database *gorm.DB, update func(*gorm.DB) error) (err error) {
+// usageTransactionAttempts bounds reruns of a usage transaction that lost its
+// read snapshot to a concurrent commit.
+const usageTransactionAttempts = 5
+
+// withDurableUsageTransaction reads and rewrites the usage record in one
+// durable transaction. The transaction is deferred, so a commit by another
+// connection between its read and its write fails it at once with
+// SQLITE_BUSY_SNAPSHOT, which busy_timeout cannot wait out. Rerunning it
+// re-reads the record against the newer snapshot.
+func withDurableUsageTransaction(ctx context.Context, database *gorm.DB, update func(*gorm.DB) error) error {
+	var err error
+	for attempt := range usageTransactionAttempts {
+		if err = durableUsageTransaction(ctx, database, update); err == nil || !isSQLiteBusy(err) {
+			return err
+		}
+		timer := time.NewTimer(time.Duration(attempt+1) * 5 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return err
+		case <-timer.C:
+		}
+	}
+	return err
+}
+
+func isSQLiteBusy(err error) bool {
+	var sqliteError interface{ Code() int }
+	return errors.As(err, &sqliteError) && sqliteError.Code()&0xff == 5
+}
+
+func durableUsageTransaction(ctx context.Context, database *gorm.DB, update func(*gorm.DB) error) (err error) {
 	tx, release, err := BeginDurableTransaction(ctx, database)
 	if err != nil {
 		return err
