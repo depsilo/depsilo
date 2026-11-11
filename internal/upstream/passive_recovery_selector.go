@@ -66,7 +66,17 @@ func (s *PassiveRecoverySelector) selectCandidate(_ context.Context, excluded ..
 	upstreams := orderedUpstreams(s.pool)
 
 	for _, candidate := range upstreams {
-		if !slices.Contains(excluded, candidate) && candidate.IsHealthy() {
+		if slices.Contains(excluded, candidate) {
+			continue
+		}
+		if candidate.IsHealthy() {
+			return candidate, nil
+		}
+		// A passive upstream that left selection after slow failures has no
+		// probe to readmit it, so while a lower-priority member serves it gets
+		// one half-open request per cooldown; otherwise traffic would never
+		// return to it once it answers again.
+		if candidate.slowFailureBreakerOpen() && candidate.reservePassiveRecovery(s.now(), s.cooldown) {
 			return candidate, nil
 		}
 	}

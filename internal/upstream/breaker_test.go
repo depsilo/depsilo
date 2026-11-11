@@ -20,7 +20,7 @@ func seasoned(u *Upstream) *Upstream {
 	return u
 }
 
-func TestSlowFailuresTakeOnlyActivelyProbedUpstreamsOutOfSelection(t *testing.T) {
+func TestConsecutiveSlowFailuresTakeAnUpstreamOutOfSelection(t *testing.T) {
 	pool, err := NewPoolFromRecords([]db.UpstreamRecord{
 		{ID: 1, AdapterType: "pypi", Name: "active", URL: "https://active.example", Priority: 1, ProbeMode: "active", ProbeInterval: "30m", Healthy: true},
 		{ID: 2, AdapterType: "pypi", Name: "passive", URL: "https://passive.example", Priority: 2, ProbeMode: "passive", ProbeInterval: "30m", Healthy: true},
@@ -43,26 +43,80 @@ func TestSlowFailuresTakeOnlyActivelyProbedUpstreamsOutOfSelection(t *testing.T)
 			t.Fatalf("%s left selection before consecutive slow failures", u.Name)
 		}
 		u.Report(slowFailureLatency, false)
+		if u.IsHealthy() {
+			t.Fatalf("%s stayed in selection after consecutive slow failures", u.Name)
+		}
 		select {
 		case <-u.recheck:
-			if u.ProbeMode != "active" || u.IsHealthy() {
-				t.Fatalf("%s: unexpected breaker trip (healthy=%v)", u.Name, u.IsHealthy())
-			}
 		default:
-			if u.ProbeMode == "active" || !u.IsHealthy() {
-				t.Fatalf("%s: consecutive slow failures did not trip only the active upstream (healthy=%v)", u.Name, u.IsHealthy())
-			}
+			t.Fatalf("%s: tripping the breaker did not ask for a recheck", u.Name)
 		}
 	}
 
-	active := pool.Snapshot()[0]
-	if active.Name != "active" {
-		active = pool.Snapshot()[1]
-	}
+	active := orderedUpstreams(pool)[0]
 	active.applyProbe(ProbeResult{Healthy: true, CheckedAt: time.Now()})
 	active.Report(slowFailureLatency, false)
 	if !active.IsHealthy() {
 		t.Fatal("a passing probe did not readmit the upstream and reset its slow failures")
+	}
+}
+
+func TestTrippedPassiveUpstreamGetsHalfOpenRequestsWhileAnotherMemberServes(t *testing.T) {
+	pool, err := NewPoolFromRecords([]db.UpstreamRecord{
+		{ID: 1, AdapterType: "pypi", Name: "mirror", URL: "https://mirror.example", Priority: 1, ProbeMode: "passive", ProbeInterval: "30m", Healthy: true},
+		{ID: 2, AdapterType: "pypi", Name: "official", URL: "https://official.example", Priority: 2, ProbeMode: "passive", ProbeInterval: "30m", Healthy: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ordered := orderedUpstreams(pool)
+	mirror, official := seasoned(ordered[0]), seasoned(ordered[1])
+	now := time.Date(2026, 11, 11, 8, 0, 0, 0, time.UTC)
+	selector := newPassiveRecoverySelector(pool, time.Minute, func() time.Time { return now })
+	selected := func() string {
+		t.Helper()
+		u, err := selector.Select(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return u.Name
+	}
+
+	mirror.Report(slowFailureLatency, false)
+	mirror.Report(slowFailureLatency, false)
+	// One half-open request per cooldown; everything else uses the member that answers.
+	if got := []string{selected(), selected()}; got[0] != "mirror" || got[1] != "official" {
+		t.Fatalf("selections after the trip = %v, want one half-open request then official", got)
+	}
+	mirror.Report(slowFailureLatency, false)
+	now = now.Add(30 * time.Second)
+	if got := selected(); got != "official" {
+		t.Fatalf("selected %s before the cooldown elapsed", got)
+	}
+	now = now.Add(31 * time.Second)
+	if got := selected(); got != "mirror" {
+		t.Fatalf("selected %s; the cooldown elapsed, want another half-open request", got)
+	}
+	mirror.Report(100*time.Millisecond, true)
+	if got := []string{selected(), selected()}; got[0] != "mirror" || got[1] != "mirror" {
+		t.Fatalf("selections after a successful half-open request = %v, want the mirror back", got)
+	}
+	_ = official
+
+	// An active upstream waits for its probe instead.
+	activePool, err := NewPoolFromRecords([]db.UpstreamRecord{
+		{ID: 1, AdapterType: "pypi", Name: "mirror", URL: "https://mirror.example", Priority: 1, ProbeMode: "active", ProbeInterval: "30m", Healthy: true},
+		{ID: 2, AdapterType: "pypi", Name: "official", URL: "https://official.example", Priority: 2, ProbeMode: "active", ProbeInterval: "30m", Healthy: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	activeMirror := seasoned(orderedUpstreams(activePool)[0])
+	seasoned(orderedUpstreams(activePool)[1])
+	activeMirror.Report(slowFailureLatency, false)
+	activeMirror.Report(slowFailureLatency, false)
+	if u, err := newPassiveRecoverySelector(activePool, time.Minute, func() time.Time { return now }).Select(context.Background()); err != nil || u.Name != "official" {
+		t.Fatalf("active pool selected %v, %v; want official until a probe readmits the mirror", u, err)
 	}
 }
 

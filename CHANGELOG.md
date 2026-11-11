@@ -39,12 +39,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   against signed or checksum-bound metadata; index files never move on a 404.
   Those proxies now answer 404 rather than 502 when every Upstream reports a
   file missing.
-- An actively probed Upstream whose requests fail slowly twice in a row, each
-  waiting at least 10 seconds as on a link that drops packets, leaves selection
-  until a probe succeeds; it is re-probed after 30 seconds and then at doubling
-  delays of up to 5 minutes. Previously only its next regular probe, 30 minutes
-  later by default, or a collapse of its lifetime success rate removed it, so
-  every request kept waiting for the connection timeout.
+- An Upstream whose requests fail slowly twice in a row, each waiting at least
+  10 seconds as on a link that drops packets, leaves selection. An active
+  Upstream is re-probed after 30 seconds and then at doubling delays of up to 5
+  minutes; a passive one receives one half-open request per minute, even while
+  a lower-priority Upstream serves. Previously only the next regular probe, 30
+  minutes later by default, or a collapse of the lifetime success rate removed
+  it, and a passive Upstream had no such probe, so every request kept waiting
+  for the connection timeout.
 - An expired package index whose refresh is still waiting after 10 seconds is
   served from cache while the refresh continues, instead of holding the
   request for up to the 60-second response timeout. pip gives up after 15

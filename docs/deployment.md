@@ -522,12 +522,14 @@ refreshes it before answering; if the refresh fails, or is still waiting after
 artifacts are served directly, so only content that was never cached needs a
 reachable Upstream.
 
-An actively probed Upstream whose requests fail slowly twice in a row, each
-waiting at least 10 seconds as on a link that drops packets, leaves selection
-until a probe succeeds. Depsilo re-probes it after 30 seconds and then at
-doubling delays of up to 5 minutes rather than its regular probe interval.
-Failures that return at once, such as a refused connection, do not count:
-the cached copy already answers them immediately.
+An Upstream whose requests fail slowly twice in a row, each waiting at least
+10 seconds as on a link that drops packets, leaves selection. Depsilo re-probes
+an active Upstream after 30 seconds and then at doubling delays of up to 5
+minutes rather than its regular probe interval; a passive Upstream receives one
+half-open request per minute instead. Either rejoins once it answers. Failures
+that return at once, such as a refused connection, do not count: the cached
+copy already answers them immediately, and the request moves on to the next
+Upstream.
 
 While the known-malicious dataset covers PyPI, a legacy archive such as a
 `.zip` sdist proves its identity from the cached project index, so it stays

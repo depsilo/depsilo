@@ -69,8 +69,8 @@ const (
 	// response timeouts, a link that drops packets) from ones that return at
 	// once, such as a refused connection, which stale caches already absorb.
 	slowFailureLatency = 10 * time.Second
-	// slowFailureLimit consecutive slow failures take an actively probed
-	// upstream out of selection until one of its probes succeeds.
+	// slowFailureLimit consecutive slow failures take an upstream out of
+	// selection until a probe or a half-open request succeeds.
 	slowFailureLimit = 2
 )
 
@@ -608,7 +608,7 @@ func (u *Upstream) Report(latency time.Duration, success bool) {
 	if !tripped {
 		return
 	}
-	zap.L().Warn("upstream stopped answering in time; routing around it until a probe succeeds",
+	zap.L().Warn("upstream stopped answering in time; routing around it until it answers again",
 		zap.String("upstream", u.Name),
 		zap.Duration("latency", latency),
 	)
@@ -642,9 +642,9 @@ func (u *Upstream) reportLocked(latency time.Duration, success bool) (tripped bo
 	case latency >= slowFailureLatency:
 		u.health.slowFailures++
 	}
-	// Only an actively probed upstream has a probe to readmit it; a passive
-	// one keeps its request-time recovery.
-	breakerOpen := u.ProbeMode == "active" && u.health.slowFailures >= slowFailureLimit
+	// An active upstream rejoins when a probe passes; a passive one when a
+	// half-open request admitted by PassiveRecoverySelector succeeds.
+	breakerOpen := u.slowFailureBreakerOpenLocked()
 	wasHealthy := u.health.healthy
 
 	// Mark unhealthy if success rate drops too low. A protocol-integrity
@@ -652,6 +652,18 @@ func (u *Upstream) reportLocked(latency time.Duration, success bool) (tripped bo
 	// cannot re-admit it to selection.
 	u.health.healthy = !u.health.criticalFailureLatched && u.health.successRate > 0.3 && !breakerOpen
 	return wasHealthy && breakerOpen
+}
+
+func (u *Upstream) slowFailureBreakerOpenLocked() bool {
+	return u.health.slowFailures >= slowFailureLimit
+}
+
+// slowFailureBreakerOpen reports whether consecutive slow failures, rather
+// than a falling success rate, took the upstream out of selection.
+func (u *Upstream) slowFailureBreakerOpen() bool {
+	u.mu.RLock()
+	defer u.mu.RUnlock()
+	return u.slowFailureBreakerOpenLocked()
 }
 
 // ReportCriticalFailure records a failed exchange and immediately removes the

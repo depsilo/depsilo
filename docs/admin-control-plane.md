@@ -340,11 +340,12 @@ Active probe workers check once when they start and then continue on their confi
 interval. Request selection always prefers the highest-priority healthy Upstream.
 Only when none is healthy may an unhealthy passive Upstream receive one cooldown-limited
 half-open request. A critical protocol-failure latch is never eligible for recovery.
-An actively probed Upstream whose requests fail slowly twice in a row, each waiting at
-least 10 seconds as on a link that drops packets, leaves selection until a probe succeeds;
-it is re-probed after 30 seconds and then at doubling delays of up to 5 minutes instead of
-its regular interval. Failures that return at once do not count, and passive Upstreams keep
-their request-time recovery.
+An Upstream whose requests fail slowly twice in a row, each waiting at least 10 seconds
+as on a link that drops packets, leaves selection. An active Upstream rejoins when a probe
+succeeds; it is re-probed after 30 seconds and then at doubling delays of up to 5 minutes
+instead of its regular interval. A passive Upstream rejoins when a half-open request
+succeeds; it receives one per cooldown even while a lower-priority Upstream serves its
+traffic. Failures that return at once do not count.
 When the selected Upstream cannot serve a PyPI artifact or a file of the APT, Alpine,
 Conda, CRAN, Go, Helm, Maven or RubyGems proxies, because the connection fails or it
 answers 5xx or 429, each remaining Upstream of the ecosystem is asked once before the
