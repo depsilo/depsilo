@@ -162,3 +162,84 @@ func closeTransparentTestManager(t *testing.T, manager *cache.Manager) {
 		t.Fatalf("close manager: %v", err)
 	}
 }
+
+// An apt pool of two archive mirrors: the preferred mirror lacks one package
+// and the InRelease file, and its Packages index is temporarily unavailable.
+func TestTransparentProxyMovesOnOnlyWhereAnotherMirrorMayAnswer(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var mirrorHits, officialHits atomic.Int64
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mirrorHits.Add(1)
+		switch r.URL.Path {
+		case "/pool/main/h/hello/hello_2.10-3_amd64.deb", "/pool/main/m/missing/missing_1.0_amd64.deb", "/dists/jammy/InRelease":
+			http.NotFound(w, r)
+		case "/dists/jammy/main/binary-amd64/Packages.gz":
+			w.WriteHeader(http.StatusServiceUnavailable)
+		default:
+			_, _ = w.Write([]byte("mirror:" + r.URL.Path))
+		}
+	}))
+	t.Cleanup(mirror.Close)
+	official := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		officialHits.Add(1)
+		if r.URL.Path == "/pool/main/m/missing/missing_1.0_amd64.deb" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte("official:" + r.URL.Path))
+	}))
+	t.Cleanup(official.Close)
+
+	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "transparent.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.AutoMigrate(&db.CacheEntry{}, &db.AccessLog{}); err != nil {
+		t.Fatal(err)
+	}
+	storage, err := cache.NewLocalStorage(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := cache.NewManager(storage, database, cache.NewEventBus(), time.Hour)
+	t.Cleanup(func() { closeTransparentTestManager(t, manager) })
+	pool, err := upstream.NewPool([]config.UpstreamConfig{
+		{Name: "mirror", URL: mirror.URL, Priority: 1, ProbeMode: "passive"},
+		{Name: "official", URL: official.URL, Priority: 2, ProbeMode: "passive"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxy := NewTransparentProxy("apt", manager, upstream.NewPassiveRecoverySelector(pool), database)
+	proxy.RetryMissingArtifacts = true
+	engine := gin.New()
+	engine.GET("/apt/*path", func(c *gin.Context) {
+		path := c.Param("path")
+		proxy.Serve(c, TransparentPlan{Path: path, CacheKey: "apt/ubuntu" + path, TTL: time.Hour})
+	})
+
+	for _, tc := range []struct {
+		name, path      string
+		status          int
+		body            string
+		officialRequest bool
+	}{
+		{"package missing on the mirror", "/pool/main/h/hello/hello_2.10-3_amd64.deb", http.StatusOK, "official:/pool/main/h/hello/hello_2.10-3_amd64.deb", true},
+		// Metadata stays on one mirror's snapshot: a 404 there is the answer.
+		{"metadata missing on the mirror", "/dists/jammy/InRelease", http.StatusNotFound, "", false},
+		{"metadata unavailable on the mirror", "/dists/jammy/main/binary-amd64/Packages.gz", http.StatusOK, "official:/dists/jammy/main/binary-amd64/Packages.gz", true},
+		{"package missing everywhere", "/pool/main/m/missing/missing_1.0_amd64.deb", http.StatusNotFound, "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before := officialHits.Load()
+			response := httptest.NewRecorder()
+			engine.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/apt"+tc.path, nil))
+			if response.Code != tc.status || (tc.body != "" && response.Body.String() != tc.body) {
+				t.Fatalf("status=%d body=%q, want %d %q", response.Code, response.Body.String(), tc.status, tc.body)
+			}
+			if asked := officialHits.Load() > before; asked != tc.officialRequest {
+				t.Fatalf("official member asked = %v, want %v", asked, tc.officialRequest)
+			}
+		})
+	}
+}

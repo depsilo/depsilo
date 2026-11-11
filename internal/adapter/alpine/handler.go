@@ -26,9 +26,13 @@ type Handler struct {
 }
 
 func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB) *Handler {
+	proxy := adapter.NewTransparentProxy("alpine", cacheMgr, selector, database)
+	// Repository mirrors carry identical packages, which apk verifies against
+	// the checksums of the signed APKINDEX.
+	proxy.RetryMissingArtifacts = true
 	return &Handler{
 		selector:    selector,
-		proxy:       adapter.NewTransparentProxy("alpine", cacheMgr, selector, database),
+		proxy:       proxy,
 		cfg:         cfg,
 		approximate: adapter.NewApproximateProvenance(),
 	}

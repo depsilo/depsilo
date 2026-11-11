@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"depsilo/internal/cache"
+	"depsilo/internal/db"
 	"depsilo/internal/upstream"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -33,6 +34,13 @@ type TransparentProxy struct {
 	cache       *cache.Manager
 	selector    upstream.Selector
 	database    *gorm.DB
+	// RetryMissingArtifacts lets another pool member serve an immutable
+	// artifact that the selected member answers with 404. Enable it only
+	// for ecosystems whose pools mirror one repository and whose clients
+	// verify artifacts against hashes in signed or source-bound metadata.
+	// Metadata itself never moves on a 404: mixing snapshots of different
+	// mirrors would break those consistency checks.
+	RetryMissingArtifacts bool
 }
 
 type transparentUpstreamError struct {
@@ -61,17 +69,20 @@ func (proxy *TransparentProxy) Serve(c *gin.Context, plan TransparentPlan) {
 		if err != nil {
 			return nil, "", 0, "", err
 		}
-		zap.L().Info("fetching from upstream",
-			zap.String("adapter_type", proxy.adapterType),
-			zap.String("path", plan.Path),
-			zap.String("upstream", selected.Name),
-		)
-		fetched, err := selected.Fetch(ctx, "/"+strings.TrimPrefix(plan.Path, "/"))
+		retryMissing := proxy.RetryMissingArtifacts && db.ClassifyCacheKind(proxy.adapterType, plan.CacheKey) == db.CacheKindArtifact
+		fetched, served, err := FetchFromPool(ctx, proxy.selector, selected, retryMissing, func(member *upstream.Upstream) (*upstream.FetchResult, error) {
+			zap.L().Info("fetching from upstream",
+				zap.String("adapter_type", proxy.adapterType),
+				zap.String("path", plan.Path),
+				zap.String("upstream", member.Name),
+			)
+			return member.Fetch(ctx, "/"+strings.TrimPrefix(plan.Path, "/"))
+		})
 		if err != nil {
-			return nil, "", 0, "", &transparentUpstreamError{name: selected.Name, cause: err}
+			return nil, "", 0, "", &transparentUpstreamError{name: served.Name, cause: err}
 		}
 		body := cache.WithResponseValidators(fetched.Body, fetched.ETag, fetched.LastModified)
-		return body, fetched.ContentType, fetched.Size, selected.Name, nil
+		return body, fetched.ContentType, fetched.Size, served.Name, nil
 	})
 	if err != nil {
 		upstreamName := ""
@@ -84,8 +95,13 @@ func (proxy *TransparentProxy) Serve(c *gin.Context, plan TransparentPlan) {
 			zap.String("path", plan.Path),
 			zap.Error(err),
 		)
-		LogAccess(c.Request.Context(), proxy.database, proxy.adapterType, c.Request.Method, plan.CacheKey, false, upstreamName, time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		status, code := http.StatusBadGateway, "UPSTREAM_UNAVAILABLE"
+		if upstream.IsNotFound(err) {
+			// Every member that answered reported the file missing.
+			status, code = http.StatusNotFound, "NOT_FOUND"
+		}
+		LogAccess(c.Request.Context(), proxy.database, proxy.adapterType, c.Request.Method, plan.CacheKey, false, upstreamName, time.Since(start), status, c.ClientIP(), 0)
+		c.JSON(status, gin.H{"code": code, "message": err.Error()})
 		return
 	}
 	defer result.Reader.Close()

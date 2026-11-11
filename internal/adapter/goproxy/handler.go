@@ -21,7 +21,11 @@ type Handler struct {
 }
 
 func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB) *Handler {
-	return &Handler{proxy: adapter.NewTransparentProxy("go", cacheMgr, selector, database), cfg: cfg}
+	proxy := adapter.NewTransparentProxy("go", cacheMgr, selector, database)
+	// Module proxies serve the same immutable module versions, which the go
+	// command verifies against go.sum and the checksum database.
+	proxy.RetryMissingArtifacts = true
+	return &Handler{proxy: proxy, cfg: cfg}
 }
 
 func (h *Handler) Type() string { return "go" }

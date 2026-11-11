@@ -18,10 +18,11 @@ type Handler struct {
 }
 
 func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB) *Handler {
-	return &Handler{
-		proxy: adapter.NewTransparentProxy("apt", cacheMgr, selector, database),
-		cfg:   cfg,
-	}
+	proxy := adapter.NewTransparentProxy("apt", cacheMgr, selector, database)
+	// Archive mirrors carry identical pool files, which apt verifies against
+	// the Packages hashes of the signed Release.
+	proxy.RetryMissingArtifacts = true
+	return &Handler{proxy: proxy, cfg: cfg}
 }
 
 func (h *Handler) Type() string { return "apt" }

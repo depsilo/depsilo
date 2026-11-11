@@ -30,6 +30,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   mirror then answered with 404, failing pip and uv installs. A 404 does not
   mark an Upstream unhealthy, and signed external artifact references stay
   bound to their source.
+- A request the selected Upstream cannot serve, because the connection fails
+  or it answers 5xx or 429, moves on to the other Upstreams of the ecosystem
+  instead of failing until health checks notice the outage. This covers PyPI
+  artifacts and the APT, Alpine, Conda, CRAN, Go, Helm, Maven and RubyGems
+  proxies. APT, Alpine, Conda and Go packages that a mirror answers with 404
+  are fetched from another Upstream too, since their clients verify packages
+  against signed or checksum-bound metadata; index files never move on a 404.
+  Those proxies now answer 404 rather than 502 when every Upstream reports a
+  file missing.
 - An actively probed Upstream whose requests fail slowly twice in a row, each
   waiting at least 10 seconds as on a link that drops packets, leaves selection
   until a probe succeeds; it is re-probed after 30 seconds and then at doubling

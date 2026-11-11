@@ -106,3 +106,21 @@ func TestPypiExternalArtifactNotFoundIsNotRetriedElsewhere(t *testing.T) {
 		t.Fatalf("status=%d host=%d other=%d", response.Code, hostHits.Load(), otherHits.Load())
 	}
 }
+
+// When the preferred mirror stops accepting connections, an uncached artifact
+// comes from the next member at once instead of failing until health checks
+// notice the outage.
+func TestPypiArtifactComesFromAnotherMemberWhenTheMirrorIsDown(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mirror, _ := countingOrigin(t, "mirror", func(string) bool { return false })
+	official, officialHits := countingOrigin(t, "official", func(string) bool { return false })
+	_, scoped, _, _ := newPoolTestHandler(t, Options{PathPrefix: "/pypi", AdapterID: "pypi"},
+		config.UpstreamConfig{Name: "mirror", URL: mirror.URL, Priority: 1, ProbeMode: "passive"},
+		config.UpstreamConfig{Name: "official", URL: official.URL, Priority: 2, ProbeMode: "passive"})
+	mirror.Close()
+
+	response := requestPypiFile(t, scoped, "packages/ab/cd/acme_demo-1.0.0-py3-none-any.whl")
+	if response.Code != http.StatusOK || response.Body.String() != "official:acme_demo-1.0.0-py3-none-any.whl" || officialHits.Load() != 1 {
+		t.Fatalf("status=%d body=%q official=%d", response.Code, response.Body.String(), officialHits.Load())
+	}
+}

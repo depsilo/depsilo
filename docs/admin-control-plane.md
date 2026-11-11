@@ -345,11 +345,16 @@ least 10 seconds as on a link that drops packets, leaves selection until a probe
 it is re-probed after 30 seconds and then at doubling delays of up to 5 minutes instead of
 its regular interval. Failures that return at once do not count, and passive Upstreams keep
 their request-time recovery.
-A PyPI artifact that the selected Upstream answers with 404 is requested from each
-remaining Upstream of the same ecosystem once before the 404 reaches the client: a
-mirror can lack PEP 658 core metadata or a release it has not synchronized yet, which
-another member's index advertised. A 404 does not mark an Upstream unhealthy, and signed
-external artifact references stay bound to their source.
+When the selected Upstream cannot serve a PyPI artifact or a file of the APT, Alpine,
+Conda, CRAN, Go, Helm, Maven or RubyGems proxies, because the connection fails or it
+answers 5xx or 429, each remaining Upstream of the ecosystem is asked once before the
+request fails. For PyPI, APT, Alpine, Conda and Go an immutable package that a member
+answers with 404 moves on as well: a mirror can lack PEP 658 core metadata or a release
+it has not synchronized yet, and those clients verify packages against hashes in their
+signed or checksum-bound metadata. Index and metadata files never move on a 404, so one
+request never mixes snapshots of different mirrors, and a file every member reports
+missing is answered with 404. A 404 does not mark an Upstream unhealthy. npm tarballs and
+signed external artifact references stay bound to the source whose metadata named them.
 
 `GET /api/v1/admin/upstreams` returns `{items,total}` runtime resources. Create and full
 Update return the resulting runtime resource; Delete returns `{deleted_id,adapter_type}`.

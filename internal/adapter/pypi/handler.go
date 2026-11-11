@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"slices"
 	"strings"
 
 	"time"
@@ -629,38 +628,14 @@ func (h *Handler) tokenAudience() string {
 	return h.adapterID
 }
 
-// poolAlternateSelector chooses a pool member that has not yet failed the
-// current request.
-type poolAlternateSelector interface {
-	SelectExcludingAll(context.Context, ...*upstream.Upstream) (*upstream.Upstream, error)
-}
-
 // fetchPoolArtifact downloads a path-addressed artifact, starting with first.
 // Pool members mirror one index, yet a member can lack a file that another
 // member's index advertised: PEP 658 core metadata, which mirrors often do not
 // publish, or a release it has not synchronized yet. The artifact path names
-// immutable content that clients verify against the index hashes, so each
-// remaining member is asked once before a 404 is reported. It returns the
-// member that served the artifact.
+// immutable content that clients verify against the index hashes, so a 404,
+// like an unavailable member, moves on to the next member.
 func (h *Handler) fetchPoolArtifact(ctx context.Context, first *upstream.Upstream, artifactPath string) (*upstream.FetchResult, *upstream.Upstream, error) {
-	result, err := first.FetchArtifact(ctx, artifactPath)
-	selector, ok := h.selector.(poolAlternateSelector)
-	if !ok {
-		return result, first, err
-	}
-	tried := []*upstream.Upstream{first}
-	for err != nil && upstream.IsNotFound(err) {
-		alternate, selectErr := selector.SelectExcludingAll(ctx, tried...)
-		if selectErr != nil || alternate == nil || slices.Contains(tried, alternate) {
-			break
-		}
-		zap.L().Info("artifact missing on upstream; asking another pool member",
-			zap.String("filepath", artifactPath),
-			zap.String("missing_on", tried[len(tried)-1].Name),
-			zap.String("upstream", alternate.Name),
-		)
-		tried = append(tried, alternate)
-		result, err = alternate.FetchArtifact(ctx, artifactPath)
-	}
-	return result, tried[len(tried)-1], err
+	return adapter.FetchFromPool(ctx, h.selector, first, true, func(member *upstream.Upstream) (*upstream.FetchResult, error) {
+		return member.FetchArtifact(ctx, artifactPath)
+	})
 }

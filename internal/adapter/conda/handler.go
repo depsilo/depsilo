@@ -26,9 +26,13 @@ type Handler struct {
 }
 
 func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB) *Handler {
+	proxy := adapter.NewTransparentProxy("conda", cacheMgr, selector, database)
+	// Channel mirrors carry identical package files, which conda verifies
+	// against the sha256 recorded in repodata.
+	proxy.RetryMissingArtifacts = true
 	return &Handler{
 		selector:    selector,
-		proxy:       adapter.NewTransparentProxy("conda", cacheMgr, selector, database),
+		proxy:       proxy,
 		cfg:         cfg,
 		approximate: adapter.NewApproximateProvenance(),
 	}
