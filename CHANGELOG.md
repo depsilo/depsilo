@@ -70,6 +70,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   read and its write. SQLite rejected such a write at once with
   `database is locked`, which could also make a clean shutdown report an error.
 
+### Security
+- Release builds use Go 1.27.4, which fixes
+  [GO-2026-6859](https://pkg.go.dev/vuln/GO-2026-6859): a header race in
+  `net/http`'s `MaxBytesReader` could crash an HTTP/1 server.
+
 ### Upgrade notes
 - Schema migration v16 runs automatically on first start and is forward-only:
   an older binary cannot open the upgraded database. Take a backup first
