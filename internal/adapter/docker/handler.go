@@ -2,10 +2,12 @@ package docker
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -162,7 +164,7 @@ func (h *Handler) handleManifest(c *gin.Context, reg *Registry, imageName, endpo
 	scope := fmt.Sprintf("repository:%s:pull", imageName)
 
 	if c.Request.Method == "HEAD" {
-		h.handleHead(c, reg, imageName, "manifests/"+resolved, scope, cacheKey, start)
+		h.handleHead(c, reg, imageName, "manifests/"+resolved, scope, cacheKey, ttl, start)
 		return
 	}
 
@@ -268,9 +270,12 @@ func (h *Handler) resolveManifestDigest(ctx context.Context, reg *Registry, imag
 	return digest, 0, nil
 }
 
-func (h *Handler) handleHead(c *gin.Context, reg *Registry, imageName, endpoint, scope, cacheKey string, start time.Time) {
+func (h *Handler) handleHead(c *gin.Context, reg *Registry, imageName, endpoint, scope, cacheKey string, ttl time.Duration, start time.Time) {
 	token, err := h.auth.GetToken(c.Request.Context(), reg.Client, reg.URL, reg.Name, reg.Username, reg.Password, scope)
 	if err != nil {
+		if h.headFromCache(c, reg, cacheKey, ttl, start, err) {
+			return
+		}
 		c.JSON(http.StatusBadGateway, gin.H{"code": "AUTH_FAILED", "message": err.Error()})
 		return
 	}
@@ -289,6 +294,9 @@ func (h *Handler) handleHead(c *gin.Context, reg *Registry, imageName, endpoint,
 
 	resp, err := reg.Client.Do(req)
 	if err != nil {
+		if h.headFromCache(c, reg, cacheKey, ttl, start, err) {
+			return
+		}
 		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
 		return
 	}
@@ -296,6 +304,10 @@ func (h *Handler) handleHead(c *gin.Context, reg *Registry, imageName, endpoint,
 	io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode >= http.StatusInternalServerError &&
+			h.headFromCache(c, reg, cacheKey, ttl, start, fmt.Errorf("registry returned %d", resp.StatusCode)) {
+			return
+		}
 		c.Status(resp.StatusCode)
 		return
 	}
@@ -312,6 +324,38 @@ func (h *Handler) handleHead(c *gin.Context, reg *Registry, imageName, endpoint,
 	c.Status(http.StatusOK)
 
 	adapter.LogAccess(c.Request.Context(), h.db, "docker", "HEAD", cacheKey, false, reg.Name, time.Since(start), http.StatusOK, c.ClientIP(), 0)
+}
+
+// maxCachedManifestBytes matches the registry limit on manifest size.
+const maxCachedManifestBytes = 4 << 20
+
+// headFromCache answers a manifest HEAD from the cached manifest when the
+// registry cannot answer it, so clients that resolve a tag with HEAD keep
+// pulling images cached before the outage. It never fetches: a manifest GET
+// counts against registry pull limits where a HEAD does not. It reports false
+// when nothing is cached.
+func (h *Handler) headFromCache(c *gin.Context, reg *Registry, cacheKey string, ttl time.Duration, start time.Time, cause error) bool {
+	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "docker", ttl, func(context.Context) (io.ReadCloser, string, int64, string, error) {
+		return nil, "", 0, reg.Name, cause
+	})
+	if err != nil {
+		return false
+	}
+	defer result.Reader.Close()
+	manifest, err := io.ReadAll(io.LimitReader(result.Reader, maxCachedManifestBytes+1))
+	if err != nil || len(manifest) > maxCachedManifestBytes {
+		return false
+	}
+	zap.L().Warn("docker registry unavailable; answering manifest HEAD from cache",
+		zap.String("key", cacheKey), zap.Error(cause))
+	if result.ContentType != "" {
+		c.Header("Content-Type", result.ContentType)
+	}
+	c.Header("Docker-Content-Digest", fmt.Sprintf("sha256:%x", sha256.Sum256(manifest)))
+	c.Header("Content-Length", strconv.Itoa(len(manifest)))
+	c.Status(http.StatusOK)
+	adapter.LogAccess(c.Request.Context(), h.db, "docker", http.MethodHead, cacheKey, true, reg.Name, time.Since(start), http.StatusOK, c.ClientIP(), 0)
+	return true
 }
 
 func (h *Handler) fetchFromUpstream(ctx context.Context, reg *Registry, imageName, endpoint, scope string, isManifest bool) (io.ReadCloser, string, int64, error) {

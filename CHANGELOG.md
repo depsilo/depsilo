@@ -59,6 +59,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   cached, because identity checks always asked the upstream. A candidate
   project whose index does not exist (404) now counts as not declaring the
   archive instead of failing the whole identity check.
+- A Docker manifest `HEAD` is answered from the cached manifest when the
+  registry or its token service cannot answer. Clients that resolve tags with
+  `HEAD`, such as containerd, received `502` even though the manifest and its
+  layers were cached, so cached images could not be pulled offline. With the
+  observation-age gate enabled, tags still require the registry.
 - Recording dependency usage retries when another write commits between its
   read and its write. SQLite rejected such a write at once with
   `database is locked`, which could also make a clean shutdown report an error.

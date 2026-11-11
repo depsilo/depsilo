@@ -535,6 +535,11 @@ While the known-malicious dataset covers PyPI, a legacy archive such as a
 `.zip` sdist proves its identity from the cached project index, so it stays
 available after a restart without network.
 
+Docker clients that resolve a tag with `HEAD`, such as containerd, receive the
+cached manifest's digest while the registry or its token service is
+unreachable. With the observation-age gate enabled, a tag still needs the
+registry: its current digest cannot be confirmed offline.
+
 ## Health checks
 
 `status` reports service health and available statistics; `doctor` performs
