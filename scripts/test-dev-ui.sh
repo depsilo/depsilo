@@ -26,7 +26,8 @@ fail() {
 
 wait_for_file() {
     local file=$1
-    for _ in $(seq 1 100); do
+    # Up to 10 seconds: a loaded machine can be slow to start the helpers.
+    for _ in $(seq 1 500); do
         [ -f "$file" ] && return 0
         sleep 0.02
     done
@@ -68,10 +69,13 @@ set -euo pipefail
 : "${VITE_STOPPED:?}"
 : "${VITE_ARGS:?}"
 : "${VITE_CWD:?}"
-printf '%s\n' "${DEPSILO_DEV_BACKEND_URL-}" > "$VITE_READY"
+trap 'touch "$VITE_STOPPED"; exit 0' TERM INT
 printf '%s\n' "$@" > "$VITE_ARGS"
 printf '%s\n' "$PWD" > "$VITE_CWD"
-trap 'touch "$VITE_STOPPED"; exit 0' TERM INT
+# Readiness comes last and appears atomically: the test signals this process
+# as soon as it sees the file, so every observation must already be recorded.
+printf '%s\n' "${DEPSILO_DEV_BACKEND_URL-}" > "$VITE_READY.tmp"
+mv "$VITE_READY.tmp" "$VITE_READY"
 while :; do sleep 0.1; done
 SH
 chmod +x "$FAKE_VITE"
