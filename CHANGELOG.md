@@ -5,6 +5,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-11
+
 ### Added
 - Free-edition export allowance for signed transfer bundles
   ([ADR-0009](docs/adr/0009-usage-limited-free-edition.md), schema v16):
@@ -67,6 +69,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - Recording dependency usage retries when another write commits between its
   read and its write. SQLite rejected such a write at once with
   `database is locked`, which could also make a clean shutdown report an error.
+
+### Upgrade notes
+- Schema migration v16 runs automatically on first start and is forward-only:
+  an older binary cannot open the upgraded database. Take a backup first
+  (`depsilo backup`), and keep `data/secrets/jwt.key` with the database if the
+  instance generated one.
+- Without Pro or an active trial, transfer-bundle exports are now metered: at
+  most 500 MiB per bundle and 5 GiB per UTC month. Exports made before the
+  upgrade were not recorded and do not count.
+- The APT, Alpine, Conda, CRAN, Go, Helm, Maven and RubyGems proxies answer a
+  file that every Upstream reports missing with `404` instead of `502`.
 
 ## [0.12.2] - 2026-11-10
 
