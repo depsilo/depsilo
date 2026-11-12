@@ -261,6 +261,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminRead.GET("/dashboard", dashHandler.GetDashboard)
 	adminRead.GET("/dashboard/recent-downloads", dashHandler.GetRecentDownloads)
 	adminRead.GET("/dashboard/trends", dashHandler.GetTrends)
+	adminRead.GET("/dashboard/breakdown", dashHandler.GetBreakdown)
 
 	// Runtime resources (CPU / memory / cache storage / disk) for the Overview.
 	runtimeHandler := admin.NewRuntimeHandler(
