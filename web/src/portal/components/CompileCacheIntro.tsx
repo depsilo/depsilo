@@ -24,7 +24,7 @@ export default function CompileCacheIntro() {
         <div className="min-w-0">
           <h3
             id="portal-compile-cache-title"
-            className="m-0 font-[var(--font-display)] text-[18px] font-[650] leading-[1.25] text-[var(--text)]"
+            className="m-0 font-display text-[18px] font-[650] leading-[1.25] text-[var(--text)]"
           >
             {t('quickstart.compileCacheTitle')}
           </h3>

@@ -515,6 +515,13 @@ body { overflow-x: clip; }
 * { box-sizing: border-box; }
 
 @layer base {
+  /* Tailwind v4 borders default to currentColor. shadcn/ui's base layer
+     resets them to the border role so a bare `border`, `border-t`, or
+     `divide-x` draws a hairline instead of a text-coloured rule; colour
+     utilities and inline styles still override it. */
+  *, ::before, ::after, ::backdrop {
+    border-color: var(--border);
+  }
   h1, h2, h3, h4 {
     font-family: var(--font-display);
     color: var(--text);

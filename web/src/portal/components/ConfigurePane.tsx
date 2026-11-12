@@ -100,7 +100,7 @@ function ManagerPicker({
         >
           {t('quickstart.managerPickerLabel')}
         </span>
-        <span className="font-[var(--font-mono)] text-[12px] text-[var(--text-subtle)]">
+        <span className="font-mono text-[12px] text-[var(--text-subtle)]">
           {t('quickstart.managerCount', { count: managers.length })}
         </span>
       </div>
@@ -150,7 +150,7 @@ function StepHeading({
     <div className="mb-3 flex items-start gap-3">
       <span
         aria-hidden="true"
-        className="mt-0.5 font-[var(--font-mono)] text-[12px] font-[650] leading-[1.4] text-[var(--brand-text)]"
+        className="mt-0.5 font-mono text-[12px] font-[650] leading-[1.4] text-[var(--brand-text)]"
       >
         {String(number).padStart(2, '0')}
       </span>
@@ -282,7 +282,7 @@ export default function ConfigurePane({
         </span>
         <div style={{ minWidth: 0 }}>
           <h3
-            className="m-0 font-[var(--font-display)] text-[clamp(20px,2vw,24px)] font-[680] leading-[1.15] text-[var(--text)]"
+            className="m-0 font-display text-[clamp(20px,2vw,24px)] font-[680] leading-[1.15] text-[var(--text)]"
           >
             {t('quickstart.configureTitle', { name: language.name })}
           </h3>
@@ -294,7 +294,7 @@ export default function ConfigurePane({
         >
           <Icon name="link" size="sm" className="shrink-0 text-[var(--text-subtle)]" />
           <span className="sr-only">{t('quickstart.endpointLabel')}</span>
-          <span className="truncate font-[var(--font-mono)] text-[12px] text-[var(--text-muted)]">
+          <span className="truncate font-mono text-[12px] text-[var(--text-muted)]">
             {resolvedEndpoint}
           </span>
         </div>
@@ -335,7 +335,7 @@ export default function ConfigurePane({
                 <span className="flex items-start gap-3">
                   <span
                     aria-hidden="true"
-                    className="mt-0.5 font-[var(--font-mono)] text-[12px] font-[650] leading-[1.4] text-[var(--brand-text)]"
+                    className="mt-0.5 font-mono text-[12px] font-[650] leading-[1.4] text-[var(--brand-text)]"
                   >
                     02
                   </span>

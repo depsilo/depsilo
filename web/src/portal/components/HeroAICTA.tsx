@@ -76,7 +76,7 @@ export default function HeroAICTA() {
           <div className="min-w-0">
             <h3
               id="quickstart-optional-ai-title"
-              className="m-0 font-[var(--font-display)] text-[18px] font-[650] leading-[1.25] text-[var(--text)]"
+              className="m-0 font-display text-[18px] font-[650] leading-[1.25] text-[var(--text)]"
             >
               {t('quickstart.optionalAiTitle')}
             </h3>
@@ -169,7 +169,7 @@ export default function HeroAICTA() {
             </div>
             <pre
               tabIndex={0}
-              className="code-scroll m-0 min-h-[120px] max-h-[60vh] overflow-auto whitespace-pre rounded-md p-4 font-[var(--font-mono)] text-[12px] leading-[1.55] text-[var(--text)]"
+              className="code-scroll m-0 min-h-[120px] max-h-[60vh] overflow-auto whitespace-pre rounded-md p-4 font-mono text-[12px] leading-[1.55] text-[var(--text)]"
               style={{
                 backgroundColor: 'var(--bg-soft)',
                 border: '1px solid var(--border)',

@@ -426,8 +426,11 @@ export default function MonitorPage() {
             <h1
               style={{
                 margin: 0,
-                fontSize: 'clamp(32px, 5vw, 44px)',
-                fontWeight: 700,
+                // Same display face, size, and weight as the Quick Start title:
+                // the two Portal pages are siblings in one header rail.
+                fontFamily: 'var(--font-display)',
+                fontSize: 'clamp(30px, 3vw, 38px)',
+                fontWeight: 680,
                 // Inter Tight is pre-tightened — mild tracking only,
                 // and milder still for CJK.
                 letterSpacing: i18n.language === 'zh' ? '-0.02em' : '-0.025em',

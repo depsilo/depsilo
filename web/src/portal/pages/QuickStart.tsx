@@ -68,7 +68,7 @@ export default function QuickStart({ pytorchIndexPath }: Props) {
       <header className="fade-up max-w-[760px]">
         <h1
           id="quickstart-title"
-          className="m-0 font-[var(--font-display)] text-[clamp(30px,3vw,38px)] font-[680] leading-[1.08] text-[var(--text)]"
+          className="m-0 font-display text-[clamp(30px,3vw,38px)] font-[680] leading-[1.08] text-[var(--text)]"
         >
           {t('quickstart.title')}
         </h1>
@@ -116,7 +116,7 @@ export default function QuickStart({ pytorchIndexPath }: Props) {
         <div className="mb-4 max-w-[68ch]">
           <h2
             id="quickstart-optional-title"
-            className="m-0 font-[var(--font-display)] text-[20px] font-[650] leading-[1.2] text-[var(--text)]"
+            className="m-0 font-display text-[20px] font-[650] leading-[1.2] text-[var(--text)]"
           >
             {t('quickstart.optionalTitle')}
           </h2>

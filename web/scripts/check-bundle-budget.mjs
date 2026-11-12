@@ -14,8 +14,10 @@ const chunkBudgetBytes = 500_000
 // The standard React Router data router adds ~55 kB uncompressed for navigation
 // blocking across tabs/sidebar/history. This deliberately replaces partial,
 // page-local leave prompts; no dependency version or lazy route seam changes.
+// Raised to 713 kB by the shared UI layer: the base border-colour reset, the
+// shared <details> chevron, and the Admin brand/filter/severity utilities.
 // Keep <2 kB headroom; the existing 320 kB transfer limit remains unchanged.
-const initialAssetsBudgetBytes = 711_000
+const initialAssetsBudgetBytes = 713_000
 const initialAssetsTransferBudgetBytes = 320_000
 const lazyModules = ['PortalApp-', 'SetupWizard-', 'AdminApp-', 'AdminShell-']
 
