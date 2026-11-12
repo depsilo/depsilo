@@ -20,7 +20,7 @@ const buttonVariants = cva(
         // tokens (>= 4.5:1 in both themes) carries the destructive state.
         destructive:
           'border-transparent bg-[var(--danger-fill)] text-[var(--danger-text)] hover:bg-[var(--danger-fill)]/80 focus-visible:border-[var(--danger-border)] focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40',
-        link: 'text-primary underline-offset-4 hover:underline',
+        link: 'text-[var(--brand-text)] underline-offset-4 hover:underline',
       },
       size: {
         default: 'h-10 min-h-10 gap-1.5 px-3 text-sm',

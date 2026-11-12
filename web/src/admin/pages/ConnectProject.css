@@ -1,5 +1,4 @@
-.connection-page { max-width: 1320px; margin: 0 auto; --connect-accent: #2563eb; }
-.dark .connection-page, [data-theme="dark"] .connection-page { --connect-accent: #60a5fa; }
+.connection-page { max-width: 1320px; margin: 0 auto; --connect-accent: var(--brand); }
 .connection-page a { color: var(--connect-accent); }
 .connection-page a:focus-visible, .connection-page summary:focus-visible, .connection-notice button:focus-visible, .connection-note button:focus-visible { outline: 2px solid var(--connect-accent); outline-offset: 4px; border-radius: 3px; }
 .connection-page [data-admin-page-description] { font-size: 14px; }
@@ -51,7 +50,6 @@
 .connection-result-actions button, .connection-result-actions a { min-height: 40px; justify-content: center; font-size: 13px; }
 .connection-return-unverified { color: var(--text-muted); font-weight: 500; }
 .connection-result-actions a { display: inline-flex; align-items: center; font-size: 13px; }
-.connection-primary { background: #2563eb !important; color: white !important; border-color: transparent !important; }
 .connection-notice { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; font-size: 13px; line-height: 1.6; }
 .connection-notice > svg { flex-shrink: 0; margin-top: 3px; }
 .connection-notice button, .connection-note button { color: var(--connect-accent); min-height: 40px; }

@@ -29,8 +29,6 @@
   padding: 24px;
   border-left: 3px solid var(--dash-accent);
 }
-.dashboard-connect-primary { background: #2563eb; color: #fff; }
-.dashboard-connect-primary:hover { background: #1d4ed8; }
 .dashboard-connect-muted { border-left-color: var(--dash-border); }
 .dashboard-cache-summary {
   display: flex;
@@ -44,8 +42,10 @@
 .dashboard-cache-summary > section { flex: 1 1 480px; }
 .dashboard-resources-panel {
   min-width: 0;
-  border-top: 1px solid;
-  padding-top: 16px;
+  border: 1px solid;
+  border-radius: var(--r-card);
+  background: var(--dash-card);
+  padding: 12px 20px 16px;
 }
 .dashboard-resources-heading {
   display: none;

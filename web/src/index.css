@@ -147,8 +147,8 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
+  --primary: #2b5fda;
+  --primary-foreground: #ffffff;
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -161,14 +161,17 @@
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --ring: #2b5fda;
   --radius: 0.625rem;
 
   /* ── Depsilo compatibility aliases ──
      The names the application grew up with, now pointing at the roles above
      so ~1,200 existing `var(--…)` call sites keep working unchanged.
-     `--brand*` is the neutral accent (selection, links, active navigation);
-     green survives only in `--ok*` / `--hit*`, where it is a status. */
+     `--brand*` is the Depsilo Deep Blue interaction accent (selection, links,
+     active navigation) on every surface; green survives only in `--ok*` /
+     `--hit*`, where it is a status. The filled primary keeps white text on
+     Deep Blue in both themes; dark mode lifts link and focus blue so text
+     clears AA on the near-black canvas. */
   --bg-page:   var(--background);
   --bg-card:   var(--card);
   --bg-soft:   var(--muted);
@@ -186,14 +189,14 @@
   --text-soft:   var(--muted-foreground);
   --text-subtle: var(--muted-foreground);
 
-  --brand:        var(--primary);
-  --brand-soft:   var(--accent);
-  --brand-border: var(--border);
-  --brand-text:   var(--foreground);
+  --brand:        #2b5fda;
+  --brand-soft:   #ecf2fd;
+  --brand-border: #b9cbf4;
+  --brand-text:   #2b5fda;
 
   --btn-primary-bg: var(--primary);
   --btn-primary-fg: var(--primary-foreground);
-  --btn-primary-press: oklch(0.32 0 0);
+  --btn-primary-press: #183ba5;
 
   /* Chart ramp — shadcn's neutral chart-1..5 scale. */
   --spec-1: oklch(0.87 0 0);
@@ -219,7 +222,7 @@
   --danger-fill:   oklch(0.936 0.032 17.717);
   --danger-border: oklch(0.808 0.114 19.571);
   --danger-text:   oklch(0.505 0.213 27.518);
-  --focus-ring:    oklch(0.708 0 0);
+  --focus-ring:    #2b5fda;
 
   /* Remaining role-named aliases. The ones with no consumers were deleted
      rather than carried: they were a second vocabulary for tokens that
@@ -297,8 +300,8 @@ html.dark,
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  --primary: #2b5fda;
+  --primary-foreground: #ffffff;
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -307,7 +310,7 @@ html.dark,
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --ring: #6b93f7;
   --radius: 0.625rem;
 
   /* Compatibility aliases — see the light block. */
@@ -328,14 +331,14 @@ html.dark,
   --text-soft:   var(--muted-foreground);
   --text-subtle: var(--muted-foreground);
 
-  --brand:        var(--primary);
-  --brand-soft:   var(--accent);
-  --brand-border: var(--border);
-  --brand-text:   var(--foreground);
+  --brand:        #6b93f7;
+  --brand-soft:   #16234a;
+  --brand-border: #2b4090;
+  --brand-text:   #a8c3fb;
 
   --btn-primary-bg: var(--primary);
   --btn-primary-fg: var(--primary-foreground);
-  --btn-primary-press: oklch(0.80 0 0);
+  --btn-primary-press: #1e47b8;
 
   --spec-1: oklch(0.87 0 0);
   --spec-2: oklch(0.556 0 0);
@@ -356,7 +359,7 @@ html.dark,
   --danger-fill:   oklch(0.258 0.092 26.042);
   --danger-border: oklch(0.444 0.177 26.899);
   --danger-text:   oklch(0.808 0.114 19.571);
-  --focus-ring:    oklch(0.556 0 0);
+  --focus-ring:    #6b93f7;
 
   /* Remaining role-named aliases — same set as the light block. */
   --inverse:   var(--foreground);
@@ -404,8 +407,8 @@ html.dark,
     --card-foreground: oklch(0.985 0 0);
     --popover: oklch(0.205 0 0);
     --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
+    --primary: #2b5fda;
+    --primary-foreground: #ffffff;
     --secondary: oklch(0.269 0 0);
     --secondary-foreground: oklch(0.985 0 0);
     --muted: oklch(0.269 0 0);
@@ -414,7 +417,7 @@ html.dark,
     --accent-foreground: oklch(0.985 0 0);
     --destructive: oklch(0.704 0.191 22.216);
     --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
+    --ring: #6b93f7;
     --radius: 0.625rem;
 
     --bg-page:   var(--background);
@@ -434,14 +437,14 @@ html.dark,
     --text-soft:   var(--muted-foreground);
     --text-subtle: var(--muted-foreground);
 
-    --brand:        var(--primary);
-    --brand-soft:   var(--accent);
-    --brand-border: var(--border);
-    --brand-text:   var(--foreground);
+    --brand:        #6b93f7;
+    --brand-soft:   #16234a;
+    --brand-border: #2b4090;
+    --brand-text:   #a8c3fb;
 
     --btn-primary-bg: var(--primary);
     --btn-primary-fg: var(--primary-foreground);
-    --btn-primary-press: oklch(0.80 0 0);
+    --btn-primary-press: #1e47b8;
 
     --spec-1: oklch(0.87 0 0);
     --spec-2: oklch(0.556 0 0);
@@ -462,7 +465,7 @@ html.dark,
     --danger-fill:   oklch(0.258 0.092 26.042);
     --danger-border: oklch(0.444 0.177 26.899);
     --danger-text:   oklch(0.808 0.114 19.571);
-    --focus-ring:    oklch(0.556 0 0);
+    --focus-ring:    #6b93f7;
 
     --bg:        oklch(0.145 0 0);
     --hit:       var(--ok);
@@ -675,57 +678,27 @@ a:focus:not(:focus-visible) {
 /* Portal topbar — equal geometry, distinct semantics. Service information and
    display preferences share quiet segmented rails; Admin is the sole accented
    navigation action. Every interactive segment keeps a 40px target. */
-/* ── Portal brand surface (docs/brand) ─────────────────────
-   The anonymous Portal is the product's public face, so it carries the brand
-   palette instead of shadcn's neutral accent: Deep Blue for structure and
-   interaction, Electric Blue for focus, Ink for nothing that used to be a
-   neutral surface. Scoped by an attribute on <html> rather than a wrapper
-   class because Base UI dialogs, selects, and tooltips portal into <body> and
-   would otherwise fall back to the neutral roles.
+/* ── Portal hover surface ──────────────────────────────────
+   The brand interaction palette (Deep Blue primary, Electric Blue focus,
+   brand text/soft/border) is shared by Portal, Setup, and Admin and lives in
+   the theme blocks above. The Portal alone also tints its hover surface blue;
+   Admin keeps neutral hovers so dense tables and menus stay quiet. Scoped by
+   an attribute on <html> rather than a wrapper class because Base UI
+   dialogs, selects, and tooltips portal into <body>.
 
    Status stays semantic: --ok / --warn / --danger and the hit colours keep
-   their product meaning and are deliberately not re-tinted here. Admin and the
-   Dashboard do not carry this attribute and are untouched. */
+   their product meaning and are deliberately not re-tinted here. */
 :root[data-surface='portal'] {
-  /* Same brand hue as the mark, one step deeper and noticeably calmer than
-     Tailwind's blue-600: the old #2563EB sat at 83% saturation, which read as
-     electric up close on a white canvas. At ~70% it still reads unmistakably
-     Depsilo blue, matches the logo wall (#2563EB) without fighting it, and
-     lifts link text from 5.17:1 to 5.6:1 on white. The tints follow: a cooler
-     blue-grey rather than the pastel #EFF6FF wash. */
-  --brand: #2b5fda;
-  --brand-text: #2b5fda;
-  --brand-soft: #ecf2fd;
-  --brand-border: #b9cbf4;
-  --primary: #2b5fda;
-  --primary-foreground: #ffffff;
-  /* Hover surface. Brand text on it measures 4.67:1 — the old #DBEAFE pairing
-     missed AA at 4.23:1. */
+  /* Brand text on this hover surface measures 4.67:1. */
   --accent: #e2ebfd;
   --accent-foreground: #1a3fa6;
-  --ring: #2b5fda;
-  --focus-ring: #2b5fda;
-  --btn-primary-press: #183ba5;
   --code-accent: #7ba7f5;
 }
 
 :root[data-surface='portal'][data-theme='dark'],
 html.dark[data-surface='portal'] {
-  --brand: #6b93f7;
-  /* Lightest step that still clears AA on the near-black canvas (10.9:1) and
-     on the tinted rail surface (8.6:1) without going pastel grey. */
-  --brand-text: #a8c3fb;
-  --brand-soft: #16234a;
-  --brand-border: #2b4090;
-  /* The filled action keeps white text on Deep Blue in both themes: it is the
-     one pairing that is legible either way. */
-  --primary: #2b5fda;
-  --primary-foreground: #ffffff;
   --accent: #1b2440;
   --accent-foreground: #a8c3fb;
-  --ring: #6b93f7;
-  --focus-ring: #6b93f7;
-  --btn-primary-press: #1e47b8;
   --code-accent: #7ba7f5;
 }
 
@@ -804,6 +777,28 @@ html.dark[data-surface='portal'] {
   }
 }
 
+/* Every plain <details> shares one chevron instead of the platform's filled
+   triangle, matching the stroke icons used elsewhere. Summaries that draw
+   their own control (`list-none`, or a direct icon child) opt out. */
+details > summary:not(.list-none):not(:has(> .icon)) { list-style: none; }
+details > summary:not(.list-none):not(:has(> .icon))::-webkit-details-marker { display: none; }
+details > summary:not(.list-none):not(:has(> .icon))::before {
+  content: '';
+  display: inline-block;
+  flex-shrink: 0;
+  width: 0.42em;
+  height: 0.42em;
+  margin: 0 0.6em 0.12em 0.1em;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  opacity: 0.65;
+  transform: rotate(-45deg);
+  transition: transform 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+details[open] > summary:not(.list-none):not(:has(> .icon))::before {
+  transform: rotate(45deg);
+}
+
 .config-disclosure > summary::-webkit-details-marker { display: none; }
 .disclosure-chevron {
   color: var(--text-subtle);
@@ -857,15 +852,15 @@ html.dark[data-surface='portal'] {
   background: transparent;
 }
 /* Overview aliases resolve through the shared theme. Chart series identity
-   and the established blue interaction accent remain distinct semantic roles;
-   this scope owns neither a second surface system nor component geometry. */
+   and the brand interaction accent remain distinct semantic roles; this scope
+   owns neither a second surface system nor component geometry. */
 .dashboard-surface {
   --dash-card: var(--card);
   --dash-ink: var(--foreground);
   --dash-muted: var(--muted-foreground);
   --dash-border: var(--border);
-  --dash-accent: #2563eb;
-  --dash-accent-soft: #eaf1fe;
+  --dash-accent: var(--brand);
+  --dash-accent-soft: var(--brand-soft);
   /* Per-category identity colours. These restore the confirmed Overview's
      pale-tinted icon bases, progress tracks and sparklines. Category colour is
      identity, not status: a green CPU icon does not mean "CPU healthy". A
@@ -892,8 +887,6 @@ html.dark[data-surface='portal'] {
 }
 [data-theme="dark"] .dashboard-surface,
 html.dark .dashboard-surface {
-  --dash-accent: #60a5fa;
-  --dash-accent-soft: color-mix(in oklab, #60a5fa 18%, transparent);
   --dash-cpu: #4ade80;
   --dash-cpu-soft: color-mix(in oklab, #4ade80 16%, transparent);
   --dash-memory: #60a5fa;

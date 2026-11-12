@@ -1,4 +1,3 @@
-import { Input } from '@/components/ui/input'
 import { TableContainer, Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -14,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
+import SearchField from '@/components/SearchField'
 
 import QueryErrorState from '@/components/QueryErrorState'
 import { NativeSelect } from '@/components/ui/native-select'
@@ -215,17 +215,12 @@ export default function AccessLogs() {
         className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center"
         onSubmit={(event) => { event.preventDefault(); handleSearch() }}
       >
-        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-sm px-3 py-1.5" style={{ border: '1px solid var(--border)' }}>
-          <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
-            <Input
-              aria-label={t('logs.searchLabel')}
-              className={"min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]" + ' h-9 rounded-none border-0 px-0 shadow-none focus-visible:ring-0 dark:bg-transparent'}
-              style={{ color: 'var(--text)' }}
-              placeholder={t('logs.searchPlaceholder')}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-        </div>
+        <SearchField
+          aria-label={t('logs.searchLabel')}
+          placeholder={t('logs.searchPlaceholder')}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
 
         <div className="grid grid-cols-2 gap-3 sm:contents">
             <NativeSelect
@@ -257,11 +252,11 @@ export default function AccessLogs() {
             </NativeSelect>
         </div>
 
-        <Button type="submit" variant="default" size="sm" className="min-h-10 self-start">
+        <Button type="submit" variant="outline">
           {t('search')}
         </Button>
         {hasFilters && (
-          <Button type="button" variant="outline" size="sm" className="min-h-10 self-start" onClick={clearFilters}>
+          <Button type="button" variant="ghost" onClick={clearFilters}>
             {t('logs.clearFilters')}
           </Button>
         )}

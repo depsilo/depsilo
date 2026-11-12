@@ -510,7 +510,7 @@ test('Chinese connection guidance and verified results remain readable on deskto
   verified = true
   await page.clock.fastForward(2_600)
   await expect(page.getByRole('heading', { name: '已确认缓存命中', exact: true })).toBeVisible()
-  await expect(page.locator('.connection-primary')).toHaveCSS('background-color', 'rgb(37, 99, 235)')
+  await expect(page.getByRole('button', { name: '查看总览', exact: true })).toHaveCSS('background-color', 'rgb(43, 95, 218)')
   for (const width of [1440, 320]) {
     await page.setViewportSize({ width, height: width < 768 ? 844 : 900 })
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width)
@@ -577,7 +577,7 @@ test('English light-theme verified guidance keeps accessible contrast and primar
   await expect(page.getByRole('heading', { name: 'Waiting for a related request', exact: true })).toBeVisible()
   await page.clock.fastForward(2_600)
   await expect(page.getByRole('heading', { name: 'Cache hit confirmed', exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'View overview', exact: true })).toHaveCSS('background-color', 'rgb(37, 99, 235)')
+  await expect(page.getByRole('button', { name: 'View overview', exact: true })).toHaveCSS('background-color', 'rgb(43, 95, 218)')
   expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations).toEqual([])
   if (process.env.CONNECTION_REVIEW_DIR) {
     await mkdir(process.env.CONNECTION_REVIEW_DIR, { recursive: true })

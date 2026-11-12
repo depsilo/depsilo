@@ -20,7 +20,7 @@ export default function DashboardMetricHelp({ label, ariaLabel, children }: Dash
     <Popover>
       <PopoverTrigger
         aria-label={`${label} · ${ariaLabel}`}
-        render={<Button variant="ghost" className="min-h-[40px] min-w-[40px] max-w-full justify-start gap-1.5 whitespace-normal px-0 text-left text-[length:inherit] font-[inherit] leading-normal text-inherit hover:bg-transparent hover:text-primary data-popup-open:text-primary dark:hover:bg-transparent" />}
+        render={<Button variant="ghost" className="min-h-[40px] min-w-[40px] max-w-full justify-start gap-1.5 whitespace-normal px-0 text-left text-[length:inherit] font-[inherit] leading-normal text-inherit hover:bg-transparent hover:text-[var(--brand-text)] data-popup-open:text-[var(--brand-text)] dark:hover:bg-transparent" />}
       >
         <span>{label}</span>
         <Icon name="info" size="sm" className="shrink-0" />

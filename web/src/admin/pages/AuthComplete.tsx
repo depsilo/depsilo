@@ -159,9 +159,9 @@ export default function AuthComplete() {
         <Alert variant="destructive"><AlertDescription>{t(error)}</AlertDescription></Alert>
         {trialRecovery && <p className="text-sm leading-6 text-muted-foreground">{t('account.testRecovery')}</p>}
         <div className="flex flex-wrap gap-4">
-          {trialRecovery ? <Link className="stripe-focus-ring inline-flex min-h-10 items-center rounded-md text-primary underline underline-offset-4" to={trialRecovery} onClick={clearOIDCTrial}>{t('account.backToSources')}</Link> : <>
-          <Link className="stripe-focus-ring inline-flex min-h-10 items-center rounded-md text-primary underline underline-offset-4" to={ADMIN_LOGIN_PATH}>{t('account.retryLogin')}</Link>
-          <Link className="stripe-focus-ring inline-flex min-h-10 items-center rounded-md text-primary underline underline-offset-4" to={getAdminRouteHref('account')}>{t('account.backToAccount')}</Link>
+          {trialRecovery ? <Link className="stripe-focus-ring inline-flex min-h-10 items-center rounded-md text-[var(--brand-text)] underline underline-offset-4" to={trialRecovery} onClick={clearOIDCTrial}>{t('account.backToSources')}</Link> : <>
+          <Link className="stripe-focus-ring inline-flex min-h-10 items-center rounded-md text-[var(--brand-text)] underline underline-offset-4" to={ADMIN_LOGIN_PATH}>{t('account.retryLogin')}</Link>
+          <Link className="stripe-focus-ring inline-flex min-h-10 items-center rounded-md text-[var(--brand-text)] underline underline-offset-4" to={getAdminRouteHref('account')}>{t('account.backToAccount')}</Link>
           </>}
         </div>
       </> : <p role="status" className="text-sm text-muted-foreground">{t('account.completingHint')}</p>}

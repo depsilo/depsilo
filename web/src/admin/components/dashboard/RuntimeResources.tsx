@@ -66,7 +66,7 @@ export function CacheStorageOverview({ runtime, runtimePending }: Pick<RuntimeRe
             {loading
               ? <Skeleton className="h-[26px] w-40" />
               : <p className="flex flex-wrap items-baseline gap-1.5 tabular-nums">
-                <span className="dash-metric-value whitespace-nowrap font-semibold leading-tight text-[var(--dash-ink)]" style={{ fontSize: '20px' }}>{inventoryKnown ? formatBytes(cache.logical_bytes) : '—'}</span>
+                <span className="dash-metric-value whitespace-nowrap font-mono font-semibold leading-tight text-[var(--dash-ink)]" style={{ fontSize: '20px' }}>{inventoryKnown ? formatBytes(cache.logical_bytes) : '—'}</span>
                 {quota != null && quota > 0 && <span className="whitespace-nowrap text-[13px] text-[var(--dash-muted)]" aria-label={t('overview.cacheQuota', { value: formatBytes(quota) })}>/ {formatBytes(quota)}</span>}
               </p>}
             {ratio !== null && <div className="flex items-center gap-2">

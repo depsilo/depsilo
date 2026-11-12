@@ -253,7 +253,8 @@ export default function Dashboard() {
     <div className="dashboard-page mx-auto w-full min-w-0">
     <AdminPage
       actions={(
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
+          <div data-dashboard-status-group className="flex min-w-0 flex-wrap items-center gap-2">
           <DashboardServiceStatus
             open={showProblems}
             onOpenChange={setShowProblems}
@@ -268,7 +269,9 @@ export default function Dashboard() {
             onRefresh={refreshStatus}
           />
           <Button variant="ghost" size="sm" render={<Link to={getAdminRouteHref('attention')} />} nativeButton={false} role="link">{t('overview.allAttention')}</Button>
-          <span className="inline-flex items-center gap-1.5 text-[13px]" style={{ color: 'var(--text-soft)' }}>
+          </div>
+          <div data-dashboard-refresh-group className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 text-[12px] tabular-nums" style={{ color: 'var(--text-soft)' }}>
             <Icon name="history" size="sm" />
             {t('overview.updatedAt', { time: lastUpdatedLabel })}
           </span>
@@ -282,6 +285,7 @@ export default function Dashboard() {
             <Icon name="refresh" size="sm" />
             {t('overview.refresh')}
           </Button>
+          </div>
         </div>
       )}
     >

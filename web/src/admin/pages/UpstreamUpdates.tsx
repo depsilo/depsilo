@@ -1,4 +1,3 @@
-import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { TableContainer, Table, TableCaption, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty'
@@ -17,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import EcosystemIcon from '@/components/EcosystemIcon'
 
 import Icon from '@/components/Icon'
+import SearchField from '@/components/SearchField'
 
 import QueryErrorState from '@/components/QueryErrorState'
 import { NativeSelect } from '@/components/ui/native-select'
@@ -314,27 +314,20 @@ export default function UpstreamUpdates() {
             applyPackageFilter()
           }}
         >
-          <div
-            className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-md border border-[var(--border)] px-3 lg:max-w-[420px]"
-            style={{ background: 'var(--bg-card)' }}
-          >
-            <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
-            <Input
-              type="text"
-              aria-label={t('upstreamUpdates.searchLabel')}
-              placeholder={t('upstreamUpdates.searchPlaceholder')}
-              className={"min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]" + ' h-9 rounded-none border-0 px-0 shadow-none focus-visible:ring-0 dark:bg-transparent'}
-              style={{ color: 'var(--text)' }}
-              value={packageDraft}
-              onChange={event => setPackageDraft(event.target.value)}
-              onKeyDown={event => {
-                if (event.key === 'Escape') {
-                  setPackageDraft('')
-                  event.currentTarget.blur()
-                }
-              }}
-            />
-          </div>
+          <SearchField
+            className="lg:max-w-[420px]"
+            type="text"
+            aria-label={t('upstreamUpdates.searchLabel')}
+            placeholder={t('upstreamUpdates.searchPlaceholder')}
+            value={packageDraft}
+            onChange={event => setPackageDraft(event.target.value)}
+            onKeyDown={event => {
+              if (event.key === 'Escape') {
+                setPackageDraft('')
+                event.currentTarget.blur()
+              }
+            }}
+          />
 
           <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center">
             <NativeSelect
@@ -362,15 +355,13 @@ export default function UpstreamUpdates() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="submit" size="sm" className="min-h-10 sm:min-h-8">
+            <Button type="submit" variant="outline">
               {t('search')}
             </Button>
             {hasFilters && (
               <Button
                 type="button"
-                variant="outline"
-                size="sm"
-                className="min-h-10 sm:min-h-8"
+                variant="ghost"
                 onClick={clearFilters}
               >
                 {t('upstreamUpdates.clearFilters')}

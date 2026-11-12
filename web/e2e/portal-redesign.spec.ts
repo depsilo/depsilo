@@ -529,7 +529,7 @@ test('Portal header and page content share a left edge on wide displays', async 
   }
 })
 
-test('Portal carries the brand accent and leaves Admin on the neutral roles', async ({ page }) => {
+test('Portal and Admin share the brand accent; only the Portal tints its hover surface', async ({ page }) => {
   await setUiPreferences(page, 'light', 'en')
   await page.goto('/')
 
@@ -537,19 +537,21 @@ test('Portal carries the brand accent and leaves Admin on the neutral roles', as
     'background-color',
     'rgb(43, 95, 218)',
   )
-  expect(await page.evaluate(() => (
-    getComputedStyle(document.documentElement).getPropertyValue('--brand').trim()
-  ))).toBe('#2b5fda')
+  const tokens = () => page.evaluate(() => {
+    const style = getComputedStyle(document.documentElement)
+    return { brand: style.getPropertyValue('--brand').trim(), accent: style.getPropertyValue('--accent').trim() }
+  })
+  expect(await tokens()).toEqual({ brand: '#2b5fda', accent: '#e2ebfd' })
 
-  // The brand surface is scoped to the Portal: Admin keeps shadcn's neutral
-  // accent, and the marker must be gone as soon as the surface unmounts.
+  // Admin keeps the same Deep Blue interaction accent but neutral hovers, and
+  // the Portal surface marker must be gone as soon as the Portal unmounts.
   await page.goto('/admin/upstreams')
   await expect.poll(() => page.evaluate(() => (
     document.documentElement.getAttribute('data-surface')
   ))).toBeNull()
-  expect(await page.evaluate(() => (
-    getComputedStyle(document.documentElement).getPropertyValue('--brand').trim()
-  ))).not.toBe('#2b5fda')
+  const admin = await tokens()
+  expect(admin.brand).toBe('#2b5fda')
+  expect(admin.accent).not.toBe('#e2ebfd')
 })
 
 test('Portal prompt dialog keeps its title in view and never scrolls sideways', async ({ page }) => {

@@ -272,7 +272,7 @@ function ConnectionWorkspace({ connection, restored, managerName, selectors, onR
           <div className="connection-result-actions">
             {save.isError && success && <Button variant="outline" disabled={save.isPending || leaving} onClick={() => complete('completed')}>{t('common.retry')}</Button>}
             {verification.isError && <Button onClick={() => { void verification.refetch() }} disabled={verification.isFetching}>{t('onboarding.retryVerification')}</Button>}
-            <Button variant={success ? "default" : 'ghost'} className={success ? 'connection-primary' : 'connection-return-unverified'} disabled={leaving} onClick={() => { void leave() }}>{t(success ? 'onboarding.viewOverview' : 'onboarding.returnUnverified')}<Icon name="arrow_forward" size="sm" /></Button>
+            <Button variant={success ? "default" : 'ghost'} className={success ? undefined : 'connection-return-unverified'} disabled={leaving} onClick={() => { void leave() }}>{t(success ? 'onboarding.viewOverview' : 'onboarding.returnUnverified')}<Icon name="arrow_forward" size="sm" /></Button>
             <Button variant="ghost" disabled={leaving} onClick={onRestart}>{t('onboarding.restartCheck')}</Button>
             {(session?.firstRequest || success) && <Button variant="ghost" disabled={leaving} onClick={() => { void leave('accessLogs') }}>{t('onboarding.viewAccessLogs')}</Button>}
           </div>

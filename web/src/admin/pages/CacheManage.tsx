@@ -1,4 +1,3 @@
-import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { TableContainer, Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
@@ -16,6 +15,7 @@ import { Meter, MeterTrack } from '@/components/ui/meter'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Textarea } from '@/components/ui/textarea'
 import Icon from '@/components/Icon'
+import SearchField from '@/components/SearchField'
 import EcosystemIcon from '@/components/EcosystemIcon'
 
 import QueryErrorState from '@/components/QueryErrorState'
@@ -199,17 +199,12 @@ export default function CacheManage() {
       </section>
       <DownloadTransfers />
       <form onSubmit={event => { event.preventDefault(); setAppliedSearch(search.trim()); setPage(1) }} data-admin-filters className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-sm px-3 py-1.5" style={{ border: '1px solid var(--border)' }}>
-          <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
-            <Input
-              aria-label={t('cache.searchLabel')}
-              className={"min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]" + ' h-9 rounded-none border-0 px-0 shadow-none focus-visible:ring-0 dark:bg-transparent'}
-              style={{ color: 'var(--text)' }}
-              placeholder={t('cache.searchPlaceholder')}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-        </div>
+        <SearchField
+          aria-label={t('cache.searchLabel')}
+          placeholder={t('cache.searchPlaceholder')}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
           <NativeSelect className="min-h-10 sm:w-auto" aria-label={t('cache.ecosystemFilter')} value={adapterType} onChange={(e) => { setAdapterType(e.target.value); setPage(1) }}>
             <option value="all">{t('all')}</option>
             {operatorEcosystems.map(ecosystem => <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>)}

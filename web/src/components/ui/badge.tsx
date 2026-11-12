@@ -20,7 +20,7 @@ const badgeVariants = cva(
           'border-transparent bg-[var(--danger-fill)] text-[var(--danger-text)]',
         pro: 'border-border bg-background text-foreground',
         outline: 'border-border text-foreground',
-        link: 'border-transparent text-primary underline-offset-4 hover:underline',
+        link: 'border-transparent text-[var(--brand-text)] underline-offset-4 hover:underline',
       },
     },
     defaultVariants: {

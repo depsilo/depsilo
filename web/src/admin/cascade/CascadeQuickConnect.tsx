@@ -25,7 +25,7 @@ export default function CascadeQuickConnect({ info, config }: CascadeQuickConnec
       </TabsList>
       <TabsContent value="client" className="space-y-3 pt-3 text-sm">
         <p className="leading-6 text-muted-foreground">{t('cascade.quick.clientGuide')}</p>
-        <Link to={getAdminRouteHref('connect')} className="inline-flex min-h-10 items-center text-primary underline underline-offset-4">{t('cascade.quick.viewAllClients')}</Link>
+        <Link to={getAdminRouteHref('connect')} className="inline-flex min-h-10 items-center text-[var(--brand-text)] underline underline-offset-4">{t('cascade.quick.viewAllClients')}</Link>
       </TabsContent>
       <TabsContent value="parent" className="space-y-3 pt-3 text-sm">
         {!info.enabled && <Alert variant="info"><AlertDescription>{t('cascade.quick.enableFirst')}</AlertDescription></Alert>}
@@ -36,7 +36,7 @@ export default function CascadeQuickConnect({ info, config }: CascadeQuickConnec
       <TabsContent value="child" className="space-y-3 pt-3 text-sm">
         <ol className="list-decimal space-y-3 pl-5 leading-6 text-muted-foreground"><li>{t('cascade.quick.addParentStep')}</li><li>{t('cascade.quick.restartStep')}</li><li>{t('cascade.quick.bindStep')}</li></ol>
         {config?.pending_restart && <Alert variant="warning"><AlertDescription>{t('cascade.pendingRestart')}</AlertDescription></Alert>}
-        <Link to={getAdminRouteHref('upstreams')} className="inline-flex min-h-10 items-center text-primary underline underline-offset-4">{t('cascade.manageUpstreams')}</Link>
+        <Link to={getAdminRouteHref('upstreams')} className="inline-flex min-h-10 items-center text-[var(--brand-text)] underline underline-offset-4">{t('cascade.manageUpstreams')}</Link>
       </TabsContent>
     </Tabs>
     <p className="mt-4 text-xs leading-5 text-muted-foreground">{t('cascade.quick.scopeHint')}</p>
