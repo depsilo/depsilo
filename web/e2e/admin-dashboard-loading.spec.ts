@@ -1,3 +1,5 @@
+import AxeBuilder from '@axe-core/playwright'
+
 import { adminApiDefaults, expect, mockAdminApi, setUiPreferences, test } from './fixtures/admin-api'
 
 // First load must hold its shape: the skeletons match the settled regions, and
@@ -46,6 +48,10 @@ test('Overview first-load skeletons cover the settled layout', async ({ page }) 
   // Loading: the trend card already occupies the chart's footprint.
   const trendSkeleton = page.locator('[data-dashboard-trends-column] [aria-busy="true"]')
   await expect(trendSkeleton).toBeVisible()
+
+  // Loading: every first load passes through this state, and an audit of any
+  // Admin page can sample it, so it meets the same contract as settled pages.
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations).toEqual([])
 
   // Settled: the same regions render real content at a comparable height.
   release()

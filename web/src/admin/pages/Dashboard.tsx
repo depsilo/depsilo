@@ -373,7 +373,7 @@ export default function Dashboard() {
           <div className="dashboard-lower-grid flex min-w-0 flex-col gap-4">
             <div data-dashboard-trends-column className="flex min-w-0">
               {trendsLoading ? (
-                <Card className="w-full p-5" aria-busy="true" aria-label={t('overview.loadingStatistics')}>
+                <Card className="w-full p-5" role="status" aria-busy="true" aria-label={t('overview.loadingStatistics')}>
                   <Skeleton aria-hidden className="h-[272px] rounded-md" style={{ background: 'var(--dash-soft)' }} />
                 </Card>
               ) : trendsInitialError ? (
