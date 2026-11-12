@@ -2583,7 +2583,7 @@ const zh = {
       unknown: "尚无观测",
       averageLatency: "平均响应 {{value}}",
       historyWindow: "近 24 小时 · 每源最多显示 {{count}} 条观测",
-      historyLegend: "历史条：绿色低于 150 ms，黄色为 150 ms 及以上，红色表示失败。健康标签依据运行状态，平均响应达到 1 秒时标为性能下降；两者口径不同。",
+      historyLegend: "历史条：柱高表示单次延迟；绿色表示正常响应，黄色表示单次响应达到 1 秒（与“性能下降”使用同一标准），红色表示失败。健康标签依据平均响应。",
       noObservations: "暂无观测记录",
       title: '实时监控',
       hitRate7d: '近 7 天命中率',

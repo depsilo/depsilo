@@ -12,11 +12,13 @@ interface UpstreamStatusInput {
 // and mirrors from another region answer in hundreds of milliseconds as a
 // matter of geography. The backend keeps the same value in
 // internal/api/public/stats.go.
+export const DEGRADED_LATENCY_MS = 1000
+
 export function upstreamStatus(upstream: UpstreamStatusInput): MirrorStatus {
   if (!upstream.healthy) return 'failed'
   // New runtimes start eligible for routing, but that is not yet evidence of
   // health. Missing metadata preserves compatibility with the public API.
   if (upstream.has_observations === false) return 'unknown'
-  if (upstream.avg_latency_ms >= 1000) return 'degraded'
+  if (upstream.avg_latency_ms >= DEGRADED_LATENCY_MS) return 'degraded'
   return 'healthy'
 }

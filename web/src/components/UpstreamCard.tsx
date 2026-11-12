@@ -13,7 +13,7 @@ import EcosystemIcon from '@/components/EcosystemIcon'
 import StatusDot from '@/components/StatusDot'
 import { isEcosystemType } from '@/lib/ecosystemTypes'
 import type { UpstreamFailure, UpstreamProxySource } from '@/lib/adminApi.types'
-import { upstreamStatus } from '@/lib/upstreamStatus'
+import { DEGRADED_LATENCY_MS, upstreamStatus } from '@/lib/upstreamStatus'
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -53,11 +53,12 @@ export interface UpstreamItem {
 //
 // Red is reserved for DOWN (-1): a slow-but-alive upstream must never
 // paint the panel in danger color — a wall of red on a page whose
-// header says "0 failed" reads as a contradiction. Slow is a single
-// amber tier. This floor is the per-probe tier for a single round trip,
-// which is a narrower question than the rolling-average bar that decides
-// an upstream's status label (1 s — see lib/upstreamStatus.ts): a mirror
-// can be labelled healthy while individual probes still run amber.
+// header says "0 failed" reads as a contradiction. Amber follows the same
+// rule: a probe turns amber only at the latency that labels an upstream
+// "degraded" (lib/upstreamStatus.ts). A lower per-probe floor painted every
+// cross-region mirror amber under a "healthy" label, because those answer
+// in hundreds of milliseconds as a matter of geography. Height still
+// separates a 20 ms mirror from a 300 ms one within the green tier.
 const HEARTBEAT_LIMIT = 44
 const BEAT_WIDTH = 6
 const BEAT_GAP = 2
@@ -65,7 +66,8 @@ const HEARTBEAT_WIDTH = HEARTBEAT_LIMIT * BEAT_WIDTH + (HEARTBEAT_LIMIT - 1) * B
 const BEAT_AREA = 24
 const BEAT_MIN = 4
 const BEAT_MAX = 18
-const BEAT_FLOOR_MS = 150
+const BEAT_SLOW_MS = DEGRADED_LATENCY_MS
+const BEAT_SCALE_FLOOR_MS = 150
 
 function beatHeight(latency: number, scale: number): number {
   if (latency < 0) return BEAT_AREA
@@ -74,7 +76,7 @@ function beatHeight(latency: number, scale: number): number {
 
 function beatColor(latency: number): string {
   if (latency < 0) return 'color-mix(in oklab, var(--danger) 78%, var(--bg-card))'
-  if (latency < BEAT_FLOOR_MS) return 'color-mix(in oklab, var(--ok) 82%, var(--bg-card))'
+  if (latency < BEAT_SLOW_MS) return 'color-mix(in oklab, var(--ok) 82%, var(--bg-card))'
   return 'color-mix(in oklab, var(--warn) 76%, var(--bg-card))'
 }
 
@@ -82,7 +84,7 @@ function beatColor(latency: number): string {
 function beatState(latency: number | null): 'none' | 'ok' | 'slow' | 'down' {
   if (latency === null) return 'none'
   if (latency < 0) return 'down'
-  return latency < BEAT_FLOOR_MS ? 'ok' : 'slow'
+  return latency < BEAT_SLOW_MS ? 'ok' : 'slow'
 }
 
 function beatLabel(latency: number | null, noDataLabel: string, failedLabel: string): string {
@@ -137,12 +139,12 @@ function HeartbeatBar({ upstream, showEmptyLabel = false }: { upstream: Upstream
   const resolvedLabels = normalized.labels
   // One scale per row: the strip answers "how has this upstream behaved",
   // while the average printed beside it answers "how does it compare".
-  // Anchoring the denominator at the 150ms tier boundary keeps an all-fast
-  // row from being stretched into a dramatic-looking chart.
+  // Anchoring the denominator at 150ms keeps an all-fast row from being
+  // stretched into a dramatic-looking chart.
   const scale = useMemo(() => {
     const measured = (upstream.beats ?? [])
       .filter((beat): beat is number => beat !== null && beat >= 0)
-    return Math.max(BEAT_FLOOR_MS, ...measured)
+    return Math.max(BEAT_SCALE_FLOOR_MS, ...measured)
   }, [upstream.beats])
   const emptySlots = Math.max(0, HEARTBEAT_LIMIT - beats.length)
   const displayBeats = [...Array(emptySlots).fill(null), ...beats]

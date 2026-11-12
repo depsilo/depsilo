@@ -2576,7 +2576,7 @@ const en = {
       unknown: "Not yet observed",
       averageLatency: "Avg response {{value}}",
       historyWindow: "Last 24h · Up to {{count}} observations per source",
-      historyLegend: "History: green below 150 ms, amber at 150 ms or above, red for failure. Health labels reflect runtime state; a 1 second average marks degradation. These measure different things.",
+      historyLegend: "History: bar height shows each probe's latency; green is a normal answer, amber is 1 second or more (the same bar that marks degradation), red is a failure. Health labels use the average.",
       noObservations: "No observations yet",
       title: 'Live monitoring',
       hitRate7d: 'Hit rate (7d)',
