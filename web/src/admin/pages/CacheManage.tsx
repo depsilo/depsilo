@@ -12,6 +12,7 @@ import { formatBytes, formatTime } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Meter, MeterTrack } from '@/components/ui/meter'
+import { Card } from '@/components/ui/card'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Textarea } from '@/components/ui/textarea'
 import Icon from '@/components/Icon'
@@ -36,6 +37,7 @@ import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { CacheCleanupResponse, CacheQuery } from '@/lib/adminApi.types'
 
 const WARMUP_ECOSYSTEMS = ['pypi', 'npm']
+const ecosystemLabel = (type: string) => operatorEcosystems.find(ecosystem => ecosystem.id === type)?.label ?? type
 const WARMUP_STATUS_KEYS: Record<string, string> = {
   queued: 'cache.warmupStatus.queued', running: 'cache.warmupStatus.running',
   cancelling: 'cache.warmupStatus.cancelling', cancelled: 'cache.warmupStatus.cancelled',
@@ -190,11 +192,14 @@ export default function CacheManage() {
           : distributionQuery.isError && !distData ? <QueryErrorState message={distributionErrorMessage} onRetry={() => distributionQuery.refetch()} />
           : distribution && <>
             {distributionQuery.isRefetchError && <StaleDataNotice onRefresh={() => distributionQuery.refetch()} />}
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-              <div><p className="text-sm text-muted-foreground">{t('cache.storageOverview')}</p><p className="mt-1 font-mono text-2xl font-semibold tabular-nums">{formatBytes(distribution.total_size)}{distribution.max_size > 0 && <span className="ml-2 text-sm font-normal text-muted-foreground">/ {formatBytes(distribution.max_size)}</span>}</p></div>
-              {distribution.max_size > 0 && <Meter className="w-44" value={distribution.total_size} max={distribution.max_size} aria-label={t('cache.storageOverview')} aria-valuetext={`${formatBytes(distribution.total_size)} / ${formatBytes(distribution.max_size)}`}><MeterTrack className="flex h-2">{distribution.by_type.map(bt => <div key={bt.type} className="h-full" style={{ width: `${bt.size / distribution.max_size * 100}%`, background: ECO_COLORS[bt.type] || 'var(--brand)' }} />)}</MeterTrack></Meter>}
-              <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">{distribution.by_type.map(bt => <span key={bt.type} className="inline-flex items-center gap-2"><span className="size-2 rounded-full" style={{background:ECO_COLORS[bt.type] || 'var(--brand)'}} />{bt.type.toUpperCase()} <span className="font-mono">{formatBytes(bt.size)}</span><span>{t('cache.objectCount', {count:bt.file_count})}</span></span>)}</div>
-            </div>
+            <Card data-cache-storage className="gap-4 px-5 py-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+                <h2 className="text-[13px] font-semibold">{t('cache.storageOverview')}</h2>
+                <p className="font-mono text-2xl font-semibold tabular-nums">{formatBytes(distribution.total_size)}{distribution.max_size > 0 && <span className="ml-2 text-sm font-normal text-muted-foreground">/ {formatBytes(distribution.max_size)}</span>}</p>
+              </div>
+              {distribution.max_size > 0 && <Meter className="w-full" value={distribution.total_size} max={distribution.max_size} aria-label={t('cache.storageOverview')} aria-valuetext={`${formatBytes(distribution.total_size)} / ${formatBytes(distribution.max_size)}`}><MeterTrack className="flex h-2 gap-px">{distribution.by_type.map(bt => <div key={bt.type} className="h-full first:rounded-l-full" style={{ width: `${bt.size / distribution.max_size * 100}%`, background: ECO_COLORS[bt.type] || 'var(--brand)' }} />)}</MeterTrack></Meter>}
+              {distribution.by_type.length > 0 && <ul className="grid gap-x-6 gap-y-2 text-[13px] sm:grid-cols-2 xl:grid-cols-4">{distribution.by_type.map(bt => <li key={bt.type} className="flex min-w-0 items-baseline gap-2"><span aria-hidden className="size-2 shrink-0 self-center rounded-full" style={{ background: ECO_COLORS[bt.type] || 'var(--brand)' }} /><span className="font-medium">{ecosystemLabel(bt.type)}</span><span className="font-mono tabular-nums">{formatBytes(bt.size)}</span><span className="truncate text-muted-foreground">{t('cache.objectCount', { count: bt.file_count })}</span></li>)}</ul>}
+            </Card>
           </>}
       </section>
       <DownloadTransfers />
@@ -271,7 +276,7 @@ export default function CacheManage() {
                           size="icon"
                           data-icon-button
                           aria-label={t('cache.deleteNamed', { key: row.key })}
-                          style={{ color: 'var(--danger-text)' }}
+                          className="text-muted-foreground hover:text-[var(--danger-text)] focus-visible:text-[var(--danger-text)]"
                         />
                       }>
                         <Icon name={"delete"} size="sm" />

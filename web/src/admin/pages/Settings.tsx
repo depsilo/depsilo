@@ -297,7 +297,7 @@ export default function Settings() {
   ).format(paths.map(fieldLabel))
   const sourceLabel = (path: SettingPath) => t(`settings.source${data.sources[path][0].toUpperCase()}${data.sources[path].slice(1)}`)
   const fieldHint = (path: SettingPath, extra?: string) => {
-    const parts = [sourceLabel(path)]
+    const parts = [t('settings.sourceOf', { source: sourceLabel(path) })]
     const variable = data.overrides[path]
     if (variable) parts.push(t('settings.envOverride', { variable }))
     const configuredValue = valueAt(data.configured, path)
@@ -321,7 +321,7 @@ export default function Settings() {
     </section>
   )
   const fields = (children: ReactNode) => (
-    <div className="divide-y divide-[var(--border-soft)] [&>div]:grid [&>div]:gap-x-6 [&>div]:py-5 [&>div:first-child]:pt-0 [&_label]:mb-2 sm:[&>div]:grid-cols-[160px_minmax(0,1fr)] sm:[&_label]:mb-0 sm:[&_label]:pt-2.5 sm:[&_p]:col-start-2">
+    <div className="divide-y divide-[var(--border-soft)] [&_[data-slot=field-description]]:mt-1.5 [&_[data-slot=field-description]]:text-[12px] [&>div]:grid [&>div]:gap-x-6 [&>div]:py-5 [&>div:first-child]:pt-0 [&_label]:mb-2 sm:[&>div]:grid-cols-[160px_minmax(0,1fr)] sm:[&_label]:mb-0 sm:[&_label]:pt-2.5 sm:[&_p]:col-start-2">
       {children}
     </div>
   )

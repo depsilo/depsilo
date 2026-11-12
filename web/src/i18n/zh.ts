@@ -2184,6 +2184,7 @@ const zh = {
       sourceDefault: '默认值',
       sourceFile: '配置文件',
       sourceEnv: '环境变量',
+      sourceOf: '来源：{{source}}',
       envOverride: '由 {{variable}} 覆盖',
       pendingRestartTitle: '等待重启',
       pendingRestartField: '等待重启的配置值：{{fields}}',

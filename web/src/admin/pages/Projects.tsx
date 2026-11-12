@@ -637,9 +637,15 @@ export default function Projects() {
     <div className="space-y-6">
       {capabilitiesNotice}
       {data && capabilities && capabilities.project_limit !== null && (
-        <div className="space-y-1 text-sm text-muted-foreground" data-project-capacity>
-          <p>{t('projects.freeAllowance', { limit: capabilities.project_limit, used: data.data.total })}</p>
-          {!canCreate && <p>{t('projects.moreRequiresPro')}</p>}
+        <div className="flex w-fit max-w-full flex-col gap-2 rounded-lg border border-[var(--border)] bg-card px-4 py-3 text-sm" data-project-capacity>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <p>{t('projects.freeAllowance', { limit: capabilities.project_limit, used: data.data.total })}</p>
+            {/* The sentence beside it already states usage; the bar is a glance aid only. */}
+            <div aria-hidden className="h-1.5 w-28 overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, data.data.total / Math.max(capabilities.project_limit, 1) * 100)}%` }} />
+            </div>
+          </div>
+          {!canCreate && <p className="text-muted-foreground">{t('projects.moreRequiresPro')}</p>}
         </div>
       )}
       {projects.length === 0 ? (

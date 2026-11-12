@@ -2177,6 +2177,7 @@ const en = {
       sourceDefault: 'Default value',
       sourceFile: 'Configuration file',
       sourceEnv: 'Environment',
+      sourceOf: 'Source: {{source}}',
       envOverride: 'Overridden by {{variable}}',
       pendingRestartTitle: 'Restart pending',
       pendingRestartField: 'Configured values waiting for a restart: {{fields}}',

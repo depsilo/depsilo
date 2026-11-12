@@ -16,6 +16,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { Switch } from '@/components/ui/switch'
 import Icon from '@/components/Icon'
 import { Badge } from '@/components/ui/badge'
+import { Card } from '@/components/ui/card'
 import { Meter, MeterIndicator, MeterTrack } from '@/components/ui/meter'
 import Metric from '@/components/Metric'
 import SectionHeader from '@/components/SectionHeader'
@@ -45,6 +46,22 @@ const SEVERITY_BADGE_MAP: Record<string, 'destructive' | 'warning' | 'default' |
   high: 'warning',
   medium: 'default',
   low: 'success',
+}
+
+const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'unknown']
+const severityRank = (severity: string) => {
+  const index = SEVERITY_ORDER.indexOf(severity)
+  return index === -1 ? SEVERITY_ORDER.length : index
+}
+// A single red-to-neutral ramp: severity is ordinal, so colour intensity
+// falls with it. Low and unknown stay neutral rather than green, which
+// would read as "safe".
+const SEVERITY_COLOR: Record<string, string> = {
+  critical: 'var(--danger)',
+  high: 'color-mix(in oklab, var(--danger) 45%, var(--warn))',
+  medium: 'var(--warn)',
+  low: 'var(--text-soft)',
+  unknown: 'var(--border-strong)',
 }
 
 const POLICY_SAVE_CONCURRENCY = 4
@@ -156,7 +173,11 @@ function OverviewTab() {
 
   const dashboard = data?.data
   const scanInProgress = scanMutation.isPending || dashboard?.scan_in_progress === true
-  const severityDist = Object.entries(dashboard?.by_severity ?? {}).filter(([, count]) => count > 0).map(([severity, count]) => ({ severity, count }))
+  // Most severe first; any severity the API adds later sorts after the known ones.
+  const severityDist = Object.entries(dashboard?.by_severity ?? {})
+    .filter(([, count]) => count > 0)
+    .map(([severity, count]) => ({ severity, count }))
+    .sort((a, b) => severityRank(a.severity) - severityRank(b.severity))
   const maxCount = Math.max(...severityDist.map((s) => s.count), 1)
 
   if (query.isPending) {
@@ -184,72 +205,65 @@ function OverviewTab() {
   return (
     <div className="space-y-6">
       {data && query.isRefetchError && <StaleDataNotice refreshing={query.isFetching} onRefresh={() => query.refetch()} />}
-      {/* ── Metrics row ───────────────────────────── */}
-      <div className="grid grid-cols-2 gap-6 py-2 lg:grid-cols-3 lg:gap-8">
-        <Link className="stripe-focus-ring rounded-md p-3 no-underline hover:bg-muted" to={`${getAdminRouteHref('security')}?tab=vulnerabilities`}><Metric label={t('security.totalVulnerabilities')} value={String(dashboard?.total_vulnerabilities ?? 0)} /></Link>
-        <div className="p-3"><Metric label={t('security.affectedPackages')} value={String(dashboard?.affected_packages ?? 0)} /></div>
-        <Link className="stripe-focus-ring rounded-md p-3 no-underline hover:bg-muted" to={`${getAdminRouteHref('security')}?tab=vulnerabilities&severity=critical`}><Metric label={t('security.criticalCount')} value={String(dashboard?.by_severity.critical ?? 0)} /></Link>
-
-      </div>
-
-      {/* ── Scan status + action ───────────────────── */}
-      <section>
-        <SectionHeader
-          title={t('security.scanStatus')}
-          action={canWrite ?
+      {/* ── Scan summary: headline counts and the scan action share one card ── */}
+      <Card data-security-summary className="gap-0 p-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
+            <h2 className="text-[13px] font-semibold text-foreground">{t('security.scanStatus')}</h2>
+            <span className="text-muted-foreground">
+              {t('security.lastScan')}: {dashboard?.last_scan_at ? formatTime(dashboard.last_scan_at, 'relative') : t('security.never')}
+            </span>
+          </div>
+          {canWrite && (
             <Button
+              variant="outline"
               onClick={() => scanMutation.mutate()}
               aria-busy={scanInProgress || undefined}
               disabled={scanInProgress}
-              size="sm"
             >
               <Icon name="radar" size="sm" />
               {scanInProgress ? t('security.scanning') : t('security.scanNow')}
             </Button>
-          : undefined}
-        />
-        {scanMutation.isSuccess && <div className="mb-3"><Alert variant={"success"}><AlertDescription>{t('security.scanStarted')}</AlertDescription></Alert></div>}
-        {scanMutation.isError && <div className="mb-3"><Alert variant={"destructive"}><AlertDescription>{getApiError(scanMutation.error).status === 409 ? t('security.scanConflict') : getApiError(scanMutation.error).message}</AlertDescription></Alert></div>}
-        <p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
-          {t('security.lastScan')}: {dashboard?.last_scan_at ? formatTime(dashboard.last_scan_at, 'relative') : t('security.never')}
-        </p>
-      </section>
-
-      <p className="text-[13px] leading-6 text-muted-foreground">{t('security.advisoryScope')}</p>
-      {/* ── Severity distribution ──────────────────── */}
-      <section>
-        <SectionHeader title={t('security.severityDistribution')} />
-        {severityDist.length > 0 ? (
-          <div className="space-y-3">
-            {severityDist.map((item) => {
-              const variant = SEVERITY_BADGE_MAP[item.severity] || 'default'
-              const barColors: Record<string, string> = {
-                critical: 'var(--danger)',
-                high: 'var(--warn)',
-                medium: 'var(--text-soft)',
-                low: 'var(--ok)',
-              }
-              return (
-                <div key={item.severity} className="flex items-center gap-3">
-                  <div className="w-20 shrink-0">
-                    <Badge variant={variant}>{item.severity.toUpperCase()}</Badge>
-                  </div>
-                  <Meter className="flex-1" value={item.count} max={maxCount} format={{ style: 'decimal' }} aria-label={`${t('security.totalVulnerabilities')} · ${item.severity}`}>
-                    <MeterTrack className="h-2">
-                      <MeterIndicator style={{ background: barColors[item.severity] || 'var(--brand)', minWidth: item.count > 0 ? '4px' : '0' }} />
-                    </MeterTrack>
-                  </Meter>
-                  <span className="font-mono text-[12px] tabular-nums w-8 text-right shrink-0" style={{ color: 'var(--text)' }}>
-                    {item.count}
-                  </span>
-                </div>
-              )
-            })}
+          )}
+        </div>
+        {(scanMutation.isSuccess || scanMutation.isError) && (
+          <div className="px-5 pt-3">
+            {scanMutation.isSuccess && <Alert variant="success"><AlertDescription>{t('security.scanStarted')}</AlertDescription></Alert>}
+            {scanMutation.isError && <Alert variant="destructive"><AlertDescription>{getApiError(scanMutation.error).status === 409 ? t('security.scanConflict') : getApiError(scanMutation.error).message}</AlertDescription></Alert>}
           </div>
+        )}
+        <div className="grid grid-cols-1 divide-y divide-[var(--border)] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <Link className="stripe-focus-ring px-5 py-4 no-underline hover:bg-muted" to={`${getAdminRouteHref('security')}?tab=vulnerabilities`}><Metric align="start" size={32} label={t('security.totalVulnerabilities')} value={String(dashboard?.total_vulnerabilities ?? 0)} /></Link>
+          <div className="px-5 py-4"><Metric align="start" size={32} label={t('security.affectedPackages')} value={String(dashboard?.affected_packages ?? 0)} /></div>
+          <Link className="stripe-focus-ring px-5 py-4 no-underline hover:bg-muted" to={`${getAdminRouteHref('security')}?tab=vulnerabilities&severity=critical`}><Metric align="start" size={32} label={t('security.criticalCount')} value={String(dashboard?.by_severity.critical ?? 0)} /></Link>
+        </div>
+        <p className="border-t border-[var(--border)] px-5 py-3 text-[12px] leading-5 text-muted-foreground">{t('security.advisoryScope')}</p>
+      </Card>
+
+      {/* ── Severity distribution ──────────────────── */}
+      <Card data-security-severity className="gap-0 p-0">
+        <h2 className="border-b border-[var(--border)] px-5 py-3 text-[13px] font-semibold">{t('security.severityDistribution')}</h2>
+        {severityDist.length > 0 ? (
+          <ul className="space-y-3 px-5 py-4">
+            {severityDist.map((item) => (
+              <li key={item.severity} data-severity={item.severity} className="grid grid-cols-[5.5rem_minmax(0,1fr)_3rem] items-center gap-3">
+                <span className="flex items-center gap-2 text-[13px]">
+                  <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: SEVERITY_COLOR[item.severity] ?? SEVERITY_COLOR.unknown }} />
+                  {t(`security.${item.severity}`, { defaultValue: item.severity })}
+                </span>
+                <Meter value={item.count} max={maxCount} format={{ style: 'decimal' }} aria-label={`${t('security.totalVulnerabilities')} · ${t(`security.${item.severity}`, { defaultValue: item.severity })}`}>
+                  <MeterTrack className="h-2">
+                    <MeterIndicator style={{ background: SEVERITY_COLOR[item.severity] ?? SEVERITY_COLOR.unknown, minWidth: item.count > 0 ? '4px' : '0' }} />
+                  </MeterTrack>
+                </Meter>
+                <span className="text-right font-mono text-[13px] tabular-nums">{item.count}</span>
+              </li>
+            ))}
+          </ul>
         ) : (
           <Empty style={{ minHeight: 140 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"verified"} size="sm" /></EmptyMedia><EmptyTitle>{t('security.noVulnerabilities')}</EmptyTitle></EmptyHeader></Empty>
         )}
-      </section>
+      </Card>
       <CapabilityOverview />
     </div>
   )

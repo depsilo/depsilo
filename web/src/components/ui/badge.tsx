@@ -11,7 +11,7 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default: 'border-transparent bg-primary text-primary-foreground',
+        default: 'border-border bg-secondary text-secondary-foreground',
         neutral: 'border-transparent bg-muted text-muted-foreground',
         secondary: 'border-transparent bg-secondary text-secondary-foreground',
         success: 'border-transparent bg-[var(--ok-fill)] text-[var(--ok-text)]',
