@@ -46,6 +46,8 @@ func newOverviewTestHandler(t *testing.T, useRollup bool) (*DashboardHandler, *g
 		&db.AccessLogHourly{},
 		&db.AccessLogDaily{},
 		&db.AccessLogPackageDaily{},
+		&db.AccessLogArchive{},
+		&db.AccessLogPackageArchive{},
 		&db.ControlPlaneState{},
 	); err != nil {
 		t.Fatalf("migrate overview db: %v", err)

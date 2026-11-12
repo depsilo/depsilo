@@ -64,19 +64,45 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 	// same request set: hit, miss, and legacy pre-diagnostics rows.
 	windowSpec := normalizeWindowRange(c.Query("range"))
 	windowFrom := now.Add(-windowSpec.duration)
-	aggregateWindow := h.aggWindow
-	if windowSpec.rollup && h.useRollup {
-		aggregateWindow = h.aggWindowHourly
-	}
-	windowAgg, err := aggregateWindow(ctx, windowFrom, now)
-	if err != nil {
-		dashboardDatabaseError(c, err)
-		return
-	}
-	prevWindowAgg, err := aggregateWindow(ctx, windowFrom.Add(-windowSpec.duration), windowFrom)
-	if err != nil {
-		dashboardDatabaseError(c, err)
-		return
+	var windowAgg, prevWindowAgg aggSnapshot
+	archived := false
+	if windowSpec.key == allTimeKey {
+		// All time has no previous period; the range start is where coverage
+		// begins, or now when nothing has been recorded.
+		start, ok, startErr := h.allTimeStart(ctx)
+		if startErr != nil {
+			dashboardDatabaseError(c, startErr)
+			return
+		}
+		windowFrom = now
+		if ok && start.Before(now) {
+			windowFrom = start
+		}
+		windowAgg, err = h.aggAllTime(ctx, now)
+		if err != nil {
+			dashboardDatabaseError(c, err)
+			return
+		}
+		archived, err = h.hasArchive(ctx)
+		if err != nil {
+			dashboardDatabaseError(c, err)
+			return
+		}
+	} else {
+		aggregateWindow := h.aggWindow
+		if windowSpec.rollup && h.useRollup {
+			aggregateWindow = h.aggWindowHourly
+		}
+		windowAgg, err = aggregateWindow(ctx, windowFrom, now)
+		if err != nil {
+			dashboardDatabaseError(c, err)
+			return
+		}
+		prevWindowAgg, err = aggregateWindow(ctx, windowFrom.Add(-windowSpec.duration), windowFrom)
+		if err != nil {
+			dashboardDatabaseError(c, err)
+			return
+		}
 	}
 	coverageStart, coverageMeasured, err := h.originCoverageStart(ctx)
 	if err != nil {
@@ -201,15 +227,24 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 		})
 	}
 
+	// Rollup statistics are hour-grained, so for all time a window that starts
+	// within the hour metering began still counts as fully metered.
+	coverageCompare := windowFrom
+	if windowSpec.key == allTimeKey && h.useRollup {
+		coverageCompare = windowFrom.Truncate(time.Hour).Add(time.Hour - time.Nanosecond)
+	}
+	rangePayload := gin.H{
+		"key":   windowSpec.key,
+		"start": windowFrom.UTC().Format(time.RFC3339),
+		"end":   now.Format(time.RFC3339),
+	}
+	if windowSpec.key == allTimeKey {
+		rangePayload["archived"] = archived
+	}
 	response := gin.H{
-		"usage": usage,
-		"range": gin.H{
-			"key":   windowSpec.key,
-			"start": windowFrom.UTC().Format(time.RFC3339),
-			"end":   now.Format(time.RFC3339),
-		},
+		"usage":  usage,
+		"range":  rangePayload,
 		"window": windowPayload(windowAgg),
-		"prev":   windowPayload(prevWindowAgg),
 		"origin_coverage": gin.H{
 			"measured": coverageMeasured,
 			"since": func() any {
@@ -218,7 +253,7 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 				}
 				return coverageStart.Format(time.RFC3339)
 			}(),
-			"window_complete": coverageMeasured && !windowFrom.Before(coverageStart),
+			"window_complete": coverageMeasured && !coverageCompare.Before(coverageStart),
 		},
 		"last_24h": gin.H{
 			"total_requests": totalRequests,
@@ -236,6 +271,9 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 		"daily_stats":  dailyStats,
 		"upstreams":    upstreams,
 		"top_packages": topPackages,
+	}
+	if windowSpec.key != allTimeKey {
+		response["prev"] = windowPayload(prevWindowAgg)
 	}
 	if h.maxSizeGB > 0 {
 		var totalSize int64
@@ -368,6 +406,8 @@ var windowRanges = map[string]windowRange{
 	"24h": {key: "24h", duration: 24 * time.Hour},
 	"7d":  {key: "7d", duration: 7 * 24 * time.Hour, rollup: true},
 	"30d": {key: "30d", duration: 30 * 24 * time.Hour, rollup: true},
+	// Bounded by coverage, not a duration; see allTimeKey.
+	allTimeKey: {key: allTimeKey, rollup: true},
 }
 
 func normalizeWindowRange(raw string) windowRange {
@@ -454,7 +494,7 @@ var sevenDayHourlyFallbackSpec = trendSpec{buckets: 168, interval: time.Hour}
 func (h *DashboardHandler) GetTrends(c *gin.Context) {
 	rangeParam := c.DefaultQuery("range", "1h")
 	spec, ok := trendSpecs[rangeParam]
-	if !ok {
+	if !ok && rangeParam != allTimeKey {
 		rangeParam = "7d"
 		spec = trendSpecs[rangeParam]
 	}
@@ -465,7 +505,9 @@ func (h *DashboardHandler) GetTrends(c *gin.Context) {
 		points []trendPoint
 		err    error
 	)
-	if !h.useRollup {
+	if rangeParam == allTimeKey {
+		points, err = h.trendsAllTime(ctx, now)
+	} else if !h.useRollup {
 		points, err = h.trendsRaw(ctx, spec, now)
 	} else {
 		switch rangeParam {
@@ -572,7 +614,10 @@ type trendWindow struct {
 
 func makeTrendWindow(now time.Time, spec trendSpec) trendWindow {
 	now = now.UTC()
-	end := now.Truncate(spec.interval)
+	// Align to the Unix epoch, the grid the SQL bucketing uses. time.Truncate
+	// counts from year 1, which differs for intervals that do not divide a day.
+	sec := int64(spec.interval / time.Second)
+	end := time.Unix((now.Unix()/sec)*sec, 0).UTC()
 	return trendWindow{
 		now:   now,
 		start: end.Add(-time.Duration(spec.buckets-1) * spec.interval),

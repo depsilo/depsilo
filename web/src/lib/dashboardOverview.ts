@@ -10,7 +10,7 @@ import type {
 import type { TFunction } from 'i18next'
 import { readLocalStorage, writeLocalStorage } from './storage'
 
-export const DASHBOARD_RANGES: readonly DashboardRange[] = ['1h', '24h', '7d', '30d']
+export const DASHBOARD_RANGES: readonly DashboardRange[] = ['1h', '24h', '7d', '30d', 'all']
 
 /** First-run default. The operator's choice is remembered after that. */
 const DEFAULT_DASHBOARD_RANGE: DashboardRange = '30d'
@@ -445,6 +445,7 @@ export function rangeLabelKey(range: DashboardRange): string {
     case '1h': return 'overview.range1h'
     case '7d': return 'overview.range7d'
     case '30d': return 'overview.range30d'
+    case 'all': return 'overview.rangeAll'
     default: return 'overview.range24h'
   }
 }

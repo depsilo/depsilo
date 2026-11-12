@@ -173,7 +173,8 @@ test('Overview title is rendered once with a single range control', async ({ pag
 
   await expect(page.getByRole('heading', { level: 1, name: '总览', exact: true })).toHaveCount(1)
   const rangeGroup = page.getByRole('group', { name: '统计周期' })
-  await expect(rangeGroup.getByRole('button')).toHaveCount(4)
+  // Four periods plus all time.
+  await expect(rangeGroup.getByRole('button')).toHaveCount(5)
   await expect(rangeGroup.getByRole('button', { name: '30 天' })).toHaveAttribute('aria-pressed', 'true')
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1440)
 })

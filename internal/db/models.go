@@ -164,6 +164,35 @@ type AccessLogPackageDaily struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+// AccessLogArchive holds the undated totals of rollup days that retention
+// has expired, keyed like AccessLogDaily without the date. The sweeper folds a
+// day in and deletes its rollups in one transaction, so a request is counted
+// either here or in a dated rollup, never both. All-time Overview figures are
+// this table plus the retained rollups.
+type AccessLogArchive struct {
+	AdapterType      string    `gorm:"size:16;primaryKey" json:"adapter_type"`
+	Hit              bool      `gorm:"primaryKey" json:"hit"`
+	Upstream         string    `gorm:"size:128;primaryKey;default:''" json:"upstream"`
+	RequestCount     int64     `gorm:"not null;default:0" json:"request_count"`
+	TotalBytes       int64     `gorm:"not null;default:0" json:"total_bytes"`
+	UpstreamRequests int64     `gorm:"not null;default:0" json:"upstream_requests"`
+	UpstreamBytes    int64     `gorm:"not null;default:0" json:"upstream_bytes"`
+	SumLatencyMs     int64     `gorm:"not null;default:0" json:"sum_latency_ms"`
+	ErrorCount       int64     `gorm:"not null;default:0" json:"error_count"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+// AccessLogPackageArchive is the package-grain counterpart of
+// AccessLogArchive, folded from AccessLogPackageDaily.
+type AccessLogPackageArchive struct {
+	AdapterType  string    `gorm:"size:16;primaryKey" json:"adapter_type"`
+	PackageName  string    `gorm:"size:256;primaryKey" json:"package_name"`
+	Hit          bool      `gorm:"primaryKey" json:"hit"`
+	RequestCount int64     `gorm:"not null;default:0" json:"request_count"`
+	TotalBytes   int64     `gorm:"not null;default:0" json:"total_bytes"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
 // TableName overrides — GORM pluralizes by default and would turn these
 // into access_log_hourlies / access_log_dailies / access_log_package_dailies,
 // which break the raw SQL written against the singular form.
@@ -171,6 +200,10 @@ func (AccessLogFiveMinutely) TableName() string { return "access_log_five_minute
 func (AccessLogHourly) TableName() string       { return "access_log_hourly" }
 func (AccessLogDaily) TableName() string        { return "access_log_daily" }
 func (AccessLogPackageDaily) TableName() string { return "access_log_package_daily" }
+func (AccessLogArchive) TableName() string      { return "access_log_archive" }
+func (AccessLogPackageArchive) TableName() string {
+	return "access_log_package_archive"
+}
 
 type UpstreamRecord struct {
 	ID            uint      `gorm:"primarykey" json:"id"`

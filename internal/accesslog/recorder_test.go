@@ -30,6 +30,7 @@ func newTestDB(t *testing.T) *gorm.DB {
 	if err := d.AutoMigrate(
 		&db.AccessLog{}, &db.AccessLogFiveMinutely{}, &db.AccessLogHourly{},
 		&db.AccessLogDaily{}, &db.AccessLogPackageDaily{}, &db.ControlPlaneState{},
+		&db.AccessLogArchive{}, &db.AccessLogPackageArchive{},
 	); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}

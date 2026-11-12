@@ -68,17 +68,131 @@ func RunRetention(ctx context.Context, gdb *gorm.DB, cfg RetentionConfig) {
 	}
 	if cfg.RollupDays > 0 {
 		cutoffDate := time.Now().UTC().AddDate(0, 0, -cfg.RollupDays).Format("2006-01-02")
-		for _, table := range []string{
-			"access_log_hourly",
-			"access_log_daily",
-			"access_log_package_daily",
-		} {
-			if err := gdb.WithContext(ctx).
-				Exec("DELETE FROM "+table+" WHERE date < ?", cutoffDate).Error; err != nil {
-				zap.L().Warn("retention: rollup delete failed",
-					zap.String("table", table),
-					zap.Error(err))
-			}
+		if err := ArchiveRollupsBefore(ctx, gdb, cutoffDate); err != nil {
+			zap.L().Warn("retention: rollup archive failed; expiring days kept for the next sweep",
+				zap.String("before", cutoffDate),
+				zap.Error(err))
 		}
 	}
+}
+
+// ArchiveRollupsBefore folds every rollup day before cutoffDate (YYYY-MM-DD)
+// into the undated archive and deletes those days, all in one transaction. A
+// request is therefore counted in exactly one place, so all-time totals stay
+// exact after the rollup horizon passes. If any step fails nothing is deleted.
+//
+// The hourly rollup is the archive's source, not the daily one: the nightly
+// compactor fills a day only when the process is up at 00:05 UTC, while every
+// recorded request has an hourly row.
+func ArchiveRollupsBefore(ctx context.Context, gdb *gorm.DB, cutoffDate string) error {
+	return gdb.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var first struct {
+			Date *string
+			Hour *int
+		}
+		if err := tx.Raw(`SELECT date, MIN(hour) AS hour FROM access_log_hourly
+			WHERE date = (SELECT MIN(date) FROM access_log_hourly WHERE date < ?) GROUP BY date`, cutoffDate).Scan(&first).Error; err != nil {
+			return err
+		}
+		if first.Date != nil && *first.Date != "" && first.Hour != nil {
+			now := time.Now().UTC()
+			if err := tx.Exec(`
+INSERT INTO access_log_archive
+    (adapter_type, hit, upstream, request_count, total_bytes, upstream_requests,
+     upstream_bytes, sum_latency_ms, error_count, updated_at)
+SELECT adapter_type, hit, COALESCE(upstream, ''),
+       SUM(request_count), SUM(total_bytes), SUM(upstream_requests),
+       SUM(upstream_bytes), SUM(sum_latency_ms), SUM(error_count), ?
+FROM access_log_hourly
+WHERE date < ?
+GROUP BY adapter_type, hit, COALESCE(upstream, '')
+ON CONFLICT(adapter_type, hit, upstream) DO UPDATE SET
+    request_count     = access_log_archive.request_count + excluded.request_count,
+    total_bytes       = access_log_archive.total_bytes + excluded.total_bytes,
+    upstream_requests = access_log_archive.upstream_requests + excluded.upstream_requests,
+    upstream_bytes    = access_log_archive.upstream_bytes + excluded.upstream_bytes,
+    sum_latency_ms    = access_log_archive.sum_latency_ms + excluded.sum_latency_ms,
+    error_count       = access_log_archive.error_count + excluded.error_count,
+    updated_at        = excluded.updated_at`, now, cutoffDate).Error; err != nil {
+				return err
+			}
+			day, err := time.Parse("2006-01-02", *first.Date)
+			if err != nil {
+				return err
+			}
+			if err := recordArchiveFirstHour(tx, day.Add(time.Duration(*first.Hour)*time.Hour)); err != nil {
+				return err
+			}
+		}
+		if err := tx.Exec(`
+INSERT INTO access_log_package_archive
+    (adapter_type, package_name, hit, request_count, total_bytes, updated_at)
+SELECT adapter_type, package_name, hit, SUM(request_count), SUM(total_bytes), ?
+FROM access_log_package_daily
+WHERE date < ?
+GROUP BY adapter_type, package_name, hit
+ON CONFLICT(adapter_type, package_name, hit) DO UPDATE SET
+    request_count = access_log_package_archive.request_count + excluded.request_count,
+    total_bytes   = access_log_package_archive.total_bytes + excluded.total_bytes,
+    updated_at    = excluded.updated_at`, time.Now().UTC(), cutoffDate).Error; err != nil {
+			return err
+		}
+		for _, table := range []string{"access_log_hourly", "access_log_daily", "access_log_package_daily"} {
+			if err := tx.Exec("DELETE FROM "+table+" WHERE date < ?", cutoffDate).Error; err != nil {
+				return err
+			}
+		}
+		return recordArchiveThroughDate(tx, cutoffDate)
+	})
+}
+
+// ArchivedThroughDate returns the date before which every day is archived,
+// or "" when nothing has been archived.
+func ArchivedThroughDate(ctx context.Context, gdb *gorm.DB) (string, error) {
+	var state []db.ControlPlaneState
+	if err := gdb.WithContext(ctx).Where("key = ?", db.AccessLogArchiveThroughDateKey).Limit(1).Find(&state).Error; err != nil {
+		return "", err
+	}
+	if len(state) == 0 {
+		return "", nil
+	}
+	return state[0].Value, nil
+}
+
+// recordArchiveThroughDate only moves the boundary forward, so lowering the
+// rollup horizon later never re-opens an archived day.
+func recordArchiveThroughDate(tx *gorm.DB, cutoffDate string) error {
+	var existing []db.ControlPlaneState
+	if err := tx.Where("key = ?", db.AccessLogArchiveThroughDateKey).Limit(1).Find(&existing).Error; err != nil {
+		return err
+	}
+	if len(existing) == 1 && existing[0].Value >= cutoffDate {
+		return nil
+	}
+	return tx.Save(&db.ControlPlaneState{Key: db.AccessLogArchiveThroughDateKey, Value: cutoffDate}).Error
+}
+
+// recordArchiveFirstHour keeps the earliest hour ever folded into the archive.
+func recordArchiveFirstHour(tx *gorm.DB, hour time.Time) error {
+	var existing []db.ControlPlaneState
+	if err := tx.Where("key = ?", db.AccessLogArchiveFirstDateKey).Limit(1).Find(&existing).Error; err != nil {
+		return err
+	}
+	if len(existing) == 1 {
+		if previous, ok := ParseArchiveFirstHour(existing[0].Value); ok && !hour.Before(previous) {
+			return nil
+		}
+	}
+	return tx.Save(&db.ControlPlaneState{Key: db.AccessLogArchiveFirstDateKey, Value: hour.UTC().Format(time.RFC3339)}).Error
+}
+
+// ParseArchiveFirstHour reads the archive's first-hour marker.
+func ParseArchiveFirstHour(value string) (time.Time, bool) {
+	if parsed, err := time.Parse(time.RFC3339, value); err == nil {
+		return parsed.UTC(), true
+	}
+	if parsed, err := time.Parse("2006-01-02", value); err == nil {
+		return parsed.UTC(), true
+	}
+	return time.Time{}, false
 }

@@ -39,14 +39,20 @@ func BackfillIfEmpty(ctx context.Context, gdb *gorm.DB) error {
 		zap.L().Info("rollup tables already populated, skipping backfill")
 		return nil
 	}
-	zap.L().Info("backfilling rollup tables from access_logs")
-	if err := backfillHourly(ctx, gdb); err != nil {
+	// Days before the archive boundary are already counted in the archive;
+	// rebuilding their rollups would count them again on the next sweep.
+	through, err := ArchivedThroughDate(ctx, gdb)
+	if err != nil {
 		return err
 	}
-	if err := backfillDaily(ctx, gdb); err != nil {
+	zap.L().Info("backfilling rollup tables from access_logs", zap.String("from_date", through))
+	if err := backfillHourly(ctx, gdb, through); err != nil {
 		return err
 	}
-	if err := backfillPackageDaily(ctx, gdb); err != nil {
+	if err := backfillDaily(ctx, gdb, through); err != nil {
+		return err
+	}
+	if err := backfillPackageDaily(ctx, gdb, through); err != nil {
 		return err
 	}
 	zap.L().Info("rollup backfill complete")
@@ -101,7 +107,7 @@ GROUP BY 1, adapter_type, hit, COALESCE(upstream, '')`
 	})
 }
 
-func backfillHourly(ctx context.Context, gdb *gorm.DB) error {
+func backfillHourly(ctx context.Context, gdb *gorm.DB, fromDate string) error {
 	sql := `
 INSERT INTO access_log_hourly
     (date, hour, adapter_type, hit, upstream,
@@ -122,6 +128,7 @@ SELECT
     datetime('now')
 FROM access_logs
 WHERE COALESCE(cache_result, '') IN ('', 'hit', 'miss')
+  AND strftime('%Y-%m-%d', created_at) >= ?
 GROUP BY date, hour, adapter_type, hit, upstream
 ON CONFLICT(date, hour, adapter_type, hit, upstream) DO UPDATE SET
     request_count     = excluded.request_count,
@@ -132,10 +139,10 @@ ON CONFLICT(date, hour, adapter_type, hit, upstream) DO UPDATE SET
     error_count       = excluded.error_count,
     updated_at        = excluded.updated_at
 `
-	return gdb.WithContext(ctx).Exec(sql).Error
+	return gdb.WithContext(ctx).Exec(sql, fromDate).Error
 }
 
-func backfillDaily(ctx context.Context, gdb *gorm.DB) error {
+func backfillDaily(ctx context.Context, gdb *gorm.DB, fromDate string) error {
 	sql := `
 INSERT INTO access_log_daily
     (date, adapter_type, hit, upstream,
@@ -155,6 +162,7 @@ SELECT
     datetime('now')
 FROM access_logs
 WHERE COALESCE(cache_result, '') IN ('', 'hit', 'miss')
+  AND strftime('%Y-%m-%d', created_at) >= ?
 GROUP BY date, adapter_type, hit, upstream
 ON CONFLICT(date, adapter_type, hit, upstream) DO UPDATE SET
     request_count     = excluded.request_count,
@@ -165,10 +173,10 @@ ON CONFLICT(date, adapter_type, hit, upstream) DO UPDATE SET
     error_count       = excluded.error_count,
     updated_at        = excluded.updated_at
 `
-	return gdb.WithContext(ctx).Exec(sql).Error
+	return gdb.WithContext(ctx).Exec(sql, fromDate).Error
 }
 
-func backfillPackageDaily(ctx context.Context, gdb *gorm.DB) error {
+func backfillPackageDaily(ctx context.Context, gdb *gorm.DB, fromDate string) error {
 	sql := `
 INSERT INTO access_log_package_daily
     (date, adapter_type, package_name, hit,
@@ -183,11 +191,12 @@ SELECT
     datetime('now')
 FROM access_logs
 WHERE package_name != ''
+  AND strftime('%Y-%m-%d', created_at) >= ?
 GROUP BY date, adapter_type, package_name, hit
 ON CONFLICT(date, adapter_type, package_name, hit) DO UPDATE SET
     request_count = excluded.request_count,
     total_bytes   = excluded.total_bytes,
     updated_at    = excluded.updated_at
 `
-	return gdb.WithContext(ctx).Exec(sql).Error
+	return gdb.WithContext(ctx).Exec(sql, fromDate).Error
 }

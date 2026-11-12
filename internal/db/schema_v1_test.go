@@ -237,6 +237,8 @@ func currentSchemaModelsForTest() []any {
 		&AccessLogHourly{},
 		&AccessLogDaily{},
 		&AccessLogPackageDaily{},
+		&AccessLogArchive{},
+		&AccessLogPackageArchive{},
 		&UpstreamRecord{},
 		&ControlPlaneState{},
 		&User{},

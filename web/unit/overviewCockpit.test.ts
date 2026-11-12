@@ -8,6 +8,8 @@ import {
   findActivityBursts,
   groupUpstreamFleet,
   isActivityTick,
+  isUtcDaySeries,
+  knownTrendStep,
   niceAxisMax,
   rebucketActivity,
   summarizeProtections,
@@ -142,6 +144,37 @@ describe('isActivityTick', () => {
     const ticks = bars.filter((bar, index) => isActivityTick(bar, '7d', bars[index - 1]))
     const days = new Set(bars.map(bar => new Date(bar.start * 1000).toDateString()))
     expect(ticks.length).toBe(days.size - 1)
+  })
+})
+
+describe('all-time day-grained series', () => {
+  it('groups UTC days without shifting them by the viewer offset', () => {
+    const points = series(14, 86400, { 0: { requests: 2 }, 13: { requests: 3 } })
+    expect(isUtcDaySeries(points)).toBe(true)
+    expect(isUtcDaySeries(series(4, 7200))).toBe(false)
+    // +13 hours would shift a whole day if rounded like an intra-day grid.
+    const bars = rebucketActivity(points, 7 * 86400, -13 * 3600)
+    for (const bar of bars) expect(bar.start % 86400).toBe(0)
+    expect(bars.reduce((sum, bar) => sum + bar.requests, 0)).toBe(5)
+  })
+
+  it('treats a single all-time point as one UTC day, not a one-minute bar', () => {
+    const points = series(1, 86400, { 0: { requests: 7 } })
+    const step = knownTrendStep('all')
+    expect(isUtcDaySeries(points, step)).toBe(true)
+    expect(activitySpan(points, 72, step)).toBe(86400)
+    const [bar] = rebucketActivity(points, 86400, -8 * 3600, step)
+    expect(bar.start % 86400).toBe(0)
+    expect(bar.end - bar.start).toBe(86400)
+    expect(knownTrendStep('7d')).toBeUndefined()
+  })
+
+  it('opens a tick at each UTC month', () => {
+    const points = series(90, 86400)
+    const bars = rebucketActivity(points, 86400)
+    const ticks = bars.filter((bar, index) => isActivityTick(bar, 'all', bars[index - 1]))
+    const months = new Set(bars.map(bar => new Date(bar.start * 1000).getUTCMonth()))
+    expect(ticks).toHaveLength(months.size - 1)
   })
 })
 

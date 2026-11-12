@@ -140,13 +140,15 @@ check_interval = "1h"
 #
 # DELETION WARNING: retention_days and rollup_retention_days physically
 # DELETE rows older than the configured horizon. Set either to 0 to keep
-# data forever (no sweep).
+# data forever (no sweep). Rollup days are first folded into undated
+# archive totals, so the Overview's All range keeps counting them; only
+# their per-day and per-hour detail is removed.
 rollup_enabled        = true   # write hourly + package_daily rollups
 batch_size            = 100    # flush after this many rows
 batch_interval        = "5s"   # ...or this much time, whichever first
 backfill_on_start     = true   # one-shot fill rollups from existing rows on boot
 retention_days        = 7      # raw access_logs sweep horizon (0 = never sweep)
-rollup_retention_days = 365    # rollup tables sweep horizon (0 = never sweep)
+rollup_retention_days = 365    # dated rollup horizon; older days become archive totals (0 = never sweep)
 
 [auth]
 enabled    = true

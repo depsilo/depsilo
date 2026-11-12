@@ -47,7 +47,7 @@ import {
   readDashboardRange,
   writeDashboardRange,
 } from '@/lib/dashboardOverview'
-import { activitySpan, rebucketActivity, type ActivityBucket } from '@/lib/overviewCockpit'
+import { activitySpan, knownTrendStep, rebucketActivity, type ActivityBucket } from '@/lib/overviewCockpit'
 import { formatTime } from '@/lib/utils'
 import './Dashboard.css'
 
@@ -63,6 +63,7 @@ const TREND_REFRESH_INTERVAL: Record<DashboardRange, number> = {
   '24h': 15_000,
   '7d': 30_000,
   '30d': 60_000,
+  all: 120_000,
 }
 
 const RANGE_KEY: Record<DashboardRange, string> = {
@@ -70,6 +71,7 @@ const RANGE_KEY: Record<DashboardRange, string> = {
   '24h': 'dashboard.range24h',
   '7d': 'dashboard.range7d',
   '30d': 'dashboard.range30d',
+  all: 'dashboard.rangeAll',
 }
 
 interface TrendQueryData {
@@ -78,7 +80,7 @@ interface TrendQueryData {
 }
 
 export default function Dashboard() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [range, setRange] = useState<DashboardRange>(() => readDashboardRange())
   const [showProblems, setShowProblems] = useState(false)
   const [detailsLogId, setDetailsLogId] = useState<number | null>(null)
@@ -193,7 +195,11 @@ export default function Dashboard() {
   }
   const trendData = trendsQuery.data ?? retainedTrends
   const trendPoints: DashboardTrendPoint[] = trendData?.response.data.points ?? NO_POINTS
-  const sparkBuckets = useMemo(() => rebucketActivity(trendPoints, activitySpan(trendPoints, SPARK_BARS)), [trendPoints])
+  const sparkStep = knownTrendStep(trendData?.range ?? range)
+  const sparkBuckets = useMemo(
+    () => rebucketActivity(trendPoints, activitySpan(trendPoints, SPARK_BARS, sparkStep), undefined, sparkStep),
+    [trendPoints, sparkStep],
+  )
   const trendRange = trendData?.range ?? range
   const trendsLoading = trendsQuery.isPending && !trendData
   const trendsInitialError = trendsQuery.isError && !trendData
@@ -400,12 +406,19 @@ export default function Dashboard() {
           {!showConnectionGuide && usage === 'active' && overview?.window?.hit_requests === 0 && (
             <p className="flex flex-wrap items-center gap-x-3 text-[var(--dash-muted)]">{t('overview.verifyCacheHint')}<Link className="dash-more dash-focus" to={getAdminRouteHref('connect')}>{t('overview.verifyCacheAction')}</Link></p>
           )}
-          {overviewStale && <p role="status" className="rounded-md bg-[var(--dash-warn-soft)] px-3 py-2 text-[var(--dash-warn)]">{t('overview.overviewStale', { range: t(RANGE_KEY[overviewRange]) })}</p>}
+          {overviewRange === 'all' && !swapped && overview?.range?.start && (overview.window?.total_requests ?? 0) > 0 && (
+            <p data-dashboard-all-time className="text-[var(--dash-muted)]">
+              {/* The start is a UTC instant from UTC-dated rollups; a local date could name a day before any data. */}
+              {t('overview.allTimeSince', { date: new Date(overview.range.start).toLocaleDateString(i18n.resolvedLanguage?.startsWith('zh') ? 'zh-CN' : 'en', { timeZone: 'UTC' }) })}
+              {overview.range.archived && ` ${t('overview.allTimeArchived')}`}
+            </p>
+          )}
+          {overviewStale && <p role="status" className="rounded-md bg-[var(--dash-warn-soft)] px-3 py-2 text-[var(--dash-warn)]">{overviewRange === 'all' ? t('overview.overviewStaleAll') : t('overview.overviewStale', { range: t(RANGE_KEY[overviewRange]) })}</p>}
           {swapped && <p role="status" className="text-[var(--dash-muted)]">{t('overview.switchingRange')}</p>}
           {usage === 'empty-period' && !swapped && !overviewStale && (
             <div data-dashboard-empty-period className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-md bg-[var(--dash-soft)] px-3 py-1">
               <p>{t('overview.emptyPeriod')} <span className="text-[var(--dash-muted)]">{t('overview.emptyPeriodHint')}</span></p>
-              {range !== '30d' && <Button variant="ghost" size="sm" className="dash-focus font-medium text-[var(--brand-text)]" onClick={() => handleRangeChange('30d')}>{t('overview.expandRange')}</Button>}
+              {range !== '30d' && range !== 'all' && <Button variant="ghost" size="sm" className="dash-focus font-medium text-[var(--brand-text)]" onClick={() => handleRangeChange('30d')}>{t('overview.expandRange')}</Button>}
             </div>
           )}
         </div>

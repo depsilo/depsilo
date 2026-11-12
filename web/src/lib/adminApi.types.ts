@@ -602,7 +602,8 @@ export interface DashboardWindow {
   avg_latency_ms: number
 }
 
-export type DashboardRange = '1h' | '24h' | '7d' | '30d'
+/** `all` covers everything still known: archived totals plus retained rollups. */
+export type DashboardRange = '1h' | '24h' | '7d' | '30d' | 'all'
 
 /**
  * One Overview period. The API reports hit_rate 0 when there is no sample;
@@ -655,8 +656,11 @@ export interface DashboardResponse {
   upstreams: DashboardUpstream[]
   top_packages: Partial<Record<AdminEcosystem, DashboardTopPackage[]>>
   cache_usage_percent?: number
-  /** Selected Overview range. Absent on older fixture payloads. */
-  range?: { key: DashboardRange; start: string; end: string }
+  /**
+   * Selected Overview range. Absent on older fixture payloads. For `all`,
+   * `archived` says whether totals include expired days the trend omits.
+   */
+  range?: { key: DashboardRange; start: string; end: string; archived?: boolean }
   window?: DashboardPeriod
   prev?: DashboardPeriod
   origin_coverage?: OriginCoverage

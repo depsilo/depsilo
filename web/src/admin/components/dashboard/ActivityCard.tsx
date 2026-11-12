@@ -8,6 +8,8 @@ import {
   activitySpan,
   findActivityBursts,
   isActivityTick,
+  isUtcDaySeries,
+  knownTrendStep,
   niceAxisMax,
   rebucketActivity,
   type ActivityBucket,
@@ -33,10 +35,15 @@ interface ActivityCardProps {
   onRetry: () => void
 }
 
-function useSpanFormat(locale: string) {
+/** Formats bar spans in local time, or in UTC for day-grained series whose buckets are UTC days. */
+function useSpanFormat(locale: string, utc = false) {
   return useMemo(() => {
-    const day = new Intl.DateTimeFormat(locale, { month: 'numeric', day: 'numeric' })
-    const clock = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    const timeZone = utc ? 'UTC' : undefined
+    const day = new Intl.DateTimeFormat(locale, { month: 'numeric', day: 'numeric', timeZone })
+    const clock = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone })
+    const atMidnight = (date: Date) => utc
+      ? date.getUTCHours() === 0 && date.getUTCMinutes() === 0 && date.getUTCSeconds() === 0
+      : date.getHours() === 0 && date.getMinutes() === 0 && date.getSeconds() === 0
     return {
       tick: (bucket: ActivityBucket, range: DashboardRange) => (
         (range === '1h' || range === '24h' ? clock : day).format(new Date(bucket.start * 1000))
@@ -51,7 +58,6 @@ function useSpanFormat(locale: string) {
         const start = new Date(from * 1000)
         const end = new Date(bucket.end * 1000)
         const lastDay = new Date(bucket.end * 1000 - 1)
-        const atMidnight = (date: Date) => date.getHours() === 0 && date.getMinutes() === 0 && date.getSeconds() === 0
         if (atMidnight(start) && atMidnight(end) && bucket.end - from >= 86400) {
           return day.format(start) === day.format(lastDay) ? day.format(start) : `${day.format(start)}–${day.format(lastDay)}`
         }
@@ -59,13 +65,13 @@ function useSpanFormat(locale: string) {
         return `${day.format(start)} ${clock.format(start)}–${sameDay ? '' : `${day.format(end)} `}${clock.format(end)}`
       },
     }
-  }, [locale])
+  }, [locale, utc])
 }
 
-function ActivityChart({ buckets, range, label }: { buckets: ActivityBucket[]; range: DashboardRange; label: string }) {
+function ActivityChart({ buckets, range, label, utc }: { buckets: ActivityBucket[]; range: DashboardRange; label: string; utc: boolean }) {
   const { t } = useTranslation()
   const locale = useNumberLocale()
-  const format = useSpanFormat(locale)
+  const format = useSpanFormat(locale, utc)
   const [active, setActive] = useState<number | null>(null)
   const plotRef = useRef<HTMLDivElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)
@@ -209,7 +215,9 @@ function ActivityChart({ buckets, range, label }: { buckets: ActivityBucket[]; r
       </table>
       <div aria-hidden className="dash-chart-x">
         {buckets.map((bucket, index) => (
-          isActivityTick(bucket, range, buckets[index - 1]) && index / count < 0.94
+          (range === 'all' && count <= 31
+            ? index % Math.max(1, Math.ceil(count / 6)) === 0
+            : isActivityTick(bucket, range, buckets[index - 1])) && index / count < 0.94
             ? <span key={bucket.start} style={{ left: `${(index / count) * 100}%` }}>{format.tick(bucket, range)}</span>
             : null
         ))}
@@ -226,10 +234,12 @@ function ActivityChart({ buckets, range, label }: { buckets: ActivityBucket[]; r
 export default function ActivityCard({ points, range, dataRange, loading, error, stale, onRetry }: ActivityCardProps) {
   const { t } = useTranslation()
   const locale = useNumberLocale()
-  const format = useSpanFormat(locale)
-  const span = useMemo(() => activitySpan(points, MAX_BARS), [points])
-  const buckets = useMemo(() => rebucketActivity(points, span), [points, span])
-  const bursts = useMemo(() => findActivityBursts(points, 4), [points])
+  const knownStep = knownTrendStep(dataRange)
+  const utc = isUtcDaySeries(points, knownStep)
+  const format = useSpanFormat(locale, utc)
+  const span = useMemo(() => activitySpan(points, MAX_BARS, knownStep), [points, knownStep])
+  const buckets = useMemo(() => rebucketActivity(points, span, undefined, knownStep), [points, span, knownStep])
+  const bursts = useMemo(() => findActivityBursts(points, 4, knownStep), [points, knownStep])
   const rangeLabel = t(rangeLabelKey(dataRange))
   const spanLabel = span >= 86400 ? t('overview.spanDays', { count: span / 86400 })
     : span >= 3600 ? t('overview.spanHours', { count: span / 3600 })
@@ -266,6 +276,7 @@ export default function ActivityCard({ points, range, dataRange, loading, error,
             <ActivityChart
               buckets={buckets}
               range={dataRange}
+              utc={utc}
               label={t('overview.activityChartLabel', { range: rangeLabel, span: spanLabel })}
             />
             {bursts.length > 0 && (

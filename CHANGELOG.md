@@ -6,7 +6,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
-- `GET /api/v1/admin/dashboard/breakdown?range=1h|24h|7d|30d` reports where an
+- `GET /api/v1/admin/dashboard/breakdown?range=1h|24h|7d|30d|all` reports where an
   Overview period's traffic went: per ecosystem, per Upstream (the measured
   bytes and exchanges it sent to Depsilo, plus the misses served through it),
   and the ten largest packages. It uses the same boundaries and request set as
@@ -16,6 +16,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   UTC days and say so in `top_packages_grain`.
 - The Admin navigation rail can collapse to icons; the choice is remembered in
   the browser.
+- The Overview has an All range covering everything Depsilo still knows since
+  installation (schema v17). Rollup retention now folds an expiring day into
+  undated archive tables (`access_log_archive`, `access_log_package_archive`)
+  in the same transaction that deletes it, so all-time totals are exact past
+  the rollup horizon; days deleted before this version are not recovered.
+  `range=all` on the dashboard, trends, and breakdown endpoints returns those
+  totals plus the retained rollups, names where coverage begins in
+  `range.start`, and has no previous period. The startup rollup backfill no
+  longer rebuilds days that are already archived.
+
+### Upgrade notes
+- Schema v17 is a forward-only migration. A 0.13.x binary refuses the
+  upgraded database; to downgrade, restore the backup taken before upgrading.
 
 ### Changed
 - The Admin Overview is a dense one-screen cockpit. Eight tiles cover what the

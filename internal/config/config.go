@@ -340,7 +340,9 @@ type OIDCConfig struct {
 //     rows continue to be written to access_logs so the admin detail page
 //     keeps working.
 //   - RetentionDays and RollupRetentionDays drive a background sweeper that
-//     deletes rows older than the configured horizon. Both default to 0,
+//     deletes rows older than the configured horizon. Expiring rollup days
+//     are folded into the undated access log archive first, so all-time
+//     totals survive the rollup horizon. Both default to 0,
 //     which DISABLES the sweep so an operator who upgrades and immediately
 //     panics doesn't lose history. A later commit raises the defaults to
 //     the spec-recommended 7d/365d once the rollout has soaked.

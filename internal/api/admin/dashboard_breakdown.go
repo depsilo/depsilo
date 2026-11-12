@@ -90,9 +90,31 @@ func (h *DashboardHandler) GetBreakdown(c *gin.Context) {
 		packages []breakdownPackage
 		err      error
 	)
-	if useRollup {
+	allTime := spec.key == allTimeKey
+	if allTime {
+		start, ok, startErr := h.allTimeStart(ctx)
+		if startErr != nil {
+			dashboardDatabaseError(c, startErr)
+			return
+		}
+		from = now
+		if ok && start.Before(now) {
+			from = start
+		}
+	}
+	switch {
+	case allTime && useRollup:
+		rows, err = h.breakdownRowsHourly(ctx, time.Unix(0, 0).UTC(), now)
+		if err == nil {
+			var archived []breakdownRow
+			archived, err = h.breakdownRowsArchive(ctx)
+			rows = append(rows, archived...)
+		}
+	case useRollup:
 		rows, err = h.breakdownRowsHourly(ctx, from, now)
-	} else {
+	case allTime:
+		rows, err = h.breakdownRowsRaw(ctx, time.Unix(0, 0).UTC(), now)
+	default:
 		rows, err = h.breakdownRowsRaw(ctx, from, now)
 	}
 	if err != nil {
@@ -100,10 +122,16 @@ func (h *DashboardHandler) GetBreakdown(c *gin.Context) {
 		return
 	}
 	grain := breakdownGrainExact
-	if useRollup {
+	switch {
+	case allTime && useRollup:
+		grain = breakdownGrainUTCDay
+		packages, err = h.breakdownPackagesAllTime(ctx)
+	case useRollup:
 		grain = breakdownGrainUTCDay
 		packages, err = h.breakdownPackagesDaily(ctx, from, now)
-	} else {
+	case allTime:
+		packages, err = h.breakdownPackagesRaw(ctx, time.Unix(0, 0).UTC(), now)
+	default:
 		packages, err = h.breakdownPackagesRaw(ctx, from, now)
 	}
 	if err != nil {

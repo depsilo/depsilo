@@ -132,6 +132,16 @@ Upstream is identified by ecosystem and name. One- and 24-hour ranges read raw a
 hourly rollup and rank packages from the daily package rollup, reported as
 `top_packages_grain: "utc_day"` because that ranking covers whole UTC days.
 
+`range=all` covers everything the instance still knows. With rollups enabled
+it is the access log archive (rollup days `rollup_retention_days` has expired,
+folded into undated totals) plus every retained hourly rollup; without
+rollups it is the retained raw access log, which `retention_days` bounds.
+`range.start` is the earliest instant those sources cover, `range.archived`
+says whether archived days are included, and there is no `prev` block.
+Origin coverage is judged at the rollup's hourly grain against that start.
+The trend series for `all` is UTC days (weeks beyond about two years) from the
+oldest retained rollup day, because archived days carry no dates.
+
 ## Cache-fill progress
 
 `GET /api/v1/admin/cache/transfers` is an authenticated Admin read endpoint.

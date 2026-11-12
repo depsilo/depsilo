@@ -41,8 +41,19 @@ const CLOCK_SPANS = [
   HOUR, 2 * HOUR, 3 * HOUR, 4 * HOUR, 6 * HOUR, 8 * HOUR, 12 * HOUR, 24 * HOUR, 48 * HOUR, 72 * HOUR, 168 * HOUR,
 ]
 
-function trendStep(points: DashboardTrendPoint[]): number {
-  return points.length > 1 ? Math.max(1, points[1].bucket - points[0].bucket) : 60
+/**
+ * The server bucket width. Two points give it; a single point cannot, so the
+ * caller passes the width it knows for the range (see knownTrendStep).
+ */
+function trendStep(points: DashboardTrendPoint[], known?: number): number {
+  if (points.length > 1) return Math.max(1, points[1].bucket - points[0].bucket)
+  return known ?? 60
+}
+
+/** The bucket width a range's series is known to use when it has a single point. */
+export function knownTrendStep(range: DashboardRange): number | undefined {
+  // All time is UTC days until history exceeds two years, which needs many points.
+  return range === 'all' ? 86400 : undefined
 }
 
 /** Seconds to add to local wall-clock time to get UTC, for the viewer's zone at a given instant. */
@@ -57,8 +68,8 @@ const viewerOffset = (unixSeconds: number) => localUtcOffsetSeconds(new Date(uni
  * The widest span that still draws at most `maxBars` bars. It is a multiple of
  * the trend series' own step, so a bar never splits a server bucket.
  */
-export function activitySpan(points: DashboardTrendPoint[], maxBars: number): number {
-  const step = trendStep(points)
+export function activitySpan(points: DashboardTrendPoint[], maxBars: number, knownStep?: number): number {
+  const step = trendStep(points, knownStep)
   const wanted = step * Math.max(1, Math.ceil(points.length / Math.max(1, maxBars)))
   return CLOCK_SPANS.find(span => span >= wanted && span % step === 0) ?? wanted
 }
@@ -89,14 +100,18 @@ export function rebucketActivity(
   points: DashboardTrendPoint[],
   span: number,
   utcOffsetSeconds: number | ((unixSeconds: number) => number) = viewerOffset,
+  knownStep?: number,
 ): ActivityBucket[] {
-  const step = trendStep(points)
+  const step = trendStep(points, knownStep)
   const offsetAt = typeof utcOffsetSeconds === 'function' ? utcOffsetSeconds : () => utcOffsetSeconds
   const groups = new Map<number, ActivityBucket>()
   let firstData = Infinity
+  // Day-grained server buckets are UTC days with no time of day to align, so
+  // they are grouped and labelled as UTC days (see isUtcDaySeries).
+  const dayGrained = step >= 86400
   for (const point of points) {
     firstData = Math.min(firstData, point.bucket)
-    const offset = Math.round(offsetAt(point.bucket) / step) * step
+    const offset = dayGrained ? 0 : Math.round(offsetAt(point.bucket) / step) * step
     const key = Math.floor((point.bucket - offset) / span)
     let group = groups.get(key)
     if (!group) {
@@ -116,8 +131,8 @@ export function rebucketActivity(
  * Contiguous runs of requests, newest first. One quiet bucket does not end a
  * run, so a build that pauses briefly still reads as one burst.
  */
-export function findActivityBursts(points: DashboardTrendPoint[], limit: number): ActivityBucket[] {
-  const step = trendStep(points)
+export function findActivityBursts(points: DashboardTrendPoint[], limit: number, knownStep?: number): ActivityBucket[] {
+  const step = trendStep(points, knownStep)
   const bursts: ActivityBucket[] = []
   let current: ActivityBucket | null = null
   let quiet = 0
@@ -138,6 +153,11 @@ export function findActivityBursts(points: DashboardTrendPoint[], limit: number)
   return bursts.reverse().slice(0, Math.max(0, limit))
 }
 
+/** Whether a trend series is day-grained, so its bars are UTC days rather than local times. */
+export function isUtcDaySeries(points: DashboardTrendPoint[], knownStep?: number): boolean {
+  return trendStep(points, knownStep) >= 86400
+}
+
 /**
  * Whether a bar's start is a labelled tick on the time axis for this range.
  * Day ticks mark the first bar of each local day rather than an exact
@@ -148,6 +168,8 @@ export function isActivityTick(bucket: ActivityBucket, range: DashboardRange, pr
   if (range === '1h') return date.getMinutes() % 10 === 0 && date.getSeconds() === 0
   if (range === '24h') return date.getMinutes() === 0 && date.getHours() % 4 === 0
   if (!previous) return false
+  // All time is day-grained UTC data: a tick opens each month.
+  if (range === 'all') return new Date(previous.start * 1000).getUTCMonth() !== date.getUTCMonth()
   const newDay = new Date(previous.start * 1000).getDate() !== date.getDate()
   if (range === '7d') return newDay
   return newDay && date.getDate() % 5 === 0

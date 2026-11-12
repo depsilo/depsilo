@@ -169,6 +169,12 @@ consequence.
   an additional database migration. Downgrading across
   this boundary requires the pre-upgrade SQLite backup as well as the older
   binary/image.
+- Schema version 17 adds the access log archive (`access_log_archive`,
+  `access_log_package_archive`). Rollup retention folds an expiring day into
+  it before deleting the day, so all-time Overview totals survive the rollup
+  horizon. Days deleted before this version are not recovered. A version 16
+  binary refuses the upgraded database; downgrading requires the pre-upgrade
+  backup.
 - The supported downgrade path is restoring a backup taken before the
   upgrade with `depsilo restore`; migrations are not reversed in place.
 - `depsilo backup` writes a checksummed `depsilo-backup` archive containing
