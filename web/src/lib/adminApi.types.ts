@@ -681,6 +681,46 @@ export interface DashboardTrendPoint {
 }
 export interface DashboardTrendsResponse { points: DashboardTrendPoint[] }
 
+/** One ecosystem's share of an Overview period. The rows add up to the period block. */
+export interface DashboardBreakdownEcosystem {
+  ecosystem: string
+  hit_requests: number
+  miss_requests: number
+  hit_bytes: number
+  miss_bytes: number
+  avg_hit_latency_ms: number
+  avg_miss_latency_ms: number
+}
+/**
+ * One Upstream's part in the period. `upstream_*` are measured origin exchanges,
+ * the same quantity as the period's origin traffic; `miss_*` describe the client
+ * requests answered through it. Names repeat across ecosystems.
+ */
+export interface DashboardBreakdownUpstream {
+  ecosystem: string
+  upstream: string
+  upstream_requests: number
+  upstream_bytes: number
+  miss_requests: number
+  miss_bytes: number
+  avg_miss_latency_ms: number
+}
+export interface DashboardBreakdownPackage {
+  ecosystem: string
+  package_name: string
+  requests: number
+  total_bytes: number
+  hit_bytes: number
+}
+export interface DashboardBreakdownResponse {
+  range: { key: DashboardRange; start: string; end: string }
+  by_ecosystem: DashboardBreakdownEcosystem[]
+  by_upstream: DashboardBreakdownUpstream[]
+  top_packages: DashboardBreakdownPackage[]
+  /** `utc_day` rankings cover whole UTC days and can start before the range. */
+  top_packages_grain: 'exact' | 'utc_day'
+}
+
 export interface RuntimeCapability { supported: boolean; reason?: string }
 export interface RuntimeProcess {
   cpu: RuntimeCapability

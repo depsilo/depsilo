@@ -78,6 +78,7 @@ export default function DashboardServiceStatus({
 
   return <>
     <Button variant="outline"
+      size="sm"
       type="button"
       data-dashboard-status
       data-query-key="now"
@@ -86,7 +87,7 @@ export default function DashboardServiceStatus({
       aria-expanded={open}
       aria-busy={pending || undefined}
       onClick={() => onOpenChange(true)}
-      className="stripe-focus-ring inline-flex min-h-[40px] max-w-full items-center gap-2 rounded-md border px-3 text-[13px] font-medium hover:bg-[var(--bg-hover)]"
+      className="stripe-focus-ring inline-flex max-w-full items-center gap-2 rounded-md border px-3 text-[13px] font-medium hover:bg-[var(--bg-hover)]"
       style={{ background: 'var(--bg-card)', borderColor: 'var(--border)', color: 'var(--text)' }}
     >
       <Icon name={pending ? 'progress_activity' : status.health === 'healthy' ? 'check_circle' : status.health === 'unknown' ? 'help' : 'warning'} size="sm" style={{ color }} />

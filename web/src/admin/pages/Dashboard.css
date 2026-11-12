@@ -1,12 +1,15 @@
-/* Reuse the Admin theme; spacing separates live diagnostics from period data. */
-.dashboard-page { max-width: 1440px; }
-.dashboard-connect-copy { max-width: 62ch; }
-.dashboard-period-summary {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 12px;
+/* Overview cockpit. Tokens come from `.dashboard-surface` (index.css); this file
+ * owns the route's dense layout. Interactive rows and controls size themselves
+ * from --dash-target: compact for a mouse, 40px for touch and phone widths. */
+.dashboard-surface {
+  container: cockpit / inline-size;
+  --dash-target: 24px;
 }
+@media (pointer: coarse) {
+  .dashboard-surface { --dash-target: 40px; }
+}
+
+.dashboard-connect-copy { max-width: 62ch; }
 .dashboard-help-samples {
   display: grid;
   gap: 4px;
@@ -15,12 +18,6 @@
 }
 .dashboard-help-samples > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; }
 .dashboard-help-samples dd { font-variant-numeric: tabular-nums; }
-.dashboard-trend-content { min-width: 0; }
-.dashboard-trend-summary { display: flex; flex-wrap: wrap; gap: 8px 24px; }
-.dashboard-trend-summary [data-trend-value] { overflow-wrap: anywhere; }
-.dashboard-trend-chart .recharts-tooltip-wrapper { z-index: 10; }
-.dashboard-trend-chart .recharts-surface:focus-visible { outline: 2px solid var(--dash-accent); outline-offset: 3px; border-radius: 4px; }
-.dashboard-trend-tooltip { width: max-content; max-width: min(320px, calc(100vw - 48px)); white-space: normal; }
 .dashboard-connect {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(240px, 1fr);
@@ -30,68 +27,393 @@
   border-left: 3px solid var(--dash-accent);
 }
 .dashboard-connect-muted { border-left-color: var(--dash-border); }
-.dashboard-cache-summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px 12px;
-  padding: 8px calc(var(--spacing) * 5);
-  border-top: 1px solid var(--dash-border);
-}
-.dashboard-cache-summary > section { flex: 1 1 480px; }
-.dashboard-resources-panel {
-  min-width: 0;
-  border: 1px solid;
-  border-radius: var(--r-card);
-  background: var(--dash-card);
-  padding: 12px 20px 16px;
-}
-.dashboard-resources-heading {
-  display: none;
-  margin-bottom: 8px;
-  font-size: 14px;
-  font-weight: 600;
-}
-.dashboard-resources-toggle {
-  display: flex;
-  min-height: 40px;
-  width: 100%;
-  align-items: center;
-  justify-content: space-between;
-  text-align: left;
-  font-size: 14px;
-  font-weight: 600;
-}
-.dashboard-resources-content { margin-top: 8px; }
-/* These container rules belong to the lazy Dashboard route. Keep one shared
- * connector row so the proxy mark and both download arrows stay aligned. */
-.dashboard-request-flow { container: dashboard-flow / inline-size; }
-.dashboard-flow-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-.dashboard-flow-rail { display: flex; padding-left: calc(var(--spacing) * 1.5); }
-.dashboard-flow-rate-label { min-height: 24px; }
-.dashboard-flow-axis {
-  display: none;
-  height: calc(var(--spacing) * 5);
-  align-items: center;
-}
-@container dashboard-flow (min-width: 760px) {
-  .dashboard-flow-grid {
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.15fr);
-    gap: 16px;
-  }
-  .dashboard-flow-rail { display: block; padding-left: 0; }
-  .dashboard-flow-rate-label { min-height: 40px; }
-  .dashboard-flow-proxy-heading { justify-content: center; }
-  .dashboard-flow-proxy-detail { text-align: center; }
-  .dashboard-flow-mobile-mark { display: none; }
-  .dashboard-flow-axis { display: flex; }
-}
 @media (max-width: 767px) {
   .dashboard-connect { grid-template-columns: minmax(0, 1fr); gap: 24px; padding: 20px; }
 }
-@media (min-width: 640px) {
-  .dashboard-resources-heading { display: block; }
-  .dashboard-resources-toggle { display: none; }
-  .dashboard-resources-content { margin-top: 0; }
+
+/* ---- header ---------------------------------------------------------- */
+.dash-live {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 10px;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--dash-border);
+  border-radius: 999px;
+  color: var(--dash-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dash-live b { color: var(--dash-ink); font-weight: 600; }
+.dash-live-tag { color: var(--dash-ink-2); font-weight: 600; }
+.dash-live .dash-spark { width: 60px; height: 14px; }
+.dash-help {
+  min-width: var(--dash-target, 40px);
+  min-height: var(--dash-target, 40px);
+}
+
+/* ---- cockpit grid ---------------------------------------------------- */
+.dash-cockpit {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.dash-notices { display: grid; gap: 8px; min-width: 0; }
+.dash-notices:empty { display: none; }
+.dash-tiles { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 10px; min-width: 0; }
+/* The groups sit in named areas. Each layout has one flexible row, which
+ * absorbs the height of the groups that span rows; the rows around it stay as
+ * tall as their own group, so no gap opens between stacked cards. */
+.dash-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 4.7fr) minmax(0, 4.3fr) minmax(0, 3fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "traffic upstreams attention"
+    "traffic upstreams control";
+  align-items: start;
+  gap: 10px;
+  min-width: 0;
+}
+.dash-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.dash-col[data-dashboard-column="attention"] { grid-area: attention; }
+.dash-col[data-dashboard-column="traffic"] { grid-area: traffic; }
+.dash-col[data-dashboard-column="upstreams"] { grid-area: upstreams; }
+.dash-col[data-dashboard-column="control"] { grid-area: control; }
+
+/* ---- cards ----------------------------------------------------------- */
+.dash-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  padding: 0;
+  border-radius: 10px;
+}
+.dash-card-h { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; min-height: 30px; padding: 6px 12px 0; }
+.dash-card-title { display: flex; align-items: center; gap: 6px; min-width: 0; margin-right: auto; font-size: 12.5px; font-weight: 600; line-height: 1.3; }
+.dash-card-body { min-width: 0; padding: 6px 12px 10px; }
+.dash-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--dash-soft);
+  color: var(--dash-muted);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.dash-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: var(--dash-target);
+  border-radius: 6px;
+  color: var(--brand-text);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.dash-more:hover { text-decoration: underline; }
+.dash-subhead { margin: 10px 0 2px; color: var(--dash-muted); font-size: 11.5px; font-weight: 600; }
+.dash-sub { color: var(--dash-muted); font-size: 11.5px; }
+.dash-note { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; padding: 8px 12px; color: var(--dash-muted); }
+.dash-note[data-tone="warning"] { color: var(--dash-warn); }
+.dash-note[data-tone="danger"] { color: var(--dash-danger); }
+.dash-note-action {
+  min-height: var(--dash-target);
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--brand-text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+.dash-note-action:hover { text-decoration: underline; }
+.dash-skeleton { display: grid; gap: 4px; padding: 8px 12px 10px; }
+.dash-legend { display: flex; flex-wrap: wrap; gap: 2px 10px; margin: 0; padding: 0; color: var(--dash-muted); font-size: 11.5px; list-style: none; }
+.dash-legend li { display: inline-flex; align-items: center; gap: 5px; }
+.dash-key { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 2px; background: var(--dash-mark); }
+.dash-key[data-kind="hit"] { background: var(--dash-hit); }
+.dash-key[data-kind="miss"] { background: var(--dash-miss); }
+.dash-tone { display: inline-flex; flex: none; color: var(--dash-muted); }
+.dash-tone[data-tone="ok"] { color: var(--dash-ok); }
+.dash-tone[data-tone="warning"] { color: var(--dash-warn); }
+.dash-tone[data-tone="danger"] { color: var(--dash-danger); }
+.dash-eco { display: inline-flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; }
+.dash-pkg { display: block; min-width: 0; overflow: hidden; font-family: var(--font-mono); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.dash-pkg span { color: var(--dash-muted); }
+
+/* ---- small marks ----------------------------------------------------- */
+.dash-split { display: flex; gap: 2px; width: 100%; min-width: 6px; height: 6px; }
+.dash-split i { display: block; flex-basis: 0; min-width: 2px; }
+.dash-split i:first-child { border-radius: 3px 0 0 3px; }
+.dash-split i:last-child { border-radius: 0 3px 3px 0; }
+.dash-split i:only-child { border-radius: 3px; }
+.dash-split .is-hit { background: var(--dash-hit); }
+.dash-split .is-miss { background: var(--dash-miss); }
+.dash-split .is-empty { flex: 1; background: var(--dash-track); }
+.dash-rank { display: block; height: 6px; overflow: hidden; border-radius: 3px; background: var(--dash-track); }
+.dash-rank i { display: block; height: 100%; border-radius: 3px; background: var(--dash-mark); }
+.dash-rank[data-kind="miss"] i { background: var(--dash-miss); }
+.dash-spark { display: flex; align-items: flex-end; gap: 1px; height: 20px; border-bottom: 1px solid var(--dash-grid); }
+.dash-spark i { flex: 1; min-width: 0; border-radius: 1px 1px 0 0; background: var(--dash-mark); }
+.dash-spark[data-kind="hit"] i { background: var(--dash-hit); }
+.dash-spark[data-kind="miss"] i { background: var(--dash-miss); }
+.dash-meter [data-slot="meter-track"] { height: 6px; background: var(--dash-track); }
+.dash-meter [data-slot="meter-indicator"] { background: var(--dash-mark-strong); }
+.dash-meter[data-tone="warning"] [data-slot="meter-indicator"] { background: var(--dash-warn); }
+.dash-meter[data-tone="danger"] [data-slot="meter-indicator"] { background: var(--dash-danger); }
+
+/* ---- tiles ----------------------------------------------------------- */
+.dash-tile { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 7px 12px 8px; border-radius: 10px; }
+.dash-tile[data-alert] { border-color: var(--dash-danger); }
+.dash-tile-label { display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 24px; color: var(--dash-muted); font-size: 11.5px; }
+.dash-tile-label > :not(.dash-key) { min-width: 0; }
+/* A tile label is one line; a longer one truncates and its help names it in full. */
+.dash-tile-label .dash-help { flex-wrap: nowrap; white-space: nowrap; }
+.dash-tile-label .dash-help > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.dash-tile-main { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; min-height: 27px; }
+.dash-tile-value {
+  color: var(--dash-ink);
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 600;
+
+  line-height: 1;
+  white-space: nowrap;
+}
+.dash-tile-unit { margin-left: 0.2em; color: var(--dash-muted); font-size: 0.55em; font-weight: 550; }
+.dash-tile-value { flex: none; }
+/* Decorative marks give way before any figure does. */
+.dash-tile-main .dash-spark { flex: 0 1 44px; min-width: 0; }
+.dash-tile-main .dash-meter,
+.dash-tile-main .dash-split { flex: 0 1 44px; align-self: center; width: auto; min-width: 0; }
+/* The fact under a figure is never cut: when it and the change chip do not
+   share a line, the chip moves to the next one. */
+.dash-tile-sub { display: flex; flex-wrap: wrap; gap: 0 6px; min-width: 0; color: var(--dash-muted); font-size: 11px; }
+.dash-tile-sub > span { white-space: nowrap; }
+.dash-tile-delta { flex: none; margin-left: auto; color: var(--dash-ink-2); font-variant-numeric: tabular-nums; }
+.dash-tile-pair { display: grid; gap: 2px; margin: 0; color: var(--dash-ink-2); font-size: 11.5px; }
+.dash-tile-pair div { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; }
+.dash-tile-pair dt { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.dash-tile-pair dd { flex: none; margin-left: auto; color: var(--dash-ink); font-family: var(--font-mono); font-size: 14px; font-weight: 600; }
+
+/* ---- activity chart -------------------------------------------------- */
+.dash-chart { position: relative; padding-left: 40px; }
+.dash-chart-plot { position: relative; height: 84px; border-radius: 4px; }
+.dash-chart-plot:focus-visible { outline: 2px solid var(--dash-accent); outline-offset: 3px; }
+.dash-chart-grid { position: absolute; right: 0; left: 0; height: 0; border-top: 1px solid var(--dash-grid); }
+.dash-chart-grid[data-base] { border-top-color: var(--dash-axis); }
+.dash-chart-grid span {
+  position: absolute;
+  top: 0;
+  right: 100%;
+  margin-right: 8px;
+  transform: translateY(-50%);
+  color: var(--dash-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dash-chart-bars { position: absolute; inset: 0; display: grid; align-items: end; }
+.dash-chart-col { position: relative; display: flex; align-items: flex-end; justify-content: center; min-width: 0; height: 100%; }
+.dash-chart-col[data-active] { background: color-mix(in oklab, var(--dash-ink) 7%, transparent); }
+.dash-chart-stack { display: flex; flex-direction: column; gap: 2px; width: clamp(2px, 64%, 20px); min-height: 3px; }
+.dash-chart-stack i { display: block; flex-basis: 0; min-height: 1px; }
+.dash-chart-stack i:first-child { border-radius: 3px 3px 0 0; }
+.dash-chart-stack .is-hit { background: var(--dash-hit); }
+.dash-chart-stack .is-miss { background: var(--dash-miss); }
+.dash-chart-stack .is-other { background: var(--dash-mark); }
+.dash-chart-error { position: absolute; top: 1px; left: 50%; width: 6px; height: 6px; margin-left: -3px; background: var(--dash-danger); transform: rotate(45deg); }
+.dash-chart-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dash-muted); }
+.dash-chart-x { position: relative; height: 16px; margin-top: 5px; color: var(--dash-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.dash-chart-x span { position: absolute; top: 0; white-space: nowrap; }
+.dash-chart-tip {
+  position: absolute;
+  z-index: 5;
+  top: 2px;
+  min-width: 150px;
+  padding: 7px 9px;
+  font-size: 14px;
+  line-height: 1.5;
+  border: 1px solid var(--dash-border);
+  border-radius: 8px;
+  background: var(--dash-card);
+  box-shadow: var(--shadow-pop);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.dash-chart-tip p { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.dash-chart-tip p span { color: var(--dash-muted); font-weight: 400; }
+.dash-chart-tip p:first-child { color: var(--dash-muted); font-weight: 400; }
+/* The burst list sizes from its own width, so its rows fit whichever column holds it. */
+.dash-bursts { container: bursts / inline-size; margin: 0; padding: 0; list-style: none; }
+.dash-bursts li { display: grid; grid-template-columns: minmax(118px, 1.3fr) minmax(58px, max-content) minmax(24px, 1fr) 70px 62px; align-items: center; gap: 8px; min-height: 21px; font-variant-numeric: tabular-nums; }
+.dash-bursts li + li { border-top: 1px solid var(--dash-grid); }
+.dash-bursts span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-bursts .is-num { text-align: right; }
+.dash-bursts .is-mute { color: var(--dash-muted); }
+@container bursts (max-width: 380px) {
+  /* Only the decorative split bar gives way; every figure stays. */
+  .dash-bursts li { grid-template-columns: minmax(0, 1fr) auto auto auto; }
+  .dash-bursts li > .dash-split { display: none; }
+}
+
+/* ---- dense tables ---------------------------------------------------- */
+/* A breakdown table keeps every column. When its card is too narrow, the
+   table scrolls inside a named, focusable region instead of dropping data. */
+.dash-scroll { overflow-x: auto; overscroll-behavior-x: contain; border-radius: 4px; }
+.dash-scroll:focus-visible { outline: 2px solid var(--dash-accent); outline-offset: 2px; }
+.dash-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.dash-table th { padding: 0 0 2px 8px; color: var(--dash-muted); font-size: 11px; font-weight: 500; text-align: right; white-space: nowrap; }
+.dash-table td { height: 22px; padding: 0 0 0 8px; text-align: right; white-space: nowrap; }
+.dash-table th:first-child,
+.dash-table td:first-child { padding-left: 0; text-align: left; }
+.dash-table td:first-child { width: 99%; max-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.dash-table tbody tr + tr td { border-top: 1px solid var(--dash-grid); }
+.dash-table .is-mute { color: var(--dash-muted); }
+.dash-table .dash-split,
+.dash-table .dash-rank { display: inline-flex; width: 30px; margin-right: 6px; vertical-align: middle; }
+.dash-table .dash-rank { display: inline-block; }
+
+/* In a narrow card the request tail keeps the package name readable; the
+   ecosystem and upstream timing move to each row's detail dialog. */
+.dash-card[data-dashboard-recent-requests] { container: recent / inline-size; }
+@container recent (max-width: 420px) {
+  .dash-reqs .is-wide { display: none; }
+}
+.dash-reqs { width: 100%; margin-top: 4px; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.dash-reqs tr { cursor: pointer; }
+.dash-reqs tbody tr { border-top: 1px solid var(--dash-grid); }
+.dash-reqs tbody tr:hover { background: var(--dash-soft); }
+.dash-reqs td { height: var(--dash-target); padding: 0 0 0 8px; text-align: right; white-space: nowrap; }
+.dash-reqs td:first-child { padding-left: 12px; text-align: left; }
+.dash-reqs td:last-child { padding-right: 12px; }
+.dash-reqs td.is-name { width: 99%; max-width: 0; text-align: left; }
+.dash-reqs td.is-mute { color: var(--dash-muted); }
+.dash-reqs-open {
+  display: block;
+  width: 100%;
+  min-height: var(--dash-target);
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dash-outcome { display: inline-flex; align-items: center; gap: 6px; color: var(--dash-ink-2); font-size: 11.5px; white-space: nowrap; }
+.dash-outcome i { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--dash-mark); }
+.dash-outcome[data-outcome="hit"] i { background: var(--dash-hit); }
+.dash-outcome[data-outcome="miss"] i { background: var(--dash-miss); }
+.dash-outcome[data-outcome="blocked"] i { border-radius: 2px; background: var(--dash-warn); }
+.dash-outcome[data-outcome="failed"] i { border-radius: 1px; background: var(--dash-danger); transform: rotate(45deg); }
+.dash-outcome[data-outcome="unknown"] i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--dash-mark); }
+
+/* ---- upstream fleet -------------------------------------------------- */
+.dash-fleet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; margin: 0; padding: 4px 12px 0; list-style: none; }
+.dash-fleet li { display: grid; grid-template-columns: minmax(0, 1fr) auto 28px; align-items: center; gap: 6px; min-height: 21px; }
+.dash-fleet .dash-eco { overflow: hidden; }
+.dash-fleet .is-num { color: var(--dash-muted); font-size: 11.5px; font-variant-numeric: tabular-nums; text-align: right; }
+.dash-fleet-marks { display: inline-flex; gap: 3px; }
+.dash-mark-state { display: inline-block; flex: none; width: 8px; height: 8px; }
+.dash-mark-state[data-state="healthy"] { border-radius: 50%; background: var(--dash-ok); }
+.dash-mark-state[data-state="slow"] { background: var(--dash-warn); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.dash-mark-state[data-state="unavailable"] { border-radius: 2px; background: var(--dash-danger); }
+.dash-fleet-key { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; margin: 0; padding: 4px 12px 0; color: var(--dash-muted); font-size: 11px; }
+.dash-fleet-key span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+
+/* ---- attention, security, runtime ------------------------------------ */
+.dash-attn { margin: 4px 0 0; padding: 0; list-style: none; }
+.dash-attn li { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 0 8px; padding: 7px 12px 4px; border-top: 1px solid var(--dash-border); }
+/* The action sits under the text, so a narrow card never squeezes the sentence into a column. */
+.dash-attn li > .dash-more,
+.dash-attn li > .dash-note-action { grid-column: 2; justify-self: start; padding-left: 0; }
+.dash-attn li > .dash-tone { margin-top: 1px; }
+.dash-attn p { margin: 0; }
+.dash-attn strong { display: block; font-weight: 600; }
+.dash-attn p span { display: block; color: var(--dash-muted); font-size: 11.5px; }
+.dash-checks { display: flex; flex-wrap: wrap; gap: 2px 8px; margin: auto 0 0; padding: 7px 12px 9px; border-top: 1px solid var(--dash-border); color: var(--dash-ink-2); font-size: 11.5px; list-style: none; }
+.dash-checks li { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.dash-checks b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.dash-allclear { display: flex; align-items: center; gap: 8px; margin: 0; padding: 12px; color: var(--dash-ink-2); }
+.dash-lead { margin: 0; color: var(--dash-ink-2); }
+.dash-lead b { color: var(--dash-ink); font-weight: 650; font-variant-numeric: tabular-nums; }
+.dash-sev { display: flex; gap: 2px; height: 8px; margin: 7px 0 6px; }
+.dash-sev i { display: block; flex-basis: 0; min-width: 2px; }
+.dash-sev i:first-child { border-radius: 4px 0 0 4px; }
+.dash-sev i:last-child { border-radius: 0 4px 4px 0; }
+.dash-sev i:only-child { border-radius: 4px; }
+[data-sev="critical"] { --sev: var(--danger); }
+[data-sev="high"] { --sev: color-mix(in oklab, var(--danger) 45%, var(--warn)); }
+[data-sev="medium"] { --sev: var(--warn); }
+[data-sev="low"] { --sev: var(--text-soft); }
+[data-sev="unknown"] { --sev: var(--border-strong); }
+.dash-sev i,
+.dash-sev-key i { background: var(--sev); }
+.dash-sev-key { display: flex; flex-wrap: wrap; gap: 1px 12px; margin: 0; padding: 0; font-size: 11.5px; font-variant-numeric: tabular-nums; list-style: none; }
+.dash-sev-key li { display: inline-flex; align-items: center; gap: 5px; color: var(--dash-muted); white-space: nowrap; }
+.dash-sev-key i { flex: none; width: 8px; height: 8px; border-radius: 2px; }
+.dash-sev-key b { color: var(--dash-ink); font-weight: 600; }
+.dash-kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 16px; margin: 0; font-variant-numeric: tabular-nums; }
+.dash-kv.is-top { margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--dash-grid); }
+.dash-kv .is-wide { grid-column: 1 / -1; }
+.dash-kv div { display: flex; justify-content: space-between; gap: 8px; min-width: 0; min-height: 20px; }
+/* A figure is never truncated: when a cell is too narrow, its label gives way.
+   Free text (a hostname, a version) is the exception and truncates itself. */
+.dash-kv dt { min-width: 0; overflow: hidden; color: var(--dash-muted); text-overflow: ellipsis; white-space: nowrap; }
+.dash-kv dd { flex: none; margin: 0; white-space: nowrap; }
+.dash-kv .is-text dt { flex: none; }
+.dash-kv .is-text dd { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.dash-kv em { color: var(--dash-muted); font-style: normal; }
+.dash-prot { margin: 0; padding: 0; list-style: none; }
+.dash-prot li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 8px; min-height: 20px; }
+.dash-prot li + li { border-top: 1px solid var(--dash-grid); }
+.dash-prot li > span:last-child { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0 6px; margin-left: auto; color: var(--dash-ink-2); font-variant-numeric: tabular-nums; }
+.dash-prot li[data-off] > span:last-child { color: var(--dash-muted); }
+.dash-prot em { color: var(--dash-muted); font-style: normal; }
+.dash-prot em[data-tone="warning"] { display: inline-flex; align-items: center; gap: 3px; color: var(--dash-warn); }
+.dash-capline { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 5px; color: var(--dash-ink-2); }
+.dash-capline b { color: var(--dash-ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.dash-capline em { color: var(--dash-muted); font-style: normal; font-weight: 400; }
+.dash-disk { margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--dash-grid); }
+
+/* ---- responsive ------------------------------------------------------ */
+@container cockpit (max-width: 1040px) {
+  .dash-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .dash-cols {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* The last row is the flexible one, so a tall upstreams group leaves its
+       slack at the bottom instead of between traffic and control. */
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas:
+      "traffic attention"
+      "traffic upstreams"
+      "control upstreams";
+  }
+}
+@container cockpit (max-width: 700px) {
+  .dash-cockpit { --dash-target: 40px; }
+  .dash-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash-cols {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas: "attention" "traffic" "upstreams" "control";
+  }
+  /* The live rates stay; only the decorative strip goes, and the text wraps. */
+  .dash-live { flex-basis: 100%; white-space: normal; border-radius: 8px; padding: 2px 10px; }
+  .dash-live .dash-spark { display: none; }
+  .dash-table { min-width: 380px; }
 }

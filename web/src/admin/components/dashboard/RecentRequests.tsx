@@ -1,163 +1,100 @@
 import type { UseQueryResult } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router'
 
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import EcosystemIcon from '@/components/EcosystemIcon'
-import Icon from '@/components/Icon'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { getAdminRouteHref } from '@/admin/routes'
-import { adminApi } from '@/lib/api'
-import { getApiError } from '@/lib/apiError'
+import EcosystemIcon from '@/components/EcosystemIcon'
+import { Skeleton } from '@/components/ui/skeleton'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
-import { REQUEST_OUTCOME_META, requestOutcome } from '@/lib/dashboardOverview'
+import type { adminApi } from '@/lib/api'
+import { getApiError } from '@/lib/apiError'
+import { requestOutcome } from '@/lib/dashboardOverview'
 import { formatBytes, formatLatency, formatTime } from '@/lib/utils'
 
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
+import { ecosystemLabel } from './cockpitFormat'
+import { CardNote, CockpitCard, MoreLink } from './cockpitParts'
 
 interface RecentRequestsProps {
   query: UseQueryResult<Awaited<ReturnType<typeof adminApi.listLogs>>>
-  limit?: number
+  limit: number
   onOpenDetails: (id: number) => void
 }
 
 /**
- * Latest client requests. This is a live tail independent of the selected
- * statistics range, which the caption states explicitly so operators do not
- * read it as range-scoped data.
+ * The latest client requests. This is a live tail, independent of the selected
+ * statistics range, and the card says so, so nobody reads it as range-scoped.
  */
-export default function RecentRequests({ query, limit = 5, onOpenDetails }: RecentRequestsProps) {
+export default function RecentRequests({ query, limit, onOpenDetails }: RecentRequestsProps) {
   const { t } = useTranslation()
-  const items = query.data?.data.items ?? []
-  const isStale = query.isRefetchError && query.data !== undefined
-  const initialError = query.isError && query.data === undefined
+  const items = query.data?.data.items.slice(0, limit) ?? []
+  const stale = query.isRefetchError && query.data !== undefined
+  const failed = query.isError && query.data === undefined
 
   return (
-    <Card
-      render={<section />}
-      data-dashboard-recent-requests
-      data-dashboard-recent-empty={!query.isPending && !initialError && items.length === 0 ? 'true' : undefined}
-      aria-labelledby="overview-recent-title"
-      aria-busy={query.isPending || undefined}
-      className="h-full min-w-0 flex-1 gap-0 p-0"
+    <CockpitCard
+      id="recent"
+      title={t('overview.recentRequestsTitle')}
+      chip={t('overview.recentLive')}
+      aside={<MoreLink to={getAdminRouteHref('accessLogs')}>{t('overview.allLogs')}</MoreLink>}
+      busy={query.isPending}
+      data-dashboard-recent-requests=""
+      data-dashboard-recent-empty={!query.isPending && !failed && items.length === 0 ? 'true' : undefined}
     >
-      <CardHeader className="min-h-[76px] gap-x-3 py-3">
-        <div className="min-w-0">
-          <CardTitle id="overview-recent-title" className="pt-2">
-            {t('overview.recentRequestsTitle')}
-          </CardTitle>
-          <CardDescription className="mt-0.5">
-            {t('overview.recentRequestsCaption')}
-          </CardDescription>
-        </div>
-        <Button
-          variant="link"
-          nativeButton={false}
-          role="link"
-          render={<Link to={getAdminRouteHref('accessLogs')} />}
-          className="px-2 text-[14px]"
-        >
-          {t('dashboard.viewAll')}
-          <Icon name="chevron_right" size="sm" />
-        </Button>
-      </CardHeader>
-
-      {isStale && (
-        <div className="px-5 pb-2"><Alert role="status" variant="warning"><AlertDescription>{t('overview.dataStale')}</AlertDescription></Alert></div>
-      )}
-
+      {stale && <CardNote tone="warning" role="status" onRetry={() => { void query.refetch() }} retryLabel={t('common.retry')}>{t('overview.dataStale')}</CardNote>}
       {query.isPending ? (
-        <div aria-hidden className="flex flex-col gap-px px-5 pb-5">
-          {/* Match the real table's header + row heights so the populated
-              state does not shift when the first response lands. */}
-          <Skeleton className="h-9" />
-          {Array.from({ length: limit }, (_, index) => (
-            <Skeleton key={index} className="h-[55px]" />
-          ))}
+        <div aria-hidden className="dash-skeleton" data-recent-skeleton>
+          {Array.from({ length: limit }, (_, index) => <Skeleton key={index} className="h-[20px]" />)}
         </div>
-      ) : initialError ? (
-        <div className="px-5 pb-5">
-          <Alert variant="warning" role="alert" className="flex flex-wrap items-center justify-between gap-2">
-            <AlertDescription>{getApiError(query.error).status === 403 ? t('common.permissionDenied') : t('overview.recentRequestsUnavailable')}</AlertDescription>
-            <Button variant="outline" size="sm" onClick={() => { void query.refetch() }}>{t('overview.refresh')}</Button>
-          </Alert>
-        </div>
+      ) : failed ? (
+        <CardNote tone="warning" role="alert" onRetry={() => { void query.refetch() }} retryLabel={t('common.retry')}>
+          {getApiError(query.error).status === 403 ? t('common.permissionDenied') : t('overview.recentRequestsUnavailable')}
+        </CardNote>
       ) : items.length === 0 ? (
-        <Empty className="min-h-[112px] gap-1.5 px-5 pb-5 pt-2">
-          <EmptyHeader className="gap-1.5">
-            <EmptyMedia variant="icon" className="mb-0 rounded-full"><Icon name="download" size="sm" /></EmptyMedia>
-            <EmptyTitle>{t('overview.recentEmpty')}</EmptyTitle>
-            <EmptyDescription>{t('overview.recentEmptyHint')}</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <CardNote>{t('overview.recentEmpty')} {t('overview.recentEmptyHint')}</CardNote>
       ) : (
-        <TableContainer label={t('overview.recentRequestsTitle')} minWidth={600}>
-          <Table className="w-full border-collapse text-left">
-            <TableHeader>
-              <TableRow style={{ color: 'var(--dash-muted)' }}>
-                <TableHead className="px-4 py-2.5 text-[13px] font-medium">{t('overview.colPackage')}</TableHead>
-                <TableHead className="px-3 py-2.5 text-[13px] font-medium whitespace-nowrap">{t('overview.colEcosystem')}</TableHead>
-                <TableHead className="px-3 py-2.5 text-[13px] font-medium whitespace-nowrap">{t('overview.colOutcome')}</TableHead>
-                <TableHead className="px-3 py-2.5 text-right text-[13px] font-medium whitespace-nowrap">{t('overview.colSize')}</TableHead>
-                <TableHead className="px-3 py-2.5 text-right text-[13px] font-medium whitespace-nowrap">{t('overview.colLatency')}</TableHead>
-                <TableHead className="px-4 py-2.5 text-right text-[13px] font-medium whitespace-nowrap">{t('overview.colTime')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map(item => {
-                const outcome = requestOutcome(item)
-                const meta = REQUEST_OUTCOME_META[outcome]
-                const name = item.package_name || t('recentDownloads.unknownPackage')
-                return (
-                  <TableRow
-                    key={item.id}
-                    data-recent-request-id={item.id}
-                    className="cursor-pointer border-t transition-colors duration-150 hover:bg-[var(--dash-soft)]"
-                    style={{ borderColor: 'var(--dash-border)' }}
-                    onClick={() => onOpenDetails(item.id)}
-                  >
-                    <TableCell className="max-w-[180px] px-4 py-4">
-                      <Button
-                        variant="ghost"
-                        type="button"
-                        onClick={event => { event.stopPropagation(); onOpenDetails(item.id) }}
-                        className="block h-auto min-w-0 max-w-full truncate p-0 text-left font-mono text-[14px] font-medium"
-                        style={{ color: 'var(--dash-ink)' }}
-                        title={item.version ? `${name}@${item.version}` : name}
-                      >
-                        {name}
-                        {item.version && <span style={{ color: 'var(--dash-muted)' }}>@{item.version}</span>}
-                      </Button>
-                    </TableCell>
-                    <TableCell className="px-3 py-4">
-                      <span className="inline-flex items-center gap-1.5 text-[13px]" style={{ color: 'var(--dash-muted)' }}>
-                        {isAdminEcosystem(item.adapter_type) && <EcosystemIcon type={item.adapter_type} size={14} decorative />}
-                        {item.adapter_type || '—'}
-                      </span>
-                    </TableCell>
-                    <TableCell className="px-3 py-4">
-                      <Badge variant={meta.variant}>{t(meta.key)}</Badge>
-                    </TableCell>
-                    <TableCell className="px-3 py-4 text-right font-mono text-[13px] tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-ink)' }}>
-                      {formatBytes(item.bytes_sent)}
-                    </TableCell>
-                    <TableCell className="px-3 py-4 text-right font-mono text-[13px] tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-muted)' }}>
-                      {formatLatency(item.latency_ms)}
-                    </TableCell>
-                    <TableCell className="px-4 py-4 text-right font-mono text-[13px] tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-muted)' }}>
-                      <time dateTime={item.created_at}>{formatTime(item.created_at, 'auto')}</time>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <table className="dash-reqs">
+          <thead className="sr-only">
+            <tr>
+              <th scope="col">{t('overview.colOutcome')}</th>
+              <th scope="col">{t('overview.colPackage')}</th>
+              <th scope="col" className="is-wide">{t('overview.colEcosystem')}</th>
+              <th scope="col" className="is-wide">{t('overview.colLatency')}</th>
+              <th scope="col">{t('overview.colSize')}</th>
+              <th scope="col">{t('overview.colTime')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map(item => {
+              const outcome = requestOutcome(item)
+              const name = item.package_name || t('recentDownloads.unknownPackage')
+              const full = item.version ? `${name}@${item.version}` : name
+              return (
+                <tr key={item.id} data-recent-request-id={item.id} onClick={() => onOpenDetails(item.id)}>
+                  <td>
+                    <span className="dash-outcome" data-outcome={outcome}><i aria-hidden />{t(`overview.outcomeShort.${outcome}`)}</span>
+                  </td>
+                  <td className="is-name">
+                    <button
+                      type="button"
+                      className="dash-reqs-open dash-focus"
+                      title={full}
+                      onClick={event => { event.stopPropagation(); onOpenDetails(item.id) }}
+                    >
+                      <span className="dash-pkg">{name}{item.version && <span>@{item.version}</span>}</span>
+                    </button>
+                  </td>
+                  <td className="is-wide">
+                    {isAdminEcosystem(item.adapter_type) && <EcosystemIcon type={item.adapter_type} size={13} decorative />}
+                    <span className="sr-only">{ecosystemLabel(item.adapter_type)}</span>
+                  </td>
+                  <td className="is-mute is-wide">{outcome === 'miss' && item.upstream ? `${item.upstream} · ` : ''}{formatLatency(item.latency_ms)}</td>
+                  <td>{formatBytes(item.bytes_sent)}</td>
+                  <td className="is-mute"><time dateTime={item.created_at}>{formatTime(item.created_at, 'auto')}</time></td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       )}
-    </Card>
+    </CockpitCard>
   )
 }

@@ -149,10 +149,18 @@ async function settlePausedApp(page: Page, initialCalls: () => number) {
   // Client navigation and React's concurrent scheduler can start the request
   // just after the last fixed clock advance. Wait for the test-specific
   // responder (rather than a same-URL warm-up response), then for its network
-  // work to finish, before giving React/Recharts an explicit render window.
+  // work to finish, before giving React an explicit render window.
   await expect.poll(initialCalls).toBe(1)
   await page.waitForLoadState('networkidle')
   await page.clock.runFor(100)
+}
+
+// The Activity card re-buckets trend points into clock-aligned bars and tags
+// each bar with its exact request sum, so the bar sums identify which range's
+// payload is on screen without depending on chart geometry.
+function activityBarRequests(trends: Locator) {
+  return trends.locator('[data-trend-chart] .dash-chart-col')
+    .evaluateAll(bars => bars.map(bar => Number(bar.getAttribute('data-requests'))))
 }
 
 function trendPoints(count: number, requestBase: number, bucketStep: number) {
@@ -195,25 +203,36 @@ test('Overview keeps the previous trend while an uncached range loads', async ({
 
   await page.goto('/admin')
   const trends = page.locator('[data-query-key="dashboard-trends"]')
-  const chart = trends.locator('[data-trend-chart] .recharts-wrapper')
+  const chart = trends.locator('[data-trend-chart]')
   const ranges = page.getByRole('group', { name: '统计周期' })
   const nextRange = ranges.getByRole('button', { name: '1 小时' })
   await expect(chart).toBeVisible()
   await expect(trends).toHaveAttribute('data-trend-range', '30d')
+  // Four 10-second buckets fall inside one clock-aligned minute: 12+13+14+15.
+  await expect.poll(() => activityBarRequests(trends)).toEqual([54])
   await nextRange.click()
   await requestStarted.promise
 
-  // The previous range's chart stays mounted and tagged while the new range loads.
+  // The previous range's bars stay mounted and tagged with their own range
+  // while the new range loads, and the card says so instead of passing the
+  // old period off as the selected one.
   await expect(chart).toBeVisible()
   await expect(trends).toHaveAttribute('data-trend-range', '30d')
   await expect(trends).toHaveAttribute('data-trend-pending', 'true')
   await expect(trends).toHaveAttribute('aria-busy', 'true')
   await expect(nextRange).toHaveAttribute('aria-pressed', 'true')
+  expect(await activityBarRequests(trends)).toEqual([54])
+  await expect(trends.getByRole('status').filter({ hasText: '正在切换统计周期，当前仍显示上一周期的数据。' })).toBeVisible()
+  await expect(trends.getByRole('status', { name: '正在加载统计' })).toHaveCount(0)
 
   response.resolve({ points: nextPoints })
   await expect(trends).toHaveAttribute('data-trend-range', '1h')
   await expect(trends).not.toHaveAttribute('data-trend-pending', 'true')
+  await expect(trends).not.toHaveAttribute('aria-busy', 'true')
   await expect(chart).toBeVisible()
+  // Six 2-hour buckets are six bars, one per bucket.
+  await expect.poll(() => activityBarRequests(trends)).toEqual([24, 25, 26, 27, 28, 29])
+  await expect(trends).not.toContainText('正在切换统计周期')
 })
 
 test('Overview keeps the previous trend and warns when an uncached range fails', async ({ page }) => {
@@ -231,19 +250,28 @@ test('Overview keeps the previous trend and warns when an uncached range fails',
 
   await page.goto('/admin')
   const trends = page.locator('[data-query-key="dashboard-trends"]')
-  const chart = trends.locator('[data-trend-chart] .recharts-wrapper')
+  const chart = trends.locator('[data-trend-chart]')
   const ranges = page.getByRole('group', { name: '统计周期' })
   const nextRange = ranges.getByRole('button', { name: '1 小时' })
   await expect(chart).toBeVisible()
+  await expect.poll(() => activityBarRequests(trends)).toEqual([54])
   await nextRange.click()
   await requestStarted.promise
   await expect(chart).toBeVisible()
   await expect(trends).toHaveAttribute('aria-busy', 'true')
 
+  // A failed range switch must neither blank the card into the first-load
+  // error nor relabel the old bars as the new range: the previous period's
+  // bars stay, still tagged 30d, with a warning and a retry.
   response.resolve({ status: 500, body: { code: 'FAILED', message: 'fixture range failure' } })
+  const staleNote = trends.getByRole('status').filter({ hasText: '最新刷新失败，正在保留最近的数据。' })
+  await expect(staleNote).toBeVisible()
+  await expect(staleNote.getByRole('button', { name: '重试' })).toBeVisible()
   await expect(trends).toHaveAttribute('data-trend-range', '30d')
+  await expect(trends).toHaveAttribute('aria-busy', 'true')
+  await expect(trends.getByRole('alert')).toHaveCount(0)
   await expect(chart).toBeVisible()
-  await expect(trends).toContainText(/保留|失败|stale/i)
+  expect(await activityBarRequests(trends)).toEqual([54])
 })
 
 test('Overview trends poll at range-specific intervals', async ({ page }) => {

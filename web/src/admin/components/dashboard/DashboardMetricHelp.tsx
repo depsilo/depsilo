@@ -11,8 +11,9 @@ interface DashboardMetricHelpProps {
   children: ReactNode
 }
 
-/** A metric label and its explanation share one touch-sized, keyboard-accessible
- * trigger. Base UI owns positioning, dismissal, and focus restoration. */
+/** A metric label and its explanation share one keyboard-accessible trigger,
+ * sized by the Overview's target token: compact for a mouse, 40px for touch.
+ * Base UI owns positioning, dismissal, and focus restoration. */
 export default function DashboardMetricHelp({ label, ariaLabel, children }: DashboardMetricHelpProps) {
   const { t } = useTranslation()
 
@@ -20,7 +21,7 @@ export default function DashboardMetricHelp({ label, ariaLabel, children }: Dash
     <Popover>
       <PopoverTrigger
         aria-label={`${label} · ${ariaLabel}`}
-        render={<Button variant="ghost" className="min-h-[40px] min-w-[40px] max-w-full justify-start gap-1.5 whitespace-normal px-0 text-left text-[length:inherit] font-[inherit] leading-normal text-inherit hover:bg-transparent hover:text-[var(--brand-text)] data-popup-open:text-[var(--brand-text)] dark:hover:bg-transparent" />}
+        render={<Button variant="ghost" className="dash-help h-auto max-w-full justify-start gap-1.5 whitespace-normal px-0 text-left text-[length:inherit] font-[inherit] leading-normal text-inherit hover:bg-transparent hover:text-[var(--brand-text)] data-popup-open:text-[var(--brand-text)] dark:hover:bg-transparent" />}
       >
         <span>{label}</span>
         <Icon name="info" size="sm" className="shrink-0" />

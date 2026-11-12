@@ -58,16 +58,38 @@ test('Overview lists the latest client requests independent of the statistics ra
       page_size: 5,
     },
   })
+  const logRequests: URL[] = []
+  page.on('request', request => {
+    const url = new URL(request.url())
+    if (url.pathname === '/api/v1/admin/logs') logRequests.push(url)
+  })
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/admin')
 
   const table = page.locator('[data-dashboard-recent-requests]')
-  await expect(table.getByRole('heading', { name: '最近请求' })).toBeVisible()
-  await expect(table).toContainText('不受上方统计周期限制')
+  await expect(table.getByRole('heading', { name: /最近请求/ })).toBeVisible()
+  // The card itself must say it is a live tail, otherwise operators read the
+  // rows as belonging to the selected statistics period.
+  await expect(table.getByRole('heading', { name: /最近请求/ })).toContainText('实时，不随周期变化')
   await expect(table.locator('[data-recent-request-id]')).toHaveCount(2)
-  await expect(table.locator('[data-recent-request-id="1"]')).toContainText('requests')
-  await expect(table.locator('[data-recent-request-id="1"]')).toContainText('回源完成')
-  await expect(table.getByRole('link', { name: /查看全部/ })).toHaveAttribute('href', '/admin/logs')
+  const missRow = table.locator('[data-recent-request-id="1"]')
+  await expect(missRow).toContainText('requests@2.32.4')
+  // An upstream fetch names its outcome in text and the upstream it came from,
+  // so the status is never carried by the dot colour alone.
+  await expect(missRow.locator('[data-outcome="miss"]')).toHaveText('回源')
+  await expect(missRow).toContainText('tuna · 240 ms')
+  await expect(missRow).toContainText('4.0 MB')
+  await expect(table.locator('[data-recent-request-id="2"] [data-outcome="hit"]')).toHaveText('命中')
+  await expect(table.getByRole('link', { name: /全部日志/ })).toHaveAttribute('href', '/admin/logs')
+
+  // Changing the statistics range must not scope or empty the live tail.
+  await page.getByRole('group', { name: '统计周期' }).getByRole('button', { name: '7 天', exact: true }).click()
+  await expect(page.getByRole('group', { name: '统计周期' }).getByRole('button', { name: '7 天', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(table.locator('[data-recent-request-id]')).toHaveCount(2)
+  expect(logRequests.length).toBeGreaterThan(0)
+  for (const url of logRequests) {
+    expect([...url.searchParams.keys()].sort()).toEqual(['page', 'page_size'])
+  }
 })
 
 test('request rows open a centered detail dialog that closes with Escape', async ({ page }) => {

@@ -1,25 +1,40 @@
-import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { useState } from 'react'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useMemo, useState } from 'react'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
 import AdminPage from '@/admin/components/AdminPage'
-import ActivityTrends from '@/admin/components/dashboard/ActivityTrends'
+import ActivityCard from '@/admin/components/dashboard/ActivityCard'
+import AttentionCard from '@/admin/components/dashboard/AttentionCard'
+import { EcosystemsCard, TopPackagesCard } from '@/admin/components/dashboard/BreakdownCards'
 import ConnectionGuide from '@/admin/components/dashboard/ConnectionGuide'
-import CacheBenefits from '@/admin/components/dashboard/CacheBenefits'
 import DashboardServiceStatus from '@/admin/components/dashboard/DashboardServiceStatus'
+import LiveStrip from '@/admin/components/dashboard/LiveStrip'
+import OverviewTiles from '@/admin/components/dashboard/OverviewTiles'
 import RecentRequests from '@/admin/components/dashboard/RecentRequests'
 import RequestDetailsDialog from '@/admin/components/dashboard/RequestDetailsDialog'
-import RuntimeResources, { CacheStorageOverview } from '@/admin/components/dashboard/RuntimeResources'
-import TrafficOverview from '@/admin/components/dashboard/TrafficOverview'
+import RuntimeCard from '@/admin/components/dashboard/RuntimeCard'
+import SecurityCard from '@/admin/components/dashboard/SecurityCard'
+import StorageCard from '@/admin/components/dashboard/StorageCard'
+import UpstreamsCard from '@/admin/components/dashboard/UpstreamsCard'
+import {
+  COCKPIT_QUERY_KEY,
+  useBreakdown,
+  useCacheDistribution,
+  useCapabilityFacts,
+  useSecuritySummary,
+  useSuggestionsTotal,
+  useUpstreamList,
+} from '@/admin/components/dashboard/overviewQueries'
 import Icon from '@/components/Icon'
 import QueryErrorState from '@/components/QueryErrorState'
 import { getAdminRouteHref } from '@/admin/routes'
 import { usePolicyStatus } from '@/admin/usePolicyStatus'
+import { useImmersiveMode } from '@/hooks/useImmersiveMode'
 import type { DashboardRange, DashboardResponse, DashboardTrendPoint, NowResponse, RuntimeResponse } from '@/lib/adminApi.types'
 import { adminApi, statsApi } from '@/lib/api'
 import { getReadiness } from '@/lib/readiness'
@@ -27,12 +42,21 @@ import { getApiError } from '@/lib/apiError'
 import {
   DASHBOARD_RANGES,
   deriveServiceStatus,
+  originCoverageNote,
   deriveUsageState,
   readDashboardRange,
   writeDashboardRange,
 } from '@/lib/dashboardOverview'
+import { activitySpan, rebucketActivity, type ActivityBucket } from '@/lib/overviewCockpit'
 import { formatTime } from '@/lib/utils'
 import './Dashboard.css'
+
+/** Rows in the live request tail. */
+const RECENT_REQUESTS = 8
+/** Bars in a tile spark: enough to show when traffic came, few enough to read at 44px. */
+const SPARK_BARS = 14
+const NO_POINTS: DashboardTrendPoint[] = []
+const NO_BUCKETS: ActivityBucket[] = []
 
 const TREND_REFRESH_INTERVAL: Record<DashboardRange, number> = {
   '1h': 5_000,
@@ -57,9 +81,16 @@ export default function Dashboard() {
   const { t } = useTranslation()
   const [range, setRange] = useState<DashboardRange>(() => readDashboardRange())
   const [showProblems, setShowProblems] = useState(false)
-  const [mobileResourcesOpen, setMobileResourcesOpen] = useState(false)
   const [detailsLogId, setDetailsLogId] = useState<number | null>(null)
   const policy = usePolicyStatus()
+  const immersive = useImmersiveMode()
+  const queryClient = useQueryClient()
+  const breakdownQuery = useBreakdown(range)
+  const upstreamListQuery = useUpstreamList()
+  const suggestionsQuery = useSuggestionsTotal()
+  const securityQuery = useSecuritySummary()
+  const capabilitiesQuery = useCapabilityFacts()
+  const distributionQuery = useCacheDistribution()
 
   const readinessQuery = useQuery({
     queryKey: ['admin', 'readiness'],
@@ -70,8 +101,8 @@ export default function Dashboard() {
   })
 
   const recentQuery = useQuery({
-    queryKey: ['admin', 'dashboard', 'recent-requests', 5],
-    queryFn: ({ signal }) => adminApi.listLogs({ page: 1, page_size: 5 }, { signal }),
+    queryKey: ['admin', 'dashboard', 'recent-requests', RECENT_REQUESTS],
+    queryFn: ({ signal }) => adminApi.listLogs({ page: 1, page_size: RECENT_REQUESTS }, { signal }),
     refetchInterval: 5_000,
     refetchIntervalInBackground: false,
     staleTime: 4_000,
@@ -161,7 +192,8 @@ export default function Dashboard() {
     setRetainedTrends(trendsQuery.data)
   }
   const trendData = trendsQuery.data ?? retainedTrends
-  const trendPoints: DashboardTrendPoint[] = trendData?.response.data.points ?? []
+  const trendPoints: DashboardTrendPoint[] = trendData?.response.data.points ?? NO_POINTS
+  const sparkBuckets = useMemo(() => rebucketActivity(trendPoints, activitySpan(trendPoints, SPARK_BARS)), [trendPoints])
   const trendRange = trendData?.range ?? range
   const trendsLoading = trendsQuery.isPending && !trendData
   const trendsInitialError = trendsQuery.isError && !trendData
@@ -238,6 +270,8 @@ export default function Dashboard() {
     void nowQuery.refetch()
     void runtimeQuery.refetch()
     void trendsQuery.refetch()
+    void capabilitiesQuery.refetch()
+    void queryClient.refetchQueries({ queryKey: COCKPIT_QUERY_KEY, type: 'active' })
   }
 
   function refreshStatus() {
@@ -248,44 +282,104 @@ export default function Dashboard() {
   }
 
   const lastUpdatedLabel = lastUpdated > 0 ? formatTime(new Date(lastUpdated).toISOString(), 'time') : '—'
+  const fullscreenLabel = t(immersive.active ? 'overview.fullscreenExit' : 'overview.fullscreenEnter')
+  // Where the Fullscreen API is missing, the mode only hides the navigation
+  // rail, so the control is offered where that rail is on screen.
+  const fullscreenSupported = typeof document !== 'undefined' && document.fullscreenEnabled
+  // A tile spark sits under the selected period's totals, so it is drawn only
+  // when the trend payload describes that same period.
+  const tileSpark = trendData && trendRange === overviewRange ? sparkBuckets : NO_BUCKETS
+  const originNote = originCoverageNote(overview?.origin_coverage, overview?.range?.start)
+  const trendsError = trendsInitialError
+    ? t(getApiError(trendsQuery.error).status === 403 ? 'common.permissionDenied' : 'overview.statisticsUnavailable')
+    : undefined
 
   return (
-    <div className="dashboard-page mx-auto w-full min-w-0">
+    <div className="dashboard-surface mx-auto w-full min-w-0">
     <AdminPage
-      actions={(
-        <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
-          <div data-dashboard-status-group className="flex min-w-0 flex-wrap items-center gap-2">
-          <DashboardServiceStatus
-            open={showProblems}
-            onOpenChange={setShowProblems}
-            status={status}
-            pending={healthPending}
-            refreshing={readinessQuery.isFetching || overviewQuery.isFetching || nowQuery.isFetching || policy.refreshing}
-            readiness={readinessQuery.data}
-            now={now}
-            policyStale={policy.isStale}
-            upstreamsStale={healthStale}
-            upstreamsUpdatedAt={healthSnapshot?.updatedAt ?? 0}
-            onRefresh={refreshStatus}
-          />
-          <Button variant="ghost" size="sm" render={<Link to={getAdminRouteHref('attention')} />} nativeButton={false} role="link">{t('overview.allAttention')}</Button>
+      titleAccessory={(
+        <>
+          <div data-dashboard-status-group className="flex min-w-0 items-center">
+            <DashboardServiceStatus
+              open={showProblems}
+              onOpenChange={setShowProblems}
+              status={status}
+              pending={healthPending}
+              refreshing={readinessQuery.isFetching || overviewQuery.isFetching || nowQuery.isFetching || policy.refreshing}
+              readiness={readinessQuery.data}
+              now={now}
+              policyStale={policy.isStale}
+              upstreamsStale={healthStale}
+              upstreamsUpdatedAt={healthSnapshot?.updatedAt ?? 0}
+              onRefresh={refreshStatus}
+            />
           </div>
-          <div data-dashboard-refresh-group className="flex min-w-0 flex-wrap items-center gap-2">
+          <LiveStrip now={now} pending={nowPending} error={nowInitialError} stale={nowStale} />
+        </>
+      )}
+      actions={(
+        <div data-dashboard-refresh-group className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-1.5 text-[12px] tabular-nums" style={{ color: 'var(--text-soft)' }}>
             <Icon name="history" size="sm" />
             {t('overview.updatedAt', { time: lastUpdatedLabel })}
           </span>
-          <Button variant="outline"
+          <Button
+            variant="outline"
+            size="sm"
             type="button"
             onClick={refreshAll}
             aria-busy={overviewQuery.isFetching || nowQuery.isFetching || undefined}
-            className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1.5 rounded-md border px-3 text-[14px] font-medium transition-colors duration-150 hover:bg-[var(--bg-hover)]"
-            style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
           >
             <Icon name="refresh" size="sm" />
             {t('overview.refresh')}
           </Button>
-          </div>
+          <Tooltip>
+            <TooltipTrigger
+              render={(
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  type="button"
+                  data-dashboard-fullscreen
+                  aria-label={fullscreenLabel}
+                  onClick={immersive.toggle}
+                  className={fullscreenSupported ? undefined : 'hidden lg:inline-flex'}
+                />
+              )}
+            >
+              <Icon name={immersive.active ? 'fullscreen_exit' : 'fullscreen'} size="sm" />
+            </TooltipTrigger>
+            <TooltipContent>{fullscreenLabel}</TooltipContent>
+          </Tooltip>
+          <ToggleGroup
+            value={[range]}
+            onValueChange={values => {
+              const next = DASHBOARD_RANGES.find(value => value === values[0])
+              if (next) handleRangeChange(next)
+            }}
+            spacing={0}
+            aria-label={t('overview.rangeGroup')}
+            className="flex shrink-0 items-center overflow-hidden rounded-md border"
+            style={{ borderColor: 'var(--dash-border)' }}
+          >
+            {DASHBOARD_RANGES.map(value => {
+              const active = range === value
+              return (
+                <ToggleGroupItem
+                  key={value}
+                  value={value}
+                  className="dash-focus min-h-10 rounded-none px-3 text-[13px] font-medium transition-colors duration-150 sm:min-h-9"
+                  style={{
+                    background: active ? 'var(--dash-accent-soft)' : 'transparent',
+                    color: active ? 'var(--brand-text)' : 'var(--dash-muted)',
+                    boxShadow: active ? 'inset 0 0 0 1px var(--dash-accent)' : undefined,
+                  }}
+                >
+                  {t(RANGE_KEY[value])}
+                </ToggleGroupItem>
+              )
+            })}
+          </ToggleGroup>
         </div>
       )}
     >
@@ -293,137 +387,120 @@ export default function Dashboard() {
         data-dashboard-root
         data-query-key="dashboard-snapshot"
         data-dashboard-health
-        className="dashboard-surface flex min-w-0 flex-col gap-4"
+        className="dash-cockpit"
       >
+        <div className="dash-notices text-[13px]">
           {showConnectionGuide && <ConnectionGuide blocked={status.health === 'unavailable'} firstUse={usage === 'waiting-first-request'} onOpenStatus={() => setShowProblems(true)} />}
           {!showConnectionGuide && status.health === 'unavailable' && (
-            <p role="alert" className="flex flex-wrap items-center gap-x-3 text-[13px] text-[var(--dash-danger)]">
+            <p role="alert" className="flex flex-wrap items-center gap-x-3 text-[var(--dash-danger)]">
               {t('overview.connectionBlocked')}
-              <Button variant="ghost" type="button" className="dash-focus min-h-[40px] rounded-md font-medium" onClick={() => setShowProblems(true)}>{t('overview.viewStatus')}</Button>
+              <Button variant="ghost" size="sm" type="button" className="dash-focus font-medium" onClick={() => setShowProblems(true)}>{t('overview.viewStatus')}</Button>
             </p>
           )}
           {!showConnectionGuide && usage === 'active' && overview?.window?.hit_requests === 0 && (
-            <p className="flex flex-wrap items-center gap-x-3 text-[13px] text-[var(--dash-muted)]">{t('overview.verifyCacheHint')}<Link className="dash-focus inline-flex min-h-[40px] items-center rounded-md text-[var(--dash-accent)]" to={getAdminRouteHref('connect')}>{t('overview.verifyCacheAction')}</Link></p>
+            <p className="flex flex-wrap items-center gap-x-3 text-[var(--dash-muted)]">{t('overview.verifyCacheHint')}<Link className="dash-more dash-focus" to={getAdminRouteHref('connect')}>{t('overview.verifyCacheAction')}</Link></p>
           )}
-
-          <div data-dashboard-period data-period-range={overviewRange} className="flex min-w-0 flex-col gap-4">
-          <div className="dashboard-period-summary">
-          <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
-            <p className="min-w-0 text-[15px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
-              {t('overview.periodTitle')} · {t(RANGE_KEY[overviewRange])}
-            </p>
-            <ToggleGroup
-              value={[range]}
-              onValueChange={values => {
-                const next = DASHBOARD_RANGES.find(value => value === values[0])
-                if (next) handleRangeChange(next)
-              }}
-              spacing={0}
-              aria-label={t('overview.rangeGroup')}
-              className="flex shrink-0 items-center overflow-hidden rounded-md border"
-              style={{ borderColor: 'var(--dash-border)' }}
-            >
-              {DASHBOARD_RANGES.map(value => {
-                const active = range === value
-                return (
-                  <ToggleGroupItem
-                    key={value}
-                    value={value}
-                    className="dash-focus min-h-[40px] rounded-none px-3 text-[13px] font-medium transition-colors duration-150"
-                    style={{
-                      background: active ? 'var(--dash-accent-soft)' : 'transparent',
-                      color: active ? 'var(--dash-accent)' : 'var(--dash-muted)',
-                      boxShadow: active ? 'inset 0 0 0 1px var(--dash-accent)' : undefined,
-                    }}
-                  >
-                    {t(RANGE_KEY[value])}
-                  </ToggleGroupItem>
-                )
-              })}
-            </ToggleGroup>
-          </div>
-
-          {overviewStale && <p role="status" className="rounded-md bg-[var(--dash-warn-soft)] px-3 py-2 text-[13px] text-[var(--dash-warn)]">{t('overview.overviewStale', { range: t(RANGE_KEY[overviewRange]) })}</p>}
-          {swapped && <p role="status" className="text-[13px] text-[var(--dash-muted)]">{t('overview.switchingRange')}</p>}
+          {overviewStale && <p role="status" className="rounded-md bg-[var(--dash-warn-soft)] px-3 py-2 text-[var(--dash-warn)]">{t('overview.overviewStale', { range: t(RANGE_KEY[overviewRange]) })}</p>}
+          {swapped && <p role="status" className="text-[var(--dash-muted)]">{t('overview.switchingRange')}</p>}
           {usage === 'empty-period' && !swapped && !overviewStale && (
-            <div data-dashboard-empty-period className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-md bg-[var(--dash-soft)] px-4 py-2">
-              <p className="text-[14px]">{t('overview.emptyPeriod')} <span className="text-[13px] text-[var(--dash-muted)]">{t('overview.emptyPeriodHint')}</span></p>
-              {range !== '30d' && <Button variant="ghost" className="dash-focus min-h-[40px] rounded-md text-[13px] font-medium text-[var(--dash-accent)]" onClick={() => handleRangeChange('30d')}>{t('overview.expandRange')}</Button>}
+            <div data-dashboard-empty-period className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-md bg-[var(--dash-soft)] px-3 py-1">
+              <p>{t('overview.emptyPeriod')} <span className="text-[var(--dash-muted)]">{t('overview.emptyPeriodHint')}</span></p>
+              {range !== '30d' && <Button variant="ghost" size="sm" className="dash-focus font-medium text-[var(--brand-text)]" onClick={() => handleRangeChange('30d')}>{t('overview.expandRange')}</Button>}
             </div>
           )}
-          <Card className="dashboard-cache-card gap-0 p-0">
+        </div>
+
+        <div data-dashboard-period data-period-range={overviewRange} className="min-w-0">
           {overviewInitialError ? (
-            <div className="p-5" data-dashboard-statistics-error>
+            <Card className="p-4 text-[13px]" data-dashboard-statistics-error>
               <QueryErrorState message={overviewError?.status === 403 ? t('common.permissionDenied') : t('overview.statisticsUnavailable')} onRetry={() => { void overviewQuery.refetch() }} />
-              <p className="mt-2 text-[13px] text-[var(--dash-muted)]">{t('overview.statisticsFailureImpact')} <Link className="dash-focus inline-flex min-h-[40px] items-center rounded-md text-[var(--dash-accent)]" to={getAdminRouteHref('connect')}>{t('overview.connectClient')}</Link></p>
-            </div>
-          ) : <CacheBenefits period={overview?.window} prev={overview?.prev} pending={overviewPending} />}
-          <div className="dashboard-cache-summary">
-            <CacheStorageOverview runtime={runtimeQuery.data} runtimePending={runtimePending} />
-            <Link className="dash-focus ml-auto inline-flex min-h-[40px] shrink-0 items-center gap-1 rounded-md px-3 text-[13px] font-medium text-[var(--dash-accent)] no-underline" to={getAdminRouteHref('cache')}>{t('dashboard.manageCache')}<Icon name="chevron_right" size="sm" /></Link>
+              <p className="mt-2 text-[var(--dash-muted)]">{t('overview.statisticsFailureImpact')} <Link className="dash-more dash-focus" to={getAdminRouteHref('connect')}>{t('overview.connectClient')}</Link></p>
+            </Card>
+          ) : (
+            <OverviewTiles
+              period={overview?.window}
+              prev={overview?.prev}
+              range={overview?.range}
+              coverage={overview?.origin_coverage}
+              pending={overviewPending}
+              runtime={runtimeQuery.data}
+              runtimePending={runtimePending}
+              spark={tileSpark}
+            />
+          )}
+        </div>
+
+        {/* Four groups in order of urgency: what needs an operator, traffic,
+            upstreams and storage, then security and the process. The stylesheet
+            lays them out as three columns, two, or one; in the single column
+            they read in this order. Each card owns its query state, so one
+            failure never blanks its neighbours. */}
+        <div className="dash-cols">
+          <div className="dash-col" data-dashboard-column="attention">
+            <AttentionCard
+              status={status}
+              pending={healthPending}
+              readiness={readinessQuery.data}
+              upstreamsAvailable={Boolean(healthSnapshot)}
+              policyStale={policy.isStale}
+              upstreamList={upstreamListQuery.data}
+              suggestionsTotal={suggestionsQuery.data}
+              suggestionsKnown={suggestionsQuery.data !== undefined}
+              security={securityQuery.data}
+              onOpenStatus={() => setShowProblems(true)}
+            />
           </div>
-          {runtimeQuery.isError && <p role="status" className="px-5 pb-3 text-[13px] text-[var(--dash-warn)]">{t(runtimeQuery.data ? 'overview.resourcesStale' : 'overview.resourcesUnavailable')} <Button variant="ghost" className="dash-focus min-h-[40px] rounded-md px-2 font-medium" onClick={() => { void runtimeQuery.refetch() }}>{t('overview.refresh')}</Button></p>}
-          </Card>
-          </div>
-          {!overviewInitialError && <TrafficOverview now={now} nowPending={nowPending} nowError={nowInitialError} nowStale={nowStale} periodPending={overviewPending} period={overview?.window} rangeStart={overview?.range?.start} coverage={overview?.origin_coverage} />}
-          {/* Trends and the recent-request tail are independent queries, so a
-              period-aggregate failure never blanks them. */}
-          {/* Give the area chart a continuous, full-width time axis. The latest
-              request tail stays separate from these range-scoped aggregates. */}
-          <div className="dashboard-lower-grid flex min-w-0 flex-col gap-4">
-            <div data-dashboard-trends-column className="flex min-w-0">
-              {trendsLoading ? (
-                <Card className="w-full p-5" role="status" aria-busy="true" aria-label={t('overview.loadingStatistics')}>
-                  <Skeleton aria-hidden className="h-[272px] rounded-md" style={{ background: 'var(--dash-soft)' }} />
-                </Card>
-              ) : trendsInitialError ? (
-                <Card className="w-full p-5">
-                  <QueryErrorState
-                    message={getApiError(trendsQuery.error).status === 403 ? t('common.permissionDenied') : t('overview.statisticsUnavailable')}
-                    onRetry={() => { void trendsQuery.refetch() }}
-                  />
-                </Card>
-              ) : (
-                <ActivityTrends
-                  raw={trendPoints}
-                  range={range}
-                  dataRange={trendRange}
-                  isStale={trendsStale}
-                  onRetry={() => { void trendsQuery.refetch() }}
-                />
-              )}
-            </div>
-            <div className="flex min-w-0">
-              <RecentRequests query={recentQuery} limit={5} onOpenDetails={setDetailsLogId} />
-            </div>
-          </div>
-          </div>
-          <section data-dashboard-resources-panel aria-labelledby="overview-resources-heading" className="dashboard-resources-panel" style={{ borderColor: 'var(--dash-border)' }}>
-            <h2 id="overview-resources-heading" className="dashboard-resources-heading" style={{ color: 'var(--dash-ink)' }}>
-              {t('overview.resourcesTitle')}
-            </h2>
-            <Button variant="ghost"
-              type="button"
-              className="dash-focus dashboard-resources-toggle"
-              style={{ color: 'var(--dash-ink)' }}
-              aria-expanded={mobileResourcesOpen}
-              aria-controls="overview-runtime-resources"
-              onClick={() => setMobileResourcesOpen(open => !open)}
-            >
-              {t('overview.resourcesTitle')}
-              <Icon name="expand_more" size="sm" className={mobileResourcesOpen ? 'rotate-180' : ''} />
-            </Button>
-            <div id="overview-runtime-resources" className={`dashboard-resources-content ${mobileResourcesOpen ? '' : 'hidden sm:block'}`}>
-              <RuntimeResources
-                runtime={runtimeQuery.data}
-                runtimePending={runtimePending}
-                now={now}
-                nowPending={nowPending}
-                nowError={nowInitialError}
-                nowStale={nowStale}
+          <div className="dash-col" data-dashboard-column="traffic">
+            <div data-dashboard-trends-column className="flex min-w-0 flex-col">
+              <ActivityCard
+                points={trendPoints}
+                range={range}
+                dataRange={trendRange}
+                loading={trendsLoading}
+                error={trendsError}
+                stale={trendsStale}
+                onRetry={() => { void trendsQuery.refetch() }}
               />
             </div>
-          </section>
+            <RecentRequests query={recentQuery} limit={RECENT_REQUESTS} onOpenDetails={setDetailsLogId} />
+            <TopPackagesCard query={breakdownQuery} />
+          </div>
+          <div className="dash-col" data-dashboard-column="upstreams">
+            <UpstreamsCard
+              status={status}
+              available={Boolean(healthSnapshot)}
+              stale={healthStale}
+              pending={overviewPending}
+              upstreamList={upstreamListQuery.data}
+              breakdown={breakdownQuery}
+              originMeasured={originNote.measured}
+              originPartial={originNote.partial}
+            />
+            <EcosystemsCard query={breakdownQuery} />
+            <StorageCard
+              runtime={runtimeQuery.data}
+              runtimePending={runtimePending}
+              runtimeError={runtimeQuery.isError}
+              onRetryRuntime={() => { void runtimeQuery.refetch() }}
+              distribution={distributionQuery}
+            />
+          </div>
+          <div className="dash-col" data-dashboard-column="control">
+            <SecurityCard
+              security={securityQuery}
+              suggestionsTotal={suggestionsQuery.data}
+              capabilities={capabilitiesQuery.data}
+              capabilitiesUnavailable={capabilitiesQuery.isError && capabilitiesQuery.data === undefined}
+            />
+            <RuntimeCard
+              runtime={runtimeQuery.data}
+              runtimePending={runtimePending}
+              runtimeError={runtimeQuery.isError}
+              onRetryRuntime={() => { void runtimeQuery.refetch() }}
+              now={now}
+            />
+          </div>
+        </div>
       </div>
 
       <RequestDetailsDialog logId={detailsLogId} onClose={() => setDetailsLogId(null)} />

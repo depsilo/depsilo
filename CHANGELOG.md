@@ -5,6 +5,30 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+- `GET /api/v1/admin/dashboard/breakdown?range=1h|24h|7d|30d` reports where an
+  Overview period's traffic went: per ecosystem, per Upstream (the measured
+  bytes and exchanges it sent to Depsilo, plus the misses served through it),
+  and the ten largest packages. It uses the same boundaries and request set as
+  the period block of `/admin/dashboard`, so its ecosystem rows and per-Upstream
+  origin bytes add up to that block. Upstreams are keyed by ecosystem and name,
+  so same-named Upstreams of different ecosystems stay apart. Ranges beyond a day rank packages by whole
+  UTC days and say so in `top_packages_grain`.
+- The Admin navigation rail can collapse to icons; the choice is remembered in
+  the browser.
+
+### Changed
+- The Admin Overview is a dense one-screen cockpit. Eight tiles cover what the
+  cache served, origin traffic, client downloads, hit rate, hit and origin
+  latency, the estimated wait avoided, errors, and cache usage, each with a
+  change against the previous period where both periods are comparable. Cards
+  show request activity as stacked columns with the recent bursts listed below,
+  the live request tail, the largest packages, every Upstream's health by
+  ecosystem with where misses actually went, per-ecosystem traffic, cache
+  contents and free disk, what needs attention with its consequence for
+  downloads, known vulnerabilities and protection coverage, and the process's
+  resources. The page has a full-screen mode that hides the navigation rail.
+
 ## [0.13.0] - 2026-11-11
 
 ### Added

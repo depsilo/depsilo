@@ -53,6 +53,7 @@ import type {
   DeleteUpstreamResponse,
   DashboardRange,
   DashboardResponse,
+  DashboardBreakdownResponse,
   DashboardTrendsResponse,
   DismissSuggestionResponse,
   LoginResponse,
@@ -187,6 +188,8 @@ export const adminApi = {
     api.get<RecentDownloadsResponse>('/admin/dashboard/recent-downloads', { ...options, params: { limit } }),
   getDashboardTrends: (range_: string = '7d', options: ApiGetOptions = {}) =>
     api.get<DashboardTrendsResponse>('/admin/dashboard/trends', { ...options, params: { range: range_ } }),
+  getDashboardBreakdown: (range: DashboardRange, options: ApiGetOptions = {}) =>
+    api.get<DashboardBreakdownResponse>('/admin/dashboard/breakdown', { ...options, params: { range } }),
 
   // Cache
   listCache: (params: CacheQuery, options: ApiGetOptions = {}) => api.get<CacheListResponse>('/admin/cache', { ...options, params }),

@@ -156,24 +156,26 @@ export function timeSavedMs(period: DashboardPeriod | undefined): number | null 
 
 /**
  * Overview metric dictionary — the only place that decides what each Overview
- * region means. UI copy stays out of this file; the gating lives here so the
- * request-flow visual, the tiles and the tests all read from one definition.
+ * figure means. UI copy stays out of this file; the gating lives here so the
+ * tiles, cards, and tests all read from one definition.
  *
- * - Status strip health      deriveServiceStatus(...) + now.status/upstreams/policy
- * - Status strip activity    now.rate.service_requests_per_sec, gated by rate.measured
- * - Flow rail service        now.rate.service_bytes_per_sec (last 60s, Depsilo → clients)
- * - Flow rail origin         now.rate.origin_bytes_per_sec  (last 60s, upstreams → Depsilo)
- * - Flow node clients        window.bytes_served / total_requests
- * - Flow node Depsilo        window.hit_rate + hit/miss requests (no sample → —)
- * - Flow node upstream       window.upstream_bytes / upstream_requests, gated by
+ * - Service status           deriveServiceStatus(...) + now.status/upstreams/policy
+ * - Last 60 s strip          now.rate.*, gated by rate.measured
+ * - Tile: from cache         window.hit_bytes (an estimate of origin traffic saved)
+ * - Tile: origin traffic     window.upstream_bytes / upstream_requests, gated by
  *                            origin coverage: an unmetered window is "not collected",
  *                            never a measured zero.
- * - Flow outcome BLOCK       Countless by design. Blocked rows are excluded from the
+ * - Tile: client downloads   window.bytes_served / total_requests
+ * - Tile: hit rate           window.hit_rate + hit/miss requests (no sample → —)
+ * - Tile: latency            latencyComparison(window): hit vs miss averages
+ * - Tile: wait avoided       timeSavedMs(window), withheld without comparable samples
+ * - Tile: errors             window.errors (5xx). Blocked rows are excluded from the
  *                            period aggregate (internal/api/admin/dashboard.go), so
- *                            they cannot share the hit-rate denominator. Security owns
- *                            the blocked/quarantine record; the chip links there.
- * - Cache benefits           hit_rate, hit_bytes (estimated savings), latencyComparison
- * - Runtime resources        runtime.process / runtime.cache / now.rate
+ *                            they cannot share the hit-rate denominator. Security
+ *                            owns the blocked/quarantine record.
+ * - Activity, bursts         dashboard/trends buckets, summed (overviewCockpit.ts)
+ * - Breakdown cards          dashboard/breakdown, the same period and request set
+ * - Storage, runtime         runtime.cache / runtime.disk / runtime.process
  *
  * A zero is rendered only when the API measured a zero. "Not collected", "no
  * sample" and "unsupported" keep their own honest states throughout.
@@ -236,82 +238,6 @@ export function formatEstimatedDuration(ms: number, t: TFunction): string {
 
 function trimTo(value: number): string {
   return value < 10 ? value.toFixed(1) : value.toFixed(0)
-}
-
-export interface SparklineGeometry {
-  /** Smooth path for the line. */
-  line: string
-  /** Closed path for the soft area fill beneath the line. */
-  area: string
-  /** Last sample position, for the end dot. */
-  last: { x: number; y: number }
-}
-
-function fmt(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(2)
-}
-
-/**
- * Builds a monotone-cubic sparkline that never overshoots the sampled data
- * (Fritsch–Carlson tangents). Straight polylines look coarse at small sizes;
- * a plain Catmull-Rom would invent peaks between samples, so monotone is the
- * honest smoothing choice. Returns null with fewer than two samples.
- */
-export function sparklineGeometry(
-  series: number[],
-  width = 96,
-  height = 30,
-  pad = 3,
-): SparklineGeometry | null {
-  if (series.length < 2) return null
-  const min = Math.min(...series)
-  const max = Math.max(...series)
-  const span = max - min || 1
-  const x = (index: number) => pad + (index * (width - 2 * pad)) / (series.length - 1)
-  const y = (value: number) => height - pad - ((value - min) / span) * (height - 2 * pad)
-  const points: Array<[number, number]> = series.map((value, index) => [x(index), y(value)])
-
-  const n = points.length
-  const dx: number[] = []
-  const slope: number[] = []
-  for (let i = 0; i < n - 1; i += 1) {
-    dx[i] = points[i + 1][0] - points[i][0]
-    slope[i] = dx[i] === 0 ? 0 : (points[i + 1][1] - points[i][1]) / dx[i]
-  }
-  const tangent: number[] = new Array(n)
-  tangent[0] = slope[0] ?? 0
-  tangent[n - 1] = slope[n - 2] ?? 0
-  for (let i = 1; i < n - 1; i += 1) {
-    if (slope[i - 1] * slope[i] <= 0) {
-      tangent[i] = 0
-    } else {
-      const w1 = 2 * dx[i] + dx[i - 1]
-      const w2 = dx[i] + 2 * dx[i - 1]
-      tangent[i] = (w1 + w2) / (w1 / slope[i - 1] + w2 / slope[i])
-    }
-  }
-
-  let line = `M ${fmt(points[0][0])} ${fmt(points[0][1])}`
-  for (let i = 0; i < n - 1; i += 1) {
-    const c1x = points[i][0] + dx[i] / 3
-    const c1y = points[i][1] + (tangent[i] * dx[i]) / 3
-    const c2x = points[i + 1][0] - dx[i] / 3
-    const c2y = points[i + 1][1] - (tangent[i + 1] * dx[i]) / 3
-    line += ` C ${fmt(c1x)} ${fmt(c1y)}, ${fmt(c2x)} ${fmt(c2y)}, ${fmt(points[i + 1][0])} ${fmt(points[i + 1][1])}`
-  }
-
-  const area = `${line} L ${fmt(points[n - 1][0])} ${height} L ${fmt(points[0][0])} ${height} Z`
-  return { line, area, last: { x: points[n - 1][0], y: points[n - 1][1] } }
-}
-
-/**
- * A flat sample series is decoration, not information: the resource tile only
- * draws its sparkline once the window carries a real range. Kept beside the
- * geometry helper so both the chart and its tests share one rule.
- */
-export function sparklineHasVariance(series: number[]): boolean {
-  if (series.length < 2) return false
-  return Math.max(...series) - Math.min(...series) > 0
 }
 
 export type ServiceHealth = 'healthy' | 'partial' | 'unavailable' | 'unknown'

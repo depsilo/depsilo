@@ -1,3 +1,5 @@
+import type { Page } from '@playwright/test'
+
 import type { DashboardPeriod, NowResponse } from '../src/lib/adminApi.types'
 import { expect, mockAdminApi, test } from './fixtures/admin-api'
 
@@ -41,55 +43,69 @@ const measuredNow: NowResponse = {
   sparkline: [],
 }
 
-// The response path is one card: live rails between three nodes, then the
-// period's real outcomes. Blocked requests stay countless by design because
-// the Overview aggregate excludes them (internal/api/admin/dashboard.go).
+function tile(page: Page, id: string) {
+  const root = page.locator(`[data-dashboard-kpis] [data-tile="${id}"]`)
+  return { root, value: root.locator('[data-tile-value]'), sub: root.locator('.dash-tile-sub') }
+}
+
+// The response path now reads as tiles plus a live strip. The byte tiles keep
+// the old flow's reading order (from cache, from Upstream, to clients); origin
+// bytes are metered at the Upstream, so they need not equal the miss share of
+// client downloads. The live strip carries the last-60-second delivery and
+// origin rates. Blocked
+// requests stay countless by design because the Overview aggregate excludes
+// them (internal/api/admin/dashboard.go): no tile invents a blocked count and
+// the failure tile counts only 5xx.
 test('Overview download flow runs upstream to clients and preserves byte metrics', async ({ page }) => {
   await mockAdminApi(page, { 'GET /api/v1/now': measuredNow })
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/admin')
 
-  const flow = page.locator('[data-dashboard-request-flow]')
-  await expect(flow).toBeVisible()
-
-  const clients = page.locator('[data-testid="traffic-served-total"]')
-  await expect(clients).toContainText('700.0 MB')
-  await expect(clients).toContainText('1,200 次请求')
-
-  const serviceRail = page.locator('[data-testid="traffic-service-flow"]')
-  await expect(serviceRail).toContainText('110.3 KB/s')
-  await expect(serviceRail).toContainText('Depsilo → 客户端')
-
-  const depsilo = page.locator('[data-testid="traffic-depsilo"]')
-  await expect(depsilo).toContainText('Depsilo')
-  await expect(depsilo).not.toContainText('92.0%')
-
-  const originRail = page.locator('[data-testid="traffic-origin-flow"]')
-  await expect(originRail).toContainText('1.5 MB/s')
-  await expect(originRail).toContainText('上游 → Depsilo')
-
-  const upstream = page.locator('[data-testid="traffic-origin-total"]')
-  await expect(upstream).toContainText('63.0 MB')
-  await expect(upstream).toContainText('104 次回源请求')
-  const [upstreamBox, depsiloBox, clientsBox] = await Promise.all([
-    upstream.boundingBox(), depsilo.boundingBox(), clients.boundingBox(),
+  const tiles = page.locator('[data-dashboard-kpis] > [data-tile]')
+  await expect(tiles).toHaveCount(8)
+  expect(await tiles.evaluateAll(nodes => nodes.map(node => node.getAttribute('data-tile')))).toEqual([
+    'cache', 'origin', 'served', 'hit-rate', 'latency', 'time-saved', 'errors', 'cache-usage',
   ])
-  expect(upstreamBox!.x).toBeLessThan(depsiloBox!.x)
-  expect(depsiloBox!.x).toBeLessThan(clientsBox!.x)
 
-  const outcomes = page.locator('[data-dashboard-flow-outcomes]')
-  await expect(outcomes).toContainText('缓存命中')
-  await expect(outcomes).toContainText('1,104')
-  await expect(outcomes).toContainText('回源完成')
-  await expect(outcomes).toContainText('96')
+  const cache = tile(page, 'cache')
+  await expect(cache.value).toHaveText('640.0MB')
+  await expect(cache.sub).toContainText('占下载量 91%')
 
-  const blocked = outcomes.getByRole('link', { name: '策略拦截，前往安全页查看' })
-  await expect(blocked).toHaveAttribute('href', '/admin/security')
-  await expect(blocked).not.toContainText(/\d/)
+  const upstream = tile(page, 'origin')
+  await expect(upstream.root).toHaveAttribute('data-testid', 'traffic-origin-total')
+  await expect(upstream.value).toHaveText('63.0MB')
+  await expect(upstream.sub).toHaveText('104 次回源请求')
+  // Origin metering began 2026-09-01, inside the previous 30-day period, so a
+  // period-over-period change would compare against a partly unmetered base.
+  await expect(upstream.root.locator('.dash-tile-delta')).toHaveCount(0)
+
+  const clients = tile(page, 'served')
+  await expect(clients.root).toHaveAttribute('data-testid', 'traffic-served-total')
+  await expect(clients.value).toHaveText('700.0MB')
+  await expect(clients.sub).toContainText('1,200 次请求')
+  await expect(clients.sub).toContainText('较上一周期上升 17%')
+
+  const hitRate = tile(page, 'hit-rate')
+  await expect(hitRate.value).toHaveText('92.0%')
+  await expect(hitRate.sub).toContainText('1,104 / 1,200')
+  await expect(hitRate.root.getByRole('img', { name: '1,104 / 1,200 个请求命中缓存' })).toBeVisible()
+
+  const errors = tile(page, 'errors')
+  await expect(errors.value).toHaveText('2')
+  await expect(errors.root).toHaveAttribute('data-alert', 'true')
+  await expect(errors.sub).toContainText('失败率 0.2%')
+  await expect(page.locator('[data-dashboard-kpis]')).not.toContainText('拦截')
+
+  const live = page.locator('[data-dashboard-live]')
+  await expect(live).toContainText('近 60 秒')
+  await expect(live).toContainText('12 次/分')
+  await expect(page.locator('[data-testid="traffic-service-flow"]')).toHaveText('交付 110.3 KB/s')
+  await expect(page.locator('[data-testid="traffic-origin-flow"]')).toHaveText('回源 1.5 MB/s')
 })
 
 // An empty period is not the same as an unmetered one: measured zeros stay
-// zeros, missing response samples stay dashes, and the live rails still read.
+// zeros, figures that need a request sample stay dashes, and the live strip
+// still reads because it is measured independently of the period aggregate.
 test('Overview flow separates a measured zero from a missing sample', async ({ page }) => {
   await mockAdminApi(page, {
     'GET /api/v1/now': measuredNow,
@@ -108,21 +124,41 @@ test('Overview flow separates a measured zero from a missing sample', async ({ p
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/admin')
 
-  const clients = page.locator('[data-testid="traffic-served-total"]')
-  await expect(clients).toContainText('0 B')
-  await expect(clients).toContainText('0 次请求')
+  // Measured zeros: the API counted bytes and requests and found none.
+  const clients = tile(page, 'served')
+  await expect(clients.value).toHaveText('0B')
+  await expect(clients.sub).toHaveText('0 次请求')
 
-  const upstream = page.locator('[data-testid="traffic-origin-total"]')
-  await expect(upstream).toContainText('0 B')
-  await expect(upstream).toContainText('0 次回源请求')
+  const upstream = tile(page, 'origin')
+  await expect(upstream.value).toHaveText('0B')
+  await expect(upstream.sub).toHaveText('0 次回源请求')
 
-  const outcomes = page.locator('[data-dashboard-flow-outcomes]')
-  await expect(outcomes).toContainText('缓存命中')
-  await expect(outcomes).toContainText('0')
-  await expect(outcomes).not.toContainText('—')
-  await expect(page.locator('[data-dashboard-benefits]')).toContainText('暂无请求样本')
+  const cache = tile(page, 'cache')
+  await expect(cache.value).toHaveText('0B')
+  await expect(cache.sub).toHaveText('暂无请求样本')
 
-  // Live rails are measured independently of the period aggregate.
-  await expect(page.locator('[data-testid="traffic-service-flow"]')).toContainText('110.3 KB/s')
-  await expect(page.locator('[data-testid="traffic-origin-flow"]')).toContainText('1.5 MB/s')
+  const errors = tile(page, 'errors')
+  await expect(errors.value).toHaveText('0')
+  await expect(errors.sub).toHaveText('暂无请求样本')
+  await expect(errors.root).not.toHaveAttribute('data-alert')
+
+  // Ratios and averages need a sample; with none they are dashes, not 0%.
+  const hitRate = tile(page, 'hit-rate')
+  await expect(hitRate.value).toHaveText('—')
+  await expect(hitRate.sub).toHaveText('暂无请求样本')
+  await expect(hitRate.root.getByRole('img')).toHaveCount(0)
+
+  const latency = page.locator('[data-dashboard-kpis] [data-tile="latency"] dd')
+  await expect(latency).toHaveText(['—', '—'])
+
+  const saved = tile(page, 'time-saved')
+  await expect(saved.value).toHaveText('—')
+  await expect(saved.sub).toHaveText('暂无请求样本')
+
+  // No delta is claimed against an empty previous period.
+  await expect(page.locator('[data-dashboard-kpis] .dash-tile-delta')).toHaveCount(0)
+
+  // The live strip is measured independently of the period aggregate.
+  await expect(page.locator('[data-testid="traffic-service-flow"]')).toHaveText('交付 110.3 KB/s')
+  await expect(page.locator('[data-testid="traffic-origin-flow"]')).toHaveText('回源 1.5 MB/s')
 })

@@ -1,5 +1,5 @@
 import { mkdir } from 'node:fs/promises'
-import type { Page, Request } from '@playwright/test'
+import type { Locator, Page, Request } from '@playwright/test'
 import type { DashboardPeriod, DashboardResponse, DashboardTrendPoint, NowResponse, RuntimeResponse } from '../src/lib/adminApi.types'
 import { adminApiDefaults, expect, mockAdminApi, setUiPreferences, test } from './fixtures/admin-api'
 
@@ -100,18 +100,54 @@ const populatedPoints: DashboardTrendPoint[] = [8, 12, 6, 19, 30, 15, 28].map((r
   errors: 0,
 }))
 
+/**
+ * A tile renders its figure and unit in separate spans ("640.0" + "MB"), so
+ * textContent reads "640.0MB". Read them back as the operator sees them.
+ * Returns null while the tile is still a skeleton.
+ */
+function tileValue(tile: Locator) {
+  return tile.locator('[data-tile-value]').evaluateAll(elements => {
+    const element = elements[0]
+    if (!element) return null
+    const text = element.textContent ?? ''
+    const unit = element.querySelector('.dash-tile-unit')?.textContent ?? ''
+    const figure = text.slice(0, text.length - unit.length)
+    // "92.0%" reads without a gap; byte and duration units take one.
+    return !unit ? figure : unit === '%' ? `${figure}%` : `${figure} ${unit}`
+  })
+}
+
+async function expectTileValue(tile: Locator, expected: string) {
+  await expect.poll(() => tileValue(tile)).toBe(expected)
+}
+
 async function reviewViewport(page: Page, scenario: string, width: number, height: number) {
   await page.setViewportSize({ width, height })
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(width)
   const cache = page.getByTestId('resource-cache')
   await expect(cache).toBeVisible()
-  const cacheLabel = cache.getByText('当前缓存占用', { exact: true })
+  // The tile label is a single ellipsizing line; at every width it must stay
+  // whole rather than collapse into "缓存…" or wrap into a tall column.
+  const cacheLabel = cache.locator('.dash-tile-label').getByText('缓存占用', { exact: true })
   const labelGeometry = await cacheLabel.evaluate(element => ({
     height: element.getBoundingClientRect().height,
     lineHeight: Number.parseFloat(getComputedStyle(element).lineHeight),
+    clipped: element.scrollWidth > element.clientWidth + 1,
   }))
   expect(labelGeometry.height).toBeLessThanOrEqual(labelGeometry.lineHeight * 2 + 1)
+  expect(labelGeometry.clipped).toBe(false)
   expect((await cache.boundingBox())!.height).toBeLessThan(240)
+  // Phone widths get 40px targets even under a fine pointer (WCAG 2.5.5 is
+  // the bar the Overview holds itself to on touch-sized layouts).
+  // The button's transition-all animates min-height after a resize, so poll
+  // for the settled box rather than sampling mid-transition.
+  if (width < 700) {
+    const help = cache.getByRole('button', { name: /缓存占用/ })
+    await expect.poll(async () => {
+      const box = (await help.boundingBox())!
+      return Math.min(box.width, box.height)
+    }).toBeGreaterThanOrEqual(40)
+  }
   if (process.env.DASHBOARD_REVIEW_SCREENSHOTS === '1') {
     const directory = process.env.DASHBOARD_REVIEW_DIR ?? 'test-results/dashboard-review'
     await mkdir(directory, { recursive: true })
@@ -137,13 +173,20 @@ test('Overview with no usage evidence offers a real connection flow without inve
   await expect(onboarding.getByRole('link', { name: '查看接入文档', exact: true })).toHaveAttribute('href', '/')
   expect((await connect.boundingBox())!.y).toBeLessThan(900)
 
+  // The inventory query succeeded with zero bytes: a measured empty cache is
+  // "0 B", not a dash, and an unset quota draws no track.
   const cache = page.getByTestId('resource-cache')
-  await expect(cache).toContainText('0 B')
-  await expect(cache).toContainText('未设置缓存配额')
+  await expectTileValue(cache, '0 B')
+  await expect(cache.locator('.dash-tile-sub')).toHaveText('未设置缓存配额')
   await expect(cache.locator('[data-progress-ratio]')).toHaveCount(0)
-  await expect(page.locator('[data-dashboard-benefits]')).toContainText('0 B')
-  await expect(page.locator('[data-dashboard-benefits]')).toContainText('暂无请求样本')
-  await expect(page.locator('[data-dashboard-benefits]')).not.toContainText('n=0')
+  // The period was measured and was empty: byte totals are a real zero, while
+  // ratios that need samples say there are none instead of printing 0% or n=0.
+  const benefits = page.locator('[data-dashboard-benefits]')
+  await expectTileValue(benefits.locator('[data-tile="cache"]'), '0 B')
+  await expectTileValue(page.getByTestId('traffic-served-total'), '0 B')
+  await expect(benefits.locator('[data-tile="hit-rate"] .dash-tile-sub')).toHaveText('暂无请求样本')
+  await expect(benefits.locator('[data-tile="cache"] .dash-tile-sub')).toHaveText('暂无请求样本')
+  await expect(benefits).not.toContainText('n=0')
 
   for (const viewport of [{ width: 1440, height: 900 }, { width: 1920, height: 1080 }, { width: 390, height: 844 }, { width: 320, height: 800 }]) {
     await reviewViewport(page, 'initialization-dark', viewport.width, viewport.height)
@@ -281,7 +324,9 @@ test('Overview statistics failure stays distinct from zero and can recover', asy
   await expect(statistics).toContainText('统计暂不可用')
   await expect(page.locator('[data-dashboard-onboarding]')).toHaveCount(0)
   await expect(page.locator('[data-dashboard-status]')).toContainText('状态未知')
-  await expect(statistics).not.toContainText('0 B')
+  // Tiles print figure and unit as separate spans, so match "0B" as well.
+  await expect(statistics).not.toContainText(/\b0\s*B\b/)
+  await expect(statistics.locator('[data-tile-value]')).toHaveCount(0)
   unavailable = false
   await statistics.getByRole('button', { name: /重试/ }).click()
   await expect(page.locator('[data-dashboard-benefits]')).toContainText('92.0%')
@@ -320,10 +365,24 @@ test('Overview populated benefits, download path and recent requests fit desktop
   })
   await page.goto('/admin')
   const benefits = page.locator('[data-dashboard-benefits]')
-  await expect(benefits).toContainText('92.0%')
-  await expect(benefits).toContainText('640.0 MB')
-  await expect(benefits).toContainText('估算')
-  await expect(page.getByTestId('resource-memory')).toContainText('内存占用')
+  await expectTileValue(benefits.locator('[data-tile="hit-rate"]'), '92.0%')
+  await expect(benefits.locator('[data-tile="hit-rate"] .dash-tile-sub')).toContainText('1,104 / 1,200')
+  // The download path as three byte totals: what the cache answered, what
+  // came back from upstreams, and what clients received.
+  await expectTileValue(benefits.locator('[data-tile="cache"]'), '640.0 MB')
+  await expectTileValue(page.getByTestId('traffic-origin-total'), '63.0 MB')
+  await expect(page.getByTestId('traffic-origin-total')).toContainText('104 次回源请求')
+  await expectTileValue(page.getByTestId('traffic-served-total'), '700.0 MB')
+  // Time saved is derived from a latency difference; it must say so rather
+  // than read as a measured build speedup.
+  await expect(benefits.locator('[data-tile="time-saved"]')).toContainText('估算')
+  await expect(benefits.locator('[data-tile="time-saved"] .dash-tile-sub')).toHaveText('按耗时差估算')
+  await expect(page.getByTestId('resource-memory')).toContainText('内存')
+  await expect(page.getByTestId('resource-memory').locator('dd')).toHaveText('180.0 MB')
+  // Re-bucketing the trend points into display columns must not lose or
+  // invent requests: the bars sum to the API's 118.
+  const bars = page.locator('[data-dashboard-trends] .dash-chart-col')
+  await expect.poll(() => bars.evaluateAll(columns => columns.reduce((sum, column) => sum + Number(column.getAttribute('data-requests')), 0))).toBe(118)
   await expect(page.locator('[data-recent-request-id]')).toHaveCount(3)
   await expect(page.locator('[data-dashboard-onboarding]')).toHaveCount(0)
   for (const viewport of [{ width: 1440, height: 900 }, { width: 1920, height: 1080 }, { width: 390, height: 844 }, { width: 320, height: 800 }]) {
@@ -331,7 +390,7 @@ test('Overview populated benefits, download path and recent requests fit desktop
   }
   await setUiPreferences(page, 'light', 'zh')
   await page.reload()
-  await expect(benefits).toContainText('92.0%')
+  await expectTileValue(benefits.locator('[data-tile="hit-rate"]'), '92.0%')
   await reviewViewport(page, 'populated-light', 1440, 900)
 })
 
@@ -364,41 +423,43 @@ test('Overview separates uncollected data from a measured zero', async ({ page }
 
   // Upstream→Depsilo metering never ran for this range: the total is unknown,
   // not zero. Client-facing bytes were measured, so a real zero stays a zero.
-  const originTotal = page.locator('[data-testid="traffic-origin-total"]')
-  await expect(originTotal).toContainText('—')
-  await expect(originTotal).toContainText('未采集')
-  await expect(originTotal).not.toContainText('0 B')
-  const servedTotal = page.locator('[data-testid="traffic-served-total"]')
-  await expect(servedTotal).toContainText('0 B')
-  await expect(servedTotal).toContainText('0 次请求')
+  const originTotal = page.getByTestId('traffic-origin-total')
+  await expectTileValue(originTotal, '—')
+  await expect(originTotal.locator('.dash-tile-sub')).toHaveText('未采集')
+  await expect(originTotal).not.toContainText(/\b0\s*B\b/)
+  const servedTotal = page.getByTestId('traffic-served-total')
+  await expectTileValue(servedTotal, '0 B')
+  await expect(servedTotal.locator('.dash-tile-sub')).toHaveText('0 次请求')
 
-  // Live rails are not collected yet: dash, localized detail, no unit.
-  const serviceFlow = page.locator('[data-testid="traffic-service-flow"]')
-  await expect(serviceFlow).toContainText('—')
-  await expect(serviceFlow).toContainText('未采集')
-  await expect(serviceFlow).not.toContainText('次/秒')
+  // The live meter has not completed a window yet: one localized "not
+  // collected", and no per-second figure or unit that would read as a zero.
+  const network = page.getByTestId('resource-network')
+  await expect(network).toContainText('未采集')
+  await expect(network).not.toContainText('/s')
+  await expect(network).not.toContainText('次/分')
+  await expect(network.getByTestId('traffic-service-flow')).toHaveCount(0)
+  await expect(network.getByTestId('traffic-origin-flow')).toHaveCount(0)
 
   // A failed first inventory query carries null counts and a zero fallback
   // byte field. It must remain unknown instead of claiming an empty cache.
   const cache = page.getByTestId('resource-cache')
-  await expect(cache.locator('.dash-metric-value')).toHaveText('—')
-  await expect(cache).toContainText('缓存库存尚未采集成功')
-  await expect(cache).not.toContainText('0 B')
+  await expectTileValue(cache, '—')
+  await expect(cache.locator('.dash-tile-sub')).toHaveText('缓存库存尚未采集成功')
+  await expect(cache).not.toContainText(/\b0\s*B\b/)
   await expect(cache.locator('[data-progress-ratio]')).toHaveCount(0)
+  const storage = page.locator('[data-dashboard-storage]')
+  await expect(storage.locator('.dash-kv dd')).toHaveText(['—', '—'])
 
-  const cpu = page.locator('[data-testid="resource-cpu"]')
-  await expect(cpu.locator('.dash-metric-value')).toHaveText('—')
+  // An unsupported platform says so in the operator's language, with no
+  // percent sign and without leaking the server's English reason.
+  const cpu = page.getByTestId('resource-cpu')
+  await expect(cpu.locator('dd')).toHaveText('当前平台不支持')
   await expect(cpu).not.toContainText('%')
-  await expect(cpu).toContainText('当前平台不支持')
   await expect(cpu).not.toContainText('cpu sampling is not available')
-
-  const network = page.locator('[data-testid="resource-network"]')
-  await expect(network).not.toContainText('次/秒')
-  await expect(network).toContainText('未采集')
-
-  // The platform's own explanation stays available in the hint.
-  await page.getByLabel('查看 CPU 口径').click()
-  await expect(page.getByText('cpu sampling is not available on this platform')).toBeVisible()
+  // Without a process RSS sample the memory row falls back to the Go
+  // runtime's own figure and labels it as such, not as process memory.
+  await expect(page.getByTestId('resource-memory').locator('dd')).toHaveText('4.0 MB · 运行时')
+  await expect(page.locator('[data-dashboard-resources]')).not.toContainText('not available')
 })
 
 test('Overview opens grouped upstream checks in one click without repeating banners', async ({ page }) => {
@@ -422,7 +483,8 @@ test('Overview opens grouped upstream checks in one click without repeating bann
   const status = page.locator('[data-dashboard-status]')
   await expect(status).toHaveText('1 个上游需关注')
   await expect(page.locator('[data-admin-version]').first()).toHaveText('dev·bd6b480')
-  await expect(page.locator('[data-admin-page-actions]')).toContainText('1 个上游需关注')
+  // The header carries the status once; no banner repeats it in the body.
+  await expect(page.locator('[data-admin-page-header]')).toContainText('1 个上游需关注')
   await expect(page.locator('[data-dashboard-alerts], [data-dashboard-status-strip]')).toHaveCount(0)
   const guide = page.locator('[data-dashboard-onboarding]')
   await expect(guide).not.toContainText('历史记录不完整')
@@ -431,16 +493,22 @@ test('Overview opens grouped upstream checks in one click without repeating bann
 
   const chart = page.locator('[data-dashboard-trends]')
   const recent = page.locator('[data-dashboard-recent-requests]')
-  await expect(chart).toContainText('当前时段暂无趋势数据')
+  await expect(chart.locator('[data-trend-chart]')).toContainText('这段时间没有请求')
+  await expect(chart.locator('.dash-chart-col[data-requests]:not([data-requests="0"])')).toHaveCount(0)
   await expect(recent).toContainText('暂无可展示的请求记录')
+  await expect(recent).toHaveAttribute('data-dashboard-recent-empty', 'true')
   const [chartBox, recentBox] = await Promise.all([chart.boundingBox(), recent.boundingBox()])
   expect(chartBox!.height).toBeLessThan(240)
   expect(recentBox!.height).toBeLessThan(240)
   expect(Math.abs(chartBox!.width - recentBox!.width)).toBeLessThan(2)
   expect(Math.abs(chartBox!.x - recentBox!.x)).toBeLessThan(2)
   expect(recentBox!.y).toBeGreaterThanOrEqual(chartBox!.y + chartBox!.height)
-  const capacity = page.locator('[data-cache-capacity-group]')
-  const amount = (await capacity.locator('.dash-metric-value').boundingBox())!
+  // A known quota with an empty cache: the figure is a measured 0%, the
+  // meter sits beside it, and its fill is genuinely empty.
+  const capacity = page.getByTestId('resource-cache')
+  await expectTileValue(capacity, '0.0%')
+  await expect(capacity.locator('.dash-tile-sub')).toHaveText('0 B / 20.0 GB')
+  const amount = (await capacity.locator('[data-tile-value]').boundingBox())!
   const bar = (await capacity.getByRole('meter').boundingBox())!
   expect(bar.x - amount.x - amount.width).toBeLessThan(120)
   await expect(capacity.getByRole('meter')).toHaveAttribute('aria-valuenow', '0')
@@ -514,7 +582,11 @@ test('Overview preserves the latest upstream observation across cached range cha
   failWide = true
   await page.getByRole('button', { name: '30 天', exact: true }).click()
   await expect(status).not.toContainText('服务正常')
-  await expect(page.locator('[data-dashboard-period]')).toContainText('最新刷新失败')
+  // The failed 30-day refresh keeps that range's cached figures on screen and
+  // names the range in the stale notice instead of blanking the tiles.
+  await expect(page.locator('[data-dashboard-period]')).toHaveAttribute('data-period-range', '30d')
+  await expect(page.getByRole('status').filter({ hasText: '30 天最新刷新失败' })).toBeVisible()
+  await expectTileValue(page.locator('[data-tile="hit-rate"]'), '92.0%')
   await status.click()
   const details = page.getByRole('dialog', { name: '服务状态详情' })
   await expect(details.locator('[data-upstream-health-id="7"]')).toContainText('1,600 ms')

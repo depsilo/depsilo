@@ -13,8 +13,6 @@ import {
   originCoverageNote,
   periodChange,
   requestOutcome,
-  sparklineGeometry,
-  sparklineHasVariance,
   timeSavedMs,
 } from '../src/lib/dashboardOverview'
 
@@ -341,45 +339,11 @@ describe('buildUpstreamHealth', () => {
   })
 })
 
-describe('sparklineHasVariance', () => {
-  it('hides flat or single-sample series and keeps a real range', () => {
-    expect(sparklineHasVariance([])).toBe(false)
-    expect(sparklineHasVariance([5])).toBe(false)
-    expect(sparklineHasVariance([5, 5, 5, 5])).toBe(false)
-    expect(sparklineHasVariance([5, 5.4, 5.1])).toBe(true)
-  })
-})
-
 describe('periodChange', () => {
   it('withholds a delta without a comparable baseline', () => {
     expect(periodChange(2, null)).toBeNull()
     expect(periodChange(2, 0)).toBeNull()
     expect(periodChange(2, 1)).toBe(100)
-  })
-})
-
-describe('sparklineGeometry', () => {
-  it('returns nothing below two samples', () => {
-    expect(sparklineGeometry([])).toBeNull()
-    expect(sparklineGeometry([4])).toBeNull()
-  })
-
-  it('draws a smooth monotone curve that stays inside the box', () => {
-    const geometry = sparklineGeometry([1, 3, 2, 6])
-    expect(geometry).not.toBeNull()
-    expect(geometry!.line.startsWith('M ')).toBe(true)
-    expect(geometry!.line).toContain('C ')
-    expect(geometry!.area.endsWith('Z')).toBe(true)
-    expect(geometry!.last.x).toBeCloseTo(93, 5)
-    expect(geometry!.last.y).toBeGreaterThanOrEqual(3)
-    expect(geometry!.last.y).toBeLessThanOrEqual(27)
-  })
-
-  it('keeps a flat series flat instead of overshooting', () => {
-    const geometry = sparklineGeometry([5, 5, 5, 5])
-    const ys = [...geometry!.line.matchAll(/(?:M|C)\s*[-\d.]+ ([-\d.]+)|,\s*[-\d.]+ ([-\d.]+)/g)]
-      .map(match => Number(match[1] ?? match[2]))
-    expect(new Set(ys).size).toBe(1)
   })
 })
 

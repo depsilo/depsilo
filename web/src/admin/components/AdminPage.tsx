@@ -12,6 +12,8 @@ interface AdminPageProps {
   children: ReactNode
   title?: ReactNode | false
   description?: ReactNode
+  /** Compact status shown on the title's own line, for a page whose header is its summary. */
+  titleAccessory?: ReactNode
   actions?: ReactNode
   width?: AdminPageWidth
 }
@@ -33,6 +35,7 @@ export default function AdminPage({
   children,
   title,
   description,
+  titleAccessory,
   actions,
   width = 'fluid',
 }: AdminPageProps) {
@@ -85,15 +88,18 @@ export default function AdminPage({
           ) : (
             <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               {(resolvedTitle || description) && (
-                <div className="min-w-0 max-w-[72ch]">
+                <div className={`min-w-0 ${titleAccessory ? 'sm:flex-1' : 'max-w-[72ch]'}`}>
                   {resolvedTitle && (
-                    <h1
-                      data-admin-page-title
-                      className="text-[26px] font-[650] leading-[1.25]"
-                      style={{ color: 'var(--text)', fontFamily: 'var(--font-display)' }}
-                    >
-                      {resolvedTitle}
-                    </h1>
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+                      <h1
+                        data-admin-page-title
+                        className="text-[26px] font-[650] leading-[1.25]"
+                        style={{ color: 'var(--text)', fontFamily: 'var(--font-display)' }}
+                      >
+                        {resolvedTitle}
+                      </h1>
+                      {titleAccessory}
+                    </div>
                   )}
                   {description && (
                     <div
@@ -107,7 +113,9 @@ export default function AdminPage({
                 </div>
               )}
               {actions && (
-                <div data-admin-page-actions className="flex min-w-0 flex-wrap items-center gap-2 sm:ml-auto sm:justify-end">
+                // Beside a title accessory the actions keep their width, so the
+                // accessory wraps under the title before any command does.
+                <div data-admin-page-actions className={`flex min-w-0 flex-wrap items-center gap-2 sm:ml-auto sm:justify-end ${titleAccessory ? 'sm:shrink-0' : ''}`}>
                   {actions}
                 </div>
               )}

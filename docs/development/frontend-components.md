@@ -56,11 +56,29 @@ the application's notification interface to the existing Sonner provider.
 Dashboard, connection verification, upstream, policy, and request components
 remain product modules built from shared primitives.
 
-Activity charts continue to use the installed Recharts implementation. Their
-bucket scope, sample counts, units, and request-path series are domain data;
-they must not be replaced with demo data or changed to match a visual example.
-The current chart uses a shared plotting area with gradient fills. Resource
-sparklines remain a compact secondary view.
+The Overview is a dense cockpit: eight period tiles, then cards for traffic,
+upstreams and storage, and what needs an operator. Its two data series, what
+the cache answered and what went to an Upstream, keep `--dash-hit` and
+`--dash-miss` everywhere on the page and nothing else uses them; the pair is
+checked for colour-vision separation and 3:1 contrast on both card surfaces.
+Status always pairs a colour with a glyph.
+
+The activity chart is plain stacked columns, not a charting library, because
+request counts are sparse and bursty: bars need no interpolation between
+buckets. Each bar is an exact sum of the trend API's buckets, re-cut to a span
+that divides a day (`web/src/lib/overviewCockpit.ts`); bucket scope, sample
+counts, and units are domain data and must not be replaced with demo data or
+changed to match a visual example. The chart is keyboard-readable, and the
+"recent bursts" list beneath it is its table view.
+
+Interactive rows on the Overview size from `--dash-target`: 24px for a fine
+pointer, 40px on touch devices and below the 700px container width, where the
+rest of Admin's 40px target rule applies.
+
+The Admin shell's rail collapses to icons, and the choice persists per browser
+(`depsilo-admin-rail`). A page can take the whole screen with
+`useImmersiveMode`, which hides the rail and requests browser fullscreen as an
+enhancement; the Overview offers it from its header.
 
 ## Updating components
 

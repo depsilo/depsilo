@@ -70,7 +70,7 @@ export default function ThemeToggle({ labeled = false, variant = 'default' }: Th
   }
 
   return (
-    <Button type="button" data-theme-toggle="icon" title={label} onClick={cycle} variant="outline" size="icon" data-icon-button aria-label={label} className="text-muted-foreground">
+    <Button type="button" data-theme-toggle="icon" title={label} onClick={cycle} variant={variant === 'admin' ? 'ghost' : 'outline'} size="icon" data-icon-button aria-label={label} className="text-muted-foreground">
       <Icon name={ICONS[theme]} size="sm" />
     </Button>
   )

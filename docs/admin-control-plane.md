@@ -121,6 +121,17 @@ still returns real zero counts. The frontend can therefore distinguish an
 empty period from unavailable statistics. Database error details remain in
 server logs.
 
+`GET /api/v1/admin/dashboard/breakdown` splits the same selected period by
+ecosystem, by Upstream, and into the ten largest packages. Per Upstream,
+`upstream_bytes` and `upstream_requests` are the measured exchanges with that
+Upstream, the same quantity as the period's origin traffic, while `miss_*`
+describes the client requests answered through it; coalesced or aborted
+downloads make the two differ. It shares the period block's boundaries and
+request filter, so the ecosystem rows add up to the block's totals. An
+Upstream is identified by ecosystem and name. One- and 24-hour ranges read raw access logs; longer ranges read the
+hourly rollup and rank packages from the daily package rollup, reported as
+`top_packages_grain: "utc_day"` because that ranking covers whole UTC days.
+
 ## Cache-fill progress
 
 `GET /api/v1/admin/cache/transfers` is an authenticated Admin read endpoint.

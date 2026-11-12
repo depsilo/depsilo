@@ -73,3 +73,21 @@
     font-size: 15px;
   }
 }
+
+/* The workspace rail. Its width is one token, so the content margin follows
+ * the collapsed state without either side knowing the other's number. The
+ * change is deliberately not animated: a transition would re-lay out a dense
+ * page on every frame, and it also replays whenever the 1024px breakpoint
+ * toggles the rule. */
+[data-admin-shell] { --admin-rail-width: 232px; }
+[data-admin-shell][data-admin-rail="collapsed"] { --admin-rail-width: 60px; }
+.admin-rail { width: var(--admin-rail-width); }
+@media (min-width: 1024px) {
+  .admin-main { margin-left: var(--admin-rail-width); }
+}
+
+/* An immersive page (useImmersiveMode) takes the whole screen: no rail, and
+ * no drawer trigger, because the page carries its own exit control. */
+html[data-admin-immersive] .admin-rail,
+html[data-admin-immersive] [data-admin-nav-trigger] { display: none; }
+html[data-admin-immersive] .admin-main { margin-left: 0; }
