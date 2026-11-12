@@ -140,10 +140,13 @@ test('wide-table query states stay in the mobile canvas and only data mounts a s
   })
 
   await page.goto('/admin/logs')
-  const loading = page.locator('main [aria-busy="true"]').filter({ hasText: /加载|Loading/ }).last()
-  await expect(loading).toBeVisible()
+  // Measure the page's own query state. The route-chunk fallback is also
+  // aria-busy under <main> and is replaced moments later, so a selector that
+  // can match it races with that swap.
+  const loadingSelector = '[data-admin-page-content] [aria-busy="true"]'
+  await expect(page.locator(loadingSelector).filter({ hasText: /加载|Loading/ })).toBeVisible()
   await expect(page.locator('[data-table-viewport]')).toHaveCount(0)
-  await expectWithinViewport(page, 'main [aria-busy="true"]', width)
+  await expectWithinViewport(page, loadingSelector, width)
 
   mode = 'empty'
   releaseLoading()
