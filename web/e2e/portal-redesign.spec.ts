@@ -435,6 +435,31 @@ test('Portal service status distinguishes loading, unknown, and recoverable fail
   await expect(page.locator('.portal-status-pill[data-query-state="success"]')).toHaveAccessibleName(/Online/i)
 })
 
+test('a late Quick Start mount keeps the header on a failed first poll', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
+  // The status band shares the header's stats query. When its lazily loaded
+  // page arrives after a failed first poll, it must show that failure instead
+  // of starting a second request that hides it from the header.
+  await page.route(url => url.pathname.includes('QuickStart'), async route => {
+    await new Promise(resolve => setTimeout(resolve, 1500))
+    await route.continue()
+  })
+  let calls = 0
+  await mockAdminApi(page, {
+    'GET /api/v1/stats': () => {
+      calls += 1
+      return calls === 1
+        ? { status: 503, body: { code: 'UNAVAILABLE', message: 'stats unavailable' } }
+        : populatedStats
+    },
+  })
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Quick start' })).toBeVisible()
+  await expect(page.locator('button.portal-status-pill[data-query-state="error"]')).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Service status' }).getByRole('button', { name: 'Retry' })).toBeVisible()
+  expect(calls).toBe(1)
+})
+
 test('Portal header keeps every visible control in view at 320px', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 844 })
   await setUiPreferences(page, 'dark', 'en')

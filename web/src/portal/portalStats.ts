@@ -35,6 +35,10 @@ export function usePortalStats() {
     staleTime: 30_000,
     refetchInterval: 30_000,
     retry: false,
+    // A component that mounts after a failed poll (the lazily loaded Quick
+    // Start band) must show that failure, not quietly start a second request
+    // that hides it from the header. Retry buttons and the interval re-fetch.
+    retryOnMount: false,
   })
 }
 
