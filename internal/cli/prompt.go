@@ -17,10 +17,12 @@ import (
 //
 //	depsilo prompt                       # uses $DEPSILO_URL or http://localhost:23333
 //	depsilo prompt --url http://lan:23333
+//	depsilo prompt --ecosystem python    # only this ecosystem
 //	depsilo prompt > integrate.md        # pipe into a file
 //	depsilo prompt | claude              # or directly into your agent
 func runPrompt(args []string) int {
 	url := ""
+	ecosystem := ""
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch {
@@ -31,6 +33,11 @@ func runPrompt(args []string) int {
 			url = strings.TrimPrefix(a, "--url=")
 		case a == "--url" && i+1 < len(args):
 			url = args[i+1]
+			i++
+		case strings.HasPrefix(a, "--ecosystem="):
+			ecosystem = strings.TrimPrefix(a, "--ecosystem=")
+		case a == "--ecosystem" && i+1 < len(args):
+			ecosystem = args[i+1]
 			i++
 		default:
 			fmt.Fprintf(os.Stderr, "unknown flag: %s\n\n", a)
@@ -43,7 +50,12 @@ func runPrompt(args []string) int {
 		url = getServerURL()
 	}
 
-	fmt.Print(prompts.Integration(url))
+	prompt, ok := prompts.IntegrationFor(url, ecosystem)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "unknown ecosystem: %s (use one of: %s)\n", ecosystem, strings.Join(prompts.Ecosystems(), ", "))
+		return 1
+	}
+	fmt.Print(prompt)
 	return 0
 }
 
@@ -63,12 +75,16 @@ explicitly asks for mirror-only mode.
 Flags:
     --url <url>     mirror URL to embed (default: $DEPSILO_URL or
                     http://localhost:23333)
+    --ecosystem <id>
+                    limit the prompt to one ecosystem (see below)
     -h, --help      show this message
 
 Examples:
     depsilo prompt
     depsilo prompt --url http://10.4.20.52:23333
+    depsilo prompt --ecosystem python
     depsilo prompt > integrate.md
     depsilo prompt | pbcopy            # macOS
     depsilo prompt | xclip -selection clipboard  # Linux`)
+	fmt.Printf("\nEcosystems:\n    %s\n", strings.Join(prompts.Ecosystems(), ", "))
 }

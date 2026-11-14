@@ -113,3 +113,49 @@ func TestIntegration_StripsMaintainerHeader(t *testing.T) {
 		t.Errorf("rendered prompt missing opening instruction line")
 	}
 }
+
+func TestIntegrationFor_EmptyEcosystemIsTheFullPrompt(t *testing.T) {
+	out, ok := prompts.IntegrationFor("http://example.local", "")
+	if !ok || out != prompts.Integration("http://example.local") {
+		t.Fatalf("empty ecosystem should render the unscoped prompt")
+	}
+}
+
+func TestIntegrationFor_ScopesToOneEcosystem(t *testing.T) {
+	out, ok := prompts.IntegrationFor("http://example.local/", "python")
+	if !ok {
+		t.Fatal("python should be a known ecosystem")
+	}
+	scope := strings.Index(out, "## Scope — Python only")
+	first := strings.Index(out, "## Identification")
+	if scope == -1 || first == -1 || scope > first {
+		t.Fatalf("scope section must come before the first instruction section; scope=%d identification=%d", scope, first)
+	}
+	for _, s := range []string{
+		"`http://example.local/pypi/simple/` and `http://example.local/conda/`",
+		"pip, uv, Poetry, Pipenv, PDM, Conda",
+		"Leave every other ecosystem's configuration",
+		// The safety sections stay: a scoped run follows the same rules.
+		"Public-registry fallback",
+		"Hard constraints",
+	} {
+		if !strings.Contains(out, s) {
+			t.Errorf("scoped prompt missing %q", s)
+		}
+	}
+}
+
+func TestIntegrationFor_RejectsUnknownEcosystem(t *testing.T) {
+	if _, ok := prompts.IntegrationFor("http://example.local", "cobol"); ok {
+		t.Fatal("unknown ecosystem should be rejected")
+	}
+}
+
+func TestIntegrationFor_EveryEcosystemRenders(t *testing.T) {
+	for _, id := range prompts.Ecosystems() {
+		out, ok := prompts.IntegrationFor("http://example.local", id)
+		if !ok || !strings.Contains(out, "## Scope — ") {
+			t.Errorf("%s: scoped prompt not rendered", id)
+		}
+	}
+}

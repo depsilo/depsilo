@@ -3,6 +3,7 @@ package public
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -30,6 +31,10 @@ func NewIntegrationPromptHandler() *IntegrationPromptHandler {
 //
 // Optional query param ?url=<override> lets the user pin a specific URL (e.g.
 // the internal LAN address when the Portal is reached via a public DNS name).
+//
+// Optional query param ?ecosystem=<id> (a Portal ecosystem id such as
+// "python") limits the prompt to that ecosystem; an unknown id is a 400 that
+// lists the accepted ones.
 func (h *IntegrationPromptHandler) Get(c *gin.Context) {
 	base := c.Query("url")
 	if base == "" {
@@ -40,6 +45,12 @@ func (h *IntegrationPromptHandler) Get(c *gin.Context) {
 		base = fmt.Sprintf("%s://%s", scheme, c.Request.Host)
 	}
 
+	ecosystem := c.Query("ecosystem")
+	prompt, ok := prompts.IntegrationFor(base, ecosystem)
 	c.Header("Content-Type", "text/plain; charset=utf-8")
-	c.String(http.StatusOK, prompts.Integration(base))
+	if !ok {
+		c.String(http.StatusBadRequest, "unknown ecosystem %q; use one of: %s\n", ecosystem, strings.Join(prompts.Ecosystems(), ", "))
+		return
+	}
+	c.String(http.StatusOK, prompt)
 }
