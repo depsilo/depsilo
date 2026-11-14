@@ -430,7 +430,7 @@ export default function MonitorPage() {
                 // the two Portal pages are siblings in one header rail.
                 fontFamily: 'var(--font-display)',
                 fontSize: 'clamp(30px, 3vw, 38px)',
-                fontWeight: 680,
+                fontWeight: 600,
                 // Inter Tight is pre-tightened — mild tracking only,
                 // and milder still for CJK.
                 letterSpacing: i18n.language === 'zh' ? '-0.02em' : '-0.025em',
@@ -585,7 +585,7 @@ export default function MonitorPage() {
             ) : q !== '' && visibleItems.length === 0 ? (
               <Empty style={{ minHeight: 160 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"search"} size="sm" /></EmptyMedia><EmptyTitle>{t('monitor.noMatch', { q: summarizedQuery })}</EmptyTitle>{t('monitor.noMatchHint') && <EmptyDescription>{t('monitor.noMatchHint')}</EmptyDescription>}</EmptyHeader></Empty>
             ) : (
-              <UpstreamGroupedPanel upstreams={visibleItems} variant="cards" minColumnWidth={380} />
+              <UpstreamGroupedPanel upstreams={visibleItems} variant="cards" minColumnWidth={380} heading="name" stretchHeartbeat />
             )}
           </>
         )}

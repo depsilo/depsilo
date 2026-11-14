@@ -1,74 +1,62 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import AIIntegrationPane from '@/portal/components/AIIntegration'
+import CompileCachePane from '@/portal/components/CompileCachePane'
 import ConfigurePane from '@/portal/components/ConfigurePane'
-import CompileCacheIntro from '@/portal/components/CompileCacheIntro'
-import EcosystemCatalog from '@/portal/components/EcosystemCatalog'
-import HeroAICTA from '@/portal/components/HeroAICTA'
+import EcosystemCatalog, { type CatalogEntry } from '@/portal/components/EcosystemCatalog'
+import StatusBand from '@/portal/components/StatusBand'
 import { LANGUAGES } from '@/lib/ecosystemData'
 import { resolveServiceOrigin } from '@/lib/packageManagerConfig'
 import { readLocalStorage, writeLocalStorage } from '@/lib/storage'
 
-const RECENT_ECOSYSTEMS_KEY = 'depsilo.portal.recent-ecosystems.v1'
-const MAX_RECENT_ECOSYSTEMS = 3
+/** The catalog entry a visitor last opened; a first visit opens AI setup. */
+const SELECTION_KEY = 'depsilo.portal.quickstart-selection.v1'
+const AI_ENTRY = 'ai'
+const COMPILE_CACHE_ENTRY = 'compile-cache'
 
 interface Props {
   pytorchIndexPath?: string
 }
 
-function readRecentEcosystems(): string[] {
-  try {
-    const stored = readLocalStorage(RECENT_ECOSYSTEMS_KEY)
-    if (!stored) return []
-
-    const parsed: unknown = JSON.parse(stored)
-    if (!Array.isArray(parsed)) return []
-
-    const supported = new Set(LANGUAGES.map(language => language.id))
-    return Array.from(
-      new Set(
-        parsed.filter(
-          (id): id is string => typeof id === 'string' && supported.has(id),
-        ),
-      ),
-    ).slice(0, MAX_RECENT_ECOSYSTEMS)
-  } catch {
-    return []
-  }
-}
-
-function writeRecentEcosystems(ids: string[]) {
-  writeLocalStorage(RECENT_ECOSYSTEMS_KEY, JSON.stringify(ids))
+function readSelection(): string {
+  const stored = readLocalStorage(SELECTION_KEY)
+  const known = stored === AI_ENTRY || stored === COMPILE_CACHE_ENTRY || LANGUAGES.some(language => language.id === stored)
+  return stored && known ? stored : AI_ENTRY
 }
 
 export default function QuickStart({ pytorchIndexPath }: Props) {
   const { t } = useTranslation()
   const endpoint = resolveServiceOrigin()
-  const [recentEcosystems, setRecentEcosystems] = useState(readRecentEcosystems)
-  const [language, setLanguage] = useState(() => recentEcosystems[0] ?? 'python')
+  const [selected, setSelected] = useState(readSelection)
 
-  useEffect(() => {
-    writeRecentEcosystems(recentEcosystems)
-  }, [recentEcosystems])
+  const leading: CatalogEntry[] = [
+    { id: AI_ENTRY, name: t('quickstart.catalog.ai'), subtitle: t('quickstart.catalog.aiSubtitle'), icon: 'lightbulb' },
+  ]
+  const optional: CatalogEntry[] = [
+    { id: COMPILE_CACHE_ENTRY, name: t('quickstart.catalog.compileCache'), subtitle: 'ccache · sccache', icon: 'memory' },
+  ]
 
-  function selectLanguage(id: string) {
-    setLanguage(id)
-    setRecentEcosystems(previous =>
-      [id, ...previous.filter(item => item !== id)].slice(
-        0,
-        MAX_RECENT_ECOSYSTEMS,
-      ),
-    )
+  function select(id: string) {
+    setSelected(id)
+    writeLocalStorage(SELECTION_KEY, id)
   }
 
   return (
     // No page-local max-width: the Portal shell already caps the content
     // width, and a second cap here is what pulled this page's left edge out
     // of line with the sticky header on wide displays.
-    <div className="flex w-full flex-col gap-7">
-      <header className="fade-up max-w-[760px]">
+    <div className="flex w-full flex-col gap-6">
+      <StatusBand
+        onOpenEcosystem={id => {
+          select(id)
+          document.getElementById('quickstart-configure')?.scrollIntoView({ block: 'start' })
+        }}
+      />
+
+      <header className="max-w-[760px]">
         <h1
           id="quickstart-title"
-          className="m-0 font-display text-[clamp(30px,3vw,38px)] font-[680] leading-[1.08] text-[var(--text)]"
+          className="m-0 font-display text-[clamp(30px,3vw,38px)] font-[600] leading-[1.08] text-[var(--text)]"
         >
           {t('quickstart.title')}
         </h1>
@@ -78,9 +66,10 @@ export default function QuickStart({ pytorchIndexPath }: Props) {
       </header>
 
       <section
+        id="quickstart-configure"
         data-quickstart-primary
         aria-labelledby="quickstart-config-title"
-        className="fade-up fade-up-d1"
+        className="scroll-mt-20"
       >
         <h2 id="quickstart-config-title" className="sr-only">
           {t('quickstart.primaryTitle')}
@@ -93,41 +82,20 @@ export default function QuickStart({ pytorchIndexPath }: Props) {
             border: '1px solid var(--border-strong)',
           }}
         >
-          <EcosystemCatalog
-            selected={language}
-            recent={recentEcosystems}
-            onSelect={selectLanguage}
-          />
-          <ConfigurePane
-            key={language}
-            languageId={language}
-            endpoint={endpoint}
-            pytorchIndexPath={pytorchIndexPath}
-            flush
-          />
-        </div>
-      </section>
-
-      <section
-        data-quickstart-optional
-        aria-labelledby="quickstart-optional-title"
-        className="fade-up fade-up-d2 border-t border-[var(--border)] pt-8"
-      >
-        <div className="mb-4 max-w-[68ch]">
-          <h2
-            id="quickstart-optional-title"
-            className="m-0 font-display text-[20px] font-[650] leading-[1.2] text-[var(--text)]"
-          >
-            {t('quickstart.optionalTitle')}
-          </h2>
-          <p className="mt-1 text-[13px] leading-[1.5] text-[var(--text-muted)]">
-            {t('quickstart.optionalDescription')}
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-          <HeroAICTA />
-          <CompileCacheIntro />
+          <EcosystemCatalog selected={selected} onSelect={select} leading={leading} optional={optional} />
+          {selected === AI_ENTRY ? (
+            <AIIntegrationPane />
+          ) : selected === COMPILE_CACHE_ENTRY ? (
+            <CompileCachePane />
+          ) : (
+            <ConfigurePane
+              key={selected}
+              languageId={selected}
+              endpoint={endpoint}
+              pytorchIndexPath={pytorchIndexPath}
+              flush
+            />
+          )}
         </div>
       </section>
     </div>

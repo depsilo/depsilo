@@ -6,7 +6,13 @@ import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import { LANGUAGES, type ManagerConfig } from '@/lib/ecosystemData'
 import { renderManagerTemplate, resolveServiceOrigin } from '@/lib/packageManagerConfig'
+import { AIIntegrationSteps } from '@/portal/components/AIIntegration'
 import PyTorchIndexNotice from '@/portal/components/PyTorchIndexNotice'
+import StepHeading from '@/portal/components/StepHeading'
+
+/** The picker's first tab: hand this ecosystem to a coding agent. */
+const AI_TAB = 'ai'
+const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
 interface Props {
   languageId: string
@@ -54,19 +60,19 @@ function ManagerChoice({
         boxShadow: active ? 'var(--shadow-surface)' : 'none',
         textAlign: 'center',
         cursor: 'pointer',
-        transition:
-          'background 140ms ease, box-shadow 140ms ease, color 140ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
+        transition: `background-color 140ms ${EASE}, box-shadow 140ms ${EASE}, color 140ms ${EASE}, transform 140ms ${EASE}`,
       }}
     >
       <span
         style={{
           color: active ? 'var(--brand-text)' : 'var(--text)',
           fontSize: 13,
-          fontWeight: active ? 660 : 540,
+          fontWeight: active ? 600 : 500,
           lineHeight: 1.25,
           whiteSpace: 'nowrap',
         }}
       >
+        {manager.id === AI_TAB && <Icon name="lightbulb" size="sm" className="mr-1 inline-block align-[-3px]" />}
         {manager.name}
       </span>
     </Toggle>
@@ -96,12 +102,12 @@ function ManagerPicker({
       <div className="mb-2 flex items-baseline justify-between gap-3">
         <span
           id={titleId}
-          className="text-[12px] font-[650] leading-[1.3] text-[var(--text-muted)]"
+          className="text-[12px] font-[600] leading-[1.3] text-[var(--text-muted)]"
         >
           {t('quickstart.managerPickerLabel')}
         </span>
-        <span className="font-mono text-[12px] text-[var(--text-subtle)]">
-          {t('quickstart.managerCount', { count: managers.length })}
+        <span className="text-[12px] tabular-nums text-[var(--text-subtle)]">
+          {t('quickstart.managerCount', { count: managers.filter(item => item.id !== AI_TAB).length })}
         </span>
       </div>
       <div
@@ -135,40 +141,6 @@ function ManagerPicker({
   )
 }
 
-function StepHeading({
-  id,
-  number,
-  title,
-  description,
-}: {
-  id: string
-  number: number
-  title: string
-  description: string
-}) {
-  return (
-    <div className="mb-3 flex items-start gap-3">
-      <span
-        aria-hidden="true"
-        className="mt-0.5 font-mono text-[12px] font-[650] leading-[1.4] text-[var(--brand-text)]"
-      >
-        {String(number).padStart(2, '0')}
-      </span>
-      <div>
-        <h4
-          id={id}
-          className="m-0 text-[15px] font-[660] leading-[1.3] text-[var(--text)]"
-        >
-          {title}
-        </h4>
-        <p className="mb-0 mt-1 text-[13px] leading-[1.5] text-[var(--text-muted)]">
-          {description}
-        </p>
-      </div>
-    </div>
-  )
-}
-
 function PathsCollapsible({ paths }: { paths: { os: string; path: string }[] }) {
   const { t } = useTranslation()
 
@@ -180,7 +152,7 @@ function PathsCollapsible({ paths }: { paths: { os: string; path: string }[] }) 
         background: 'var(--bg-card)',
       }}
     >
-      <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-md px-3 text-[13px] font-[540] text-[var(--text-muted)]">
+      <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-md px-3 text-[13px] font-[500] text-[var(--text-muted)]">
         {t('quickstart.whereReadsFrom')}
         <span className="disclosure-chevron inline-flex">
           <Icon name="expand_more" size="sm" />
@@ -234,9 +206,7 @@ export default function ConfigurePane({
 }: Props) {
   const { t } = useTranslation()
   const language = LANGUAGES.find(item => item.id === languageId)
-  const [managerId, setManagerId] = useState<string>(
-    () => language?.managers[0]?.id ?? '',
-  )
+  const [managerId, setManagerId] = useState<string>(AI_TAB)
 
   if (!language) return null
 
@@ -245,6 +215,13 @@ export default function ConfigurePane({
   const manager =
     language.managers.find(item => item.id === managerId) ?? language.managers[0]
   if (!manager) return null
+  const showAI = managerId === AI_TAB
+  const aiTab: ManagerConfig = {
+    ...manager,
+    id: AI_TAB,
+    name: t('quickstart.ai.tab'),
+    hint: t('quickstart.ai.tabHint', { name: language.name }),
+  }
 
   const pytorchClient =
     manager.id === 'uv'
@@ -257,6 +234,7 @@ export default function ConfigurePane({
 
   return (
     <div
+      data-quickstart-pane={language.id}
       className={flush ? '' : 'card'}
       style={{ display: 'flex', minWidth: 0, flex: 1, flexDirection: 'column' }}
     >
@@ -282,7 +260,7 @@ export default function ConfigurePane({
         </span>
         <div style={{ minWidth: 0 }}>
           <h3
-            className="m-0 font-display text-[clamp(20px,2vw,24px)] font-[680] leading-[1.15] text-[var(--text)]"
+            className="m-0 font-display text-[clamp(20px,2vw,24px)] font-[600] leading-[1.15] text-[var(--text)]"
           >
             {t('quickstart.configureTitle', { name: language.name })}
           </h3>
@@ -302,11 +280,16 @@ export default function ConfigurePane({
 
       <div className="flex flex-col gap-7 p-4 sm:p-6 lg:p-7">
         <ManagerPicker
-          managers={language.managers}
-          active={manager.id}
+          managers={[aiTab, ...language.managers]}
+          active={showAI ? AI_TAB : manager.id}
           onChange={setManagerId}
         />
 
+        {showAI ? (
+          <div key={AI_TAB} className="manager-config-swap flex flex-col gap-7">
+            <AIIntegrationSteps scope={{ id: language.id, name: language.name }} />
+          </div>
+        ) : (
         <div key={manager.id} className="manager-config-swap flex flex-col gap-7">
           <section aria-labelledby="quickstart-config-step">
             <StepHeading
@@ -323,7 +306,7 @@ export default function ConfigurePane({
                 code={fill(manager.persistent.body)}
                 language={manager.persistent.lang}
                 copyName={manager.persistent.file}
-                tone="ink"
+                flat
               />
               <PathsCollapsible paths={manager.paths} />
             </div>
@@ -331,23 +314,15 @@ export default function ConfigurePane({
 
           {manager.methods && manager.methods.length > 0 && (
             <details className="config-disclosure border-y border-[var(--border)] py-2">
-              <summary className="stripe-focus-ring flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-md px-1">
-                <span className="flex items-start gap-3">
-                  <span
-                    aria-hidden="true"
-                    className="mt-0.5 font-mono text-[12px] font-[650] leading-[1.4] text-[var(--brand-text)]"
-                  >
-                    02
-                  </span>
-                  <span>
-                    <span className="block text-[14px] font-[640] text-[var(--text)]">
-                      {t('quickstart.quickMethods')}
-                    </span>
-                    <span className="mt-0.5 block text-[12px] leading-[1.45] text-[var(--text-muted)]">
-                      {t('quickstart.quickMethodsDescription')}
-                    </span>
-                  </span>
-                </span>
+              {/* -mx-1 offsets the focus-ring padding so the step number
+                  stays in the column of steps 01 and 03. */}
+              <summary className="stripe-focus-ring -mx-1 flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-md px-1">
+                <StepHeading
+                  inline
+                  number={2}
+                  title={t('quickstart.quickMethods')}
+                  description={t('quickstart.quickMethodsDescription')}
+                />
                 <span className="disclosure-chevron inline-flex">
                   <Icon name="expand_more" size="sm" />
                 </span>
@@ -355,13 +330,14 @@ export default function ConfigurePane({
               <div className="flex flex-col gap-3 pb-2 pt-3">
                 {manager.methods.map(method => (
                   <div key={`${method.label}-${method.body}`} className="flex flex-col gap-1">
-                    <span className="px-0.5 text-[12px] font-[560] text-[var(--text-muted)]">
+                    <span className="px-0.5 text-[12px] font-[500] text-[var(--text-muted)]">
                       {t(method.label)}
                     </span>
                     <CodeBlock
                       code={fill(method.body)}
                       language={method.lang}
                       copyName={t(method.label)}
+                      flat
                     />
                   </div>
                 ))}
@@ -380,6 +356,7 @@ export default function ConfigurePane({
               code={fill(manager.verify.body)}
               language={manager.verify.lang}
               copyName={t('quickstart.verifyStep')}
+              flat
             />
           </section>
 
@@ -391,6 +368,7 @@ export default function ConfigurePane({
             />
           )}
         </div>
+        )}
       </div>
     </div>
   )

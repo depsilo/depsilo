@@ -1,0 +1,119 @@
+/* Quick Start status band: one row of live figures. Cells are divided by
+   hairlines; the first cell carries the service state tint. */
+
+.status-band {
+  --status-band-hit: var(--ok);
+  --status-band-miss: color-mix(in oklab, var(--text-subtle) 55%, transparent);
+  display: grid;
+  grid-template-columns: minmax(170px, 1.25fr) repeat(5, minmax(0, 1fr)) minmax(200px, 1.6fr) minmax(130px, 1fr);
+  align-items: stretch;
+  min-height: 64px;
+  overflow: hidden;
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+}
+.status-band > * + * { border-left: 1px solid var(--border); }
+
+.status-band-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: color-mix(in oklab, var(--ok-text) 7%, var(--bg-card));
+}
+.status-band-state[data-tone='failed'] { background: color-mix(in oklab, var(--danger-text) 8%, var(--bg-card)); }
+.status-band-state[data-tone='unknown'] { background: var(--bg-card); }
+.status-band-state-text { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.status-band-state-head { font-size: 15px; font-weight: 600; line-height: 1.2; color: var(--ok-text); white-space: nowrap; }
+.status-band-state[data-tone='failed'] .status-band-state-head { color: var(--danger-text); }
+.status-band-state[data-tone='unknown'] .status-band-state-head { color: var(--text-muted); }
+
+.status-band-cell,
+.status-band-hour {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px 16px;
+}
+.status-band-label { font-size: 12px; line-height: 1.3; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.status-band-value {
+  display: flex;
+  min-height: 24px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.status-band-value small { font-size: 12px; font-weight: 400; color: var(--text-muted); }
+
+.status-band-upstreams .status-band-value { align-items: center; font-size: 14px; }
+.status-band-upstreams[data-tone='warn'] .status-band-value { color: var(--warn-text); }
+.status-band-upstreams[data-tone='ok'] .status-band-value { color: var(--ok-text); }
+.status-band-failing {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--warn-border);
+  border-radius: 6px;
+  background: var(--warn-fill);
+  color: var(--warn-text);
+  font: 500 12px/1 var(--font-mono);
+}
+button.status-band-failing { cursor: pointer; transition: background-color 140ms cubic-bezier(0.22, 1, 0.36, 1); }
+button.status-band-failing:hover { background: color-mix(in oklab, var(--warn-text) 16%, var(--warn-fill)); }
+.status-band-failing:focus-visible,
+.status-band-retry:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+.status-band-hour svg { width: 100%; height: 24px; }
+.status-band-hour-idle { font-size: 14px; font-weight: 500; line-height: 24px; color: var(--text-muted); }
+
+.status-band-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.status-band-skeleton {
+  display: inline-block;
+  width: 64px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--bg-soft);
+}
+
+@media (max-width: 1279px) {
+  .status-band { grid-template-columns: minmax(160px, 1.2fr) repeat(3, minmax(0, 1fr)) minmax(190px, 1.6fr); }
+  .status-band-cell[data-optional='true'],
+  .status-band-hour { display: none; }
+}
+
+/* Phones: state on top, the three figures in one row, upstreams last.
+   1px gaps over a border-coloured band draw the dividers. */
+@media (max-width: 759px) {
+  .status-band { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--border); }
+  .status-band > * + * { border-left: 0; }
+  .status-band > :not(.status-band-state) { background: var(--bg-card); }
+  .status-band-state,
+  .status-band-upstreams { grid-column: 1 / -1; }
+  .status-band-state { padding: 12px; }
+  .status-band-cell { padding: 8px 12px; }
+  .status-band-value { font-size: 16px; }
+  .status-band-value small { display: none; }
+  .status-band-failing { height: 40px; }
+}

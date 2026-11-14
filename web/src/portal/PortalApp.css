@@ -40,7 +40,7 @@
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
-  transition: background 120ms ease, color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1);
+  transition: background-color 140ms cubic-bezier(0.22, 1, 0.36, 1), color 140ms cubic-bezier(0.22, 1, 0.36, 1), transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 button.portal-header-control {
   cursor: pointer;
@@ -241,4 +241,29 @@ button.portal-header-control {
   .portal-header-nav > a {
     padding-inline: 4px !important;
   }
+}
+
+/* ── Portal type and motion ────────────────────────────────────────────────
+   Tracking: CJK glyphs have no sidebearings to absorb negative tracking, and
+   small text never gets it, so Portal headings and figures sit at 0. Only a
+   Latin page title keeps the tight display tracking from index.css. The
+   Admin keeps its own rules. */
+:root[data-surface='portal'] :is(h2, h3, h4),
+:root[data-surface='portal'] :is(.num, .mono, [data-tabular]) { letter-spacing: 0; }
+:root[data-surface='portal']:lang(zh) h1 { letter-spacing: 0; }
+
+/* Motion: one curve. Hover and press take 140ms; a swapped configuration
+   enters in 300ms with a short rise and no blur. */
+@keyframes portal-config-reveal {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+:root[data-surface='portal'] .manager-config-swap {
+  animation: portal-config-reveal 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+:root[data-surface='portal'] .disclosure-chevron {
+  transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1), color 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-surface='portal'] .manager-config-swap { animation: none; }
 }

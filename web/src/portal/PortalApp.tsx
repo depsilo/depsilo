@@ -2,9 +2,7 @@ import './PortalApp.css'
 import { Button } from '@/components/ui/button'
 import { useEffect } from 'react'
 import { Routes, Route, Link, NavLink } from 'react-router'
-import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { statsApi } from '@/lib/api'
 import { copyText } from '@/lib/clipboard'
 import { buildVersionLabel } from '@/lib/buildVersion'
 import Logo from '@/components/Logo'
@@ -16,14 +14,10 @@ import { lazyRoute } from '@/routing/lazyRoute'
 import RouteNotFound from '@/routing/RouteNotFound'
 import { useTransientState } from '@/hooks/useTransientFlag'
 import { resolveServiceOrigin } from '@/lib/packageManagerConfig'
+import { serviceHealth, usePortalStats } from '@/portal/portalStats'
 
 const QuickStart = lazyRoute(() => import('@/portal/pages/QuickStart'))
 const Monitor = lazyRoute(() => import('@/portal/pages/Monitor'))
-
-interface PortalStats {
-  service: { status: string; version: string }
-  extra_indexes?: Array<{ kind?: string; path: string }>
-}
 
 // The endpoint is an action inside the service-information group. The full
 // URL remains available to assistive technology and is always copied even
@@ -170,16 +164,7 @@ export default function PortalApp() {
     return () => root.removeAttribute('data-surface')
   }, [])
 
-  const { data, isPending, isError, refetch } = useQuery<PortalStats>({
-    queryKey: ['stats-status'],
-    queryFn: async ({ signal }) => {
-      const res = await statsApi.getStats({ signal })
-      return res.data
-    },
-    staleTime: 30_000,
-    refetchInterval: 30000,
-    retry: false,
-  })
+  const { data, isPending, isError, refetch } = usePortalStats()
 
   // The Portal header answers one question for an anonymous visitor: is
   // Depsilo serving? Upstream mirror health is a separate axis with its own
@@ -187,12 +172,7 @@ export default function PortalApp() {
   // single slow or unreachable mirror does not restate itself here as a
   // service-wide warning. `degraded` therefore reads as online below; the API
   // keeps reporting it for the Admin surfaces that act on upstream health.
-  const serviceStatus = data?.service?.status
-  const resolvedStatus = serviceStatus === 'failed'
-    ? 'failed'
-    : serviceStatus === 'healthy' || serviceStatus === 'degraded'
-      ? 'healthy'
-      : 'unknown'
+  const resolvedStatus = serviceHealth(data)
   const statusTone = isPending
     ? 'loading'
     : isError && !data
@@ -280,7 +260,7 @@ export default function PortalApp() {
               style={{
                 fontFamily: 'var(--font-display)',
                 fontSize: 15,
-                fontWeight: 700,
+                fontWeight: 600,
                 letterSpacing: '-0.025em',
                 color: 'var(--text)',
               }}

@@ -54,7 +54,7 @@ function ChannelButton({
       }}
     >
       <span className="flex w-full min-w-0 items-center justify-between gap-1.5">
-        <span className="truncate text-[13px] font-[650] leading-[1.25]">
+        <span className="truncate text-[13px] font-[600] leading-[1.25]">
           {choice.label}
         </span>
         {active && (
@@ -117,7 +117,7 @@ export default function PyTorchIndexNotice({ endpoint, path, client }: Props) {
             <span className="flex flex-wrap items-center gap-2">
               <span
                 id={titleId}
-                className="text-[13px] font-[650] leading-[1.35] text-[var(--text)]"
+                className="text-[13px] font-[600] leading-[1.35] text-[var(--text)]"
               >
                 {t('quickstart.pytorchIndexTitle')}
               </span>
@@ -142,7 +142,7 @@ export default function PyTorchIndexNotice({ endpoint, path, client }: Props) {
             {t('quickstart.pytorchIndexDescription')}
           </p>
           <fieldset className="m-0 min-w-0 border-0 p-0">
-            <legend className="mb-2 text-[12px] font-[650] leading-[1.3] text-[var(--text-muted)]">
+            <legend className="mb-2 text-[12px] font-[600] leading-[1.3] text-[var(--text-muted)]">
               {t('quickstart.pytorchIndexPlatformLabel')}
             </legend>
             <div
@@ -209,7 +209,7 @@ export default function PyTorchIndexNotice({ endpoint, path, client }: Props) {
                 aria-atomic="true"
                 className="mb-3 mt-3 flex min-w-0 flex-col gap-1 rounded-md bg-[var(--bg-soft)] px-3 py-2"
               >
-                <span className="text-[12px] font-[620] text-[var(--text-subtle)]">
+                <span className="text-[12px] font-[500] text-[var(--text-subtle)]">
                   {t('quickstart.pytorchIndexEndpointLabel')}
                 </span>
                 <code className="break-all font-mono text-[12px] leading-[1.45] text-[var(--brand-text)]">
@@ -221,6 +221,7 @@ export default function PyTorchIndexNotice({ endpoint, path, client }: Props) {
                 code={command}
                 language="sh"
                 copyName={commandName}
+                flat
               />
             </>
           )}

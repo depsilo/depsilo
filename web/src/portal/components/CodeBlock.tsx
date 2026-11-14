@@ -14,6 +14,12 @@ interface CodeBlockProps {
   copyDisabled?: boolean
   wrap?: boolean
   tone?: 'light' | 'ink'
+  /**
+   * The Portal's code block: always ink, a hairline edge instead of a drop
+   * shadow, and no header bar when there is no filename (the copy control
+   * sits in the code's top-right corner instead).
+   */
+  flat?: boolean
 }
 
 // Lightweight syntax highlight: comments + URLs.
@@ -22,7 +28,7 @@ interface CodeBlockProps {
 // lands on the part of the snippet they actually need to verify.
 const URL_RE = /(https?:\/\/[^\s'"`<>]+)/g
 
-function highlightLine(line: string, lineIdx: number, ink: boolean): ReactNode {
+function highlightLine(line: string, lineIdx: number, ink: boolean, urlWeight: number): ReactNode {
   const trimmed = line.trimStart()
   if (trimmed.startsWith('#') || trimmed.startsWith(';')) {
     return (
@@ -43,7 +49,7 @@ function highlightLine(line: string, lineIdx: number, ink: boolean): ReactNode {
     parts.push(
       <span
         key={`u${m.index}`}
-        style={{ color: ink ? 'var(--code-accent)' : 'var(--brand-text)', fontWeight: 560 }}
+        style={{ color: ink ? 'var(--code-accent)' : 'var(--brand-text)', fontWeight: urlWeight }}
       >
         {m[0]}
       </span>
@@ -54,11 +60,11 @@ function highlightLine(line: string, lineIdx: number, ink: boolean): ReactNode {
   return <span key={lineIdx}>{parts}</span>
 }
 
-function highlight(code: string, ink: boolean): ReactNode {
+function highlight(code: string, ink: boolean, urlWeight: number): ReactNode {
   const lines = code.split('\n')
   return lines.map((line, i) => (
     <span key={i}>
-      {highlightLine(line, i, ink)}
+      {highlightLine(line, i, ink, urlWeight)}
       {i < lines.length - 1 && '\n'}
     </span>
   ))
@@ -72,10 +78,12 @@ export default function CodeBlock({
   copyDisabled = false,
   wrap = false,
   tone = 'light',
+  flat = false,
 }: CodeBlockProps) {
   const { t } = useTranslation()
   const [copyState, showCopyState] = useTransientState<'idle' | 'copied' | 'failed'>('idle')
-  const ink = tone === 'ink'
+  const ink = flat || tone === 'ink'
+  const headed = !flat || Boolean(filename)
 
   const handleCopy = useCallback(async () => {
     if (await copyText(code)) {
@@ -90,35 +98,46 @@ export default function CodeBlock({
   return (
     <div
       className="code-block group"
-      data-code-tone={tone}
+      data-code-tone={ink ? 'ink' : 'light'}
+      data-code-flat={flat ? 'true' : undefined}
       style={{
+        position: flat ? 'relative' : undefined,
         background: ink ? 'var(--code-bg)' : 'var(--bg-soft)',
-        border: ink ? 'none' : '1px solid var(--border)',
+        border: flat ? '1px solid var(--code-line)' : ink ? 'none' : '1px solid var(--border)',
         borderRadius: 'var(--r-card)',
-        boxShadow: ink ? 'var(--code-shadow)' : 'none',
+        boxShadow: ink && !flat ? 'var(--code-shadow)' : 'none',
         overflow: 'hidden',
       }}
     >
       <div
-        style={{
+        style={headed ? {
           background: ink ? 'var(--code-header)' : 'var(--bg-card)',
           borderBottom: `1px solid ${ink ? 'var(--code-line)' : 'var(--border)'}`,
-          minHeight: 42,
+          minHeight: flat ? 40 : 42,
           display: 'flex',
           alignItems: 'center',
-          padding: '0 5px 0 14px',
+          padding: flat ? '0 4px 0 16px' : '0 5px 0 14px',
           justifyContent: 'space-between',
+        } : {
+          position: 'absolute',
+          top: 4,
+          right: 4,
+          zIndex: 1,
+          borderRadius: 6,
+          background: 'var(--code-bg)',
         }}
       >
-        <span
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 12,
-            color: ink ? 'var(--code-muted)' : 'var(--text-subtle)',
-          }}
-        >
-          {filename ?? ''}
-        </span>
+        {headed && (
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 12,
+              color: ink ? 'var(--code-muted)' : 'var(--text-subtle)',
+            }}
+          >
+            {filename ?? ''}
+          </span>
+        )}
         <Button
           variant="ghost"
           type="button"
@@ -162,7 +181,10 @@ export default function CodeBlock({
         tabIndex={0}
         style={{
           margin: 0,
-          padding: ink ? '18px 20px 20px' : '14px 16px',
+          padding: flat
+            ? headed ? '16px 20px' : '14px 96px 14px 20px'
+            : ink ? '18px 20px 20px' : '14px 16px',
+          minHeight: headed ? undefined : 48,
           fontFamily: 'var(--font-mono)',
           fontSize: 13,
           lineHeight: ink ? 1.68 : 1.6,
@@ -174,7 +196,7 @@ export default function CodeBlock({
           // fade needs to hide the shadow at each end of the scroll.
         }}
       >
-        <code>{highlight(code, ink)}</code>
+        <code>{highlight(code, ink, flat ? 500 : 560)}</code>
       </pre>
     </div>
   )

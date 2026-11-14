@@ -1,26 +1,38 @@
 import { Toggle } from '@/components/ui/toggle'
-import { useMemo, useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import EcosystemIcon from '@/components/EcosystemIcon'
-import Icon from '@/components/Icon'
+import Icon, { type IconName } from '@/components/Icon'
 import { Input } from '@/components/ui/input'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { LANGUAGES, type Language, type LanguageGroup } from '@/lib/ecosystemData'
 
-interface Props {
-  selected: string
-  recent: string[]
-  onSelect: (id: string) => void
+/** A catalog entry that is not a package ecosystem, e.g. AI setup. */
+export interface CatalogEntry {
+  id: string
+  name: string
+  subtitle: string
+  icon: IconName
 }
 
-interface EcosystemButtonProps {
-  language: Language
+interface Props {
   selected: string
+  onSelect: (id: string) => void
+  /** Listed first, above every ecosystem group. */
+  leading?: CatalogEntry[]
+  /** Listed last, under the "Optional" group. */
+  optional?: CatalogEntry[]
+}
+
+interface EntryButtonProps {
+  id: string
+  name: string
   subtitle: string
+  icon: ReactNode
+  selected: string
   onSelect: (id: string) => void
   compact?: boolean
-  chip?: boolean
   /**
    * Phone rail: intrinsic width so a whole list can scroll sideways in one
    * row.
@@ -29,6 +41,7 @@ interface EcosystemButtonProps {
 }
 
 const GROUP_ORDER: LanguageGroup[] = ['os', 'lang', 'data', 'infra']
+const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
 function groupLabelKey(group: LanguageGroup): string {
   return `quickstart.group${group.charAt(0).toUpperCase()}${group.slice(1)}`
@@ -38,43 +51,44 @@ function ecoLabelKey(subtitleKey: string): string {
   return `quickstart.eco${subtitleKey.charAt(0).toUpperCase()}${subtitleKey.slice(1)}`
 }
 
-function EcosystemButton({
-  language,
-  selected,
+function EntryButton({
+  id,
+  name,
   subtitle,
+  icon,
+  selected,
   onSelect,
   compact = false,
-  chip = false,
   rail = false,
-}: EcosystemButtonProps) {
-  const active = language.id === selected
+}: EntryButtonProps) {
+  const active = id === selected
 
   return (
     <Toggle
       type="button"
       pressed={active}
       data-active={active ? 'true' : undefined}
-      title={language.name}
-      onPressedChange={() => onSelect(language.id)}
+      data-catalog-entry={id}
+      title={name}
+      onPressedChange={() => onSelect(id)}
       className="stripe-focus-ring active:scale-[0.98] min-h-[40px]"
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: rail ? 7 : compact ? 6 : 11,
+        gap: rail ? 8 : compact ? 6 : 12,
         width: rail ? 'auto' : '100%',
         flexShrink: rail ? 0 : undefined,
-        minHeight: chip || rail ? 40 : compact ? 40 : 52,
-        padding: rail ? '6px 12px 6px 7px' : chip ? '6px 10px' : compact ? '5px 4px' : '8px 10px',
+        minHeight: rail || compact ? 40 : 52,
+        padding: rail ? '6px 12px 6px 8px' : compact ? '4px' : '8px',
         // The selected row takes the brand tint, keyline, and label together:
         // the accent surface is reserved for hover, because brand text on it
         // lands at 4.23:1 and misses AA.
         background: active ? 'var(--brand-soft)' : 'transparent',
         border: `1px solid ${active ? 'var(--brand-border)' : 'transparent'}`,
-        borderRadius: rail ? 8 : chip || compact ? 6 : 8,
+        borderRadius: compact ? 6 : 8,
         textAlign: 'left',
         cursor: 'pointer',
-        transition:
-          'background 120ms ease, border-color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
+        transition: `background-color 140ms ${EASE}, border-color 140ms ${EASE}, transform 140ms ${EASE}`,
       }}
       onMouseEnter={event => {
         if (!active) event.currentTarget.style.background = 'var(--accent)'
@@ -83,49 +97,47 @@ function EcosystemButton({
         if (!active) event.currentTarget.style.background = 'transparent'
       }}
     >
-      {(rail || !chip) && (
-        <span
-          aria-hidden="true"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: rail ? 22 : compact ? 24 : 32,
-            height: rail ? 22 : compact ? 24 : 32,
-            borderRadius: rail ? 5 : 6,
-            // The glyph tile keeps the card colour wherever the row itself is
-            // raised or tinted; only the flat desktop row falls back to the
-            // soft page surface.
-            background: active
-              ? 'var(--accent)'
-              : rail
-                ? 'var(--bg-card)'
-                : 'color-mix(in oklab, var(--bg-soft) 78%, transparent)',
-            flexShrink: 0,
-          }}
-        >
-          <EcosystemIcon type={language.iconAdapter} size={rail ? 13 : compact ? 14 : 18} useColor />
-        </span>
-      )}
+      <span
+        aria-hidden="true"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: rail ? 22 : compact ? 24 : 32,
+          height: rail ? 22 : compact ? 24 : 32,
+          borderRadius: rail ? 5 : 6,
+          // The glyph tile keeps the card colour wherever the row itself is
+          // raised or tinted; only the flat desktop row falls back to the
+          // soft page surface.
+          background: active
+            ? 'var(--accent)'
+            : rail
+              ? 'var(--bg-card)'
+              : 'color-mix(in oklab, var(--bg-soft) 78%, transparent)',
+          flexShrink: 0,
+        }}
+      >
+        {icon}
+      </span>
       <span style={{ minWidth: 0, flex: rail ? '0 0 auto' : 1 }}>
         <span
           style={{
             display: 'block',
             overflow: 'hidden',
             color: active ? 'var(--brand-text)' : 'var(--text)',
-            fontSize: rail ? 13 : chip ? 12 : compact ? 12.5 : 14,
-            fontWeight: active ? 640 : 540,
-            letterSpacing: compact ? '-0.01em' : undefined,
+            fontSize: rail ? 13 : compact ? 12.5 : 14,
+            fontWeight: active ? 600 : 500,
             lineHeight: 1.25,
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
           }}
         >
-          {language.name}
+          {name}
         </span>
-        {/* The phone rail is icon + name only: a second line per chip costs
-            more height than the extra words are worth there. */}
-        {!rail && !compact && !chip && (
+        {/* The phone rail and the compact grid are icon + name only: a
+            second line costs more height than the extra words are worth
+            there. */}
+        {!rail && !compact && (
           <span
             style={{
               display: 'block',
@@ -146,7 +158,11 @@ function EcosystemButton({
   )
 }
 
-export default function EcosystemCatalog({ selected, recent, onSelect }: Props) {
+function matches(query: string, ...fields: string[]): boolean {
+  return fields.join(' ').toLocaleLowerCase().includes(query)
+}
+
+export default function EcosystemCatalog({ selected, onSelect, leading = [], optional = [] }: Props) {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
   // Phones get one scrollable row instead of the full grouped directory:
@@ -154,43 +170,67 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
   // screen down the page.
   const railLayout = useMediaQuery('(max-width: 899px)')
 
-  const languagesById = useMemo(
-    () => new Map(LANGUAGES.map(language => [language.id, language])),
-    [],
-  )
-  const recentLanguages = recent
-    .map(id => languagesById.get(id))
-    .filter((language): language is Language => Boolean(language))
-
   const normalizedQuery = query.trim().toLocaleLowerCase()
   const matchingLanguages = normalizedQuery
-    ? LANGUAGES.filter(language => {
-        const subtitle = t(ecoLabelKey(language.subtitleKey))
-        return [
-          language.id,
-          language.name,
-          subtitle,
-          ...language.managers.flatMap(manager => [manager.id, manager.name]),
-        ]
-          .join(' ')
-          .toLocaleLowerCase()
-          .includes(normalizedQuery)
-      })
-    : []
+    ? LANGUAGES.filter(language => matches(
+        normalizedQuery,
+        language.id,
+        language.name,
+        t(ecoLabelKey(language.subtitleKey)),
+        ...language.managers.flatMap(manager => [manager.id, manager.name]),
+      ))
+    : LANGUAGES
+  const matchingLeading = normalizedQuery
+    ? leading.filter(entry => matches(normalizedQuery, entry.id, entry.name, entry.subtitle))
+    : leading
+  const matchingOptional = normalizedQuery
+    ? optional.filter(entry => matches(normalizedQuery, entry.id, entry.name, entry.subtitle))
+    : optional
+  const matchCount = matchingLanguages.length + matchingLeading.length + matchingOptional.length
 
-  function grouped(languages: Language[]): Record<LanguageGroup, Language[]> {
-    const groups: Record<LanguageGroup, Language[]> = {
-      os: [],
-      lang: [],
-      data: [],
-      infra: [],
-    }
-    for (const language of languages) groups[language.group].push(language)
-    return groups
+  function entryIcon(entry: CatalogEntry) {
+    return <Icon name={entry.icon} size="sm" className="text-[var(--brand-text)]" />
+  }
+
+  function languageIcon(language: Language, size: number) {
+    return <EcosystemIcon type={language.iconAdapter} size={size} useColor />
+  }
+
+  function renderLeading(entries: CatalogEntry[]) {
+    if (entries.length === 0) return null
+    return (
+      <ul className="m-0 flex list-none flex-col gap-1 p-0">
+        {entries.map(entry => (
+          <li key={entry.id}>
+            <EntryButton {...entry} icon={entryIcon(entry)} selected={selected} onSelect={onSelect} />
+          </li>
+        ))}
+      </ul>
+    )
+  }
+
+  function renderOptional(entries: CatalogEntry[]) {
+    if (entries.length === 0) return null
+    return (
+      <section aria-labelledby="ecosystem-group-optional">
+        <h4 id="ecosystem-group-optional" className="m-0 mb-1 text-[12px] font-[500] text-[var(--text-muted)]">
+          {t('quickstart.catalog.optionalGroup')}
+        </h4>
+        <ul className="m-0 grid list-none grid-cols-1 gap-1 p-0">
+          {entries.map(entry => (
+            <li key={entry.id}>
+              <EntryButton {...entry} icon={entryIcon(entry)} selected={selected} onSelect={onSelect} compact />
+            </li>
+          ))}
+        </ul>
+      </section>
+    )
   }
 
   function renderGroupedLanguages(languages: Language[]) {
-    const groups = grouped(languages)
+    const groups: Record<LanguageGroup, Language[]> = { os: [], lang: [], data: [], infra: [] }
+    for (const language of languages) groups[language.group].push(language)
+
     return GROUP_ORDER.map(group => {
       const items = groups[group]
       if (items.length === 0) return null
@@ -199,17 +239,19 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
         <section key={group} aria-labelledby={`ecosystem-group-${group}`}>
           <h4
             id={`ecosystem-group-${group}`}
-            className="m-0 mb-1 text-[12px] font-[620] text-[var(--text-muted)]"
+            className="m-0 mb-1 text-[12px] font-[500] text-[var(--text-muted)]"
           >
             {t(groupLabelKey(group))}
           </h4>
           <ul className="m-0 grid list-none grid-cols-1 gap-1 p-0 min-[360px]:grid-cols-2">
             {items.map(language => (
               <li key={language.id}>
-                <EcosystemButton
-                  language={language}
-                  selected={selected}
+                <EntryButton
+                  id={language.id}
+                  name={language.name}
                   subtitle={t(ecoLabelKey(language.subtitleKey))}
+                  icon={languageIcon(language, 14)}
+                  selected={selected}
                   onSelect={onSelect}
                   compact
                 />
@@ -221,21 +263,29 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
     })
   }
 
-  function renderRail(languages: Language[]) {
+  function renderRail() {
     return (
       <div
         data-eco-rail
         className="eco-rail -mx-1.5 flex gap-1.5 overflow-x-auto px-1.5 py-1"
       >
-        {languages.map(language => (
-          <EcosystemButton
+        {leading.map(entry => (
+          <EntryButton key={entry.id} {...entry} icon={entryIcon(entry)} selected={selected} onSelect={onSelect} rail />
+        ))}
+        {LANGUAGES.map(language => (
+          <EntryButton
             key={language.id}
-            language={language}
-            selected={selected}
+            id={language.id}
+            name={language.name}
             subtitle={t(ecoLabelKey(language.subtitleKey))}
+            icon={languageIcon(language, 13)}
+            selected={selected}
             onSelect={onSelect}
             rail
           />
+        ))}
+        {optional.map(entry => (
+          <EntryButton key={entry.id} {...entry} icon={entryIcon(entry)} selected={selected} onSelect={onSelect} rail />
         ))}
       </div>
     )
@@ -247,13 +297,13 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
       className="eco-catalog flex flex-col border-b border-[var(--border)] min-[900px]:border-r min-[900px]:border-b-0"
       style={{
         minWidth: 0,
-        padding: '18px 14px 20px',
+        padding: '16px 12px 20px',
         // A rail, not a card: the tint keeps the column reading as a
         // directory when the configuration pane next to it is taller.
         background: 'var(--bg-soft)',
       }}
     >
-      <h3 className="m-0 text-[16px] font-[650] leading-[1.3] text-[var(--text)]">
+      <h3 className="m-0 text-[16px] font-[600] leading-[1.3] text-[var(--text)]">
         {t('quickstart.pickEcosystem')}
       </h3>
 
@@ -284,74 +334,37 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
       {normalizedQuery ? (
         <div className="mt-4 flex flex-col gap-4">
           <span className="sr-only" aria-live="polite">
-            {t('quickstart.searchResultCount', {
-              count: matchingLanguages.length,
-            })}
+            {t('quickstart.searchResultCount', { count: matchCount })}
           </span>
-          {matchingLanguages.length > 0 ? (
-            renderGroupedLanguages(matchingLanguages)
+          {matchCount > 0 ? (
+            <>
+              {renderLeading(matchingLeading)}
+              {renderGroupedLanguages(matchingLanguages)}
+              {renderOptional(matchingOptional)}
+            </>
           ) : (
             <p className="m-0 py-4 text-[13px] leading-[1.5] text-[var(--text-muted)]">
               {t('quickstart.noEcosystemMatch', { query: query.trim() })}
             </p>
           )}
         </div>
+      ) : railLayout ? (
+        <div className="mt-4">{renderRail()}</div>
       ) : (
-        <>
-          {recentLanguages.length > 0 && (
-            <section className="mt-4" aria-labelledby="recent-ecosystems-title">
-              <h4
-                id="recent-ecosystems-title"
-                className="m-0 mb-1.5 text-[12px] font-[620] text-[var(--text-muted)]"
-              >
-                {t('quickstart.recentEcosystems')}
-              </h4>
-              {railLayout
-                ? renderRail(recentLanguages)
-                : (
-                  <div className="grid grid-cols-3 gap-1">
-                    {recentLanguages.map(language => (
-                      <EcosystemButton
-                        key={language.id}
-                        language={language}
-                        selected={selected}
-                        subtitle={t(ecoLabelKey(language.subtitleKey))}
-                        onSelect={onSelect}
-                        compact
-                        chip
-                      />
-                    ))}
-                  </div>
-                )}
-            </section>
-          )}
-
-          <section
-            className="mt-4 border-t border-[var(--border)] pt-3"
-            aria-labelledby="all-ecosystems-title"
-          >
-            <h4
-              id="all-ecosystems-title"
-              className="m-0 mb-2 text-[12px] font-[620] text-[var(--text-muted)]"
-            >
-              {t('quickstart.allEcosystems')}
-            </h4>
-            {railLayout
-              ? renderRail(LANGUAGES)
-              : (
-                <div className="flex flex-col gap-3">
-                  {renderGroupedLanguages(LANGUAGES)}
-                </div>
-              )}
-          </section>
-        </>
+        <div className="mt-4 flex flex-col gap-3">
+          {renderLeading(leading)}
+          <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-3">
+            {renderGroupedLanguages(LANGUAGES)}
+            {renderOptional(optional)}
+          </div>
+        </div>
       )}
 
       {!railLayout && (
         <div className="mt-auto pt-6">
           <Link
             to="/monitor"
-            className="stripe-focus-ring -ml-2 inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-[13px] font-[550] no-underline hover:bg-[var(--bg-card)]"
+            className="stripe-focus-ring -ml-2 inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-[13px] font-[500] no-underline hover:bg-[var(--bg-card)]"
             style={{ color: 'var(--text-muted)' }}
           >
             {t('quickstart.viewUpstreamHealth')}

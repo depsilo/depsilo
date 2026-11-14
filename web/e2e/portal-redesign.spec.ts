@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright'
-import type { Page } from '@playwright/test'
+import type { Page, Request } from '@playwright/test'
 import { expect, mockAdminApi, setUiPreferences, test } from './fixtures/admin-api'
 
 const populatedStats = {
@@ -57,39 +57,124 @@ async function expectNoDocumentOverflow(page: Page) {
   })))
 }
 
-test('Quick Start is compact and shows every Python manager', { tag: '@smoke' }, async ({ page }) => {
+async function openManager(page: Page, ecosystem: RegExp, manager: string) {
+  const primary = page.locator('[data-quickstart-primary]')
+  await primary.getByRole('button', { name: ecosystem }).first().click()
+  await primary.getByRole('group', { name: 'Package manager' })
+    .getByRole('button', { name: manager, exact: true }).click()
+}
+
+test('Quick Start opens on AI setup and lists every Python manager after it', { tag: '@smoke' }, async ({ page }) => {
   await setUiPreferences(page, 'dark', 'en')
   await page.goto('/')
+  const origin = new URL(page.url()).origin
 
   const primary = page.locator('[data-quickstart-primary]')
-  const optional = page.locator('[data-quickstart-optional]')
-
   await expect(primary).toBeVisible()
-  await expect(optional).toBeVisible()
-  await expect(page.locator('ol[aria-label="Package setup path"]')).toHaveCount(0)
+  await expect(page.locator('[data-quickstart-optional]')).toHaveCount(0)
+
+  // A first visit opens the AI hand-off: the catalog's first entry.
+  const ai = primary.locator('[data-catalog-entry="ai"]')
+  await expect(ai).toHaveAttribute('aria-pressed', 'true')
+  await expect(primary.getByRole('heading', { name: 'Set up with AI' })).toBeVisible()
+  await expect(primary.locator('pre').first()).toContainText(`${origin}/api/v1/integration-prompt `)
+
+  await primary.getByRole('button', { name: /^Python\b/ }).click()
   await expect(primary.getByRole('heading', { name: 'Configure Python' })).toBeVisible()
-
   const managerPicker = primary.getByRole('group', { name: 'Package manager' })
-  const pipManager = managerPicker.getByRole('button', { name: /^pip\b/i })
-  await expect(pipManager).toHaveAttribute('aria-pressed', 'true')
-  await expect(managerPicker.getByRole('button')).toHaveCount(7)
-  for (const manager of [/^uv\b/i, /^venv\b/i, /^Poetry\b/i, /^Pipenv\b/i, /^PDM\b/i, /^Conda\b/i]) {
-    await expect(managerPicker.getByRole('button', { name: manager })).toBeVisible()
+  await expect(managerPicker.getByRole('button')).toHaveCount(8)
+  await expect(managerPicker.getByRole('button').first()).toHaveText('AI setup')
+  await expect(managerPicker.getByRole('button', { name: 'AI setup' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(managerPicker).toContainText('7 managers')
+  for (const manager of ['pip', 'uv', 'venv', 'Poetry', 'Pipenv', 'PDM', 'Conda']) {
+    await expect(managerPicker.getByRole('button', { name: manager, exact: true })).toBeVisible()
   }
-  await expect(managerPicker).not.toContainText('Recommended')
-  await expect(primary.getByRole('button', { name: /alternatives/i })).toHaveCount(0)
-  await expect(primary).toContainText('~/.config/pip/pip.conf')
-  await expect(primary.locator('[data-code-tone="ink"]')).toHaveCount(1)
-  await expect(primary.getByRole('link', { name: 'Open Monitor' })).toHaveCount(0)
-  await expect(primary).not.toContainText('Prompt for ChatGPT / Claude / Cursor')
 
-  await expect(optional.getByRole('heading', {
-    name: 'Let your AI coding agent configure a project',
-  })).toBeVisible()
-  await expect(optional.getByRole('button', { name: /Copy the full prompt/i })).toBeVisible()
-  await expect(optional.getByRole('article', {
-    name: 'Remote build cache for ccache and sccache',
-  })).toBeVisible()
+  await managerPicker.getByRole('button', { name: 'pip', exact: true }).click()
+  await expect(primary).toContainText('~/.config/pip/pip.conf')
+  // Every Portal code block is flat ink: a hairline, no drop shadow.
+  const blocks = primary.locator('.code-block')
+  await expect(blocks).not.toHaveCount(0)
+  await expect(primary.locator('.code-block:not([data-code-flat="true"])')).toHaveCount(0)
+  await expect(blocks.first()).toHaveCSS('box-shadow', 'none')
+})
+
+test('an ecosystem AI tab hands over only that ecosystem', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
+  const requested: (string | null)[] = []
+  await mockAdminApi(page, {
+    'GET /api/v1/integration-prompt': (request: Request) => {
+      const ecosystem = new URL(request.url()).searchParams.get('ecosystem')
+      requested.push(ecosystem)
+      return { status: 200, body: `## Scope — ${ecosystem ?? 'all'}\nline two`, contentType: 'text/plain; charset=utf-8', serialize: 'text' }
+    },
+  })
+  await page.goto('/')
+  const origin = new URL(page.url()).origin
+
+  const primary = page.locator('[data-quickstart-primary]')
+  await primary.getByRole('button', { name: /^Node\.js\b/ }).click()
+  const pane = primary.locator('[data-quickstart-pane="node"]')
+  await expect(pane.getByRole('button', { name: 'AI setup' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(pane.locator('[data-manager-description]')).toContainText('only this project\'s Node.js dependency settings')
+  await expect(pane.locator('pre').first()).toContainText(`${origin}/api/v1/integration-prompt?ecosystem=node `)
+  await expect(pane.locator('pre').first()).toContainText('route only this project\'s Node.js dependency installs')
+
+  const full = pane.locator('[data-quickstart-full-prompt]')
+  await expect(full.locator('summary')).toContainText('Show the full prompt · 2 lines')
+  await full.locator('summary').click()
+  await expect(full.locator('pre')).toContainText('## Scope — node')
+  expect(requested).toContain('node')
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations).toEqual([])
+})
+
+test('the status band names failing mirrors and opens their ecosystem', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
+  await mockAdminApi(page, {
+    'GET /api/v1/stats': {
+      ...populatedStats,
+      service: { status: 'degraded', version: 'v0.9.3', uptime_seconds: 90_000 },
+      today: { total_requests: 22, hit_count: 7, miss_count: 15, hit_rate: 0.318, bytes_served: 834_666_496, bytes_saved: 0 },
+      series: { interval_minutes: 5, points: [] },
+      upstreams: [
+        ...populatedStats.upstreams,
+        { id: 102, name: 'ruby-china', adapter: 'rubygems', url: 'https://gems.ruby-china.com', healthy: false, avg_latency_ms: 0, success_rate: 0 },
+      ],
+    },
+  })
+  await page.goto('/')
+
+  const band = page.getByRole('region', { name: 'Service status' })
+  // A degraded mirror does not take the service down.
+  await expect(band.getByRole('status')).toHaveText('Serving')
+  await expect(band).toContainText('Up 1d 1h')
+  await expect(band).toContainText('Upstream mirrors · 2 total')
+  await expect(band).toContainText('1 failing')
+  // An idle hour is said in words, not drawn as an empty chart.
+  await expect(band.locator('[data-status-band-hour]')).toHaveAttribute('data-status-band-hour', 'idle')
+  await expect(band).toContainText('No requests')
+
+  await band.getByRole('button', { name: 'Ruby · ruby-china is failing; open the Ruby configuration' }).click()
+  await expect(page.locator('[data-quickstart-primary]').getByRole('heading', { name: 'Configure Ruby' })).toBeVisible()
+})
+
+test('the compile cache is a catalog entry with its own client steps', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
+  await page.goto('/')
+  const origin = new URL(page.url()).origin
+
+  const primary = page.locator('[data-quickstart-primary]')
+  await primary.getByRole('region', { name: 'Optional' }).getByRole('button', { name: /^Compile cache\b/ }).click()
+  const pane = primary.locator('[data-quickstart-pane="compile-cache"]')
+  await expect(pane.getByRole('heading', { name: 'Configure the compile cache' })).toBeVisible()
+  await expect(pane.locator('pre').first()).toContainText(`${origin}/ccache/v1/<namespace>|bearer-token=<build-credential>`)
+  await pane.getByRole('group', { name: 'Client' }).getByRole('button', { name: 'sccache' }).click()
+  await expect(pane.locator('pre').first()).toContainText(`endpoint = "${origin}/sccache/v1/<namespace>"`)
+  await pane.locator('details summary').click()
+  await expect(pane).toContainText('not sccache-dist')
+  await expect(pane).toContainText('Single-instance only')
+  await expect(pane.getByRole('link', { name: 'Open cache workspace' })).toHaveAttribute('href', '/admin/compile-cache')
+  await expectNoDocumentOverflow(page)
 })
 
 test('Python setup explains the channel-aware PyTorch cache route', async ({ page, context }) => {
@@ -97,6 +182,7 @@ test('Python setup explains the channel-aware PyTorch cache route', async ({ pag
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await setUiPreferences(page, 'light', 'en')
   await page.goto('/')
+  await openManager(page, /^Python\b/, 'pip')
 
   const primary = page.locator('[data-quickstart-primary]')
   const notice = primary.getByRole('complementary', {
@@ -171,6 +257,7 @@ test('Python setup explains the channel-aware PyTorch cache route', async ({ pag
 })
 
 test('PyTorch guidance follows the runtime capability', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
   await mockAdminApi(page, {
     'GET /api/v1/stats': {
       service: { status: 'healthy', version: 'dev' },
@@ -180,6 +267,7 @@ test('PyTorch guidance follows the runtime capability', async ({ page }) => {
     },
   })
   await page.goto('/')
+  await openManager(page, /^Python\b/, 'pip')
   await expect(page.locator('[data-pytorch-index]')).toHaveCount(0)
 })
 
@@ -188,30 +276,27 @@ test('all ecosystems are visible by default and selection persists', async ({ pa
   await page.goto('/')
 
   const primary = page.locator('[data-quickstart-primary]')
-  const allEcosystems = primary.getByRole('region', { name: 'All ecosystems' })
-  await expect(allEcosystems.getByRole('button')).toHaveCount(14)
-  await expect(allEcosystems.getByRole('button', { name: /^Java\b/ })).toBeVisible()
-  await expect(allEcosystems.getByRole('button', { name: /^Hugging Face\b/ })).toBeVisible()
-  await expect(primary.getByText('Browse all 14 ecosystems')).toHaveCount(0)
-  await expect(primary.getByRole('region', { name: 'Recommended' })).toHaveCount(0)
+  const catalog = primary.getByRole('navigation', { name: 'Choose ecosystem' })
+  // AI setup, the 14 ecosystems, and the compile cache.
+  await expect(catalog.locator('[data-catalog-entry]')).toHaveCount(16)
+  await expect(catalog.locator('[data-catalog-entry]').first()).toHaveAttribute('data-catalog-entry', 'ai')
+  await expect(catalog.getByRole('button', { name: /^Java\b/ })).toBeVisible()
+  await expect(catalog.getByRole('button', { name: /^Hugging Face\b/ })).toBeVisible()
+  await expect(catalog.getByRole('region', { name: 'Recently used' })).toHaveCount(0)
 
-  const search = primary.getByRole('searchbox', { name: 'Search all ecosystems' })
+  const search = catalog.getByRole('searchbox', { name: 'Search all ecosystems' })
+  await expect(search).toHaveAttribute('placeholder', 'Search ecosystems or tools')
   await search.fill('Hugging')
-  await expect(primary.getByRole('button', { name: /^Hugging Face\b/ })).toBeVisible()
-  await expect(primary.getByRole('button', { name: /^Go\b/ })).toHaveCount(0)
+  await expect(catalog.getByRole('button', { name: /^Hugging Face\b/ })).toBeVisible()
+  await expect(catalog.getByRole('button', { name: /^Go\b/ })).toHaveCount(0)
 
-  await primary.getByRole('button', { name: /^Hugging Face\b/ }).click()
+  await catalog.getByRole('button', { name: /^Hugging Face\b/ }).click()
   await expect(primary.getByRole('heading', { name: 'Configure Hugging Face' })).toBeVisible()
-  await expect.poll(() => page.evaluate(() => {
-    const stored = localStorage.getItem('depsilo.portal.recent-ecosystems.v1')
-    return stored === null ? null : JSON.parse(stored)
-  })).toEqual(['huggingface'])
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('depsilo.portal.quickstart-selection.v1')))
+    .toBe('huggingface')
 
   await page.reload()
   await expect(primary.getByRole('heading', { name: 'Configure Hugging Face' })).toBeVisible()
-  const recent = primary.getByRole('region', { name: 'Recently used' })
-  const recentChoice = recent.getByRole('button', { name: 'Hugging Face' })
-  await expect(recentChoice).toBeVisible()
 })
 
 test('Debian setup uses the signed Depsilo repository-root routes', async ({ page }) => {
@@ -219,7 +304,7 @@ test('Debian setup uses the signed Depsilo repository-root routes', async ({ pag
   await page.goto('/')
 
   const primary = page.locator('[data-quickstart-primary]')
-  await primary.getByRole('button', { name: /^Debian\b/ }).click()
+  await openManager(page, /^Debian\b/, 'apt')
   await expect(primary.getByRole('heading', { name: 'Configure Debian' })).toBeVisible()
   await expect(primary).toContainText('/apt/debian')
   await expect(primary).toContainText('/apt/debian-security')
@@ -232,6 +317,7 @@ test('manager rail switches the focused configuration without hiding choices', a
   await page.goto('/')
 
   const primary = page.locator('[data-quickstart-primary]')
+  await primary.getByRole('button', { name: /^Python\b/ }).click()
   const managerPicker = primary.getByRole('group', { name: 'Package manager' })
   const pip = managerPicker.getByRole('button', { name: 'pip', exact: true })
   const uv = managerPicker.getByRole('button', { name: 'uv', exact: true })
@@ -242,17 +328,19 @@ test('manager rail switches the focused configuration without hiding choices', a
   await expect(managerPicker.locator('[data-manager-description]')).toContainText(
     'Fast Python dependency resolver',
   )
-  const focusCode = primary.locator('[data-code-tone="ink"]')
-  await expect(focusCode).toHaveCount(1)
-  await expect(focusCode).toContainText('pyproject.toml')
-  await expect(primary.locator('[data-code-tone="light"]')).not.toHaveCount(0)
+  await expect(primary.locator('.code-block').first()).toContainText('pyproject.toml')
 
+  // The three step numbers share one column, including the disclosure step.
+  const numbers = await primary.locator('[data-quickstart-step-number]').evaluateAll(
+    elements => elements.map(element => Math.round(element.getBoundingClientRect().left)),
+  )
+  expect(numbers.length).toBeGreaterThanOrEqual(3)
+  expect(new Set(numbers).size).toBe(1)
+
+  // Another ecosystem starts on its own AI tab again.
   await primary.getByRole('button', { name: /^Debian\b/ }).click()
   await primary.getByRole('button', { name: /^Python\b/ }).click()
-  await expect(managerPicker.getByRole('button', { name: 'pip', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
+  await expect(managerPicker.getByRole('button', { name: 'AI setup' })).toHaveAttribute('aria-pressed', 'true')
 })
 
 test('Quick Start passes axe at 1440px', async ({ page }) => {
@@ -473,12 +561,11 @@ test('Quick Start keeps the ecosystem directory to one rail on phones', async ({
   await page.goto('/')
 
   const primary = page.locator('[data-quickstart-primary]')
-  const rail = primary
-    .getByRole('region', { name: 'All ecosystems' })
-    .locator('[data-eco-rail]')
+  const rail = primary.locator('[data-eco-rail]')
 
   await expect(rail).toBeVisible()
-  await expect(rail.getByRole('button')).toHaveCount(14)
+  await expect(rail.getByRole('button')).toHaveCount(16)
+  await expect(rail.getByRole('button').first()).toHaveAttribute('data-catalog-entry', 'ai')
   // Stacked, the directory used to run ~560px and pushed the configuration
   // past the first screen. As a rail it overflows sideways instead.
   expect(await rail.evaluate(rail => rail.scrollWidth > rail.clientWidth)).toBe(true)
@@ -552,26 +639,6 @@ test('Portal and Admin share the brand accent; only the Portal tints its hover s
   const admin = await tokens()
   expect(admin.brand).toBe('#2b5fda')
   expect(admin.accent).not.toBe('#e2ebfd')
-})
-
-test('Portal prompt dialog keeps its title in view and never scrolls sideways', async ({ page }) => {
-  await setUiPreferences(page, 'light', 'en')
-  await page.goto('/')
-
-  await page.getByRole('button', { name: 'Read it first' }).click()
-  const dialog = page.getByRole('dialog')
-  await expect(dialog).toBeVisible()
-  await expect(dialog.getByRole('heading', { name: 'Wire this project to the mirror via your AI agent' })).toBeVisible()
-
-  // The prompt holds 1000+ character lines; without a shrinkable grid item the
-  // dialog widened to the longest line and scrolled away from its own title.
-  const metrics = await dialog.evaluate(element => ({
-    scrollWidth: element.scrollWidth,
-    clientWidth: element.clientWidth,
-    scrollLeft: element.scrollLeft,
-  }))
-  expect(metrics.scrollWidth).toBe(metrics.clientWidth)
-  expect(Math.abs(metrics.scrollLeft)).toBeLessThanOrEqual(1)
 })
 
 test('Portal header stays pinned while the page scrolls', async ({ page }) => {
