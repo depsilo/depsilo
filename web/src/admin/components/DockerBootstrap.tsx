@@ -26,7 +26,7 @@ export default function DockerBootstrap() {
 
   return (
     <section aria-labelledby="docker-bootstrap-title" className="mt-6 border-t border-[var(--border)] pt-6">
-      <h3 id="docker-bootstrap-title" className="text-[14px] font-[650] text-[var(--text)]">{t('onboarding.docker.title')}</h3>
+      <h3 id="docker-bootstrap-title" className="text-[14px] font-[600] text-[var(--text)]">{t('onboarding.docker.title')}</h3>
       {query.isLoading && <p role="status" className="mt-2 text-[13px] text-[var(--text-muted)]">{t('onboarding.docker.checking')}</p>}
       {query.isError && <div className="mt-3"><QueryErrorState message={t('onboarding.docker.loadError')} onRetry={() => { void query.refetch() }} /></div>}
       {query.data && (

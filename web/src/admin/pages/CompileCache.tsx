@@ -361,7 +361,7 @@ export default function CompileCache() {
                   </div>
 
                   <div className="space-y-3 border-t border-[var(--border)] pt-4">
-                    <span className="text-[11px] font-[600] uppercase text-[var(--text-subtle)]">
+                    <span className="text-[12px] font-[500] text-[var(--text-muted)]">
                       {t('compileCache.endpoints')}
                     </span>
                     {(['ccache', 'sccache'] as const).map(client => {
@@ -540,8 +540,8 @@ export default function CompileCache() {
                   const target = `${item.client}-config` as CopiedValue
                   return (
                     <TabsContent key={item.client} value={item.client}><section className="flex min-w-0 flex-col rounded-md border border-[var(--border)] p-4">
-                      <h3 className="font-mono text-[14px] font-[650] text-[var(--text)]">{item.client}</h3>
-                      <p className="mt-1 text-[11px] text-[var(--text-muted)]">{item.label}</p>
+                      <h3 className="font-mono text-[14px] font-[600] text-[var(--text)]">{item.client}</h3>
+                      <p className="mt-1 text-[12px] text-[var(--text-muted)]">{item.label}</p>
                       <div className="mt-3 flex-1 rounded-sm bg-[var(--bg-soft)] p-3">
                         <code className="block whitespace-pre-wrap break-all font-mono text-[12px] leading-5 text-[var(--text)]">
                           {item.value}

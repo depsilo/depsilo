@@ -43,7 +43,7 @@ export default function Metric({
       data-metric-label={label}
     >
       <span
-        className="text-[11px] font-[600]"
+        className="text-[12px] font-[600]"
         style={{ color: 'var(--text-subtle)' }}
       >
         {label}
@@ -69,7 +69,7 @@ export default function Metric({
           data-metric-change
           data-change-intent={changeIntent}
           data-change-tone={changeTone}
-          className="text-[11px] font-mono tabular-nums mt-1.5"
+          className="text-[12px] font-mono tabular-nums mt-1.5"
           style={{
             color: changeTone === 'positive'
               ? 'var(--ok-text)'

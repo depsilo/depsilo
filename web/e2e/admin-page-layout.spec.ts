@@ -183,3 +183,57 @@ test('duplicate page titles are removed while entity and section headings remain
   await expect(page.getByRole('heading', { name: '用户', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'API 令牌', exact: true })).toBeVisible()
 })
+
+test('single pages and tabbed workspaces share one header band', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const band = async (path: string) => {
+    await page.goto(path)
+    const title = page.locator('[data-admin-page-header] .admin-page-navigation')
+    await expect(title).toBeVisible()
+    return title.evaluate(element => {
+      const box = element.getBoundingClientRect()
+      return { top: Math.round(box.top), height: Math.round(box.height) }
+    })
+  }
+  // Projects has no sibling destinations; Users is a tab in System. Moving
+  // between them must not shift the top of the page.
+  const single = await band('/admin/projects')
+  const tabbed = await band('/admin/users')
+  expect(single).toEqual(tabbed)
+  await page.goto('/admin/projects')
+  await expect(page.getByRole('heading', { level: 1, name: '项目管理' })).toBeVisible()
+})
+
+test('tables name ecosystems by product and keep routine states quiet', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/logs': {
+      items: [{ id: 1, adapter_type: 'crates', method: 'GET', cache_key: 'k', package_name: 'serde', hit: true, cache_result: 'hit', upstream: 'rsproxy', latency_ms: 12, status_code: 200, client_ip: '10.0.0.2', bytes_sent: 1024, created_at: '2026-11-15T08:00:00Z' }],
+      total: 1, page: 1, page_size: 50,
+    },
+    'GET /api/v1/admin/cache/indexes': {
+      items: [{ id: 7, key: 'npm/left-pad', adapter_type: 'npm', package_name: 'left-pad', size: 2048, hit_count: 3, etag: '', last_modified: '', last_accessed: '2026-11-15T08:00:00Z', expires_at: '2026-11-15T07:00:00Z', updated_at: '2026-11-15T06:00:00Z', status: 'stale' }],
+      summary: [{ adapter_type: 'npm', total: 1, fresh: 0, stale: 1, last_updated: '2026-11-15T06:00:00Z' }],
+      total: 1, page: 1, page_size: 25,
+    },
+  })
+
+  await page.goto('/admin/logs')
+  const logs = page.locator('[data-admin-page-content]')
+  // An internal alias is shown by the product name an Operator knows.
+  await expect(logs.getByRole('cell', { name: 'Cargo' })).toBeVisible()
+  const head = logs.locator('th').first()
+  await expect(head).toHaveCSS('text-transform', 'none')
+  await expect(head).toHaveCSS('font-weight', '500')
+  await expect(head).toHaveCSS('font-size', '12px')
+
+  await page.goto('/admin/indexes')
+  const stale = page.locator('[data-admin-page-content] table').getByText('已过期', { exact: true })
+  await expect(stale).toBeVisible()
+  // A stale index is routine: it must not wear the warning colour.
+  const warn = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--warn-text').trim())
+  const color = await stale.evaluate(element => getComputedStyle(element).color)
+  expect(color).not.toBe(warn)
+  expect(await stale.evaluate(element => element.closest('[data-slot="badge"]')?.className ?? '')).not.toContain('warn')
+  await expect(page.locator('[data-admin-page-content]').getByText('npm', { exact: true }).first()).toBeVisible()
+})

@@ -14,7 +14,7 @@
 .connection-section { margin-bottom: 20px; }
 .connection-section:last-child { margin-bottom: 0; }
 .connection-section-heading { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
-.connection-section-heading h2 { font-size: 16px; font-weight: 650; line-height: 1.5; }
+.connection-section-heading h2 { font-size: 16px; font-weight: 600; line-height: 1.5; }
 .connection-section-heading p { font-size: 14px; color: var(--text-muted); line-height: 1.55; margin-top: 4px; }
 .connection-number { display: grid; flex-shrink: 0; place-items: center; width: 24px; height: 24px; border: 1px solid var(--border); border-radius: 50%; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .connection-page .code-block { --bg-soft: var(--bg-card); border-radius: 8px !important; }
@@ -34,7 +34,7 @@
 .connection-result { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
 .connection-eyebrow { font-size: 13px; color: var(--text-muted); margin-bottom: 10px; }
 .connection-result-title { display: flex; align-items: center; gap: 8px; }
-.connection-result-title h2 { font-size: 17px; font-weight: 650; line-height: 1.5; }
+.connection-result-title h2 { font-size: 17px; font-weight: 600; line-height: 1.5; }
 .connection-result-success .connection-result-title { color: var(--ok-text); }
 .connection-result-warning .connection-result-title, .connection-warning { color: var(--warn-text); }
 .connection-result-danger .connection-result-title, .connection-danger { color: var(--danger-text); }

@@ -86,40 +86,38 @@ export default function AdminPage({
               )}
             </>
           ) : (
-            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              {(resolvedTitle || description) && (
-                <div className={`min-w-0 ${titleAccessory ? 'sm:flex-1' : 'max-w-[72ch]'}`}>
-                  {resolvedTitle && (
-                    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
-                      <h1
-                        data-admin-page-title
-                        className="text-[26px] font-[650] leading-[1.25]"
-                        style={{ color: 'var(--text)', fontFamily: 'var(--font-display)' }}
-                      >
+            <>
+              {/* A page without sibling destinations uses the same header band
+                  as a tabbed workspace: its title sits where the selected tab
+                  would, at the same size and on the same hairline, so moving
+                  between pages never shifts the top of the page. */}
+              {(resolvedTitle || titleAccessory || actions) && (
+                <div data-admin-page-band className="admin-page-navigation admin-page-band">
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
+                    {resolvedTitle && (
+                      <h1 data-admin-page-title className="admin-page-heading">
                         {resolvedTitle}
                       </h1>
-                      {titleAccessory}
-                    </div>
-                  )}
-                  {description && (
-                    <div
-                      data-admin-page-description
-                      className={`${resolvedTitle ? 'mt-1.5' : ''} text-[13px] leading-[1.6]`}
-                      style={{ color: 'var(--text-soft)' }}
-                    >
-                      {description}
+                    )}
+                    {titleAccessory}
+                  </div>
+                  {actions && (
+                    <div data-admin-page-actions className="flex min-w-0 flex-wrap items-center gap-2 self-center sm:justify-end">
+                      {actions}
                     </div>
                   )}
                 </div>
               )}
-              {actions && (
-                // Beside a title accessory the actions keep their width, so the
-                // accessory wraps under the title before any command does.
-                <div data-admin-page-actions className={`flex min-w-0 flex-wrap items-center gap-2 sm:ml-auto sm:justify-end ${titleAccessory ? 'sm:shrink-0' : ''}`}>
-                  {actions}
+              {description && (
+                <div
+                  data-admin-page-description
+                  className="mt-2 min-w-0 max-w-[72ch] text-[13px] leading-[1.6]"
+                  style={{ color: 'var(--text-soft)' }}
+                >
+                  {description}
                 </div>
               )}
-            </div>
+            </>
           )}
         </header>
       )}

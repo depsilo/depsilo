@@ -278,7 +278,7 @@ test('Security permits disabling but not re-enabling a legacy exact-only auto-bl
   await expect(autoBlock).not.toBeChecked()
   await expect(autoBlock).toBeDisabled()
 
-  await goPolicy.getByRole('button', { name: /GO.*保存|GO.*Save/ }).click()
+  await goPolicy.getByRole('button', { name: /Go.*保存|Go.*Save/ }).click()
   await expect.poll(() => savedAutoBlock).toBe(false)
   await expect(goPolicy).toHaveCount(0)
   await expect(page.getByText(/没有需要关闭的旧版策略|No legacy policies need disabling/)).toBeVisible()
@@ -318,8 +318,8 @@ test('Security disables conflicting bulk policy actions while a row save is pend
   await page.goto('/admin/security?tab=policies')
 
   const pypiPolicy = page.locator('[data-policy-ecosystem="pypi"]')
-  await pypiPolicy.getByRole('switch', { name: /PYPI.*自动拦截|PYPI.*Auto-block/ }).click()
-  await pypiPolicy.getByRole('button', { name: /PYPI.*保存|PYPI.*Save/ }).click()
+  await pypiPolicy.getByRole('switch', { name: /PyPI.*自动拦截|PyPI.*Auto-block/ }).click()
+  await pypiPolicy.getByRole('button', { name: /PyPI.*保存|PyPI.*Save/ }).click()
   await saveStarted
 
   const bulk = page.locator('[data-security-policy-bulk]')
@@ -427,10 +427,10 @@ test('Security capability overview renders source-bound and safety-disabled fact
   await expect(section).toContainText(/从未同步|Never synced/)
   await expect(section).toContainText(/近似（Last-Modified）|Approximate \(Last-Modified\)/)
   await expect(section).toContainText(/首次观测（非发布时间）|First observed \(not publish time\)/)
-  await expect(section).toContainText('NPM')
-  await expect(section).toContainText('MAVEN')
-  await expect(section).toContainText('CONDA')
-  await expect(section).toContainText('DOCKER')
+  await expect(section).toContainText('npm')
+  await expect(section).toContainText('Maven')
+  await expect(section).toContainText('Conda')
+  await expect(section).toContainText('Docker')
 })
 
 test('Security capability overview explains the disabled Docker age gate', async ({ page }) => {

@@ -7,6 +7,7 @@ import { getAdminRouteHref } from '@/admin/routes'
 import type { NowResponse, ReadinessResponse } from '@/lib/adminApi.types'
 import { formatUptimeSeconds, type ServiceProblem, type ServiceProblemCode, type ServiceStatusModel } from '@/lib/dashboardOverview'
 import DashboardInfoDialog from './DashboardInfoDialog'
+import { ecosystemLabel } from '@/admin/operatorEcosystems'
 
 interface Props {
   open: boolean
@@ -130,7 +131,7 @@ export default function DashboardServiceStatus({
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
               <h4 className="break-words text-[14px] font-semibold">{upstream.name}</h4>
-              <p className="mt-0.5 text-[12px] text-[var(--text-soft)]">{upstream.adapter}{upstream.id > 0 && ` · #${upstream.id}`} · {t('overview.upstreamCheckCount', { count: upstream.checks.length })}</p>
+              <p className="mt-0.5 text-[12px] text-[var(--text-soft)]">{ecosystemLabel(upstream.adapter)}{upstream.id > 0 && ` · #${upstream.id}`} · {t('overview.upstreamCheckCount', { count: upstream.checks.length })}</p>
             </div>
             <p className="text-[13px]" style={{ color: upstream.state === 'healthy' ? 'var(--ok-text)' : 'var(--warn-text)' }}>
               {upstreamsStale && `${t('overview.previousState')} · `}{t(`overview.upstreamState.${upstream.state}`)}

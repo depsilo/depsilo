@@ -1,3 +1,4 @@
+import { ecosystemLabel } from '@/admin/operatorEcosystems'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { TableContainer, Table, TableCaption, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty'
@@ -220,8 +221,8 @@ export default function UpstreamUpdates() {
         {isAdminEcosystem(event.ecosystem) && (
           <EcosystemIcon type={event.ecosystem} size={13} useColor decorative />
         )}
-        <span className="shrink-0 uppercase" style={{ color: 'var(--text)' }}>
-          {event.ecosystem}
+        <span className="shrink-0" style={{ color: 'var(--text)' }}>
+          {ecosystemLabel(event.ecosystem)}
         </span>
         <span aria-hidden="true" style={{ color: 'var(--text-subtle)' }}>·</span>
         <span className="min-w-0 truncate" title={event.upstream || undefined}>
@@ -314,20 +315,25 @@ export default function UpstreamUpdates() {
             applyPackageFilter()
           }}
         >
-          <SearchField
-            className="lg:max-w-[420px]"
-            type="text"
-            aria-label={t('upstreamUpdates.searchLabel')}
-            placeholder={t('upstreamUpdates.searchPlaceholder')}
-            value={packageDraft}
-            onChange={event => setPackageDraft(event.target.value)}
-            onKeyDown={event => {
-              if (event.key === 'Escape') {
-                setPackageDraft('')
-                event.currentTarget.blur()
-              }
-            }}
-          />
+          <div className="flex min-w-0 gap-2 lg:contents">
+            <SearchField
+              className="lg:max-w-[420px]"
+              type="text"
+              aria-label={t('upstreamUpdates.searchLabel')}
+              placeholder={t('upstreamUpdates.searchPlaceholder')}
+              value={packageDraft}
+              onChange={event => setPackageDraft(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Escape') {
+                  setPackageDraft('')
+                  event.currentTarget.blur()
+                }
+              }}
+            />
+            <Button type="submit" variant="outline" className="shrink-0 lg:order-last">
+              {t('search')}
+            </Button>
+          </div>
 
           <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center">
             <NativeSelect
@@ -354,10 +360,7 @@ export default function UpstreamUpdates() {
             </NativeSelect>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="submit" variant="outline">
-              {t('search')}
-            </Button>
+          <div className="flex flex-wrap items-center gap-2 lg:order-last">
             {hasFilters && (
               <Button
                 type="button"
@@ -438,7 +441,7 @@ export default function UpstreamUpdates() {
                   <li key={event.id} className="space-y-2.5 py-4 first:pt-0">
                     <div className="flex min-w-0 items-start justify-between gap-3">
                       <Link to={`${getAdminRouteHref('cacheIndexes')}?${new URLSearchParams({ package: event.package })}`}
-                        className="min-w-0 break-words font-mono text-[14px] font-[550] underline-offset-4 hover:underline focus-visible:outline-2"
+                        className="min-w-0 break-words font-mono text-[14px] font-[500] underline-offset-4 hover:underline focus-visible:outline-2"
                         style={{ color: 'var(--text)' }}
                       >
                         {event.package}
@@ -481,8 +484,7 @@ export default function UpstreamUpdates() {
                         <TableHead
                           key={heading}
                           scope="col"
-                          className="px-3 py-2 text-[12px] font-[600] first:pl-0"
-                          style={{ color: 'var(--text-muted)' }}
+                          className="px-3 py-2 first:pl-0"
                         >
                           {heading}
                         </TableHead>

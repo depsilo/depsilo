@@ -12,7 +12,7 @@ import { adminApi } from '@/lib/api'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import StatusDot from '@/components/StatusDot'
 import { isEcosystemType } from '@/lib/ecosystemTypes'
-import { operatorEcosystems } from '@/admin/operatorEcosystems'
+import { ecosystemLabel } from '@/admin/operatorEcosystems'
 import type { UpstreamFailure, UpstreamProxySource } from '@/lib/adminApi.types'
 import { DEGRADED_LATENCY_MS, upstreamStatus } from '@/lib/upstreamStatus'
 
@@ -61,9 +61,7 @@ export interface UpstreamItem {
 // in hundreds of milliseconds as a matter of geography. Height still
 // separates a 20 ms mirror from a 300 ms one within the green tier.
 const HEARTBEAT_LIMIT = 44
-const BEAT_WIDTH = 6
 const BEAT_GAP = 2
-const HEARTBEAT_WIDTH = HEARTBEAT_LIMIT * BEAT_WIDTH + (HEARTBEAT_LIMIT - 1) * BEAT_GAP
 const BEAT_AREA = 24
 const BEAT_MIN = 4
 const BEAT_MAX = 18
@@ -126,7 +124,7 @@ function normalizeBeats(
   }
 }
 
-function HeartbeatBar({ upstream, showEmptyLabel = false, stretch = false }: { upstream: UpstreamItem; showEmptyLabel?: boolean; stretch?: boolean }) {
+function HeartbeatBar({ upstream, showEmptyLabel = false }: { upstream: UpstreamItem; showEmptyLabel?: boolean }) {
   const { t } = useTranslation()
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
@@ -175,7 +173,7 @@ function HeartbeatBar({ upstream, showEmptyLabel = false, stretch = false }: { u
     <div
       data-upstream-heartbeat
       className="stripe-focus-ring relative w-full min-w-0 rounded-sm"
-      style={{ height: 40, maxWidth: stretch ? undefined : HEARTBEAT_WIDTH }}
+      style={{ height: 40 }}
       tabIndex={0}
       aria-label={t('monitor.latencyHistoryNamed', { name: upstream.name })}
       aria-describedby={`${instructionsId}${activeIdx === null ? '' : ` ${detailId}`}`}
@@ -227,7 +225,8 @@ function HeartbeatBar({ upstream, showEmptyLabel = false, stretch = false }: { u
       <div
         className="absolute inset-x-0 bottom-1 grid items-end"
         style={{
-          gridTemplateColumns: `repeat(${HEARTBEAT_LIMIT}, minmax(0, ${stretch ? '1fr' : `${BEAT_WIDTH}px`}))`,
+          // The bars fill the row, so they end where the latency column does.
+          gridTemplateColumns: `repeat(${HEARTBEAT_LIMIT}, minmax(0, 1fr))`,
           columnGap: BEAT_GAP,
           height: BEAT_AREA,
           // Baseline: short bars still read as columns rather than as dots.
@@ -249,17 +248,23 @@ function HeartbeatBar({ upstream, showEmptyLabel = false, stretch = false }: { u
               data-heartbeat-height={barHeight}
               aria-hidden="true"
               style={{
+                position: 'relative',
                 minWidth: 0,
                 height: BEAT_AREA,
-                background: `linear-gradient(to top, ${barColor} 0, ${barColor} ${barHeight}px, transparent ${barHeight}px)`,
                 opacity: beats.length === 0 ? 0.4 : (activeIdx !== null && activeIdx !== i ? 0.42 : 1),
                 boxShadow: activeIdx === i
                   ? '0 0 0 1px color-mix(in oklab, var(--text) 22%, transparent) inset'
                   : 'none',
-                transition: 'opacity 90ms ease, box-shadow 90ms ease',
+                transition: 'opacity 140ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 140ms cubic-bezier(0.22, 1, 0.36, 1)',
               }}
               onMouseEnter={() => setHoveredIdx(i)}
-            />
+            >
+              {barHeight > 0 && (
+                <span
+                  style={{ position: 'absolute', insetInline: 0, bottom: 0, height: barHeight, background: barColor }}
+                />
+              )}
+            </div>
           )
         })}
       </div>
@@ -288,14 +293,12 @@ function UpstreamRow({
   metadata,
   operational = false,
   historyReady = true,
-  stretchHeartbeat = false,
 }: {
   upstream: UpstreamItem
   actions?: React.ReactNode
   metadata?: React.ReactNode
   operational?: boolean
   historyReady?: boolean
-  stretchHeartbeat?: boolean
 }) {
   const { t } = useTranslation()
   const status = upstreamStatus(upstream)
@@ -397,7 +400,7 @@ function UpstreamRow({
           )}
         </>
       )}
-      <HeartbeatBar upstream={upstream} showEmptyLabel={operational && historyReady} stretch={stretchHeartbeat} />
+      <HeartbeatBar upstream={upstream} showEmptyLabel={operational && historyReady} />
     </div>
   )
 }
@@ -411,14 +414,6 @@ interface UpstreamGroupedPanelProps {
   variant?: 'plain' | 'cards'
   minColumnWidth?: number
   layout?: 'tiles' | 'adaptive'
-  /**
-   * `name` shows the ecosystem's product name (PyPI) instead of the uppercase
-   * adapter id, and sets the group summary in the interface face (a mono face
-   * spaces mixed Chinese text loosely).
-   */
-  heading?: 'adapter' | 'name'
-  /** Heartbeat bars widen to fill the row instead of stopping at a fixed width. */
-  stretchHeartbeat?: boolean
 }
 
 export function UpstreamGroupedPanel({
@@ -428,8 +423,6 @@ export function UpstreamGroupedPanel({
   variant = 'plain',
   minColumnWidth = 360,
   layout = 'tiles',
-  heading = 'adapter',
-  stretchHeartbeat = false,
 }: UpstreamGroupedPanelProps) {
   const { t } = useTranslation()
   const groupHeadingBaseId = useId()
@@ -505,7 +498,7 @@ export function UpstreamGroupedPanel({
         <div
           data-upstream-history-error
           role="status"
-          className="mb-3 flex min-h-10 items-center justify-between gap-3 rounded-md border px-3 py-2 text-[12.5px]"
+          className="mb-3 flex min-h-10 items-center justify-between gap-3 rounded-md border px-3 py-2 text-[12px]"
           style={{ borderColor: 'var(--warn-border)', color: 'var(--warn-text)', background: 'var(--warn-fill)' }}
         >
           <span>{t('monitor.historyUnavailable')}</span>
@@ -554,20 +547,16 @@ export function UpstreamGroupedPanel({
                 >
                   <h2
                     id={headingId}
-                    className={heading === 'name'
-                      ? 'flex min-w-0 items-center gap-2 text-[14px] font-semibold'
-                      : 'flex min-w-0 items-center gap-2 text-[13px] font-semibold uppercase tracking-wide'}
+                    className="flex min-w-0 items-center gap-2 text-[14px] font-semibold"
                     style={{ color: 'var(--text)' }}
                   >
                     {isEcosystemType(adapter) && <EcosystemIcon type={adapter} size={14} useColor decorative />}
                     <span className="min-w-0 truncate">
-                      {heading === 'name' ? operatorEcosystems.find(item => item.id === adapter)?.label ?? adapter : adapter}
+                      {ecosystemLabel(adapter)}
                     </span>
                   </h2>
                   <span
-                    className={heading === 'name'
-                      ? 'ml-auto shrink-0 text-[12px] tabular-nums'
-                      : 'ml-auto shrink-0 text-[12.5px] font-mono tabular-nums'}
+                    className="ml-auto shrink-0 text-[12px] tabular-nums"
                     style={{ color: 'var(--text-muted)' }}
                   >
                     {!isOperational && <>{t('monitor.historySummary', { count: checkCount })} · </>}{t('monitor.healthySummary', { healthy: healthyCount, total: items.length })}
@@ -590,7 +579,6 @@ export function UpstreamGroupedPanel({
                       actions={renderActions?.(u)}
                       metadata={renderMetadata?.(u)}
                       operational={isOperational}
-                      stretchHeartbeat={stretchHeartbeat}
                       historyReady={u.id === undefined || upstreams.find(item => item.id === u.id)?.beats !== undefined || isLatencySuccess}
                     />
                   ))}

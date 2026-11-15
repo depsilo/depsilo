@@ -28,6 +28,7 @@ import { downloadBlob } from '@/lib/download'
 import { useAppToast } from '@/components/Toast'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { AuditLog, AuditLogQuery } from '@/lib/adminApi.types'
+import { ecosystemLabel } from '@/admin/operatorEcosystems'
 
 function resultBadge(result: string, t: (k: string) => string) {
   if (result === 'hit') return <Badge variant="success">{t('audit.hit')}</Badge>
@@ -228,17 +229,22 @@ export default function AuditLogs() {
       <AuditIntegrityNotice />
       <form
         data-admin-filters
-        className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center"
+        className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3"
         onSubmit={(event) => { event.preventDefault(); handleSearch() }}
       >
-        <SearchField
-          aria-label={t('audit.searchLabel')}
-          placeholder={t('audit.searchPlaceholder')}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <div className="flex min-w-0 gap-2 sm:contents">
+          <SearchField
+            aria-label={t('audit.searchLabel')}
+            placeholder={t('audit.searchPlaceholder')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <Button type="submit" variant="outline" className="shrink-0 sm:order-last">
+            {t('search')}
+          </Button>
+        </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:contents">
+        <div className="grid grid-cols-2 gap-2 sm:contents">
             <NativeSelect
               className="min-h-10 sm:w-auto"
               aria-label={t('audit.ecosystem')}
@@ -294,11 +300,8 @@ export default function AuditLogs() {
           ))}
         </fieldset>
 
-        <Button type="submit" variant="outline">
-          {t('search')}
-        </Button>
         {hasFilters && (
-          <Button type="button" variant="ghost" onClick={clearFilters}>
+          <Button type="button" variant="ghost" className="sm:order-last" onClick={clearFilters}>
             {t('audit.clearFilters')}
           </Button>
         )}
@@ -321,7 +324,7 @@ export default function AuditLogs() {
             <TableHeader>
               <TableRow style={{ borderBottom: '1px solid var(--border)' }}>
                 {headers.map(h => (
-                  <TableHead key={h} scope="col" className="text-left text-[12px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>
+                  <TableHead key={h} scope="col" className="text-left py-2 px-3 first:pl-0">
                     {h}
                   </TableHead>
                 ))}
@@ -339,7 +342,7 @@ export default function AuditLogs() {
                   </TableCell>
                   <TableCell className="py-2 px-3 max-w-[260px]">
                     <span className="block break-words font-mono">{row.package_name || '—'}{row.version ? `@${row.version}` : ''}</span>
-                    <span className="mt-1 flex items-center gap-1 text-[12px] text-muted-foreground">{isAdminEcosystem(row.ecosystem) && <EcosystemIcon type={row.ecosystem} size={13} />}{row.ecosystem}</span>
+                    <span className="mt-1 flex items-center gap-1 text-[12px] text-muted-foreground">{isAdminEcosystem(row.ecosystem) && <EcosystemIcon type={row.ecosystem} size={13} />}{ecosystemLabel(row.ecosystem)}</span>
                   </TableCell>
                   <TableCell className="py-2 px-3">
                     <span>{actionLabel(row.action)}</span>

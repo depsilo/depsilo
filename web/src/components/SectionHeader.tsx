@@ -17,7 +17,7 @@ export default function SectionHeader({ title, action, hint, divider = true }: S
           {title}
         </h2>
         {hint && (
-          <p className="mt-1 text-[11px]" style={{ color: 'var(--text-soft)' }}>
+          <p className="mt-1 text-[12px]" style={{ color: 'var(--text-soft)' }}>
             {hint}
           </p>
         )}

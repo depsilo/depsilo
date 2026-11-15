@@ -27,6 +27,7 @@ import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
 import { maliciousBlocklistEcosystems } from '@/admin/operatorEcosystems'
+import { ecosystemLabel } from '@/admin/operatorEcosystems'
 
 // Backend mirrors db.QuarantineEvent + db.ApprovedVersion. We keep
 // the shape narrow to avoid leaking schema details into TS — extra
@@ -280,18 +281,22 @@ function EventsTab(props: {
   return (
     <div className="space-y-4">
       {/* Filter bar */}
-      <form className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center" onSubmit={event => { event.preventDefault(); props.setPkgSearch(searchDraft.trim()) }}>
-        <Input
-          aria-label={t('quarantine.filter.package_placeholder')}
-          placeholder={t('quarantine.filter.package_placeholder')}
-          value={searchDraft}
-          onChange={(e) => setSearchDraft(e.target.value)}
-          className="col-span-2 sm:w-[260px]"
-        />
+      <form data-admin-filters className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center" onSubmit={event => { event.preventDefault(); props.setPkgSearch(searchDraft.trim()) }}>
+        <div className="flex min-w-0 gap-2 sm:contents">
+          <Input
+            aria-label={t('quarantine.filter.package_placeholder')}
+            placeholder={t('quarantine.filter.package_placeholder')}
+            value={searchDraft}
+            onChange={(e) => setSearchDraft(e.target.value)}
+            className="min-w-0 flex-1 sm:w-[260px] sm:flex-none"
+          />
+          <Button type="submit" variant="outline" className="min-h-10 shrink-0 sm:order-last">{t('search')}</Button>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:contents">
         <NativeSelect className="min-h-10 sm:min-h-9 sm:w-auto" aria-label={t('quarantine.col.ecosystem')} value={props.ecoFilter} onChange={(event) => (props.setEcoFilter)(event.target.value)}>
           {([
             { value: 'all', label: t('quarantine.filter.all_ecosystems') },
-            ...ECOSYSTEMS.map((eco) => ({ value: eco, label: eco })),
+            ...ECOSYSTEMS.map((eco) => ({ value: eco, label: ecosystemLabel(eco) })),
           ]).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
         </NativeSelect>
         <NativeSelect className="min-h-10 sm:min-h-9 sm:w-auto" aria-label={t('quarantine.col.action')} value={props.actionFilter} onChange={(event) => (props.setActionFilter)(event.target.value)}>
@@ -300,7 +305,7 @@ function EventsTab(props: {
             ...ACTIONS.map((a) => ({ value: a, label: t(`quarantine.action.${a}`) })),
           ]).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
         </NativeSelect>
-        <Button type="submit" variant="outline" className="col-span-2 min-h-10">{t('search')}</Button>
+        </div>
       </form>
 
       {/* Table */}
@@ -547,7 +552,7 @@ function ApprovalsTab(props: {
               <Td>
                 <div className="flex items-center gap-1.5">
                   {isAdminEcosystem(row.ecosystem) && <EcosystemIcon type={row.ecosystem} size={14} />}
-                  <span className="text-[12px] font-mono">{row.ecosystem}</span>
+                  <span className="text-[12px]">{ecosystemLabel(row.ecosystem)}</span>
                 </div>
               </Td>
               <Td><span className="text-[13px] font-mono">{row.package}</span></Td>
@@ -582,7 +587,7 @@ function ApprovalsTab(props: {
             <Field disabled={createM.isPending}>
               <FieldLabel>{t('quarantine.col.ecosystem')}</FieldLabel>
               <NativeSelect value={form.ecosystem} disabled={createM.isPending} onChange={event => setForm({ ...form, ecosystem: event.target.value })}>
-                {activeEcosystems.map(ecosystem => <option key={ecosystem} value={ecosystem}>{ecosystem.toUpperCase()}</option>)}
+                {activeEcosystems.map(ecosystem => <option key={ecosystem} value={ecosystem}>{ecosystemLabel(ecosystem)}</option>)}
               </NativeSelect>
             </Field>
             <Field disabled={createM.isPending}>
@@ -833,7 +838,7 @@ function BlocklistTab() {
                       <Td>
                         <div className="flex items-center gap-1.5">
                           {isAdminEcosystem(row.ecosystem) && <EcosystemIcon type={row.ecosystem} size={14} />}
-                          <span className="text-[12px] font-mono">{row.ecosystem}</span>
+                          <span className="text-[12px]">{ecosystemLabel(row.ecosystem)}</span>
                         </div>
                       </Td>
                       <Td><span className="text-[13px] font-mono">{row.package}</span></Td>
@@ -975,7 +980,7 @@ function BlocklistTab() {
 function StatusItem({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-[10px] font-mono font-[600] uppercase" style={{ color: 'var(--text-subtle)' }}>
+      <span className="text-[12px] font-[500]" style={{ color: 'var(--text-muted)' }}>
         {label}
       </span>
       {children}
@@ -995,8 +1000,7 @@ function formatRemaining(ms: number): string {
 
 function Th({ children }: { children: React.ReactNode }) {
   return (
-    <TableHead className="text-left px-3 py-2.5 text-[11px] font-mono font-[600] uppercase"
-        style={{ color: 'var(--text-subtle)' }}>{children}</TableHead>
+    <TableHead className="text-left px-3 py-2.5">{children}</TableHead>
   )
 }
 
@@ -1013,7 +1017,7 @@ function MobilePackageIdentity(props: { ecosystem: string; packageName: string; 
         </span>
       )}
       <div className="min-w-0">
-        <p className="break-words font-mono text-[14px] font-[550]" style={{ color: 'var(--text)' }}>
+        <p className="break-words font-mono text-[14px] font-[500]" style={{ color: 'var(--text)' }}>
           {props.packageName}
         </p>
         <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[12px]" style={{ color: 'var(--text-muted)' }}>
@@ -1033,7 +1037,7 @@ function MobileMetadata({ entries }: {
     <dl className="grid grid-cols-1 gap-2.5">
       {entries.map((entry) => (
         <div key={entry.label} className="min-w-0">
-          <dt className="text-[11px] font-[600]" style={{ color: 'var(--text-subtle)' }}>
+          <dt className="text-[12px] font-[600]" style={{ color: 'var(--text-subtle)' }}>
             {entry.label}
           </dt>
           <dd

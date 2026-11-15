@@ -61,8 +61,8 @@ export default function ThemeToggle({ labeled = false, variant = 'default' }: Th
         className="h-[40px] min-w-[40px] gap-1.5 px-2.5 text-muted-foreground"
       >
         <Icon name={ICONS[theme]} size="sm" />
-        <span className="text-[11px] font-[600] sm:hidden">{LABELS[theme]}</span>
-        <span className="hidden text-[11px] font-[600] sm:inline">
+        <span className="text-[12px] font-[600] sm:hidden">{LABELS[theme]}</span>
+        <span className="hidden text-[12px] font-[600] sm:inline">
           {visibleLabel}
         </span>
       </Button>

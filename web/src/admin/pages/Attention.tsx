@@ -316,7 +316,7 @@ export default function Attention() {
                         <Badge variant={event.action.includes('blocked') || event.action === 'tamper_detected' ? "destructive" : 'warning'}>
                           {t(`quarantine.action.${event.action}`)}
                         </Badge>
-                        <time className="font-mono text-[11px] tabular-nums text-[var(--text-subtle)]" dateTime={event.created_at}>
+                        <time className="font-mono text-[12px] tabular-nums text-[var(--text-subtle)]" dateTime={event.created_at}>
                           {formatTime(event.created_at)}
                         </time>
                       </div>

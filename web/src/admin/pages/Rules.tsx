@@ -38,6 +38,7 @@ import type {
 import AdminPage from '@/admin/components/AdminPage'
 import ConfirmActionDialog from '@/admin/components/ConfirmActionDialog'
 import { packageRuleEcosystems, supportsPackageRuleRanges, supportsPackageRuleVersions } from '@/admin/operatorEcosystems'
+import { ecosystemLabel } from '@/admin/operatorEcosystems'
 
 const ECOSYSTEM_OPTIONS = packageRuleEcosystems.map(ecosystem => ({ value: ecosystem.id, label: ecosystem.label }))
 
@@ -205,7 +206,7 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
                       {!matched && <Badge variant="neutral">{t('rules.notMatched')}</Badge>}
                     </div>
                   </div>
-                  <div className="mt-2 grid min-w-0 grid-cols-1 gap-1 text-[11px] sm:grid-cols-3" data-rule-test-levels>
+                  <div className="mt-2 grid min-w-0 grid-cols-1 gap-1 text-[12px] sm:grid-cols-3" data-rule-test-levels>
                     <span className="min-w-0 break-words" style={{ color: 'var(--text-soft)' }}>
                       <span style={{ color: 'var(--text-muted)' }}>{t('rules.levelEcosystem')}:</span>{' '}
                       {matchLevelLabel(t, 'ecosystem', levels?.ecosystem)}
@@ -319,7 +320,7 @@ export default function Rules() {
   // 402s, so there is no Pro paywall branch to render.
 
   const columns = [
-    { key: 'ecosystem', label: t('rules.ecosystem'), render: (v: unknown) => { const ecosystem = typeof v === 'string' ? v : ''; return <div className="flex items-center gap-1.5">{isAdminEcosystem(ecosystem) && <EcosystemIcon type={ecosystem} size={14} />}<Badge variant="default">{ecosystem === '*' ? t('rules.allEcosystems') : ecosystem.toUpperCase()}</Badge></div> } },
+    { key: 'ecosystem', label: t('rules.ecosystem'), render: (v: unknown) => { const ecosystem = typeof v === 'string' ? v : ''; return <div className="flex items-center gap-1.5">{isAdminEcosystem(ecosystem) && <EcosystemIcon type={ecosystem} size={14} />}<Badge variant="default">{ecosystem === '*' ? t('rules.allEcosystems') : ecosystemLabel(ecosystem)}</Badge></div> } },
     { key: 'package_name', label: t('rules.packageName'), render: (v: unknown, row: RuleRecord) => <Button variant="link" className="h-auto min-h-10 whitespace-normal p-0 text-left break-all" onClick={() => setDetail(row)}>{v as string}</Button> },
     { key: 'version', label: t('rules.version'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{(v as string) === '*' ? t('rules.allVersions') : (v as string)}</span> },
     { key: 'action', label: t('rules.action'), render: (v: unknown) => (v as string) === 'allow' ? <Badge variant="success">{t('rules.allow')}</Badge> : <Badge variant="destructive">{t('rules.deny')}</Badge> },
@@ -368,8 +369,8 @@ export default function Rules() {
       )}
     >
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px_160px]">
-        <Input aria-label={t('rules.search')} placeholder={t('rules.search')} value={search} onChange={event => setFilter('q', event.target.value)} />
+      <div data-admin-filters className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_180px_160px] sm:gap-3">
+        <Input className="col-span-2 sm:col-span-1" aria-label={t('rules.search')} placeholder={t('rules.search')} value={search} onChange={event => setFilter('q', event.target.value)} />
         <NativeSelect aria-label={t('rules.ecosystem')} value={ecosystemFilter} onChange={event => setFilter('filter_ecosystem', event.target.value)}><option value="">{t('all')}</option><option value="*">{t('rules.allEcosystems')}</option>{ECOSYSTEM_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</NativeSelect>
         <NativeSelect aria-label={t('rules.action')} value={actionFilter} onChange={event => setFilter('action', event.target.value)}><option value="">{t('all')}</option><option value="allow">{t('rules.allow')}</option><option value="deny">{t('rules.deny')}</option></NativeSelect>
       </div>

@@ -27,6 +27,24 @@ export type OperatorEcosystemId = (typeof operatorEcosystemDefinitions)[number][
 
 export const operatorEcosystems = Object.freeze(operatorEcosystemDefinitions)
 
+// Internal adapter aliases the API can report, mapped to the Ecosystem an
+// Operator knows them by.
+const adapterAliases: Readonly<Record<string, OperatorEcosystemId>> = {
+  pip: 'pypi',
+  goproxy: 'go',
+  crates: 'cargo',
+}
+
+/**
+ * The product name for an adapter id ("pypi" → "PyPI", "crates" → "Cargo"),
+ * falling back to the id for an adapter this build does not know. Tables and
+ * cards show this instead of the uppercase adapter id.
+ */
+export function ecosystemLabel(adapter: string): string {
+  const id = adapterAliases[adapter] ?? adapter
+  return operatorEcosystems.find(ecosystem => ecosystem.id === id)?.label ?? adapter
+}
+
 export const standardUpstreamEcosystems = Object.freeze(
   operatorEcosystems.filter(ecosystem => ecosystem.id !== 'docker'),
 )

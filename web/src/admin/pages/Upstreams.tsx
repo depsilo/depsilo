@@ -682,7 +682,7 @@ export default function Upstreams() {
                   ) : (
                     <kbd
                       aria-hidden="true"
-                      className="hidden rounded-sm border border-[var(--border)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--text-subtle)] sm:inline"
+                      className="hidden rounded-sm border border-[var(--border)] px-1.5 py-0.5 font-mono text-[12px] text-[var(--text-subtle)] sm:inline"
                     >
                       /
                     </kbd>

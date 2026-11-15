@@ -24,9 +24,10 @@ import { usePrincipal } from '@/hooks/usePrincipal'
 import { adminApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
 import type { AdminUpstream, UpstreamMutationRequest } from '@/lib/adminApi.types'
+import { ecosystemLabel } from '@/admin/operatorEcosystems'
 
 const navigateLinkClass = 'stripe-focus-ring inline-flex min-h-10 items-center rounded-sm px-2 text-[12px] font-[600] no-underline text-[var(--brand-text)] hover:bg-[var(--bg-hover)]'
-const tableHeadClass = 'px-3 py-2 text-left font-mono text-[10px] font-[600] uppercase first:pl-0'
+const tableHeadClass = 'px-3 py-2 text-left first:pl-0'
 const tableCellClass = 'px-3 py-3 align-top first:pl-0'
 
 function truncateMiddle(value: string, max = 48): string {
@@ -246,7 +247,7 @@ export default function Cascade() {
                           t('cascade.upstreamVia'),
                           t('cascade.upstreamPriority'),
                         ].map(heading => (
-                          <TableHead key={heading} scope="col" className={tableHeadClass} style={{ color: 'var(--text-subtle)' }}>
+                          <TableHead key={heading} scope="col" className={tableHeadClass}>
                             {heading}
                           </TableHead>
                         ))}
@@ -263,8 +264,8 @@ export default function Cascade() {
                             style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
                           >
                             <TableCell className={tableCellClass}>
-                              <span className="font-mono uppercase" style={{ color: 'var(--text-muted)' }}>
-                                {upstream.adapter_type}
+                              <span style={{ color: 'var(--text-muted)' }}>
+                                {ecosystemLabel(upstream.adapter_type)}
                               </span>
                             </TableCell>
                             <TableCell className={`${tableCellClass} font-[500]`} style={{ color: 'var(--text)' }}>

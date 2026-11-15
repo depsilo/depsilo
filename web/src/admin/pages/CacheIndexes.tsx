@@ -25,11 +25,15 @@ import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { CacheIndexEntry, CacheIndexQuery, CacheIndexStatus } from '@/lib/adminApi.types'
 import { getApiError } from '@/lib/apiError'
 import { formatBytes, formatTime } from '@/lib/utils'
+import { ecosystemLabel } from '@/admin/operatorEcosystems'
 
 const PAGE_SIZE = 25
 
-function statusBadgeVariant(status: CacheIndexStatus): 'success' | 'warning' {
-  return status === 'fresh' ? 'success' : 'warning'
+// A stale index is routine: it is revalidated on the next request and does
+// not mean a download failed (the page says so). Amber stays reserved for
+// states an Operator has to act on.
+function statusBadgeVariant(status: CacheIndexStatus): 'success' | 'neutral' {
+  return status === 'fresh' ? 'success' : 'neutral'
 }
 
 export default function CacheIndexes() {
@@ -109,15 +113,19 @@ export default function CacheIndexes() {
           <p className="text-sm text-muted-foreground">{t('cacheIndexes.summaryTitle')}</p>
           {summary.length === 0 ? <p className="text-sm text-muted-foreground">{t('cacheIndexes.noSummaryTitle')}</p> : summary.map(item => <div key={item.adapter_type} className="flex items-center gap-2 text-sm">
             {isAdminEcosystem(item.adapter_type) && <EcosystemIcon type={item.adapter_type} size={15} />}
-            <span>{item.adapter_type.toUpperCase()}</span><span className="font-mono tabular-nums">{item.total.toLocaleString()}</span><span className="text-muted-foreground">{t('cacheIndexes.staleCount', {count:item.stale})}</span>
+            <span>{ecosystemLabel(item.adapter_type)}</span><span className="font-mono tabular-nums">{item.total.toLocaleString()}</span><span className="text-muted-foreground">{t('cacheIndexes.staleCount', {count:item.stale})}</span>
           </div>)}
         </section>}
-        <form data-admin-filters className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-end" onSubmit={event => { event.preventDefault(); applySearch() }}>
-          <Input className="min-w-0 sm:basis-60 sm:flex-1" aria-label={t('cacheIndexes.searchLabel')} placeholder={t('cacheIndexes.searchPlaceholder')} value={search} onChange={event => setSearch(event.target.value)} />
+        <form data-admin-filters className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end sm:gap-3" onSubmit={event => { event.preventDefault(); applySearch() }}>
+          <div className="flex min-w-0 gap-2 sm:contents">
+          <Input className="min-w-0 flex-1 sm:basis-60" aria-label={t('cacheIndexes.searchLabel')} placeholder={t('cacheIndexes.searchPlaceholder')} value={search} onChange={event => setSearch(event.target.value)} />
+          <Button type="submit" variant="outline" className="shrink-0 sm:order-last">{t('search')}</Button>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:contents">
           <NativeSelect className="sm:w-auto" aria-label={t('cacheIndexes.ecosystemFilter')} value={adapterType} onChange={event => {setAdapterType(event.target.value);setPage(1)}}><option value="all">{t('cacheIndexes.allEcosystems')}</option>{operatorEcosystems.map(ecosystem => <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>)}</NativeSelect>
           <NativeSelect className="sm:w-auto" aria-label={t('cacheIndexes.statusFilter')} value={status} onChange={event => {setStatus(event.target.value as typeof status);setPage(1)}}><option value="all">{t('cacheIndexes.allStatuses')}</option><option value="fresh">{t('cacheIndexes.statusFresh')}</option><option value="stale">{t('cacheIndexes.statusStale')}</option></NativeSelect>
-          <Button type="submit" variant="outline">{t('search')}</Button>
-          {hasFilters && <Button type="button" variant="ghost" onClick={clearFilters}>{t('cacheIndexes.clearFilters')}</Button>}
+          </div>
+          {hasFilters && <Button type="button" variant="ghost" className="sm:order-last" onClick={clearFilters}>{t('cacheIndexes.clearFilters')}</Button>}
         </form>
         <p className="text-xs text-muted-foreground">{t('cacheIndexes.freshnessHint')}</p>
         {query.isPending ? <div role="status" className="py-12 text-center text-muted-foreground">{t('loading')}</div> : query.isError && !query.data ? <QueryErrorState message={errorMessage} onRetry={() => query.refetch()} /> : items.length === 0 ? (
@@ -127,7 +135,7 @@ export default function CacheIndexes() {
             <TableHeader><TableRow>{['packageName','ecosystem','status','size','expiresAt','actions'].map(key => <TableHead key={key}>{t(`cacheIndexes.${key}`)}</TableHead>)}</TableRow></TableHeader>
             <TableBody>{items.map(item => <TableRow key={item.id}>
               <TableCell className="max-w-64"><Button variant="link" className="h-auto max-w-full justify-start px-0 text-left" onClick={() => setSelected(item)}><span className="truncate">{item.package_name || item.key}</span></Button><p className="truncate text-xs text-muted-foreground">{item.key}</p></TableCell>
-              <TableCell>{item.adapter_type.toUpperCase()}</TableCell>
+              <TableCell>{ecosystemLabel(item.adapter_type)}</TableCell>
               <TableCell><Badge variant={statusBadgeVariant(item.status)}>{t(item.status === 'fresh' ? 'cacheIndexes.statusFresh' : 'cacheIndexes.statusStale')}</Badge></TableCell>
               <TableCell className="font-mono tabular-nums">{formatBytes(item.size)}</TableCell>
               <TableCell className="whitespace-nowrap text-muted-foreground">{formatTime(item.expires_at)}</TableCell>
@@ -140,7 +148,7 @@ export default function CacheIndexes() {
       <Dialog open={selectedItem !== null} onOpenChange={open => {if (!open) setSelected(null)}}><DialogContent className="max-w-xl"><DialogTitle>{selectedItem?.package_name || t('cacheIndexes.details')}</DialogTitle>{selectedItem && <>
         <dl className="space-y-4 text-sm">{[
           [t('cacheIndexes.key'),selectedItem.key],
-          [t('cacheIndexes.ecosystem'),selectedItem.adapter_type],
+          [t('cacheIndexes.ecosystem'),ecosystemLabel(selectedItem.adapter_type)],
           [t('cacheIndexes.hitCount'),selectedItem.hit_count.toLocaleString()],
           ['ETag',selectedItem.etag || t('cacheIndexes.noValidator')],
           ['Last-Modified',selectedItem.last_modified || t('cacheIndexes.noValidator')],

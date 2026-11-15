@@ -21,6 +21,7 @@ import QueryErrorState from '@/components/QueryErrorState'
 import ConfirmActionDialog from '@/admin/components/ConfirmActionDialog'
 
 import type { Snapshot } from '@/lib/adminApi.types'
+import { ecosystemLabel } from '@/admin/operatorEcosystems'
 
 function formatBytes(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
@@ -196,11 +197,11 @@ export default function SnapshotSection() {
             <Table className="w-full text-[12px]">
               <TableHeader>
                 <TableRow style={{ color: 'var(--text-soft)' }}>
-                  <TableHead className="px-2 py-2 text-left font-[500]">{t('snapshot.name')}</TableHead>
-                  <TableHead className="px-2 py-2 text-left font-[500]">{t('snapshot.artifacts')}</TableHead>
-                  <TableHead className="px-2 py-2 text-left font-[500]">{t('snapshot.size')}</TableHead>
-                  <TableHead className="px-2 py-2 text-left font-[500]">{t('snapshot.createdAt')}</TableHead>
-                  <TableHead className="px-2 py-2 text-right font-[500]">{t('snapshot.actions')}</TableHead>
+                  <TableHead className="px-2 py-2 text-left">{t('snapshot.name')}</TableHead>
+                  <TableHead className="px-2 py-2 text-left">{t('snapshot.artifacts')}</TableHead>
+                  <TableHead className="px-2 py-2 text-left">{t('snapshot.size')}</TableHead>
+                  <TableHead className="px-2 py-2 text-left">{t('snapshot.createdAt')}</TableHead>
+                  <TableHead className="px-2 py-2 text-right">{t('snapshot.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -253,7 +254,7 @@ export default function SnapshotSection() {
           {detailQuery.isPending ? <p role="status">{t('loading')}</p> : detailQuery.isError ? <QueryErrorState message={getApiError(detailQuery.error).message} onRetry={() => detailQuery.refetch()} /> : detailQuery.data && <>
             <p className="text-sm">{t('snapshot.activationScope', { count: detailQuery.data.data.total, shown: detailQuery.data.data.items.length })}</p>
             <ul className="max-h-60 space-y-2 overflow-auto rounded-md border p-3 text-sm">
-              {detailQuery.data.data.items.map(item => <li key={item.id} className="break-all"><span className="text-muted-foreground">{item.ecosystem} · </span><code>{item.package}@{item.version}</code></li>)}
+              {detailQuery.data.data.items.map(item => <li key={item.id} className="break-all"><span className="text-muted-foreground">{ecosystemLabel(item.ecosystem)} · </span><code>{item.package}@{item.version}</code></li>)}
             </ul>
           </>}
           {activateMutation.isError && <Alert variant="destructive"><AlertDescription>{getApiError(activateMutation.error).message}</AlertDescription></Alert>}

@@ -32,6 +32,7 @@ import { getApiError } from '@/lib/apiError'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
 import { useTransientFlag } from '@/hooks/useTransientFlag'
 import type { CreateProjectRequest, ProjectDetail, ProjectSBOMFormat, ProjectSummary } from '@/lib/adminApi.types'
+import { ecosystemLabel } from '@/admin/operatorEcosystems'
 
 function CopyButton({ text, label }: { text: string; label: string }) {
   const [copied, showCopied] = useTransientFlag()
@@ -361,7 +362,7 @@ export default function Projects() {
         render: (v: unknown) => (
           <div className="flex items-center gap-1.5">
             {typeof v === 'string' && isAdminEcosystem(v) && <EcosystemIcon type={v} size={14} />}
-            <Badge variant="default">{(v as string)?.toUpperCase()}</Badge>
+            <Badge variant="default">{typeof v === 'string' ? ecosystemLabel(v) : ''}</Badge>
           </div>
         ),
       },
@@ -448,7 +449,7 @@ export default function Projects() {
                   {Object.entries(ecosystems).map(([eco, count]) => (
                     <div key={eco} className="flex items-center gap-1.5 px-2 py-1 rounded-sm" style={{ background: 'var(--bg-soft)' }}>
                       {isAdminEcosystem(eco) && <EcosystemIcon type={eco} size={12} />}
-                      <span className="text-[12px]" style={{ color: 'var(--text)' }}>{eco.toUpperCase()}</span>
+                      <span className="text-[12px]" style={{ color: 'var(--text)' }}>{ecosystemLabel(eco)}</span>
                       <span className="text-[12px] font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{count}</span>
                     </div>
                   ))}

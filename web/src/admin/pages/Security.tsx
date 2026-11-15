@@ -1,3 +1,4 @@
+import { ecosystemLabel } from '@/admin/operatorEcosystems'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -57,11 +58,11 @@ const severityRank = (severity: string) => {
 // falls with it. Low and unknown stay neutral rather than green, which
 // would read as "safe".
 const SEVERITY_COLOR: Record<string, string> = {
-  critical: 'var(--danger)',
-  high: 'color-mix(in oklab, var(--danger) 45%, var(--warn))',
-  medium: 'var(--warn)',
-  low: 'var(--text-soft)',
-  unknown: 'var(--border-strong)',
+  critical: 'var(--sev-critical)',
+  high: 'var(--sev-high)',
+  medium: 'var(--sev-medium)',
+  low: 'var(--sev-low)',
+  unknown: 'var(--sev-unknown)',
 }
 
 const POLICY_SAVE_CONCURRENCY = 4
@@ -129,7 +130,7 @@ function CapabilityOverview() {
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {rows.map((fact) => (
                   <div key={`${fact.ecosystem ?? 'all'}-${fact.name}`} className="min-w-0 rounded-sm bg-[var(--bg-page)] p-2 text-[12px]">
-                    <div className="mb-1 font-[600]">{fact.ecosystem?.toUpperCase() ?? t('security.capabilityOverall')}</div>
+                    <div className="mb-1 font-[600]">{fact.ecosystem ? ecosystemLabel(fact.ecosystem) : t('security.capabilityOverall')}</div>
                     <div><span className="text-[var(--text-soft)]">{t('security.capabilitySupport')}: </span>{value(fact, 'support')}</div>
                     <div><span className="text-[var(--text-soft)]">{t('security.capabilityMode')}: </span>{value(fact, 'mode')}</div>
                     <div><span className="text-[var(--text-soft)]">{t('security.capabilityData')}: </span>{value(fact, 'data_status')}</div>
@@ -314,7 +315,7 @@ function VulnerabilitiesTab() {
       render: (v: unknown) => (
         <div className="flex items-center gap-1.5">
           <EcosystemIcon type={v as EcosystemName} size={14} />
-          <Badge variant="default">{(v as string)?.toUpperCase()}</Badge>
+          <Badge variant="default">{typeof v === 'string' ? ecosystemLabel(v) : ''}</Badge>
         </div>
       ),
     },
@@ -492,7 +493,7 @@ function SuggestionsTab() {
           <span>{t('security.manualRuleRequired')}</span>
           <Link
             to={getAdminRouteHref('rules')}
-            className="stripe-focus-ring inline-flex min-h-10 shrink-0 items-center rounded-sm px-2 text-[12px] font-[650] text-[var(--brand-text)] no-underline hover:bg-[var(--bg-hover)]"
+            className="stripe-focus-ring inline-flex min-h-10 shrink-0 items-center rounded-sm px-2 text-[12px] font-[600] text-[var(--brand-text)] no-underline hover:bg-[var(--bg-hover)]"
           >
             {t('security.openPackageRules')}
           </Link>
@@ -515,7 +516,7 @@ function SuggestionsTab() {
                   <Button variant="link" className="h-auto min-h-10 p-0 text-left whitespace-normal" onClick={() => setSelected(item)}>{item.osv_id}</Button>
                   <Badge variant={severityVariant}>{item.severity?.toUpperCase()}</Badge>
                   {item.cvss_score != null && (
-                    <span className="font-mono text-[11px] tabular-nums" style={{ color: 'var(--text-soft)' }}>
+                    <span className="font-mono text-[12px] tabular-nums" style={{ color: 'var(--text-soft)' }}>
                       CVSS {Number(item.cvss_score).toFixed(1)}
                     </span>
                   )}
@@ -553,7 +554,7 @@ function SuggestionsTab() {
         description={t('security.dismissImpact', { name: dismissTarget?.package_name ?? '' })}
         details={dismissTarget ? [
           { label: t('security.package'), value: dismissTarget.package_name, mono: true },
-          { label: t('security.ecosystem'), value: dismissTarget.ecosystem.toUpperCase() },
+          { label: t('security.ecosystem'), value: ecosystemLabel(dismissTarget.ecosystem) },
           { label: t('security.osvId'), value: dismissTarget.osv_id, mono: true },
           {
             label: t('security.cvssScore'),
@@ -985,8 +986,8 @@ function PoliciesTab() {
                 >
                   <div className="flex min-w-0 items-center gap-2">
                     <EcosystemIcon type={eco as EcosystemName} size={16} />
-                    <span className="min-w-0 truncate text-[13px] font-[500]" title={eco.toUpperCase()} style={{ color: 'var(--text)' }}>
-                      {eco.toUpperCase()}
+                    <span className="min-w-0 truncate text-[13px] font-[500]" title={ecosystemLabel(eco)} style={{ color: 'var(--text)' }}>
+                      {ecosystemLabel(eco)}
                     </span>
                     {isDirty && <Badge variant="warning">{t('security.unsaved')}</Badge>}
                   </div>
@@ -994,7 +995,7 @@ function PoliciesTab() {
                   <div className="justify-self-end text-[var(--text-soft)] sm:justify-self-start">
                     <Field orientation="horizontal" disabled={!canWrite || isSaving || isBatchSaving || (!autoBlockSupported && !policy.auto_block_enabled)}>
                       <Switch
-                        aria-label={`${eco.toUpperCase()} ${t('security.autoBlock')}`}
+                        aria-label={`${ecosystemLabel(eco)} ${t('security.autoBlock')}`}
                         checked={policy.auto_block_enabled}
                         disabled={!canWrite || isSaving || isBatchSaving || (!autoBlockSupported && !policy.auto_block_enabled)}
                         onCheckedChange={(checked) => setPolicy(eco, { auto_block_enabled: checked })}
@@ -1008,7 +1009,7 @@ function PoliciesTab() {
                     <Field disabled={!canWrite || isSaving || isBatchSaving || !autoBlockSupported || !policy.auto_block_enabled}>
                       <FieldLabel>{t('security.cvssThreshold')}</FieldLabel>
                       <Input
-                        aria-label={`${eco.toUpperCase()} ${t('security.cvssThreshold')}`}
+                        aria-label={`${ecosystemLabel(eco)} ${t('security.cvssThreshold')}`}
                         type="number"
                         min={0}
                         max={10}
@@ -1025,7 +1026,7 @@ function PoliciesTab() {
                     <Button
                       variant="outline"
                       size="sm"
-                      aria-label={`${eco.toUpperCase()} ${t('save')}`}
+                      aria-label={`${ecosystemLabel(eco)} ${t('save')}`}
                       aria-busy={isSaving || undefined}
                       disabled={isSaving || isBatchSaving || !isDirty}
                       onClick={() => { void handleSave(eco) }}
@@ -1053,7 +1054,7 @@ function PoliciesTab() {
         details={[
           {
             label: t('security.changedEcosystems'),
-            value: dirtyEcosystems.map(ecosystem => ecosystem.toUpperCase()).join(', '),
+            value: dirtyEcosystems.map(ecosystem => ecosystemLabel(ecosystem)).join(', '),
             mono: true,
           },
         ]}

@@ -28,7 +28,7 @@ interface CodeBlockProps {
 // lands on the part of the snippet they actually need to verify.
 const URL_RE = /(https?:\/\/[^\s'"`<>]+)/g
 
-function highlightLine(line: string, lineIdx: number, ink: boolean, urlWeight: number): ReactNode {
+function highlightLine(line: string, lineIdx: number, ink: boolean): ReactNode {
   const trimmed = line.trimStart()
   if (trimmed.startsWith('#') || trimmed.startsWith(';')) {
     return (
@@ -49,7 +49,7 @@ function highlightLine(line: string, lineIdx: number, ink: boolean, urlWeight: n
     parts.push(
       <span
         key={`u${m.index}`}
-        style={{ color: ink ? 'var(--code-accent)' : 'var(--brand-text)', fontWeight: urlWeight }}
+        style={{ color: ink ? 'var(--code-accent)' : 'var(--brand-text)', fontWeight: 500 }}
       >
         {m[0]}
       </span>
@@ -60,11 +60,11 @@ function highlightLine(line: string, lineIdx: number, ink: boolean, urlWeight: n
   return <span key={lineIdx}>{parts}</span>
 }
 
-function highlight(code: string, ink: boolean, urlWeight: number): ReactNode {
+function highlight(code: string, ink: boolean): ReactNode {
   const lines = code.split('\n')
   return lines.map((line, i) => (
     <span key={i}>
-      {highlightLine(line, i, ink, urlWeight)}
+      {highlightLine(line, i, ink)}
       {i < lines.length - 1 && '\n'}
     </span>
   ))
@@ -196,7 +196,7 @@ export default function CodeBlock({
           // fade needs to hide the shadow at each end of the scroll.
         }}
       >
-        <code>{highlight(code, ink, flat ? 500 : 560)}</code>
+        <code>{highlight(code, ink)}</code>
       </pre>
     </div>
   )

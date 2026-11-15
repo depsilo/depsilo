@@ -219,6 +219,14 @@
 
   /* Danger / miss — shadcn's --destructive with an accessible text red. */
   --danger:        oklch(0.577 0.245 27.325);
+  /* Vulnerability severity: an ordinal scale that steps in lightness as well
+     as hue, so critical, high, and medium stay apart for colour-blind
+     readers (validated with the dataviz checks). Always shown with a label. */
+  --sev-critical:  #a51d1d;
+  --sev-high:      #e2581f;
+  --sev-medium:    #e8a320;
+  --sev-low:       var(--text-soft);
+  --sev-unknown:   var(--border-strong);
   --danger-fill:   oklch(0.936 0.032 17.717);
   --danger-border: oklch(0.808 0.114 19.571);
   --danger-text:   oklch(0.505 0.213 27.518);
@@ -356,6 +364,11 @@ html.dark,
   --warn-text:   oklch(0.879 0.169 91.605);
 
   --danger:        oklch(0.704 0.191 22.216);
+  --sev-critical:  #e5484d;
+  --sev-high:      #ff9b45;
+  --sev-medium:    #ffe066;
+  --sev-low:       var(--text-soft);
+  --sev-unknown:   var(--border-strong);
   --danger-fill:   oklch(0.258 0.092 26.042);
   --danger-border: oklch(0.444 0.177 26.899);
   --danger-text:   oklch(0.808 0.114 19.571);
@@ -462,6 +475,11 @@ html.dark,
     --warn-text:   oklch(0.879 0.169 91.605);
 
     --danger:        oklch(0.704 0.191 22.216);
+    --sev-critical:  #e5484d;
+    --sev-high:      #ff9b45;
+    --sev-medium:    #ffe066;
+    --sev-low:       var(--text-soft);
+    --sev-unknown:   var(--border-strong);
     --danger-fill:   oklch(0.258 0.092 26.042);
     --danger-border: oklch(0.444 0.177 26.899);
     --danger-text:   oklch(0.808 0.114 19.571);

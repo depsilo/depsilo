@@ -11,7 +11,7 @@ import { adminApi } from '@/lib/api'
 import { formatBytes, formatTime } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Meter, MeterTrack } from '@/components/ui/meter'
+import { Meter, MeterIndicator, MeterTrack } from '@/components/ui/meter'
 import { Card } from '@/components/ui/card'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Textarea } from '@/components/ui/textarea'
@@ -28,16 +28,14 @@ import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import ConfirmActionDialog from '@/admin/components/ConfirmActionDialog'
 import SnapshotSection from '@/admin/components/SnapshotSection'
 import DownloadTransfers from '@/admin/components/DownloadTransfers'
-import { operatorEcosystems } from '@/admin/operatorEcosystems'
+import { ecosystemLabel, operatorEcosystems } from '@/admin/operatorEcosystems'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
 import { readLocalStorage, writeLocalStorage } from '@/lib/storage'
-import { ECOSYSTEM_COLORS as ECO_COLORS } from '@/lib/ecosystemColors'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { CacheCleanupResponse, CacheQuery } from '@/lib/adminApi.types'
 
 const WARMUP_ECOSYSTEMS = ['pypi', 'npm']
-const ecosystemLabel = (type: string) => operatorEcosystems.find(ecosystem => ecosystem.id === type)?.label ?? type
 const WARMUP_STATUS_KEYS: Record<string, string> = {
   queued: 'cache.warmupStatus.queued', running: 'cache.warmupStatus.running',
   cancelling: 'cache.warmupStatus.cancelling', cancelled: 'cache.warmupStatus.cancelled',
@@ -197,26 +195,41 @@ export default function CacheManage() {
                 <h2 className="text-[13px] font-semibold">{t('cache.storageOverview')}</h2>
                 <p className="font-mono text-2xl font-semibold tabular-nums">{formatBytes(distribution.total_size)}{distribution.max_size > 0 && <span className="ml-2 text-sm font-normal text-muted-foreground">/ {formatBytes(distribution.max_size)}</span>}</p>
               </div>
-              {distribution.max_size > 0 && <Meter className="w-full" value={distribution.total_size} max={distribution.max_size} aria-label={t('cache.storageOverview')} aria-valuetext={`${formatBytes(distribution.total_size)} / ${formatBytes(distribution.max_size)}`}><MeterTrack className="flex h-2 gap-px">{distribution.by_type.map(bt => <div key={bt.type} className="h-full first:rounded-l-full" style={{ width: `${bt.size / distribution.max_size * 100}%`, background: ECO_COLORS[bt.type] || 'var(--brand)' }} />)}</MeterTrack></Meter>}
-              {distribution.by_type.length > 0 && <ul className="grid gap-x-6 gap-y-2 text-[13px] sm:grid-cols-2 xl:grid-cols-4">{distribution.by_type.map(bt => <li key={bt.type} className="flex min-w-0 items-baseline gap-2"><span aria-hidden className="size-2 shrink-0 self-center rounded-full" style={{ background: ECO_COLORS[bt.type] || 'var(--brand)' }} /><span className="font-medium">{ecosystemLabel(bt.type)}</span><span className="font-mono tabular-nums">{formatBytes(bt.size)}</span><span className="truncate text-muted-foreground">{t('cache.objectCount', { count: bt.file_count })}</span></li>)}</ul>}
+              {/* A share of one total: the meter shows use against capacity in
+                  the accent, and each ecosystem gets a thin bar of its share.
+                  One hue throughout, so no ecosystem colour can read as a
+                  health state (green, amber, red). */}
+              {distribution.max_size > 0 && <Meter className="w-full" value={distribution.total_size} max={distribution.max_size} aria-label={t('cache.storageOverview')} aria-valuetext={`${formatBytes(distribution.total_size)} / ${formatBytes(distribution.max_size)}`}><MeterTrack className="h-2"><MeterIndicator className="rounded-full bg-[var(--brand)]" /></MeterTrack></Meter>}
+              {distribution.by_type.length > 0 && <ul data-cache-share className="grid gap-x-8 gap-y-3 text-[13px] sm:grid-cols-2 xl:grid-cols-4">{distribution.by_type.map(bt => {
+                const share = distribution.total_size > 0 ? bt.size / distribution.total_size : 0
+                return <li key={bt.type} className="flex min-w-0 flex-col gap-1.5">
+                  <div className="flex min-w-0 items-baseline gap-2"><span className="font-medium">{ecosystemLabel(bt.type)}</span><span className="font-mono tabular-nums">{formatBytes(bt.size)}</span><span className="ml-auto shrink-0 font-mono text-[12px] tabular-nums text-muted-foreground">{(share * 100).toFixed(share < 0.1 ? 1 : 0)}%</span></div>
+                  <div aria-hidden className="h-1 overflow-hidden rounded-full bg-[var(--bg-soft)]"><div className="h-full rounded-full bg-[var(--text-subtle)]" style={{ width: `${Math.max(share * 100, share > 0 ? 1 : 0)}%` }} /></div>
+                  <span className="truncate text-[12px] text-muted-foreground">{t('cache.objectCount', { count: bt.file_count })}</span>
+                </li>
+              })}</ul>}
             </Card>
           </>}
       </section>
       <DownloadTransfers />
-      <form onSubmit={event => { event.preventDefault(); setAppliedSearch(search.trim()); setPage(1) }} data-admin-filters className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <SearchField
-          aria-label={t('cache.searchLabel')}
-          placeholder={t('cache.searchPlaceholder')}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <form onSubmit={event => { event.preventDefault(); setAppliedSearch(search.trim()); setPage(1) }} data-admin-filters className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+        <div className="flex min-w-0 gap-2 sm:contents">
+          <SearchField
+            aria-label={t('cache.searchLabel')}
+            placeholder={t('cache.searchPlaceholder')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <Button type="submit" variant="outline" className="shrink-0 sm:order-last">{t('search')}</Button>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:contents">
           <NativeSelect className="min-h-10 sm:w-auto" aria-label={t('cache.ecosystemFilter')} value={adapterType} onChange={(e) => { setAdapterType(e.target.value); setPage(1) }}>
             <option value="all">{t('all')}</option>
             {operatorEcosystems.map(ecosystem => <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>)}
           </NativeSelect>
         <NativeSelect className="min-h-10 sm:w-auto" aria-label={t('cache.kindFilter')} value={kind} onChange={event => { setKind(event.target.value as typeof kind); setPage(1) }}><option value="all">{t('cache.allKinds')}</option><option value="artifact">{t('cache.artifact')}</option><option value="metadata">{t('cache.metadata')}</option></NativeSelect>
-        <Button type="submit" variant="outline">{t('search')}</Button>
-        {hasFilters && <Button type="button" variant="ghost" onClick={clearFilters}>{t('cache.clearFilters')}</Button>}
+        </div>
+        {hasFilters && <Button type="button" variant="ghost" className="sm:order-last" onClick={clearFilters}>{t('cache.clearFilters')}</Button>}
       </form>
 
       <div data-cache-list>
@@ -237,7 +250,7 @@ export default function CacheManage() {
             <TableHeader>
               <TableRow style={{ borderBottom: '1px solid var(--border)' }}>
                 {[t('cache.object'), t('type'), t('cache.size'), t('cache.hitCount'), t('cache.lastAccessed'), t('actions')].map(h => (
-                  <TableHead key={h} scope="col" className="text-left text-[10px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>{h}</TableHead>
+                  <TableHead key={h} scope="col" className="text-left py-2 px-3 first:pl-0">{h}</TableHead>
                 ))}
               </TableRow>
             </TableHeader>
@@ -255,7 +268,7 @@ export default function CacheManage() {
                   <TableCell className="py-2 px-3">
                     <div className="flex items-center gap-1.5">
                       {isAdminEcosystem(row.adapter_type) && <EcosystemIcon type={row.adapter_type} size={13} />}
-                      <Badge variant="default">{row.adapter_type?.toUpperCase()}</Badge>
+                      <Badge variant="default">{row.adapter_type ? ecosystemLabel(row.adapter_type) : ''}</Badge>
                     </div>
                   </TableCell>
                   <TableCell className="py-2 px-3">
@@ -307,7 +320,7 @@ export default function CacheManage() {
         }} modal>
           <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={deleteMutation.isPending}>
             <DialogTitle className="pr-10">{t('cache.confirmDelete')}</DialogTitle>
-            <p className="text-[14px] mb-4" style={{ color: 'var(--text-soft)' }}>{t('cache.confirmDeleteMsg')}</p><code className="mb-4 block break-all text-sm">{selectedEntry?.key}</code>{selectedEntry && <p className="mb-4 text-sm text-muted-foreground">{selectedEntry.adapter_type.toUpperCase()} · {formatBytes(selectedEntry.size)}</p>}
+            <p className="text-[14px] mb-4" style={{ color: 'var(--text-soft)' }}>{t('cache.confirmDeleteMsg')}</p><code className="mb-4 block break-all text-sm">{selectedEntry?.key}</code>{selectedEntry && <p className="mb-4 text-sm text-muted-foreground">{ecosystemLabel(selectedEntry.adapter_type)} · {formatBytes(selectedEntry.size)}</p>}
             {deleteMutation.isError && <div className="mb-4"><Alert variant={"destructive"}><AlertDescription>{getApiError(deleteMutation.error).message}</AlertDescription></Alert></div>}
             <div className="flex justify-end gap-3">
               <Button variant="outline" disabled={deleteMutation.isPending} onClick={() => {
@@ -399,7 +412,7 @@ export default function CacheManage() {
               <Field>
                 <FieldLabel>{t('cache.warmupEcosystem')}</FieldLabel>
                 <NativeSelect value={warmupEco} onChange={(e) => setWarmupEco(e.target.value)}>
-                  {WARMUP_ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
+                  {WARMUP_ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{ecosystemLabel(eco)}</option>)}
                 </NativeSelect>
               </Field>
               <Field>

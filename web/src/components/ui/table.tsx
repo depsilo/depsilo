@@ -71,7 +71,9 @@ function TableHead({ className, ...props }: React.ComponentProps<'th'>) {
     <th
       data-slot="table-head"
       className={cn(
-        'h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground',
+        // One header style for every Admin table: sentence case, the interface
+        // face, and the muted text role. Pages set padding and alignment only.
+        'h-10 px-2 text-left align-middle text-[12px] font-[500] whitespace-nowrap text-[var(--text-muted)]',
         className,
       )}
       {...props}

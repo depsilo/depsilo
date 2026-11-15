@@ -98,7 +98,7 @@ function SidebarContent({
           <Logo size={26} />
           {!collapsed && (
             <span
-              className="text-[15px] font-[700]"
+              className="text-[15px] font-[600]"
               style={{ color: 'var(--text)', fontFamily: 'var(--font-display)' }}
             >
               Depsilo
@@ -138,7 +138,7 @@ function SidebarContent({
                     className={`stripe-focus-ring flex min-h-[40px] min-w-0 flex-1 items-center gap-2.5 rounded-md py-2 text-[13px] no-underline ${collapsed ? 'justify-center px-0' : 'px-2.5'}`}
                     style={{
                       color: section.active ? 'var(--brand-text)' : 'var(--text-soft)',
-                      fontWeight: section.active ? 650 : 550,
+                      fontWeight: section.active ? 600 : 500,
                     }}
                   >
                     <span
@@ -170,7 +170,7 @@ function SidebarContent({
               aria-controls="admin-rail-navigation"
               aria-label={collapsed ? t('nav.expandRail') : undefined}
               onClick={onToggleCollapsed}
-              className={`mb-1 w-full gap-2.5 text-[13px] font-[550] text-muted-foreground ${collapsed ? 'justify-center px-0' : 'justify-start px-2'}`}
+              className={`mb-1 w-full gap-2.5 text-[13px] font-[500] text-muted-foreground ${collapsed ? 'justify-center px-0' : 'justify-start px-2'}`}
             >
               <Icon name={collapsed ? 'left_panel_open' : 'left_panel_close'} size="sm" />
               {!collapsed && <span>{t('nav.collapseRail')}</span>}
@@ -187,7 +187,7 @@ function SidebarContent({
               to={getAdminRouteHref('users')}
               onClick={onNavigate}
               aria-label={t('nav.instanceManagement')}
-              className={`stripe-focus-ring mb-2 flex min-h-10 items-center gap-2.5 rounded-md py-2 text-[13px] font-[550] no-underline transition-colors hover:bg-[var(--admin-rail-hover)] ${collapsed ? 'justify-center px-0' : 'px-2'}`}
+              className={`stripe-focus-ring mb-2 flex min-h-10 items-center gap-2.5 rounded-md py-2 text-[13px] font-[500] no-underline transition-colors hover:bg-[var(--admin-rail-hover)] ${collapsed ? 'justify-center px-0' : 'px-2'}`}
               style={{ color: 'var(--text-soft)' }}
             >
               <Icon name="settings" size="sm" />
@@ -221,7 +221,7 @@ function SidebarContent({
               </div>
               <Link to={getAdminRouteHref('account')} onClick={onNavigate} aria-label={t('account.title')} className="stripe-focus-ring min-w-0 flex-1 rounded-md py-1 no-underline">
                 <p className="truncate text-[13px] font-[500] leading-tight" style={{ color: 'var(--text)' }}>{username}</p>
-                <p className="mt-0.5 text-[11px] leading-tight" style={{ color: 'var(--text-muted)' }}>
+                <p className="mt-0.5 text-[12px] leading-tight" style={{ color: 'var(--text-muted)' }}>
                   {isAdmin ? t('nav.admin') : t('nav.readonly')} · {t('account.title')}
                 </p>
               </Link>

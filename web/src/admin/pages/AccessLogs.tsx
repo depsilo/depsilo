@@ -28,6 +28,7 @@ import { copyText } from '@/lib/clipboard'
 import { useAppToast } from '@/components/Toast'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { AccessLog, AccessLogDetail, AccessLogQuery } from '@/lib/adminApi.types'
+import { ecosystemLabel } from '@/admin/operatorEcosystems'
 
 function latencyColor(ms: number): string {
   return ms >= 1000 ? 'var(--warn-text)' : 'var(--text-soft)'
@@ -212,17 +213,22 @@ export default function AccessLogs() {
       <div className="space-y-6">
       <form
         data-admin-filters
-        className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center"
+        className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3"
         onSubmit={(event) => { event.preventDefault(); handleSearch() }}
       >
-        <SearchField
-          aria-label={t('logs.searchLabel')}
-          placeholder={t('logs.searchPlaceholder')}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <div className="flex min-w-0 gap-2 sm:contents">
+          <SearchField
+            aria-label={t('logs.searchLabel')}
+            placeholder={t('logs.searchPlaceholder')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <Button type="submit" variant="outline" className="shrink-0 sm:order-last">
+            {t('search')}
+          </Button>
+        </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:contents">
+        <div className="grid grid-cols-2 gap-2 sm:contents">
             <NativeSelect
               className="min-h-10 sm:w-auto"
               aria-label={t('audit.ecosystem')}
@@ -252,11 +258,8 @@ export default function AccessLogs() {
             </NativeSelect>
         </div>
 
-        <Button type="submit" variant="outline">
-          {t('search')}
-        </Button>
         {hasFilters && (
-          <Button type="button" variant="ghost" onClick={clearFilters}>
+          <Button type="button" variant="ghost" className="sm:order-last" onClick={clearFilters}>
             {t('logs.clearFilters')}
           </Button>
         )}
@@ -279,7 +282,7 @@ export default function AccessLogs() {
             <TableHeader>
               <TableRow style={{ borderBottom: '1px solid var(--border)' }}>
                 {[t('logs.time'), t('type'), t('logs.packageName'), t('logs.cacheFact'), t('logs.status'), t('logs.latency'), t('actions')].map(h => (
-                  <TableHead key={h} scope="col" className="text-left text-[12px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>
+                  <TableHead key={h} scope="col" className="text-left py-2 px-3 first:pl-0">
                     {h}
                   </TableHead>
                 ))}
@@ -301,7 +304,7 @@ export default function AccessLogs() {
                   <TableCell className="py-2 px-3">
                     <div className="flex items-center gap-1.5">
                       {isAdminEcosystem(row.adapter_type) && <EcosystemIcon type={row.adapter_type} size={13} />}
-                      <span className="text-[12px] uppercase" style={{ color: 'var(--text)' }}>{row.adapter_type}</span>
+                      <span className="text-[12px]" style={{ color: 'var(--text)' }}>{ecosystemLabel(row.adapter_type)}</span>
                     </div>
                   </TableCell>
 
@@ -364,7 +367,7 @@ export default function AccessLogs() {
           <div className="flex h-full flex-col gap-5 overflow-y-auto p-5 sm:p-6">
             <div className="flex items-start justify-between gap-4 pr-10">
               <div>
-                <p className="font-mono text-[12px] uppercase" style={{ color: 'var(--text-subtle)' }}>{t('logs.detailTitle')}</p>
+                <p className="text-[12px] font-[500]" style={{ color: 'var(--text-muted)' }}>{t('logs.detailTitle')}</p>
                 <h2 className="mt-1 break-words font-mono text-[16px]" style={{ color: 'var(--text)' }}>{detailQuery.data?.data.package_name || (detailQuery.isPending ? t('logs.loadingDetail') : t('logs.detailTitle'))}</h2>
               </div>
               {detailQuery.data?.data && <Tooltip>

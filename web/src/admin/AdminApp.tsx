@@ -83,7 +83,7 @@ function AdminAuthPending() {
           <Logo size={26} />
         </span>
         <span className="flex min-w-0 flex-col gap-0.5">
-          <span className="font-display text-[15px] font-[700] leading-5">Depsilo</span>
+          <span className="font-display text-[15px] font-[600] leading-5">Depsilo</span>
           <span className="text-[12px] leading-4 text-[var(--text-muted)]">{t('auth.verifyingSession')}</span>
         </span>
         <Icon

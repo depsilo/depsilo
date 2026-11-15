@@ -24,7 +24,7 @@ export default function LangToggle({ variant = 'default' }: LangToggleProps) {
       data-language-toggle={portal ? 'portal' : admin ? 'admin' : 'default'}
       className={portal
         ? 'portal-header-control portal-language-control'
-        : 'min-h-[40px] min-w-[40px] px-2 font-mono text-[11px] font-medium text-muted-foreground'}
+        : 'min-h-[40px] min-w-[40px] px-2 font-mono text-[12px] font-medium text-muted-foreground'}
       aria-label={t(isZh ? 'language.switchToEnglish' : 'language.switchToChinese')}
       title={t(isZh ? 'language.switchToEnglish' : 'language.switchToChinese')}
 

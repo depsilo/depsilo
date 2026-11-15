@@ -227,7 +227,7 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
           </p>
         ) : (
           <>
-            <div className={`${peerRowGrid} hidden px-1 text-[10px] font-[600] uppercase tracking-[0.06em] lg:grid`} style={{ color: 'var(--text-subtle)' }}>
+            <div className={`${peerRowGrid} hidden px-1 text-[12px] font-[500] lg:grid`} style={{ color: 'var(--text-muted)' }}>
               <span>{t('cascade.config.peerName')}</span>
               <span>{t('cascade.config.peerURL')}</span>
               <span>{t('cascade.config.peerTokenShort')}</span>

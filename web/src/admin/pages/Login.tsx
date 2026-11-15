@@ -155,12 +155,12 @@ export default function Login() {
             className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-2 rounded-md text-[var(--text)] no-underline transition-opacity duration-150 hover:opacity-75"
           >
             <Logo size={28} />
-            <span className="font-display text-[16px] font-[700]">Depsilo</span>
+            <span className="font-display text-[16px] font-[600]">Depsilo</span>
           </Link>
           <Link
             to="/"
             onClick={cancelLoginForPortalNavigation}
-            className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1.5 rounded-md px-2 text-[12px] font-[550] text-[var(--text-muted)] no-underline transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
+            className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1.5 rounded-md px-2 text-[12px] font-[500] text-[var(--text-muted)] no-underline transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
           >
             <Icon name="arrow_back" size="sm" />
             {t('login.backToPortal')}
@@ -168,7 +168,7 @@ export default function Login() {
         </div>
 
         <header className="mb-8">
-          <h1 className="m-0 font-display text-[30px] font-[650] leading-[1.1] text-[var(--text)]">
+          <h1 className="m-0 font-display text-[30px] font-[600] leading-[1.1] text-[var(--text)]">
             {t('login.title')}
           </h1>
           <p className="mt-2 max-w-[46ch] text-[14px] leading-6 text-[var(--text-muted)]">

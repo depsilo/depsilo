@@ -42,7 +42,7 @@ function FlowNode({
           {badge}
         </span>
         {subtitle && (
-          <span className="block truncate text-[10px]" style={{ color: 'var(--text-soft)' }}>{subtitle}</span>
+          <span className="block truncate text-[12px]" style={{ color: 'var(--text-soft)' }}>{subtitle}</span>
         )}
       </span>
     </div>
@@ -52,7 +52,7 @@ function FlowNode({
 function FlowArrow({ label, dashed }: { label: string; dashed?: boolean }) {
   return (
     <span className="hidden shrink-0 flex-col items-center px-1 sm:inline-flex">
-      <span className="text-[9px] whitespace-nowrap" style={{ color: 'var(--text-subtle)' }}>{label}</span>
+      <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-subtle)' }}>{label}</span>
       <Icon
         name="arrow_forward"
         size="sm"
@@ -162,7 +162,7 @@ export default function CascadeTopology({
       </div>
       {chips.length > 0 && (
         <div
-          className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-2 text-[11px]"
+          className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-2 text-[12px]"
           style={{ borderColor: 'var(--border)', color: 'var(--text-soft)' }}
         >
           {chips}

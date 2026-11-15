@@ -343,7 +343,7 @@ test('Overview status entry, its details and recent table stay readable at 1024 
   await status.click()
   const details = page.getByRole('dialog')
   await expect(details).toContainText('ruby-china')
-  await expect(details).toContainText('rubygems · #1')
+  await expect(details).toContainText('RubyGems · #1')
   expect((await details.boundingBox())!.width).toBeLessThan(1024)
   await page.keyboard.press('Escape')
   await expect(status).toBeFocused()

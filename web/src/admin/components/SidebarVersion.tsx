@@ -34,12 +34,12 @@ export default function SidebarVersion({ version }: { version?: string }) {
         data-admin-version
         aria-label={`${t('nav.versionDetails')}: ${label}`}
         aria-busy={pending || undefined}
-        className="ml-auto min-h-[40px] min-w-[40px] max-w-[88px] whitespace-normal px-0"
+        className="ml-auto min-h-[40px] min-w-[40px] max-w-[100px] whitespace-normal px-0"
       >
         {/* Release identifiers stay complete and wrap only when they cannot
             fit; the tight metrics usually keep "dev·<7-hex>" on one line. */}
         <span
-          className="block min-w-0 rounded-sm border px-1 py-1 font-mono text-[11px] leading-tight tracking-tight tabular-nums [overflow-wrap:anywhere]"
+          className="block min-w-0 rounded-sm border px-1 py-1 font-mono text-[12px] leading-tight tabular-nums [overflow-wrap:anywhere]"
           style={{ background: 'var(--bg-hover)', color: 'var(--text-soft)', borderColor: 'var(--border)' }}
         >
           {separator > 0 ? <>{label.slice(0, separator)}<wbr />{label.slice(separator)}</> : label}

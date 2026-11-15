@@ -173,14 +173,14 @@ export default function SiemExportersSection() {
             <Table className="w-full text-[12px]">
               <TableHeader>
                 <TableRow style={{ color: 'var(--text-soft)' }}>
-                  <TableHead className="px-2 py-2 text-left font-[500]">{t('siem.name')}</TableHead>
-                  <TableHead className="px-2 py-2 text-left font-[500]">{t('siem.kind')}</TableHead>
-                  <TableHead className="px-2 py-2 text-left font-[500]">{t('siem.status')}</TableHead>
-                  <TableHead className="px-2 py-2 text-left font-[500]">{t('siem.events')}</TableHead>
-                  <TableHead className="px-2 py-2 text-right font-[500]">{t('siem.delivered')}</TableHead>
-                  <TableHead className="px-2 py-2 text-right font-[500]">{t('siem.lag')}</TableHead>
-                  <TableHead className="px-2 py-2 text-left font-[500]">{t('siem.lastDelivery')}</TableHead>
-                  <TableHead className="px-2 py-2 text-right font-[500]">{t('siem.actions')}</TableHead>
+                  <TableHead className="px-2 py-2 text-left">{t('siem.name')}</TableHead>
+                  <TableHead className="px-2 py-2 text-left">{t('siem.kind')}</TableHead>
+                  <TableHead className="px-2 py-2 text-left">{t('siem.status')}</TableHead>
+                  <TableHead className="px-2 py-2 text-left">{t('siem.events')}</TableHead>
+                  <TableHead className="px-2 py-2 text-right">{t('siem.delivered')}</TableHead>
+                  <TableHead className="px-2 py-2 text-right">{t('siem.lag')}</TableHead>
+                  <TableHead className="px-2 py-2 text-left">{t('siem.lastDelivery')}</TableHead>
+                  <TableHead className="px-2 py-2 text-right">{t('siem.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
