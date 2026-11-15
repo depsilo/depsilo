@@ -5,6 +5,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-15
+
 ### Added
 - `GET /api/v1/admin/dashboard/breakdown?range=1h|24h|7d|30d|all` reports where an
   Overview period's traffic went: per ecosystem, per Upstream (the measured
@@ -25,6 +27,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   totals plus the retained rollups, names where coverage begins in
   `range.start`, and has no previous period. The startup rollup backfill no
   longer rebuilds days that are already archived.
+- `GET /api/v1/integration-prompt?ecosystem=<id>` limits the AI integration
+  prompt to one Portal ecosystem (`python`, `node`, `java`, `rust`, `go`,
+  `container`, `kubernetes`, `ruby`, `dotnet`, `debian`, `alpine`, `php`, `r`,
+  `huggingface`). The prompt then opens with a scope section naming the
+  ecosystem, its clients, and this service's address for it, and tells the
+  agent to leave every other ecosystem alone; the safety sections are
+  unchanged. An unknown id is a `400` that lists the accepted ids.
+  `depsilo prompt --ecosystem <id>` prints the same text.
 
 ### Upgrade notes
 - Schema v17 is a forward-only migration. A 0.13.x binary refuses the
@@ -41,6 +51,30 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   contents and free disk, what needs attention with its consequence for
   downloads, known vulnerabilities and protection coverage, and the process's
   resources. The page has a full-screen mode that hides the navigation rail.
+- The Portal Quick Start leads with AI setup. A one-row status band above it
+  shows whether the service is serving, today's requests and hit rate, egress,
+  seven-day savings, cache size, failing Upstream mirrors (each opens its
+  ecosystem's setup), and the last hour. "AI setup" is the catalog's first
+  entry and the default on a first visit, and every ecosystem's package
+  manager picker starts with an AI setup tab whose prompt covers only that
+  ecosystem. The compile cache is a catalog entry; the separate optional
+  section, the recently-used list, and the prompt dialog are gone.
+- Admin and Portal design pass. Status colours mean status only: a stale
+  index is a neutral badge, and the cache storage card shows one usage meter
+  and a single-hue share list instead of ecosystem brand colours that read as
+  health. Vulnerability severity uses one red, orange, and amber ramp that
+  also steps in lightness, so high and medium stay apart for colour-blind
+  readers. Tables share one sentence-case header style, ecosystems appear by
+  product name (PyPI, npm, Cargo) instead of uppercase adapter ids, type uses
+  three weights and nothing below 12 px except units and chart ticks, Upstream
+  probe bars fill their row, phone filters put search and its button on one
+  row with filters two to a row, and pages without tabs use the same header
+  band as tabbed workspaces.
+
+### Fixed
+- The Portal header now shows a failed first status poll and its retry
+  control even when the Quick Start page loads after the failure; previously
+  the late page retried silently and hid the error.
 
 ## [0.13.0] - 2026-11-11
 
