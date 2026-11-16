@@ -62,7 +62,7 @@ type ApprovedVersion = {
 }
 
 const ACTIONS = ['blocked', 'malware_blocked', 'tamper_detected', 'served_eligible', 'bypassed', 'malware_bypassed', 'warned', 'malware_warned', 'approved', 'approval_revoked', 'override_created', 'override_revoked']
-const PAGE_SIZE = 50
+const PAGE_SIZE = 20
 
 type BlocklistStatus = {
   enabled: boolean

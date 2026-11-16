@@ -14,7 +14,7 @@ test('upstream update history renders episode counts and loads the next cursor p
     'GET /api/v1/admin/upstream-updates': async (request: Request) => {
       const searchParams = new URL(request.url()).searchParams
       const cursor = searchParams.get('cursor')
-      expect(searchParams.get('limit')).toBe('100')
+      expect(searchParams.get('limit')).toBe('20')
       expect(searchParams.has('offset')).toBe(false)
       requestedCursors.push(cursor)
 

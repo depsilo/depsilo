@@ -94,7 +94,8 @@ export default function UpstreamUpdates() {
   }), [locale])
 
   const filterQuery = useMemo<AdminUpstreamUpdateQuery>(() => {
-    const params: AdminUpstreamUpdateQuery = { limit: 100 }
+    // Twenty a page like the other Admin lists; "Load more" appends the next.
+    const params: AdminUpstreamUpdateQuery = { limit: 20 }
     if (packageFilter) params.package = packageFilter
     if (ecosystemFilter !== 'all') params.ecosystem = ecosystemFilter
     if (resultFilter !== 'all') params.result = resultFilter

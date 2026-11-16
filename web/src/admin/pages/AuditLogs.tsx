@@ -42,6 +42,9 @@ function resultBadge(result: string, t: (k: string) => string) {
   return <Badge>{result || '-'}</Badge>
 }
 
+/** Rows per page, the same on every Admin list. */
+const PAGE_SIZE = 20
+
 /** The audit log opens on the last day, as its former "today" did. */
 const DEFAULT_RANGE: TimePreset = '24h'
 
@@ -110,7 +113,7 @@ export default function AuditLogs() {
 
   function buildParams(): AuditLogQuery {
     const timeWindow = resolveTimeWindow(timeRange, anchor)
-    const params: AuditLogQuery = { page, page_size: 50, ...timeWindow }
+    const params: AuditLogQuery = { page, page_size: PAGE_SIZE, ...timeWindow }
     if (appliedSearch) params.package = appliedSearch
     const ecosystemFilter = serializeEcosystemList(ecosystems)
     if (ecosystemFilter) params.ecosystem = ecosystemFilter
@@ -342,7 +345,7 @@ export default function AuditLogs() {
       )}
 
       {/* Pagination */}
-      <AdminPagination page={page} pageSize={50} total={total} ready={isSuccess && !isFetching} onPageChange={setPage} />
+      <AdminPagination page={page} pageSize={PAGE_SIZE} total={total} ready={isSuccess && !isFetching} onPageChange={setPage} />
 
       <p className="text-[12px] text-muted-foreground">{t('audit.exportScope')}</p>
       </div>}

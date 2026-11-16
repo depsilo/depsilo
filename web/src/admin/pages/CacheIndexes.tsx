@@ -29,7 +29,7 @@ import { getApiError } from '@/lib/apiError'
 import { formatBytes, formatTime } from '@/lib/utils'
 import { ecosystemLabel } from '@/admin/operatorEcosystems'
 
-const PAGE_SIZE = 25
+const PAGE_SIZE = 20
 
 // A stale index is routine: it is revalidated on the next request and does
 // not mean a download failed (the page says so). Amber stays reserved for

@@ -27,6 +27,6 @@ test('empty index filters offer a reset without losing the cache overview on mob
   await expect(page.getByRole('combobox', { name: '按有效状态筛选' })).toHaveValue('all')
   await expect(page.getByRole('button', { name: '清除筛选' })).toHaveCount(0)
   await expect(page.getByText('暂无索引缓存')).toBeVisible()
-  await expect.poll(() => queries.at(-1)).toBe('?page=1&page_size=25')
+  await expect.poll(() => queries.at(-1)).toBe('?page=1&page_size=20')
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
 })

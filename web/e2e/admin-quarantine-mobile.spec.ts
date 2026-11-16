@@ -134,7 +134,7 @@ test('quarantine events and approvals can reach older pages, and filtering reset
   const events = page.locator('[data-quarantine-mobile-list="events"]')
   await expect(events).toContainText('event-1')
   await page.getByRole('navigation', { name: '分页' }).getByRole('button', { name: '下一页' }).click()
-  await expect(events).toContainText('event-51')
+  await expect(events).toContainText('event-21')
   await page.getByRole('group', { name: '按生态筛选' }).locator('[data-ecosystem-chip="npm"]').click()
   await expect(events).toContainText('filtered')
   await expect(page.locator('[data-admin-pagination]')).toHaveCount(0)
@@ -143,7 +143,7 @@ test('quarantine events and approvals can reach older pages, and filtering reset
   const approvals = page.locator('[data-quarantine-mobile-list="approvals"]')
   await expect(approvals).toContainText('approval-1')
   await page.getByRole('navigation', { name: '分页' }).getByRole('button', { name: '下一页' }).click()
-  await expect(approvals).toContainText('approval-51')
+  await expect(approvals).toContainText('approval-21')
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
 })
 
