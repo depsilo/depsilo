@@ -20,6 +20,8 @@ test('Access Logs keeps applied filters and pagination in the URL and restores t
     adapter_type: 'pypi',
     hit: 'true',
     page: '2',
+    // Twenty rows a page by default.
+    page_size: '20',
   })
   await expect(page.getByLabel(/按包名搜索访问日志|Search access logs by package/)).toHaveValue('requests')
 

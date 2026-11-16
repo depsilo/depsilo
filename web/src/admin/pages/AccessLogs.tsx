@@ -38,6 +38,9 @@ function latencyColor(ms: number): string {
   return ms >= 1000 ? 'var(--warn-text)' : 'var(--text-soft)'
 }
 
+/** Rows per page: short enough to scan without scrolling far. */
+const PAGE_SIZE = 20
+
 /** Access logs open on everything Depsilo still holds, as before. */
 const DEFAULT_RANGE: TimePreset = 'all'
 
@@ -108,7 +111,7 @@ export default function AccessLogs() {
     setSearch(appliedSearch)
   }, [appliedSearch])
 
-  const params: AccessLogQuery = { page, page_size: 50 }
+  const params: AccessLogQuery = { page, page_size: PAGE_SIZE }
   if (appliedSearch) Object.assign(params, { search: appliedSearch })
   const adapterTypes = serializeEcosystemList(ecosystems)
   if (adapterTypes) params.adapter_type = adapterTypes
@@ -381,7 +384,7 @@ export default function AccessLogs() {
         </div>
       )}
 
-      <AdminPagination page={page} pageSize={50} total={total} ready={isSuccess && !isFetching} onPageChange={setPage} />
+      <AdminPagination page={page} pageSize={PAGE_SIZE} total={total} ready={isSuccess && !isFetching} onPageChange={setPage} />
       </div>
 
       <Sheet open={detailId !== null} onOpenChange={(open) => { if (!open) setDetailId(null) }} modal>
