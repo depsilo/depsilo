@@ -38,6 +38,8 @@ export default function EcosystemChips({ counts, selected, onChange, labelFor, c
   const missing = selected.filter(id => !known.some(item => item.id === id)).map(id => ({ id, count: 0 }))
   const chips = [...known, ...missing]
   const total = known.reduce((sum, item) => sum + item.count, 0)
+  // Nothing to choose between: an empty list has no ecosystems to filter.
+  if (counts && chips.length === 0) return null
 
   return (
     <div
