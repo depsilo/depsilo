@@ -8,8 +8,8 @@
 
 **A self-hosted dependency cache for homelabs and small teams.**
 
-Reuse package downloads, reduce upstream traffic, and apply supply-chain policies
-through one service. Keep using your existing package managers.
+Download each package once, then serve it to every developer machine and CI job
+on your network. Keep using your existing package managers.
 
 [![Release](https://img.shields.io/github/v/release/depsilo/depsilo)](https://github.com/depsilo/depsilo/releases)
 [![Verify](https://github.com/depsilo/depsilo/actions/workflows/verify.yml/badge.svg)](https://github.com/depsilo/depsilo/actions/workflows/verify.yml)
@@ -22,26 +22,60 @@ through one service. Keep using your existing package managers.
 
 </div>
 
-## Why Depsilo?
+## What it does
 
-- **Download once, reuse across machines.** Cache dependencies for developers
-  and CI, with local or S3-backed artifact storage.
-- **See what is happening.** Monitor service health, cache hits, upstream traffic,
-  and recent requests in the web dashboard.
-- **Control what gets installed.** Apply malicious-package blocking, package
-  rules, release-age policies, and snapshots. Coverage varies by ecosystem;
-  see [supply-chain controls](docs/supply-chain.md).
-- **Use your team's login.** Connect multiple OIDC or LDAP authentication sources
-  and manage personal login bindings.
+Without a shared cache, the same packages are downloaded from the internet over
+and over: once on every developer machine, and again in every clean CI run and
+container build.
+
+Depsilo sits between your machines and the public registries. The first request
+for a package fetches it and keeps a copy. Later requests, from any machine, are
+served from that copy.
+
+```mermaid
+flowchart LR
+    dev["Developer machines"] --> depsilo
+    ci["CI workers"] --> depsilo
+    agents["AI coding agents"] --> depsilo
+    depsilo["Depsilo on your network<br/>cache · policies · dashboard"]
+    depsilo -- "only what is not cached yet" --> upstream["Upstream registries<br/>PyPI · npm · Maven Central · Docker Hub · …"]
+```
+
+To connect a tool, you change where it downloads from. The built-in guide
+writes the exact lines for your address and package manager, for example:
+
+```bash
+pip config set global.index-url https://depsilo.example.com/pypi/simple/
+npm config set registry https://depsilo.example.com/npm/
+```
+
+## What you get
+
+- **Download once, reuse across machines.** One cache for developers and CI,
+  stored on local disk or S3.
+- **See whether it is working.** The dashboard shows service health, cache hits,
+  upstream traffic, and recent requests.
+- **Control what gets installed.** Block known-malicious packages, and apply
+  package rules, a minimum release age, and snapshots. Coverage varies by
+  ecosystem; see [supply-chain controls](docs/supply-chain.md).
+- **Let a coding agent do the setup.** The home page offers a ready-made prompt
+  for Claude Code, Cursor, Copilot Chat, Codex, and similar agents. It asks the
+  agent to show its plan and wait for your approval before editing.
+  `depsilo init-agent` and MCP are [also available](docs/deployment.md#ai-coding-agents).
+- **Use your team's login.** Sign in through OIDC providers or LDAP directories,
+  with local accounts still available.
+- **Extend it later.** Chain instances so one fills its cache through another
+  ([cascade](docs/cascade.md)), or share compiler output between build machines
+  ([ccache and sccache](docs/compile-cache.md)).
 
 Runs as a single binary or Docker container, backed by SQLite. MIT-licensed,
 with no telemetry.
 
 ## Quick start
 
-### Start with Docker
+You need Docker. No repository checkout or configuration file is required.
 
-No repository checkout or configuration file is needed for a new installation.
+### 1. Start Depsilo
 
 ```bash
 docker run -d --name depsilo \
@@ -51,22 +85,35 @@ docker run -d --name depsilo \
   ghcr.io/depsilo/depsilo:latest
 ```
 
-Once the service starts, retrieve the setup token:
+### 2. Create your administrator
+
+Print the setup token:
 
 ```bash
 docker exec depsilo depsilo setup token
 ```
 
-1. Open **<http://127.0.0.1:23333>**, enter the token, and create your administrator.
-   There is no default administrator password.
-2. Open **Connect a client**, choose your package manager, and apply the generated
-   configuration on the machine that will download dependencies.
-3. Run the suggested download command and confirm the request and cache results
-   on this page, then open the dashboard for statistics. You can reopen the guide anytime.
+Open **<http://127.0.0.1:23333>**, enter the token, and create your
+administrator. There is no default administrator password.
 
-The volume preserves configuration, credentials, database, and cache. For an
-ongoing deployment, pin a release tag instead of `latest` and keep the service
-on a trusted network. Use a TLS reverse proxy for remote access.
+### 3. Connect a client
+
+Setup continues to **Connect a client**:
+
+1. Choose your package manager.
+2. Apply the generated configuration on the machine that will download
+   dependencies.
+3. Run the suggested download command, and confirm the request and cache
+   results on the same page.
+
+The dashboard then shows the statistics. You can reopen the guide anytime, or
+pick **AI setup** on the home page to hand the client configuration to a coding
+agent.
+
+The `depsilo-data` volume preserves configuration, credentials, database, and
+cache. For an ongoing deployment, pin a release tag instead of `latest` and
+keep the service on a trusted network. Use a TLS reverse proxy for remote
+access.
 
 <details>
 <summary>Prefer a binary? Linux / macOS</summary>
@@ -100,12 +147,24 @@ For Compose, custom ports, persistent directories, or upgrades, follow the
 | Container images | Docker / OCI pulls, including containerd and Podman |
 | Compiler caches | ccache and sccache; [separate setup](docs/compile-cache.md) |
 
-Package traffic uses 14 ecosystem routes plus Docker's separate OCI route.
 Docker and Hugging Face need [additional setup](docs/deployment.md#optional-ecosystems).
-Docker support is a pull-through cache, without image push or hosted repositories.
 
-Each instance owns its database and configuration; shared-database HA is not
-supported. See [product scope](PRODUCT.md) for capability boundaries.
+## What it does not do
+
+- **It does not host your own packages.** Depsilo caches what it fetches from
+  upstream registries. There is no private publishing, and Docker support is a
+  pull-through cache without image push.
+- **It does not run as a cluster.** Each instance owns its database and
+  configuration; shared-database HA is not supported. Independent instances can
+  be chained with [cascade](docs/cascade.md).
+- **It does not install into isolated networks yet.** Content that is already
+  cached can still be served through some
+  [upstream failures](docs/deployment.md#when-upstreams-are-unreachable), and
+  signed dependency-set bundles can be
+  [exported and imported](docs/distribution.md). Serving those bundles to
+  package managers on a network without internet access is planned work.
+
+See [product scope](PRODUCT.md) for the full capability boundaries.
 
 ## Find the next step
 

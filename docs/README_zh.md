@@ -8,7 +8,7 @@
 
 **面向 homelab 和小团队的自托管依赖缓存服务。**
 
-用一个服务复用依赖下载、减少回源流量，并执行供应链策略。
+每个依赖包只下载一次，然后供内网里的每台开发机和每个 CI 任务复用。
 继续使用你熟悉的包管理器。
 
 [![Release](https://img.shields.io/github/v/release/depsilo/depsilo)](https://github.com/depsilo/depsilo/releases)
@@ -22,21 +22,50 @@
 
 </div>
 
-## 为什么使用 Depsilo？
+## 它做什么
 
-- **一次下载，多台机器复用。** 为开发者和 CI 缓存依赖制品，支持本地或 S3 存储。
+没有共享缓存时，同样的依赖包会被反复从互联网下载：每台开发机下载一次，
+每次干净的 CI 构建和容器镜像构建还要再下载一次。
+
+Depsilo 部署在你的设备和公共上游源之间。某个包第一次被请求时，Depsilo 回源下载并保留一份；
+之后无论哪台机器再请求，都直接从这份缓存返回。
+
+```mermaid
+flowchart LR
+    dev["开发机"] --> depsilo
+    ci["CI 构建机"] --> depsilo
+    agents["AI 编码 Agent"] --> depsilo
+    depsilo["内网中的 Depsilo<br/>缓存 · 策略 · 总览"]
+    depsilo -- "只回源尚未缓存的内容" --> upstream["上游源<br/>PyPI · npm · Maven Central · Docker Hub · …"]
+```
+
+接入一个工具，只需要修改它的下载地址。内置的接入指引会按你的服务地址和包管理器生成具体配置，例如：
+
+```bash
+pip config set global.index-url https://depsilo.example.com/pypi/simple/
+npm config set registry https://depsilo.example.com/npm/
+```
+
+## 你能得到什么
+
+- **一次下载，多台机器复用。** 开发者和 CI 共用一份缓存，存放在本地磁盘或 S3。
 - **看清缓存是否有效。** 在总览中查看服务健康、缓存命中、回源流量和最近请求。
-- **控制安装的内容。** 支持恶意包阻断、包规则、最小发布年龄和快照。
+- **控制安装的内容。** 阻断已知恶意包，并支持包规则、最小发布年龄和快照。
   具体覆盖范围因生态而异，详见[供应链控制](supply-chain.md)。
-- **接入团队的登录方式。** 支持多个 OIDC 或 LDAP 认证源，以及个人登录方式的绑定管理。
+- **把接入交给编码 Agent。** 首页提供现成的提示词，可用于 Claude Code、Cursor、
+  Copilot Chat、Codex 等 Agent；提示词要求 Agent 先给出修改计划，等你确认后再动手。
+  另有 `depsilo init-agent` 和 MCP 两种[接入方式](deployment.md#ai-coding-agents)。
+- **接入团队的登录方式。** 通过 OIDC 身份提供方或 LDAP 目录登录，本地账号仍然可用。
+- **需要时再扩展。** 让一个实例通过另一个实例回源并填充缓存（[级联缓存](cascade.md)），
+  或在构建机之间共享编译产物（[ccache 与 sccache](compile-cache.md)）。
 
 通过单个可执行文件或 Docker 容器运行，使用 SQLite，采用 MIT 许可证，不收集遥测。
 
 ## 快速开始
 
-### 使用 Docker 启动
+需要先安装 Docker。无需克隆仓库，也无需提前编写配置文件。
 
-新安装无需克隆仓库，也无需提前编写配置文件。
+### 1. 启动 Depsilo
 
 ```bash
 docker run -d --name depsilo \
@@ -46,17 +75,28 @@ docker run -d --name depsilo \
   ghcr.io/depsilo/depsilo:latest
 ```
 
-服务启动后，获取初始化令牌：
+### 2. 创建管理员
+
+获取初始化令牌：
 
 ```bash
 docker exec depsilo depsilo setup token
 ```
 
-1. 打开 **<http://127.0.0.1:23333>**，输入令牌并创建管理员。系统没有默认管理员密码。
-2. 进入 **接入客户端**，选择包管理器，在实际下载依赖的设备上应用生成的配置。
-3. 运行建议的下载命令，在当前页面确认请求与缓存结果，再前往总览查看统计。以后可以随时重新打开接入指引。
+打开 **<http://127.0.0.1:23333>**，输入令牌并创建管理员。系统没有默认管理员密码。
 
-Volume 会保留配置、凭据、数据库和缓存。长期部署时，请用明确的发行版本替换 `latest`，
+### 3. 接入客户端
+
+初始化完成后会进入 **接入客户端**：
+
+1. 选择包管理器。
+2. 在实际下载依赖的设备上应用生成的配置。
+3. 运行建议的下载命令，在同一页面确认请求与缓存结果。
+
+之后可以在总览查看统计。接入指引可以随时重新打开；也可以在首页选择 **AI 接入**，
+把客户端配置交给编码 Agent 完成。
+
+`depsilo-data` 这个 Volume 会保留配置、凭据、数据库和缓存。长期部署时，请用明确的发行版本替换 `latest`，
 并将服务放在可信网络中；远程访问应通过提供 TLS 的反向代理。
 
 <details>
@@ -89,11 +129,18 @@ Compose、自定义端口、持久化目录和升级方式见[部署指南](depl
 | 容器镜像 | Docker / OCI 拉取，包括 containerd 和 Podman |
 | 编译缓存 | ccache、sccache，需[单独配置](compile-cache.md) |
 
-包请求通过 14 个生态路由和独立的 Docker OCI 路由接入。
 Docker 与 Hugging Face 需要[额外配置](deployment.md#optional-ecosystems)。
-Docker 支持拉取缓存，不提供镜像推送或托管仓库。
 
-每个实例独立管理数据库与配置，不支持共享数据库的高可用部署。
+## 它不做什么
+
+- **不托管你自己的包。** Depsilo 缓存的是从上游源取回的内容，不提供私有包发布；
+  Docker 仅支持拉取缓存，不支持镜像推送。
+- **不以集群方式运行。** 每个实例独立管理数据库与配置，不支持共享数据库的高可用部署。
+  多个独立实例可以通过[级联缓存](cascade.md)串联。
+- **暂不支持向隔离网络安装依赖。** 已缓存的内容在部分[上游故障](deployment.md#when-upstreams-are-unreachable)期间仍可提供，
+  签名的依赖集传输包也已经可以[导出和导入](distribution.md)；
+  但在无法访问互联网的网络中把这些内容提供给包管理器，仍在计划中。
+
 完整能力边界见[产品说明](../PRODUCT.md)。
 
 ## 接下来做什么
