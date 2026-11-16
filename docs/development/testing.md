@@ -93,7 +93,7 @@ it does not reset existing services. Its script contracts run in `verify-scripts
 The [Python offline acceptance fixture](../../testground/offline-pypi/README.md)
 also has offline guard tests in that gate. Its disconnected native install
 requires a separately prepared isolated target and is not part of `make verify`;
-artifact transfer/activation remain planned.
+set activation and offline package serving remain planned.
 
 For changes to local hot reload, run the focused lifecycle and route contracts
 before the aggregate script gate:

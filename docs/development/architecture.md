@@ -94,9 +94,10 @@ Admin and every other browser route to Portal.
 - General artifact hosting is future intent, not permission to overload proxy
   interfaces. Record the new seam and migration contract in an ADR first.
 - [ADR-0008](../adr/0008-dependency-cache-and-distribution.md) owns the current
-  cache/distribution direction. Offline bundles and incremental delivery are
-  planned. The opt-in [preparation catalog](../distribution.md) retains and
-  verifies declared content but does not expose offline package routes or
-  signed bundles. Existing snapshot and backup formats do not transfer artifact
-  bytes. ADR-0006's relay and ADR-0007's
-  identity decisions remain in force.
+  cache/distribution direction. Offline package serving, disconnected
+  installation, and incremental delivery are planned. The opt-in
+  [preparation catalog](../distribution.md) retains and verifies declared
+  content and exports and imports signed full transfer bundles. Imported sets
+  are not activated, and no offline package routes exist. Existing snapshot
+  and backup formats do not transfer artifact bytes. ADR-0006's relay and
+  ADR-0007's identity decisions remain in force.
