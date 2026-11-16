@@ -78,7 +78,7 @@ rejected by the CLI. The manifest records each original filename separately.
 The manifest is limited to 1 MiB. Unknown fields, duplicate fields, duplicate
 object digests, and duplicate filenames are rejected. Wheel filenames end in
 `.whl`; metadata filenames end in `.whl.metadata`. This format is a preparation
-record, not the planned signed transfer-bundle format.
+record, not the signed [transfer-bundle](#transfer-bundles) format.
 
 The set ID is the SHA-256 of the **exact manifest bytes**, including whitespace.
 Reusing the same `name` and `revision` with changed bytes returns a conflict;

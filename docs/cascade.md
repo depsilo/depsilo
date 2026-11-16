@@ -11,8 +11,10 @@ The design and its boundaries are recorded in
 [ADR-0006](adr/0006-cascade-cache-peering.md). This page is the operator
 guide.
 
-Cascade requires a network path to a parent. Offline artifact transfer is
-planned separately in [ADR-0008](adr/0008-dependency-cache-and-distribution.md).
+Cascade requires a network path to a parent. Delivery into an isolated network
+is a separate workflow: signed [transfer bundles](distribution.md#transfer-bundles)
+can be exported and imported, and offline package serving is planned
+([ADR-0008](adr/0008-dependency-cache-and-distribution.md)).
 The direct-upstream fallback below applies only where public internet access
 is permitted; it is not a way to connect an isolated network.
 
