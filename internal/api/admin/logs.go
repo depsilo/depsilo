@@ -27,12 +27,13 @@ func NewAccessLogHandler(database *gorm.DB) *AccessLogHandler {
 }
 
 type accessLogFilter struct {
-	Search      string
-	AdapterType string
-	Hit         *bool
-	Result      string
-	Page        int
-	PageSize    int
+	Search       string
+	AdapterTypes []string
+	Window       timeWindow
+	Hit          *bool
+	Result       string
+	Page         int
+	PageSize     int
 }
 
 type accessLogResponse struct {
@@ -60,6 +61,8 @@ type accessLogListResponse struct {
 	Total    int64               `json:"total"`
 	Page     int                 `json:"page"`
 	PageSize int                 `json:"page_size"`
+	// Ecosystems counts the rows every other filter matches, per ecosystem.
+	Ecosystems []ecosystemCount `json:"ecosystems"`
 }
 
 type accessLogAuditEvent struct {
@@ -94,15 +97,20 @@ func parseAccessLogFilter(c *gin.Context) (accessLogFilter, error) {
 	if err != nil || pageSize < 1 || pageSize > 200 {
 		pageSize = 50
 	}
-	adapterType := c.Query("adapter_type")
-	if adapterType == "" {
-		adapterType = c.Query("type")
+	adapterTypes, err := parseEcosystemFilter(c, "adapter_type", "type")
+	if err != nil {
+		return accessLogFilter{}, err
+	}
+	window, err := parseTimeWindow(c)
+	if err != nil {
+		return accessLogFilter{}, err
 	}
 	filter := accessLogFilter{
-		Search:      c.Query("search"),
-		AdapterType: adapterType,
-		Page:        page,
-		PageSize:    pageSize,
+		Search:       c.Query("search"),
+		AdapterTypes: adapterTypes,
+		Window:       window,
+		Page:         page,
+		PageSize:     pageSize,
 	}
 	if raw := c.Query("hit"); raw != "" {
 		hit, err := strconv.ParseBool(raw)
@@ -127,9 +135,10 @@ func applyAccessLogFilter(database *gorm.DB, filter accessLogFilter) *gorm.DB {
 	if filter.Search != "" {
 		query = query.Where("package_name LIKE ?", "%"+filter.Search+"%")
 	}
-	if filter.AdapterType != "" {
-		query = query.Where("adapter_type = ?", filter.AdapterType)
+	if len(filter.AdapterTypes) > 0 {
+		query = query.Where("adapter_type IN ?", filter.AdapterTypes)
 	}
+	query = filter.Window.apply(query, "created_at")
 	if filter.Hit != nil {
 		query = query.Where("hit = ?", *filter.Hit)
 	}
@@ -195,11 +204,19 @@ func (h *AccessLogHandler) List(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
 		return
 	}
+	facetFilter := filter
+	facetFilter.AdapterTypes = nil
+	ecosystems, err := countByEcosystem(applyAccessLogFilter(h.db.WithContext(c.Request.Context()), facetFilter), "adapter_type")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, accessLogListResponse{
-		Items:    toAccessLogResponses(logs),
-		Total:    total,
-		Page:     filter.Page,
-		PageSize: filter.PageSize,
+		Items:      toAccessLogResponses(logs),
+		Total:      total,
+		Page:       filter.Page,
+		PageSize:   filter.PageSize,
+		Ecosystems: ecosystems,
 	})
 }
 

@@ -10,7 +10,7 @@ test('Access Logs keeps applied filters and pagination in the URL and restores t
   await mockAdminApi(page, {
     'GET /api/v1/admin/logs': (request: Request) => {
       requests.push(requestParams(request))
-      return { items: [], total: 120, page: Number(new URL(request.url()).searchParams.get('page') ?? 1), page_size: 50 }
+      return { items: [], total: 120, page: Number(new URL(request.url()).searchParams.get('page') ?? 1), page_size: 50, ecosystems: [{ id: 'pypi', count: 80 }, { id: 'npm', count: 40 }] }
     },
   })
 
@@ -23,13 +23,16 @@ test('Access Logs keeps applied filters and pagination in the URL and restores t
   })
   await expect(page.getByLabel(/按包名搜索访问日志|Search access logs by package/)).toHaveValue('requests')
 
-  await page.getByLabel(/生态|Ecosystem/).selectOption('npm')
+  // Chips add to the choice: PyPI stays on and npm joins it.
+  const chips = page.getByRole('group', { name: /按生态筛选|Filter by ecosystem/ })
+  await expect(chips.locator('[data-ecosystem-chip="pypi"]')).toHaveAttribute('aria-pressed', 'true')
+  await chips.locator('[data-ecosystem-chip="npm"]').click()
   await expect(page).toHaveURL(/package=requests/)
-  await expect(page).toHaveURL(/ecosystem=npm/)
+  await expect(page).toHaveURL(/ecosystem=pypi%2Cnpm/)
   await expect(page).not.toHaveURL(/page=2/)
   await expect.poll(() => requests.at(-1)).toMatchObject({
     search: 'requests',
-    adapter_type: 'npm',
+    adapter_type: 'pypi,npm',
     hit: 'true',
     page: '1',
   })
@@ -255,3 +258,54 @@ for (const exportCase of [
     expect(calls).toBe(2)
   })
 }
+
+test('Access Logs filter several ecosystems, a time window, and refresh in place', async ({ page }) => {
+  const requests: Array<Record<string, string>> = []
+  await page.clock.install({ time: new Date('2026-11-16T12:00:00.000Z') })
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/logs': (request: Request) => {
+      requests.push(requestParams(request))
+      return { items: [], total: 0, page: 1, page_size: 50, ecosystems: [{ id: 'pypi', count: 812 }, { id: 'npm', count: 301 }, { id: 'apt', count: 98 }] }
+    },
+  })
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/admin/logs')
+
+  // Chips name each ecosystem with its count, biggest first, and add up.
+  const chips = page.getByRole('group', { name: '按生态筛选' })
+  await expect(chips.locator('[data-ecosystem-chip]')).toHaveText([/全部生态\s*1,211/, /PyPI\s*812/, /npm\s*301/, /APT\s*98/])
+  await chips.locator('[data-ecosystem-chip="pypi"]').click()
+  await chips.locator('[data-ecosystem-chip="apt"]').click()
+  await expect.poll(() => requests.at(-1)?.adapter_type).toBe('pypi,apt')
+  await expect(chips.locator('[data-ecosystem-chip="all"]')).toHaveAttribute('aria-pressed', 'false')
+
+  // A preset is a window ending at the moment it was chosen.
+  const time = page.getByRole('group', { name: '时间范围' })
+  await time.locator('[data-time-preset="7d"]').click()
+  await expect(page).toHaveURL(/range=7d/)
+  await expect.poll(() => requests.at(-1)?.start).toBeDefined()
+  const week = requests.at(-1) as Record<string, string>
+  expect(Date.parse(week.end) - Date.parse(week.start)).toBe(7 * 24 * 60 * 60 * 1000)
+
+  // Refresh moves a preset window to now.
+  await page.clock.runFor(60_000)
+  await page.getByRole('button', { name: '刷新', exact: true }).click()
+  await expect.poll(() => Date.parse(requests.at(-1)?.end ?? '') - Date.parse(week.end)).toBeGreaterThanOrEqual(60_000)
+  await expect(page.locator('[data-refresh-updated]')).toContainText('更新于')
+
+  // A custom range is applied from the popover and survives a reload.
+  await time.locator('[data-time-preset="custom"]').click()
+  const custom = page.locator('[data-time-custom]')
+  await custom.getByLabel('开始').fill('2026-11-10T08:00')
+  await custom.getByLabel('结束').fill('2026-11-10T06:00')
+  await expect(custom.getByRole('alert')).toContainText('结束时间不能早于开始时间')
+  await expect(custom.getByRole('button', { name: '应用' })).toBeDisabled()
+  await custom.getByLabel('结束').fill('2026-11-11T08:00')
+  await custom.getByRole('button', { name: '应用' }).click()
+  await expect(page).toHaveURL(/range=custom/)
+  await expect.poll(() => Date.parse(requests.at(-1)?.end ?? '') - Date.parse(requests.at(-1)?.start ?? '')).toBe(24 * 60 * 60 * 1000)
+  await expect(time.locator('[data-time-preset="custom"]')).toHaveAttribute('aria-pressed', 'true')
+  await page.reload()
+  await expect(time.locator('[data-time-preset="custom"]')).toHaveAttribute('aria-pressed', 'true')
+  await expect.poll(() => requests.at(-1)?.adapter_type).toBe('pypi,apt')
+})

@@ -571,6 +571,27 @@ const en = {
     },
 
     // Dashboard
+    filters: {
+      ecosystems: 'Filter by ecosystem',
+      allEcosystems: 'All ecosystems',
+      ecosystemChip: '{{name}}, {{count}} rows',
+      timeRange: 'Time range',
+      time1h: '1 hour',
+      time24h: '24 hours',
+      time7d: '7 days',
+      time30d: '30 days',
+      timeAll: 'All time',
+      timeCustom: 'Custom',
+      timeCustomTitle: 'Custom time range',
+      timeStart: 'From',
+      timeEnd: 'To',
+      timeCustomHint: 'Fill one side only to leave the other open',
+      timeEndBeforeStart: 'The end cannot be before the start',
+      now: 'now',
+      apply: 'Apply',
+      refresh: 'Refresh',
+      updatedAt: 'Updated {{time}}',
+    },
     common: {
       loadFailed: 'Could not load data',
       retry: 'Retry',

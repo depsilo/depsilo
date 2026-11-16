@@ -366,7 +366,7 @@ func TestHistoryListRejectsInvalidAndMismatchedCursors(t *testing.T) {
 	for subject := uint(71); subject <= 72; subject++ {
 		mustRecordHistory(t, history, historyObservation(subject, ResultUnchanged, observedAt))
 	}
-	page := mustListHistory(t, history, HistoryQuery{Limit: 1, Ecosystem: "pypi"})
+	page := mustListHistory(t, history, HistoryQuery{Limit: 1, Ecosystems: []string{"pypi"}})
 	if page.NextCursor == "" {
 		t.Fatal("first page did not return a cursor")
 	}
@@ -377,10 +377,10 @@ func TestHistoryListRejectsInvalidAndMismatchedCursors(t *testing.T) {
 		query HistoryQuery
 	}{
 		{name: "malformed cursor", query: HistoryQuery{Limit: 1, Cursor: "not-a-cursor"}},
-		{name: "filter mismatch", query: HistoryQuery{Limit: 1, Cursor: page.NextCursor, Ecosystem: "npm"}},
-		{name: "cursor and offset", query: HistoryQuery{Limit: 1, Cursor: page.NextCursor, LegacyOffset: &zero, Ecosystem: "pypi"}},
+		{name: "filter mismatch", query: HistoryQuery{Limit: 1, Cursor: page.NextCursor, Ecosystems: []string{"npm"}}},
+		{name: "cursor and offset", query: HistoryQuery{Limit: 1, Cursor: page.NextCursor, LegacyOffset: &zero, Ecosystems: []string{"pypi"}}},
 		{name: "unknown result", query: HistoryQuery{Limit: 1, Result: "success"}},
-		{name: "ecosystem filter too long", query: HistoryQuery{Limit: 1, Ecosystem: strings.Repeat("e", eventEcosystemLimit+1)}},
+		{name: "ecosystem filter too long", query: HistoryQuery{Limit: 1, Ecosystems: []string{strings.Repeat("e", eventEcosystemLimit+1)}}},
 		{name: "upstream filter too long", query: HistoryQuery{Limit: 1, Upstream: strings.Repeat("u", eventUpstreamLimit+1)}},
 		{name: "package filter too long", query: HistoryQuery{Limit: 1, Package: strings.Repeat("p", eventPackageLimit+1)}},
 	}
@@ -525,5 +525,51 @@ func TestHistoryConcurrentRecordsDoNotLoseOccurrences(t *testing.T) {
 	page := mustListHistory(t, history, HistoryQuery{Limit: 10})
 	if page.Total != 1 || len(page.Items) != 1 || page.Items[0].OccurrenceCount != writers {
 		t.Fatalf("concurrent page = %+v", page)
+	}
+}
+
+func TestHistoryWindowKeepsEpisodesThatOverlapIt(t *testing.T) {
+	history, database := newHistoryContractTestSubject(t)
+	day := time.Date(2026, 7, 20, 0, 0, 0, 0, time.UTC)
+	// A coalesced episode first seen before the window but still seen in it.
+	mustRecordHistory(t, history, historyObservation(81, ResultUnchanged, day.Add(-48*time.Hour)))
+	mustRecordHistory(t, history, historyObservation(81, ResultUnchanged, day.Add(2*time.Hour)))
+	// An event entirely before the window.
+	old := historyObservation(82, ResultUpdated, day.Add(-72*time.Hour))
+	old.Ecosystem = "npm"
+	mustRecordHistory(t, history, old)
+	// A legacy row (zero last_seen_at) inside the window, in another ecosystem.
+	legacy := db.UpstreamUpdateEvent{Ecosystem: "cargo", Upstream: "primary", Package: "serde", Result: ResultUpdated, CreatedAt: day.Add(3 * time.Hour)}
+	if err := database.Create(&legacy).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Model(&db.UpstreamUpdateEvent{}).Where("id = ?", legacy.ID).
+		UpdateColumns(map[string]any{"last_seen_at": time.Time{}}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	window := HistoryQuery{Limit: 10, Since: day, Until: day.Add(24 * time.Hour)}
+	page := mustListHistory(t, history, window)
+	if page.Total != 2 {
+		t.Fatalf("window total = %d, want the overlapping episode and the legacy row", page.Total)
+	}
+
+	scoped := window
+	scoped.Ecosystems = []string{"pypi", "npm"}
+	if page := mustListHistory(t, history, scoped); page.Total != 1 || page.Items[0].Ecosystem != "pypi" {
+		t.Fatalf("scoped page = %+v", page)
+	}
+	counts, err := history.EcosystemCounts(context.Background(), scoped)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Counts keep the window but not the ecosystem choice.
+	want := []EcosystemCount{{ID: "cargo", Count: 1}, {ID: "pypi", Count: 1}}
+	if len(counts) != 2 || counts[0] != want[0] || counts[1] != want[1] {
+		t.Fatalf("counts = %+v, want %+v", counts, want)
+	}
+
+	if _, err := history.List(context.Background(), HistoryQuery{Limit: 1, Since: day, Until: day.Add(-time.Hour)}); !errors.Is(err, ErrInvalidHistoryQuery) {
+		t.Fatalf("reversed window error = %v", err)
 	}
 }

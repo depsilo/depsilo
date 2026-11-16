@@ -1,4 +1,7 @@
 import { Input } from '@/components/ui/input'
+import EcosystemChips from '@/admin/components/EcosystemChips'
+import RefreshControl from '@/admin/components/RefreshControl'
+import { serializeEcosystemList } from '@/admin/listFilters'
 import { TableContainer, Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
@@ -18,7 +21,6 @@ import { useAppToast } from '@/components/Toast'
 import AdminPage from '@/admin/components/AdminPage'
 import AdminPagination from '@/admin/components/AdminPagination'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
-import { operatorEcosystems } from '@/admin/operatorEcosystems'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { adminApi } from '@/lib/api'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
@@ -47,14 +49,15 @@ export default function CacheIndexes() {
   const appliedSearch = packageFilter
   const [seenPackage, setSeenPackage] = useState(packageFilter)
   if (seenPackage !== packageFilter) { setSeenPackage(packageFilter); setSearch(packageFilter) }
-  const [adapterType, setAdapterType] = useState('all')
+  const [ecosystems, setEcosystems] = useState<string[]>([])
   const [status, setStatus] = useState<'all' | CacheIndexStatus>('all')
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<CacheIndexEntry | null>(null)
 
   const params: CacheIndexQuery = { page, page_size: PAGE_SIZE }
   if (appliedSearch) params.search = appliedSearch
-  if (adapterType !== 'all') params.adapter_type = adapterType
+  const adapterTypes = serializeEcosystemList(ecosystems)
+  if (adapterTypes) params.adapter_type = adapterTypes
   if (status !== 'all') params.status = status
 
   const query = useQuery({
@@ -96,17 +99,17 @@ export default function CacheIndexes() {
   function clearFilters() {
     setSearch('')
     setSearchParams({})
-    setAdapterType('all')
+    setEcosystems([])
     setStatus('all')
     setPage(1)
   }
 
-  const hasFilters = Boolean(appliedSearch || adapterType !== 'all' || status !== 'all')
+  const hasFilters = Boolean(appliedSearch || ecosystems.length > 0 || status !== 'all')
 
   const selectedItem = items.find(item => item.id === selected?.id) ?? selected
 
   return (
-    <AdminPage description={t('cacheIndexes.subtitle')} actions={<Button variant="outline" disabled={query.isFetching} onClick={() => query.refetch()}><Icon name="refresh" size="sm" />{t('cacheIndexes.reload')}</Button>}>
+    <AdminPage description={t('cacheIndexes.subtitle')} actions={<RefreshControl updatedAt={query.dataUpdatedAt} fetching={query.isFetching} onRefresh={() => { void query.refetch() }} />}>
       <div className="space-y-6">
         {query.isRefetchError && query.data && <StaleDataNotice message={t('cacheIndexes.staleNotice')} onRefresh={() => query.refetch()} />}
         {response && <section aria-label={t('cacheIndexes.summaryTitle')} className="flex flex-wrap gap-x-6 gap-y-3 border-b pb-4">
@@ -121,12 +124,12 @@ export default function CacheIndexes() {
           <Input className="min-w-0 flex-1 sm:basis-60" aria-label={t('cacheIndexes.searchLabel')} placeholder={t('cacheIndexes.searchPlaceholder')} value={search} onChange={event => setSearch(event.target.value)} />
           <Button type="submit" variant="outline" className="shrink-0 sm:order-last">{t('search')}</Button>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:contents">
-          <NativeSelect className="sm:w-auto" aria-label={t('cacheIndexes.ecosystemFilter')} value={adapterType} onChange={event => {setAdapterType(event.target.value);setPage(1)}}><option value="all">{t('cacheIndexes.allEcosystems')}</option>{operatorEcosystems.map(ecosystem => <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>)}</NativeSelect>
+          <div className="flex min-w-0 flex-col gap-2 sm:contents">
           <NativeSelect className="sm:w-auto" aria-label={t('cacheIndexes.statusFilter')} value={status} onChange={event => {setStatus(event.target.value as typeof status);setPage(1)}}><option value="all">{t('cacheIndexes.allStatuses')}</option><option value="fresh">{t('cacheIndexes.statusFresh')}</option><option value="stale">{t('cacheIndexes.statusStale')}</option></NativeSelect>
           </div>
           {hasFilters && <Button type="button" variant="ghost" className="sm:order-last" onClick={clearFilters}>{t('cacheIndexes.clearFilters')}</Button>}
         </form>
+        <EcosystemChips counts={response?.ecosystems} selected={ecosystems} onChange={ids => { setEcosystems(ids); setPage(1) }} />
         <p className="text-xs text-muted-foreground">{t('cacheIndexes.freshnessHint')}</p>
         {query.isPending ? <div role="status" className="py-12 text-center text-muted-foreground">{t('loading')}</div> : query.isError && !query.data ? <QueryErrorState message={errorMessage} onRetry={() => query.refetch()} /> : items.length === 0 ? (
           <Empty><EmptyHeader><EmptyMedia variant="icon"><Icon name="inventory_2" size="sm" /></EmptyMedia><EmptyTitle>{t(hasFilters ? 'cacheIndexes.emptyTitle' : 'cacheIndexes.emptyUnfilteredTitle')}</EmptyTitle><EmptyDescription>{t(hasFilters ? 'cacheIndexes.emptyHint' : 'cacheIndexes.emptyUnfilteredHint')}</EmptyDescription></EmptyHeader></Empty>

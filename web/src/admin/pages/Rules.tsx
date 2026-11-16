@@ -1,4 +1,5 @@
 import { Toggle } from '@/components/ui/toggle'
+import RefreshControl from '@/admin/components/RefreshControl'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Field, FieldLabel } from '@/components/ui/field'
@@ -363,6 +364,7 @@ export default function Rules() {
       description={t('rules.subtitle')}
       actions={(
         <>
+          <RefreshControl updatedAt={query.dataUpdatedAt} fetching={query.isFetching} onRefresh={() => { void query.refetch() }} />
           <Button variant="ghost" size="sm" onClick={() => { setTestOpen(true); setTestResult(null) }}><Icon name="science" size="sm" />{t('rules.testRule')}</Button>
           {canWrite && <Button onClick={openCreate}><Icon name="add" size="sm" />{t('rules.addRule')}</Button>}
         </>

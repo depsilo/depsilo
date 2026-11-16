@@ -76,7 +76,11 @@ func (h *CacheHandler) ListIndexes(c *gin.Context) {
 	page := parseIntParam(c, "page", 1, 1, 100000)
 	pageSize := parseIntParam(c, "page_size", 50, 1, 200)
 	search := strings.TrimSpace(c.Query("search"))
-	adapterType := strings.TrimSpace(c.Query("adapter_type"))
+	adapterTypes, err := parseEcosystemFilter(c, "adapter_type")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": err.Error()})
+		return
+	}
 	status := strings.TrimSpace(c.Query("status"))
 	if status != "" && status != "fresh" && status != "stale" {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": "status must be fresh or stale"})
@@ -84,21 +88,26 @@ func (h *CacheHandler) ListIndexes(c *gin.Context) {
 	}
 
 	now := time.Now().UTC()
-	query := h.db.WithContext(c.Request.Context()).Model(&db.CacheEntry{}).
-		Where("cache_kind = ?", db.CacheKindMetadata).
-		Where("NOT (adapter_type = ? AND key LIKE ?)", "huggingface", "huggingface/__query__/%")
-	if search != "" {
-		like := "%" + search + "%"
-		query = query.Where("package_name LIKE ? OR key LIKE ?", like, like)
+	// Ecosystem counts reuse every filter except the ecosystem one.
+	filtered := func(withEcosystems bool) *gorm.DB {
+		query := h.db.WithContext(c.Request.Context()).Model(&db.CacheEntry{}).
+			Where("cache_kind = ?", db.CacheKindMetadata).
+			Where("NOT (adapter_type = ? AND key LIKE ?)", "huggingface", "huggingface/__query__/%")
+		if search != "" {
+			like := "%" + search + "%"
+			query = query.Where("package_name LIKE ? OR key LIKE ?", like, like)
+		}
+		if withEcosystems && len(adapterTypes) > 0 {
+			query = query.Where("adapter_type IN ?", adapterTypes)
+		}
+		if status == "fresh" {
+			query = query.Where("expires_at > ?", now)
+		} else if status == "stale" {
+			query = query.Where("expires_at <= ?", now)
+		}
+		return query
 	}
-	if adapterType != "" && adapterType != "all" {
-		query = query.Where("adapter_type = ?", adapterType)
-	}
-	if status == "fresh" {
-		query = query.Where("expires_at > ?", now)
-	} else if status == "stale" {
-		query = query.Where("expires_at <= ?", now)
-	}
+	query := filtered(true)
 
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
@@ -140,9 +149,15 @@ func (h *CacheHandler) ListIndexes(c *gin.Context) {
 		return
 	}
 
+	ecosystems, err := countByEcosystem(filtered(false), "adapter_type")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"items": items, "total": total, "page": page, "page_size": pageSize,
-		"summary": summary,
+		"summary": summary, "ecosystems": ecosystems,
 	})
 }
 
@@ -364,9 +379,15 @@ func (h *CacheHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	search := c.Query("search")
-	adapterType := c.Query("adapter_type")
-	if adapterType == "" {
-		adapterType = c.Query("type")
+	adapterTypes, err := parseEcosystemFilter(c, "adapter_type", "type")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": err.Error()})
+		return
+	}
+	kind := c.Query("cache_kind")
+	if kind != "" && kind != string(db.CacheKindArtifact) && kind != string(db.CacheKindMetadata) {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": "invalid cache kind"})
+		return
 	}
 
 	if page < 1 {
@@ -374,20 +395,21 @@ func (h *CacheHandler) List(c *gin.Context) {
 	}
 	offset := (page - 1) * pageSize
 
-	query := h.db.WithContext(c.Request.Context()).Model(&db.CacheEntry{})
-	if kind := c.Query("cache_kind"); kind != "" {
-		if kind != string(db.CacheKindArtifact) && kind != string(db.CacheKindMetadata) {
-			c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": "invalid cache kind"})
-			return
+	// Ecosystem counts reuse every filter except the ecosystem one.
+	filtered := func(withEcosystems bool) *gorm.DB {
+		query := h.db.WithContext(c.Request.Context()).Model(&db.CacheEntry{})
+		if kind != "" {
+			query = query.Where("cache_kind = ?", kind)
 		}
-		query = query.Where("cache_kind = ?", kind)
+		if search != "" {
+			query = query.Where("key LIKE ?", "%"+search+"%")
+		}
+		if withEcosystems && len(adapterTypes) > 0 {
+			query = query.Where("adapter_type IN ?", adapterTypes)
+		}
+		return query
 	}
-	if search != "" {
-		query = query.Where("key LIKE ?", "%"+search+"%")
-	}
-	if adapterType != "" {
-		query = query.Where("adapter_type = ?", adapterType)
-	}
+	query := filtered(true)
 
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
@@ -401,11 +423,18 @@ func (h *CacheHandler) List(c *gin.Context) {
 		return
 	}
 
+	ecosystems, err := countByEcosystem(filtered(false), "adapter_type")
+	if err != nil {
+		h.readError(c, err)
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"total":     total,
-		"page":      page,
-		"page_size": pageSize,
-		"items":     entries,
+		"total":      total,
+		"page":       page,
+		"page_size":  pageSize,
+		"items":      entries,
+		"ecosystems": ecosystems,
 	})
 }
 

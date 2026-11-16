@@ -40,25 +40,35 @@ func NewQuarantineHandler(database *gorm.DB, store *quarantine.Store, approvalsE
 type quarantineEventResp struct {
 	Items []db.QuarantineEvent `json:"items"`
 	Total int64                `json:"total"`
+	// Ecosystems counts the events every other filter matches, per ecosystem.
+	Ecosystems []ecosystemCount `json:"ecosystems"`
 }
 
 func (h *QuarantineHandler) ListEvents(c *gin.Context) {
 	limit := parseIntParam(c, "limit", 50, 1, 500)
 	offset := parseIntParam(c, "offset", 0, 0, 100000)
-	ecosystem := strings.TrimSpace(c.Query("ecosystem"))
+	ecosystems, err := parseEcosystemFilter(c, "ecosystem")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": err.Error()})
+		return
+	}
 	action := strings.TrimSpace(c.Query("action"))
 	pkg := strings.TrimSpace(c.Query("package"))
 
-	q := h.db.WithContext(c.Request.Context()).Model(&db.QuarantineEvent{})
-	if ecosystem != "" {
-		q = q.Where("ecosystem = ?", ecosystem)
+	filtered := func(withEcosystems bool) *gorm.DB {
+		q := h.db.WithContext(c.Request.Context()).Model(&db.QuarantineEvent{})
+		if withEcosystems && len(ecosystems) > 0 {
+			q = q.Where("ecosystem IN ?", ecosystems)
+		}
+		if action != "" {
+			q = q.Where("action = ?", action)
+		}
+		if pkg != "" {
+			q = q.Where("package LIKE ?", "%"+pkg+"%")
+		}
+		return q
 	}
-	if action != "" {
-		q = q.Where("action = ?", action)
-	}
-	if pkg != "" {
-		q = q.Where("package LIKE ?", "%"+pkg+"%")
-	}
+	q := filtered(true)
 
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
@@ -71,7 +81,12 @@ func (h *QuarantineHandler) ListEvents(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, quarantineEventResp{Items: items, Total: total})
+	counts, err := countByEcosystem(filtered(false), "ecosystem")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, quarantineEventResp{Items: items, Total: total, Ecosystems: counts})
 }
 
 // ── GET /admin/quarantine/approvals ───────────────────────────────

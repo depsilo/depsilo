@@ -1,4 +1,5 @@
 import { TableContainer, Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
+import { isKnownEcosystemId } from '@/admin/operatorEcosystems'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
@@ -21,7 +22,6 @@ import { NativeSelect } from '@/components/ui/native-select'
 import AdminPage from '@/admin/components/AdminPage'
 import AdminPagination from '@/admin/components/AdminPagination'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
-import { operatorEcosystems } from '@/admin/operatorEcosystems'
 import { getApiError } from '@/lib/apiError'
 import { downloadBlob } from '@/lib/download'
 import { copyText } from '@/lib/clipboard'
@@ -29,10 +29,17 @@ import { useAppToast } from '@/components/Toast'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { AccessLog, AccessLogDetail, AccessLogQuery } from '@/lib/adminApi.types'
 import { ecosystemLabel } from '@/admin/operatorEcosystems'
+import EcosystemChips from '@/admin/components/EcosystemChips'
+import RefreshControl from '@/admin/components/RefreshControl'
+import TimeRangeControl from '@/admin/components/TimeRangeControl'
+import { parseEcosystemList, parseTimeRange, resolveTimeWindow, serializeEcosystemList, writeTimeRange, type TimePreset, type TimeRangeValue } from '@/admin/listFilters'
 
 function latencyColor(ms: number): string {
   return ms >= 1000 ? 'var(--warn-text)' : 'var(--text-soft)'
 }
+
+/** Access logs open on everything Depsilo still holds, as before. */
+const DEFAULT_RANGE: TimePreset = 'all'
 
 function parsePage(value: string | null): number {
   if (value === null || !/^[1-9]\d*$/.test(value)) return 1
@@ -52,9 +59,10 @@ function canonicalizeSearchParams(current: URLSearchParams): URLSearchParams {
   if (packageName) next.set('package', packageName)
   else next.delete('package')
 
-  const ecosystem = current.get('ecosystem')?.trim() ?? ''
-  if (operatorEcosystems.some(item => item.id === ecosystem)) next.set('ecosystem', ecosystem)
+  const ecosystems = serializeEcosystemList(parseEcosystemList(current.get('ecosystem'), id => isKnownEcosystemId(id)))
+  if (ecosystems) next.set('ecosystem', ecosystems)
   else next.delete('ecosystem')
+  writeTimeRange(next, parseTimeRange(current, DEFAULT_RANGE), DEFAULT_RANGE)
 
   const result = current.get('result')
   if (result === 'hit' || result === 'miss' || result === 'unknown') next.set('result', result)
@@ -78,7 +86,11 @@ export default function AccessLogs() {
   const serializedCanonicalSearchParams = canonicalSearchParams.toString()
   const searchParamsRef = useRef(canonicalSearchParams)
   const appliedSearch = canonicalSearchParams.get('package') ?? ''
-  const adapterType = canonicalSearchParams.get('ecosystem') ?? 'all'
+  const ecosystems = parseEcosystemList(canonicalSearchParams.get('ecosystem'), id => isKnownEcosystemId(id))
+  const timeRange = parseTimeRange(canonicalSearchParams, DEFAULT_RANGE)
+  // Presets count back from this moment; refreshing moves it to now.
+  const [anchor, setAnchor] = useState(() => Date.now())
+  const timeWindow = resolveTimeWindow(timeRange, anchor)
   const hitFilter = canonicalSearchParams.get('result') ?? 'all'
   const page = parsePage(canonicalSearchParams.get('page'))
   const [search, setSearch] = useState(appliedSearch)
@@ -98,7 +110,10 @@ export default function AccessLogs() {
 
   const params: AccessLogQuery = { page, page_size: 50 }
   if (appliedSearch) Object.assign(params, { search: appliedSearch })
-  if (adapterType !== 'all') params.adapter_type = adapterType
+  const adapterTypes = serializeEcosystemList(ecosystems)
+  if (adapterTypes) params.adapter_type = adapterTypes
+  if (timeWindow.start) params.start = timeWindow.start
+  if (timeWindow.end) params.end = timeWindow.end
   if (hitFilter === 'hit') params.hit = true
   if (hitFilter === 'miss') params.hit = false
   if (hitFilter === 'unknown') params.result = 'unknown'
@@ -155,7 +170,27 @@ export default function AccessLogs() {
       next.delete('package')
       next.delete('ecosystem')
       next.delete('result')
+      writeTimeRange(next, { preset: DEFAULT_RANGE }, DEFAULT_RANGE)
     })
+  }
+
+  function setEcosystems(ids: string[]) {
+    updateParams((next) => {
+      const value = serializeEcosystemList(ids)
+      if (value) next.set('ecosystem', value)
+      else next.delete('ecosystem')
+    })
+  }
+
+  function setTimeRange(value: TimeRangeValue) {
+    setAnchor(Date.now())
+    updateParams((next) => writeTimeRange(next, value, DEFAULT_RANGE))
+  }
+
+  function refresh() {
+    // A relative window moves to now (a new query); a fixed one refetches.
+    if (timeRange.preset !== 'custom' && timeRange.preset !== 'all') setAnchor(Date.now())
+    else void refetch()
   }
 
   function setPage(nextPage: number) {
@@ -188,15 +223,14 @@ export default function AccessLogs() {
     else toast.show({ tone: 'danger', message: t('logs.copyFailed') })
   }
 
-  const hasFilters = Boolean(appliedSearch || adapterType !== 'all' || hitFilter !== 'all')
+  const hasFilters = Boolean(appliedSearch || ecosystems.length > 0 || hitFilter !== 'all' || timeRange.preset !== DEFAULT_RANGE)
   const cacheResult = (row: AccessLog) => row.cache_result || (row.hit ? 'hit' : 'unknown')
 
   return (
     <AdminPage
       description={t('logs.subtitle')}
       actions={<>
-        {dataUpdatedAt > 0 && <span className="text-[12px] text-muted-foreground">{t('logs.updatedAt', { time: formatTime(new Date(dataUpdatedAt).toISOString()) })}</span>}
-        <Button variant="outline" size="sm" disabled={isFetching} onClick={() => { void refetch() }}><Icon name="refresh" size="sm" />{t('now.refresh')}</Button>
+        <RefreshControl updatedAt={dataUpdatedAt} fetching={isFetching} onRefresh={refresh} />
         <Button
           type="button"
           variant="outline"
@@ -228,20 +262,7 @@ export default function AccessLogs() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:contents">
-            <NativeSelect
-              className="min-h-10 sm:w-auto"
-              aria-label={t('audit.ecosystem')}
-              value={adapterType}
-              onChange={(event) => updateParams((next) => {
-                if (event.target.value === 'all') next.delete('ecosystem')
-                else next.set('ecosystem', event.target.value)
-              })}
-            >
-              <option value="all">{t('all')}</option>
-              {operatorEcosystems.map(ecosystem => <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>)}
-            </NativeSelect>
-
+        <div className="flex min-w-0 flex-col gap-2 sm:contents">
             <NativeSelect
               className="min-h-10 sm:w-auto"
               aria-label={t('audit.result')}
@@ -256,6 +277,7 @@ export default function AccessLogs() {
               <option value="miss">{t('logs.miss')}</option>
               <option value="unknown">{t('logs.unknown')}</option>
             </NativeSelect>
+            <TimeRangeControl value={timeRange} onChange={setTimeRange} />
         </div>
 
         {hasFilters && (
@@ -264,6 +286,7 @@ export default function AccessLogs() {
           </Button>
         )}
       </form>
+      <EcosystemChips counts={data?.data.ecosystems} selected={ecosystems} onChange={setEcosystems} />
 
       {isPending ? (
         <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>

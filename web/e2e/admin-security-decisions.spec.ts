@@ -85,13 +85,13 @@ test('event details hand off an exact coordinate and explain permanent age appro
 test('quarantine filters survive reload and readonly users can inspect evidence without approving', async ({ page }) => {
   await mockAdminApi(page, {
     'GET /api/v1/auth/me': { id: 2, username: 'reader', role: 'readonly', enabled: true, auth_method: 'jwt', token_permissions: null, can_write: false },
-    'GET /api/v1/admin/quarantine/events': { items: [event], total: 1 },
+    'GET /api/v1/admin/quarantine/events': { items: [event], total: 1, ecosystems: [{ id: 'pypi', count: 1 }] },
   })
   await page.setViewportSize({ width: 320, height: 900 })
   await page.goto('/admin/quarantine?tab=events&package=review-package&ecosystem=pypi&action=blocked')
   await page.reload()
   await expect(page.getByRole('textbox', { name: '按包名搜索' })).toHaveValue('review-package')
-  await expect(page.getByRole('combobox', { name: '生态', exact: true })).toHaveValue('pypi')
+  await expect(page.getByRole('group', { name: '按生态筛选' }).locator('[data-ecosystem-chip="pypi"]')).toHaveAttribute('aria-pressed', 'true')
   await page.getByRole('button', { name: '查看事件详情' }).click()
   await expect(page.getByRole('dialog')).toContainText('Minimum release age not reached')
   await expect(page.getByRole('dialog').getByRole('link', { name: '新建放行' })).toHaveCount(0)

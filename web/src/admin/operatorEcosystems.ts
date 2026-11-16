@@ -35,6 +35,11 @@ const adapterAliases: Readonly<Record<string, OperatorEcosystemId>> = {
   crates: 'cargo',
 }
 
+/** Whether an id names a known Ecosystem or one of its adapter aliases. */
+export function isKnownEcosystemId(id: string): boolean {
+  return Object.hasOwn(adapterAliases, id) || operatorEcosystems.some(ecosystem => ecosystem.id === id)
+}
+
 /**
  * The product name for an adapter id ("pypi" → "PyPI", "crates" → "Cargo"),
  * falling back to the id for an adapter this build does not know. Tables and

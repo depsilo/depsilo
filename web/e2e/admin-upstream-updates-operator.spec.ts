@@ -38,7 +38,9 @@ function updatePage(
   nextCursor: string | null = null,
   total = items.length,
 ): AdminUpstreamUpdateListResponse {
-  return { items, total, next_cursor: nextCursor }
+  // Ecosystem counts ignore the ecosystem filter, so every page offers the
+  // same chips.
+  return { items, total, next_cursor: nextCursor, ecosystems: [{ id: 'pypi', count: 2 }, { id: 'npm', count: 1 }] }
 }
 
 interface CapturedQuery {
@@ -121,7 +123,7 @@ test('trims package search, sends server filters, resets cursors, and clears fil
   const toolbar = page.locator('[data-upstream-updates-toolbar]')
   const search = toolbar.getByLabel('Search packages')
   await search.fill('  requests  ')
-  await toolbar.getByLabel('Ecosystem').selectOption('pypi')
+  await page.getByRole('group', { name: 'Filter by ecosystem' }).locator('[data-ecosystem-chip="pypi"]').click()
   await toolbar.getByLabel('Result').selectOption('updated')
 
   await expect.poll(() => queries.slice(filteredRequestStart).some(query => (

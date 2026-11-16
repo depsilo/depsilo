@@ -32,13 +32,25 @@ func (h *UpstreamUpdateHandler) List(c *gin.Context) {
 		return
 	}
 
+	ecosystems, err := parseEcosystemFilter(c, "ecosystem")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": err.Error()})
+		return
+	}
+	window, err := parseTimeWindow(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": err.Error()})
+		return
+	}
 	query := upstreamupdates.HistoryQuery{
-		Limit:     parseIntParam(c, "limit", 50, 1, 500),
-		Cursor:    strings.TrimSpace(c.Query("cursor")),
-		Ecosystem: strings.TrimSpace(c.Query("ecosystem")),
-		Upstream:  strings.TrimSpace(c.Query("upstream")),
-		Package:   strings.TrimSpace(c.Query("package")),
-		Result:    strings.TrimSpace(c.Query("result")),
+		Limit:      parseIntParam(c, "limit", 50, 1, 500),
+		Cursor:     strings.TrimSpace(c.Query("cursor")),
+		Ecosystems: ecosystems,
+		Upstream:   strings.TrimSpace(c.Query("upstream")),
+		Package:    strings.TrimSpace(c.Query("package")),
+		Result:     strings.TrimSpace(c.Query("result")),
+		Since:      window.Start,
+		Until:      window.End,
 	}
 	if _, present := c.GetQuery("offset"); present {
 		offset := parseIntParam(c, "offset", 0, 0, 100000)
@@ -58,18 +70,29 @@ func (h *UpstreamUpdateHandler) List(c *gin.Context) {
 		return
 	}
 
+	counts, err := h.history.EcosystemCounts(c.Request.Context(), query)
+	if err != nil {
+		writeUpstreamUpdateInternalError(c)
+		return
+	}
+	if counts == nil {
+		counts = []upstreamupdates.EcosystemCount{}
+	}
+
 	var nextCursor *string
 	if page.NextCursor != "" {
 		nextCursor = &page.NextCursor
 	}
 	c.JSON(http.StatusOK, struct {
-		Items      []upstreamupdates.HistoryEvent `json:"items"`
-		Total      int64                          `json:"total"`
-		NextCursor *string                        `json:"next_cursor"`
+		Items      []upstreamupdates.HistoryEvent   `json:"items"`
+		Total      int64                            `json:"total"`
+		NextCursor *string                          `json:"next_cursor"`
+		Ecosystems []upstreamupdates.EcosystemCount `json:"ecosystems"`
 	}{
 		Items:      page.Items,
 		Total:      page.Total,
 		NextCursor: nextCursor,
+		Ecosystems: counts,
 	})
 }
 

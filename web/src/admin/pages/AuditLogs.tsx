@@ -1,5 +1,5 @@
-import { Toggle } from '@/components/ui/toggle'
 import { TableContainer, Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
+import { isKnownEcosystemId } from '@/admin/operatorEcosystems'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -22,13 +22,16 @@ import SiemExportersSection from '@/admin/components/SiemExportersSection'
 import AuditIntegrityNotice from '@/admin/components/AuditIntegrityNotice'
 import AdminPagination from '@/admin/components/AdminPagination'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
-import { operatorEcosystems } from '@/admin/operatorEcosystems'
 import { getApiError } from '@/lib/apiError'
 import { downloadBlob } from '@/lib/download'
 import { useAppToast } from '@/components/Toast'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { AuditLog, AuditLogQuery } from '@/lib/adminApi.types'
 import { ecosystemLabel } from '@/admin/operatorEcosystems'
+import EcosystemChips from '@/admin/components/EcosystemChips'
+import RefreshControl from '@/admin/components/RefreshControl'
+import TimeRangeControl from '@/admin/components/TimeRangeControl'
+import { parseEcosystemList, parseTimeRange, resolveTimeWindow, serializeEcosystemList, writeTimeRange, type TimePreset, type TimeRangeValue } from '@/admin/listFilters'
 
 function resultBadge(result: string, t: (k: string) => string) {
   if (result === 'hit') return <Badge variant="success">{t('audit.hit')}</Badge>
@@ -39,13 +42,8 @@ function resultBadge(result: string, t: (k: string) => string) {
   return <Badge>{result || '-'}</Badge>
 }
 
-function getTimeRange(preset: string) {
-  const now = new Date(); const end = now.toISOString(); const start = new Date(now)
-  if (preset === 'today') start.setHours(0, 0, 0, 0)
-  else if (preset === '7d') start.setDate(start.getDate() - 7)
-  else if (preset === '30d') start.setDate(start.getDate() - 30)
-  return { start: start.toISOString(), end }
-}
+/** The audit log opens on the last day, as its former "today" did. */
+const DEFAULT_RANGE: TimePreset = '24h'
 
 function parsePage(value: string | null): number {
   if (value === null || !/^[1-9]\d*$/.test(value)) return 1
@@ -59,17 +57,15 @@ function canonicalizeSearchParams(current: URLSearchParams): URLSearchParams {
   if (packageName) next.set('package', packageName)
   else next.delete('package')
 
-  const ecosystem = current.get('ecosystem')?.trim() ?? ''
-  if (ecosystem === 'admin' || operatorEcosystems.some(item => item.id === ecosystem)) next.set('ecosystem', ecosystem)
+  const ecosystems = serializeEcosystemList(parseEcosystemList(current.get('ecosystem'), id => id === 'admin' || isKnownEcosystemId(id)))
+  if (ecosystems) next.set('ecosystem', ecosystems)
   else next.delete('ecosystem')
 
   const result = current.get('result')
   if (result === 'hit' || result === 'miss' || result === 'success' || result === 'error' || result === 'blocked') next.set('result', result)
   else next.delete('result')
 
-  const range = current.get('range')
-  if (range === '7d' || range === '30d') next.set('range', range)
-  else next.delete('range')
+  writeTimeRange(next, parseTimeRange(current, DEFAULT_RANGE), DEFAULT_RANGE)
 
   const page = parsePage(current.get('page'))
   if (page > 1) next.set('page', String(page))
@@ -86,14 +82,15 @@ export default function AuditLogs() {
   const serializedCanonicalSearchParams = canonicalSearchParams.toString()
   const searchParamsRef = useRef(canonicalSearchParams)
   const appliedSearch = canonicalSearchParams.get('package') ?? ''
-  const ecosystem = canonicalSearchParams.get('ecosystem') ?? 'all'
+  const ecosystems = parseEcosystemList(canonicalSearchParams.get('ecosystem'), id => id === 'admin' || isKnownEcosystemId(id))
   const resultFilter = canonicalSearchParams.get('result') ?? 'all'
-  const timeRange = canonicalSearchParams.get('range') ?? 'today'
+  const timeRange = parseTimeRange(canonicalSearchParams, DEFAULT_RANGE)
+  // Presets count back from this moment; refreshing moves it to now.
+  const [anchor, setAnchor] = useState(() => Date.now())
   const page = parsePage(canonicalSearchParams.get('page'))
   const [search, setSearch] = useState(appliedSearch)
   const [selectedEvent, setSelectedEvent] = useState<AuditLog | null>(null)
   const deliveryView = searchParams.get('view') === 'delivery'
-  const windowRef = useRef({ preset: timeRange, ...getTimeRange(timeRange) })
   function setView(delivery: boolean) {
     setSearchParams(current => { const next = new URLSearchParams(current); if (delivery) next.set('view', 'delivery'); else next.delete('view'); return next })
   }
@@ -112,11 +109,11 @@ export default function AuditLogs() {
   }, [appliedSearch])
 
   function buildParams(): AuditLogQuery {
-    if (windowRef.current.preset !== timeRange) windowRef.current = { preset: timeRange, ...getTimeRange(timeRange) }
-    const range = windowRef.current
-    const params: AuditLogQuery = { page, page_size: 50, start: range.start, end: range.end }
+    const timeWindow = resolveTimeWindow(timeRange, anchor)
+    const params: AuditLogQuery = { page, page_size: 50, ...timeWindow }
     if (appliedSearch) params.package = appliedSearch
-    if (ecosystem !== 'all') params.ecosystem = ecosystem
+    const ecosystemFilter = serializeEcosystemList(ecosystems)
+    if (ecosystemFilter) params.ecosystem = ecosystemFilter
     if (resultFilter === 'hit') params.result = 'hit'
     if (resultFilter === 'miss') params.result = 'miss'
     if (resultFilter === 'success') params.result = 'success'
@@ -126,7 +123,7 @@ export default function AuditLogs() {
   }
 
   const { data, error, isPending, isError, isSuccess, isFetching, dataUpdatedAt, isRefetchError, refetch } = useQuery({
-    queryKey: ['admin', 'audit-logs', appliedSearch, ecosystem, resultFilter, timeRange, page],
+    queryKey: ['admin', 'audit-logs', buildParams()],
     queryFn: async ({ signal }) => {
       const appliedParams = buildParams()
       const response = await adminApi.listAuditLogs(appliedParams, { signal })
@@ -187,12 +184,26 @@ export default function AuditLogs() {
   }
 
   function refreshRecords() {
-    windowRef.current = { preset: timeRange, ...getTimeRange(timeRange) }
-    void refetch()
+    // A relative window moves to now (a new query); a fixed one refetches.
+    if (timeRange.preset !== 'custom' && timeRange.preset !== 'all') setAnchor(Date.now())
+    else void refetch()
+  }
+
+  function setEcosystems(ids: string[]) {
+    updateParams((next) => {
+      const value = serializeEcosystemList(ids)
+      if (value) next.set('ecosystem', value)
+      else next.delete('ecosystem')
+    })
+  }
+
+  function setTimeRange(value: TimeRangeValue) {
+    setAnchor(Date.now())
+    updateParams((next) => writeTimeRange(next, value, DEFAULT_RANGE))
   }
 
   const hasFilters = Boolean(
-    appliedSearch || ecosystem !== 'all' || resultFilter !== 'all' || timeRange !== 'today',
+    appliedSearch || ecosystems.length > 0 || resultFilter !== 'all' || timeRange.preset !== DEFAULT_RANGE,
   )
 
   // Audit logs moved to open-source on 2026-06-28 — the page no longer
@@ -210,8 +221,7 @@ export default function AuditLogs() {
       actions={<>
         <Button variant="outline" size="sm" onClick={() => setView(!deliveryView)}>{t(deliveryView ? 'audit.records' : 'audit.delivery')}</Button>
         {!deliveryView && <>
-        {dataUpdatedAt > 0 && <span className="text-[12px] text-muted-foreground">{t('logs.updatedAt', { time: formatTime(new Date(dataUpdatedAt).toISOString()) })}</span>}
-        <Button variant="outline" size="sm" disabled={isFetching} onClick={refreshRecords}><Icon name="refresh" size="sm" />{t('now.refresh')}</Button>
+        <RefreshControl updatedAt={dataUpdatedAt} fetching={isFetching} onRefresh={refreshRecords} />
         <Button
           type="button"
           variant="outline"
@@ -244,21 +254,7 @@ export default function AuditLogs() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:contents">
-            <NativeSelect
-              className="min-h-10 sm:w-auto"
-              aria-label={t('audit.ecosystem')}
-              value={ecosystem}
-              onChange={(event) => updateParams((next) => {
-                if (event.target.value === 'all') next.delete('ecosystem')
-                else next.set('ecosystem', event.target.value)
-              })}
-            >
-              <option value="all">{t('all')}</option>
-              <option value="admin">{t('audit.management')}</option>
-              {operatorEcosystems.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
-            </NativeSelect>
-
+        <div className="flex min-w-0 flex-col gap-2 sm:contents">
             <NativeSelect
               className="min-h-10 sm:w-auto"
               aria-label={t('audit.result')}
@@ -275,30 +271,9 @@ export default function AuditLogs() {
               <option value="error">{t('audit.error')}</option>
               <option value="blocked">{t('audit.blocked')}</option>
             </NativeSelect>
+            <TimeRangeControl value={timeRange} onChange={setTimeRange} />
         </div>
 
-        <fieldset className="flex min-h-10 items-center gap-1" aria-label={t('audit.timeRange')}>
-          <legend className="sr-only">{t('audit.timeRange')}</legend>
-          {(['today', '7d', '30d'] as const).map(r => (
-            <Toggle
-              type="button"
-              key={r}
-              onPressedChange={() => updateParams((next) => {
-                if (r === 'today') next.delete('range')
-                else next.set('range', r)
-              })}
-              pressed={timeRange === r}
-              className="px-2.5 py-1 text-[12px] rounded-sm transition-[background,color,border-color,transform] duration-150 cursor-pointer active:scale-[0.96] min-h-[40px]"
-              style={{
-                background: timeRange === r ? 'var(--btn)' : 'transparent',
-                color: timeRange === r ? 'var(--btn-fg)' : 'var(--text-soft)',
-                border: timeRange === r ? 'none' : '1px solid var(--border)',
-              }}
-            >
-              {r === 'today' ? t('audit.today') : r === '7d' ? t('audit.days7') : t('audit.days30')}
-            </Toggle>
-          ))}
-        </fieldset>
 
         {hasFilters && (
           <Button type="button" variant="ghost" className="sm:order-last" onClick={clearFilters}>
@@ -306,6 +281,12 @@ export default function AuditLogs() {
           </Button>
         )}
       </form>
+      <EcosystemChips
+        counts={data?.data.ecosystems}
+        selected={ecosystems}
+        onChange={setEcosystems}
+        labelFor={id => (id === 'admin' ? t('audit.management') : undefined)}
+      />
 
       {isPending ? (
         <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>

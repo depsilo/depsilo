@@ -10,7 +10,8 @@ import (
 
 // Query holds the filter parameters for audit log queries.
 type Query struct {
-	Ecosystem   string
+	// Ecosystems keeps rows in any of these ecosystems; empty means all.
+	Ecosystems  []string
 	PackageName string
 	ClientIP    string
 	CacheResult string
@@ -36,29 +37,7 @@ func RunQuery(database *gorm.DB, q Query) (*QueryResult, error) {
 		q.PageSize = 50
 	}
 
-	query := database.Model(&db.AuditLog{})
-
-	if q.Ecosystem != "" {
-		query = query.Where("ecosystem = ?", q.Ecosystem)
-	}
-	if q.PackageName != "" {
-		query = query.Where("package_name LIKE ?", "%"+q.PackageName+"%")
-	}
-	if q.ClientIP != "" {
-		query = query.Where("client_ip = ?", q.ClientIP)
-	}
-	if q.CacheResult != "" {
-		query = query.Where("cache_result = ?", q.CacheResult)
-	}
-	if !q.StartTime.IsZero() {
-		// Compare via datetime() so SQLite normalises both sides to UTC
-		// regardless of how they were originally stored (with offset, with Z,
-		// or naive). Plain string compare would mis-rank "...+08:00" vs "...Z".
-		query = query.Where("datetime(created_at) >= datetime(?)", q.StartTime.UTC())
-	}
-	if !q.EndTime.IsZero() {
-		query = query.Where("datetime(created_at) <= datetime(?)", q.EndTime.UTC())
-	}
+	query := filter(database, q, true)
 
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
@@ -86,10 +65,19 @@ func RunQuery(database *gorm.DB, q Query) (*QueryResult, error) {
 // RunExportQuery returns filtered audit rows, capped at 10,000. HTTP-layer
 // DTO mapping and credential policy are deliberately applied by the caller.
 func RunExportQuery(database *gorm.DB, q Query) ([]db.AuditLog, error) {
-	query := database.Model(&db.AuditLog{})
+	query := filter(database, q, true)
 
-	if q.Ecosystem != "" {
-		query = query.Where("ecosystem = ?", q.Ecosystem)
+	var items []db.AuditLog
+	err := query.Order("datetime(created_at) DESC").Limit(10000).Find(&items).Error
+	return items, err
+}
+
+// filter applies q to the audit table. Ecosystem counts skip the ecosystem
+// condition so every choice reports what it would show.
+func filter(database *gorm.DB, q Query, withEcosystems bool) *gorm.DB {
+	query := database.Model(&db.AuditLog{})
+	if withEcosystems && len(q.Ecosystems) > 0 {
+		query = query.Where("ecosystem IN ?", q.Ecosystems)
 	}
 	if q.PackageName != "" {
 		query = query.Where("package_name LIKE ?", "%"+q.PackageName+"%")
@@ -101,13 +89,32 @@ func RunExportQuery(database *gorm.DB, q Query) ([]db.AuditLog, error) {
 		query = query.Where("cache_result = ?", q.CacheResult)
 	}
 	if !q.StartTime.IsZero() {
+		// Compare via datetime() so SQLite normalises both sides to UTC
+		// regardless of how they were originally stored (with offset, with Z,
+		// or naive). Plain string compare would mis-rank "...+08:00" vs "...Z".
 		query = query.Where("datetime(created_at) >= datetime(?)", q.StartTime.UTC())
 	}
 	if !q.EndTime.IsZero() {
 		query = query.Where("datetime(created_at) <= datetime(?)", q.EndTime.UTC())
 	}
+	return query
+}
 
-	var items []db.AuditLog
-	err := query.Order("datetime(created_at) DESC").Limit(10000).Find(&items).Error
-	return items, err
+// EcosystemCount is how many audit rows an ecosystem holds under a query.
+type EcosystemCount struct {
+	ID    string `json:"id"`
+	Count int64  `json:"count"`
+}
+
+// EcosystemCounts counts the rows q matches per ecosystem, ignoring q's own
+// ecosystem filter, by descending count.
+func EcosystemCounts(database *gorm.DB, q Query) ([]EcosystemCount, error) {
+	var rows []EcosystemCount
+	err := filter(database, q, false).
+		Select("ecosystem AS id, COUNT(*) AS count").
+		Where("ecosystem <> ''").
+		Group("ecosystem").
+		Order("count DESC, id").
+		Scan(&rows).Error
+	return rows, err
 }

@@ -1,4 +1,9 @@
 import { TableContainer, Table, TableHeader, TableRow, TableBody, TableHead, TableCell } from '@/components/ui/table'
+import { isKnownEcosystemId } from '@/admin/operatorEcosystems'
+import EcosystemChips from '@/admin/components/EcosystemChips'
+import RefreshControl from '@/admin/components/RefreshControl'
+import { parseEcosystemList, serializeEcosystemList } from '@/admin/listFilters'
+import type { EcosystemCount } from '@/lib/adminApi.types'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Field, FieldLabel } from '@/components/ui/field'
@@ -56,7 +61,6 @@ type ApprovedVersion = {
   created_at: string
 }
 
-const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker', 'huggingface']
 const ACTIONS = ['blocked', 'malware_blocked', 'tamper_detected', 'served_eligible', 'bypassed', 'malware_bypassed', 'warned', 'malware_warned', 'approved', 'approval_revoked', 'override_created', 'override_revoked']
 const PAGE_SIZE = 50
 
@@ -125,7 +129,7 @@ export default function Quarantine() {
   const pageNumber = (value: string | null) => Math.max(1, Number.isSafeInteger(Number(value)) ? Number(value) : 1)
   const eventsPage = pageNumber(params.get('page'))
   const approvalsPage = pageNumber(params.get('approvals_page'))
-  const ecoFilter = params.get('ecosystem') || 'all'
+  const ecoFilter = parseEcosystemList(params.get('ecosystem'), id => isKnownEcosystemId(id))
   const actionFilter = params.get('action') || 'all'
   const pkgSearch = params.get('package') || ''
   function updateParams(patch: Record<string, string>) {
@@ -141,7 +145,8 @@ export default function Quarantine() {
 
   // ── Data ──────────────────────────────────────────────────────
   const eventsParams: Record<string, string | number> = { limit: PAGE_SIZE, offset: (eventsPage - 1) * PAGE_SIZE }
-  if (ecoFilter !== 'all') eventsParams.ecosystem = ecoFilter
+  const ecosystemParam = serializeEcosystemList(ecoFilter)
+  if (ecosystemParam) eventsParams.ecosystem = ecosystemParam
   if (actionFilter !== 'all') eventsParams.action = actionFilter
   if (pkgSearch.trim()) eventsParams.package = pkgSearch.trim()
 
@@ -149,7 +154,7 @@ export default function Quarantine() {
     queryKey: ['admin', 'quarantine', 'events', eventsParams],
     queryFn: async ({ signal }) => {
       const res = await adminApi.listQuarantineEvents(eventsParams, { signal })
-      return res.data as { items: QuarantineEvent[]; total: number }
+      return res.data as { items: QuarantineEvent[]; total: number; ecosystems?: EcosystemCount[] }
     },
     enabled: tab === 'events',
     refetchInterval: 30_000,
@@ -182,7 +187,16 @@ export default function Quarantine() {
 
   // ── Render ────────────────────────────────────────────────────
   return (
-    <AdminPage description={t('quarantine.subtitle')}>
+    <AdminPage
+      description={t('quarantine.subtitle')}
+      actions={tab === 'blocklist' ? undefined : (
+        <RefreshControl
+          updatedAt={tab === 'events' ? eventsQ.dataUpdatedAt : approvalsQ.dataUpdatedAt}
+          fetching={tab === 'events' ? eventsQ.isFetching : approvalsQ.isFetching}
+          onRefresh={() => { void (tab === 'events' ? eventsQ.refetch() : approvalsQ.refetch()) }}
+        />
+      )}
+    >
     <div className="space-y-6">
       <div className="max-w-xs">
           <Field>
@@ -205,7 +219,7 @@ export default function Quarantine() {
         page={eventsPage}
         setPage={setEventsPage}
         ecoFilter={ecoFilter}
-        setEcoFilter={value => updateParams({ ecosystem: value, page: '1' })}
+        setEcoFilter={ids => updateParams({ ecosystem: serializeEcosystemList(ids) ?? '', page: '1' })}
         actionFilter={actionFilter}
         setActionFilter={value => updateParams({ action: value, page: '1' })}
         pkgSearch={pkgSearch}
@@ -266,12 +280,12 @@ export default function Quarantine() {
 function EventsTab(props: {
   eventsQ: ReturnType<typeof useQuery>
   page: number; setPage: (page: number) => void
-  ecoFilter: string; setEcoFilter: (v: string) => void
+  ecoFilter: string[]; setEcoFilter: (ids: string[]) => void
   actionFilter: string; setActionFilter: (v: string) => void
   pkgSearch: string; setPkgSearch: (v: string) => void
 }) {
   const { t } = useTranslation()
-  const data = props.eventsQ.data as { items: QuarantineEvent[]; total: number } | undefined
+  const data = props.eventsQ.data as { items: QuarantineEvent[]; total: number; ecosystems?: EcosystemCount[] } | undefined
   const items = data?.items ?? []
   const [searchDraft, setSearchDraft] = useState(props.pkgSearch)
   const [selected, setSelected] = useState<QuarantineEvent | null>(null)
@@ -292,13 +306,7 @@ function EventsTab(props: {
           />
           <Button type="submit" variant="outline" className="min-h-10 shrink-0 sm:order-last">{t('search')}</Button>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:contents">
-        <NativeSelect className="min-h-10 sm:min-h-9 sm:w-auto" aria-label={t('quarantine.col.ecosystem')} value={props.ecoFilter} onChange={(event) => (props.setEcoFilter)(event.target.value)}>
-          {([
-            { value: 'all', label: t('quarantine.filter.all_ecosystems') },
-            ...ECOSYSTEMS.map((eco) => ({ value: eco, label: ecosystemLabel(eco) })),
-          ]).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-        </NativeSelect>
+        <div className="flex min-w-0 flex-col gap-2 sm:contents">
         <NativeSelect className="min-h-10 sm:min-h-9 sm:w-auto" aria-label={t('quarantine.col.action')} value={props.actionFilter} onChange={(event) => (props.setActionFilter)(event.target.value)}>
           {([
             { value: 'all', label: t('quarantine.filter.all_actions') },
@@ -307,6 +315,7 @@ function EventsTab(props: {
         </NativeSelect>
         </div>
       </form>
+      <EcosystemChips counts={data?.ecosystems} selected={props.ecoFilter} onChange={props.setEcoFilter} />
 
       {/* Table */}
       {props.eventsQ.isPending ? (

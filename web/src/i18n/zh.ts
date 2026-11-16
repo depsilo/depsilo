@@ -571,6 +571,27 @@ const zh = {
     },
 
     // Dashboard
+    filters: {
+      ecosystems: '按生态筛选',
+      allEcosystems: '全部生态',
+      ecosystemChip: '{{name}}，{{count}} 条',
+      timeRange: '时间范围',
+      time1h: '1 小时',
+      time24h: '24 小时',
+      time7d: '7 天',
+      time30d: '30 天',
+      timeAll: '全部时间',
+      timeCustom: '自定义',
+      timeCustomTitle: '自定义时间范围',
+      timeStart: '开始',
+      timeEnd: '结束',
+      timeCustomHint: '只填一端表示从该时间起或到该时间止',
+      timeEndBeforeStart: '结束时间不能早于开始时间',
+      now: '现在',
+      apply: '应用',
+      refresh: '刷新',
+      updatedAt: '更新于 {{time}}',
+    },
     common: {
       loadFailed: '加载失败',
       retry: '重试',

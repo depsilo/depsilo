@@ -228,8 +228,15 @@ export interface AccessLogDetail extends AccessLog {
   audit_events: AccessLogAuditEvent[]
 }
 
-export interface AccessLogQuery { page?: number; page_size?: number; search?: string; adapter_type?: string; hit?: boolean; result?: 'hit' | 'miss' | 'unknown' }
-export interface AccessLogListResponse { items: AccessLog[]; total: number; page: number; page_size: number }
+/**
+ * One entry of a list's ecosystem facet: how many rows every other filter
+ * matches in that ecosystem. Lists return it so filters can show counts.
+ */
+export interface EcosystemCount { id: string; count: number }
+
+/** Ecosystem filters accept several ids, sent comma-separated (`pypi,npm`). */
+export interface AccessLogQuery { page?: number; page_size?: number; search?: string; adapter_type?: string; hit?: boolean; result?: 'hit' | 'miss' | 'unknown'; start?: string; end?: string }
+export interface AccessLogListResponse { items: AccessLog[]; total: number; page: number; page_size: number; ecosystems?: EcosystemCount[] }
 
 export interface RecentDownload {
   id: number
@@ -247,7 +254,7 @@ export interface RecentDownloadsResponse { items: RecentDownload[] }
 
 export interface CacheQuery { page?: number; page_size?: number; search?: string; adapter_type?: string; cache_kind?: 'artifact' | 'metadata' }
 export interface CacheEntry { cache_kind?: 'artifact' | 'metadata'; id: number; key: string; adapter_type: string; package_name: string; size: number; hit_count: number; last_accessed: string; expires_at: string }
-export interface CacheListResponse { items: CacheEntry[]; total: number; page: number; page_size: number }
+export interface CacheListResponse { items: CacheEntry[]; total: number; page: number; page_size: number; ecosystems?: EcosystemCount[] }
 export interface CacheDeleteResponse {
   message: string
   deleted: number
@@ -429,6 +436,7 @@ export interface CacheIndexListResponse {
   page: number
   page_size: number
   summary: CacheIndexSummary[]
+  ecosystems?: EcosystemCount[]
 }
 export interface CacheIndexRefreshResponse {
   message: string
@@ -462,7 +470,7 @@ export interface AuditLogQuery {
   start?: string
   end?: string
 }
-export interface AuditLogListResponse { items: AuditLog[]; total: number; page: number }
+export interface AuditLogListResponse { items: AuditLog[]; total: number; page: number; ecosystems?: EcosystemCount[] }
 
 export type AuditExporterKind = 'ndjson' | 'splunk_hec'
 
@@ -1076,6 +1084,7 @@ export interface AdminUpstreamUpdateListResponse {
   items: AdminUpstreamUpdateEvent[]
   total: number
   next_cursor?: string | null
+  ecosystems?: EcosystemCount[]
 }
 
 export interface AdminUpstreamUpdateQuery {
@@ -1086,6 +1095,8 @@ export interface AdminUpstreamUpdateQuery {
   upstream?: string
   result?: UpstreamUpdateResult
   package?: string
+  start?: string
+  end?: string
 }
 
 export interface SetupRequest {

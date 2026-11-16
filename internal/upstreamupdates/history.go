@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -68,10 +69,15 @@ type HistoryQuery struct {
 	Limit        int
 	Cursor       string
 	LegacyOffset *int
-	Ecosystem    string
-	Upstream     string
-	Package      string
-	Result       string
+	// Ecosystems keeps events in any of these ecosystems; empty means all.
+	Ecosystems []string
+	Upstream   string
+	Package    string
+	Result     string
+	// Since and Until keep events whose observed span overlaps the window;
+	// a zero value leaves that side open.
+	Since time.Time
+	Until time.Time
 }
 
 // HistoryEvent is the read-only domain projection returned to API adapters.
@@ -295,7 +301,9 @@ type normalizedHistoryQuery struct {
 	limit        int
 	cursor       string
 	legacyOffset *int
-	ecosystem    string
+	ecosystems   []string
+	since        time.Time
+	until        time.Time
 	upstream     string
 	packageName  string
 	result       string
@@ -334,11 +342,24 @@ func normalizeHistoryQuery(query HistoryQuery) (normalizedHistoryQuery, error) {
 	if result != "" && !validHistoryResult(result) {
 		return normalizedHistoryQuery{}, fmt.Errorf("%w: unsupported result", ErrInvalidHistoryQuery)
 	}
-	ecosystem := strings.TrimSpace(query.Ecosystem)
+	ecosystems := make([]string, 0, len(query.Ecosystems))
+	for _, value := range query.Ecosystems {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if len(value) > eventEcosystemLimit {
+			return normalizedHistoryQuery{}, fmt.Errorf("%w: filter is too long", ErrInvalidHistoryQuery)
+		}
+		ecosystems = append(ecosystems, value)
+	}
+	sort.Strings(ecosystems)
+	if !query.Since.IsZero() && !query.Until.IsZero() && query.Until.Before(query.Since) {
+		return normalizedHistoryQuery{}, fmt.Errorf("%w: until is before since", ErrInvalidHistoryQuery)
+	}
 	upstream := strings.TrimSpace(query.Upstream)
 	packageName := strings.TrimSpace(query.Package)
-	if len(ecosystem) > eventEcosystemLimit ||
-		len(upstream) > eventUpstreamLimit ||
+	if len(upstream) > eventUpstreamLimit ||
 		len(packageName) > eventPackageLimit {
 		return normalizedHistoryQuery{}, fmt.Errorf("%w: filter is too long", ErrInvalidHistoryQuery)
 	}
@@ -346,7 +367,9 @@ func normalizeHistoryQuery(query HistoryQuery) (normalizedHistoryQuery, error) {
 		limit:        limit,
 		cursor:       cursor,
 		legacyOffset: offset,
-		ecosystem:    ecosystem,
+		ecosystems:   ecosystems,
+		since:        query.Since.UTC(),
+		until:        query.Until.UTC(),
 		upstream:     upstream,
 		packageName:  packageName,
 		result:       result,
@@ -361,20 +384,43 @@ func validHistoryResult(result string) bool {
 
 func historyFilterFingerprint(query normalizedHistoryQuery) string {
 	canonical := struct {
-		Ecosystem string `json:"ecosystem"`
-		Upstream  string `json:"upstream"`
-		Package   string `json:"package"`
-		Result    string `json:"result"`
-	}{query.ecosystem, query.upstream, query.packageName, query.result}
+		Ecosystems []string `json:"ecosystems"`
+		Upstream   string   `json:"upstream"`
+		Package    string   `json:"package"`
+		Result     string   `json:"result"`
+		Since      string   `json:"since,omitempty"`
+		Until      string   `json:"until,omitempty"`
+	}{query.ecosystems, query.upstream, query.packageName, query.result, formatWindowBound(query.since), formatWindowBound(query.until)}
 	payload, _ := json.Marshal(canonical)
 	sum := sha256.Sum256(payload)
 	return hex.EncodeToString(sum[:])
 }
 
+func formatWindowBound(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.Format(time.RFC3339Nano)
+}
+
 func (h *History) filtered(ctx context.Context, query normalizedHistoryQuery) *gorm.DB {
+	return h.filteredExcept(ctx, query, true)
+}
+
+// filteredExcept applies query; ecosystem counts pass withEcosystems=false so
+// every ecosystem reports what choosing it would show.
+func (h *History) filteredExcept(ctx context.Context, query normalizedHistoryQuery, withEcosystems bool) *gorm.DB {
 	database := h.database.WithContext(ctx).Model(&db.UpstreamUpdateEvent{})
-	if query.ecosystem != "" {
-		database = database.Where("ecosystem = ?", query.ecosystem)
+	if withEcosystems && len(query.ecosystems) > 0 {
+		database = database.Where("ecosystem IN ?", query.ecosystems)
+	}
+	// An event spans its first observation (created_at) to its last
+	// (last_seen_at, zero for legacy rows); keep it when that span overlaps.
+	if !query.since.IsZero() {
+		database = database.Where("COALESCE(NULLIF(last_seen_at, ?), created_at) >= ?", time.Time{}, query.since)
+	}
+	if !query.until.IsZero() {
+		database = database.Where("created_at <= ?", query.until)
 	}
 	if query.upstream != "" {
 		database = database.Where("upstream = ?", query.upstream)
@@ -548,4 +594,31 @@ func truncateUTF8(value string, limit int) string {
 		value = value[:len(value)-1]
 	}
 	return value
+}
+
+// EcosystemCount is how many events an ecosystem holds under a query.
+type EcosystemCount struct {
+	ID    string `json:"id"`
+	Count int64  `json:"count"`
+}
+
+// EcosystemCounts counts the events query matches per ecosystem, ignoring
+// its own ecosystem filter and pagination, by descending count.
+func (h *History) EcosystemCounts(ctx context.Context, query HistoryQuery) ([]EcosystemCount, error) {
+	query.Cursor, query.LegacyOffset = "", nil
+	normalized, err := normalizeHistoryQuery(query)
+	if err != nil {
+		return nil, err
+	}
+	var rows []EcosystemCount
+	err = h.filteredExcept(ctx, normalized, false).
+		Select("ecosystem AS id, COUNT(*) AS count").
+		Where("ecosystem <> ''").
+		Group("ecosystem").
+		Order("count DESC, id").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("count upstream update history by ecosystem: %w", err)
+	}
+	return rows, nil
 }

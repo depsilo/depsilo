@@ -65,7 +65,8 @@ test('upstream update history renders episode counts and loads the next cursor p
   await page.goto('/admin/upstream-updates')
 
   const toolbar = page.locator('[data-upstream-updates-toolbar]')
-  await expect(toolbar.getByLabel('生态').locator('option[value="all"]')).toHaveText('全部生态')
+  await expect(toolbar).toBeVisible()
+  await expect(page.getByRole('group', { name: '按生态筛选' }).locator('[data-ecosystem-chip="all"]')).toContainText('全部生态')
   const table = page.locator('[data-upstream-update-table]')
   await expect(table.getByRole('cell', { name: 'requests', exact: true })).toBeVisible()
   await expect(table.getByText('×3', { exact: true })).toHaveAttribute('aria-label', '检查次数：3')

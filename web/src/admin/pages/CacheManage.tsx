@@ -1,4 +1,7 @@
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import EcosystemChips from '@/admin/components/EcosystemChips'
+import RefreshControl from '@/admin/components/RefreshControl'
+import { serializeEcosystemList } from '@/admin/listFilters'
 import { TableContainer, Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Field, FieldLabel } from '@/components/ui/field'
@@ -28,7 +31,7 @@ import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import ConfirmActionDialog from '@/admin/components/ConfirmActionDialog'
 import SnapshotSection from '@/admin/components/SnapshotSection'
 import DownloadTransfers from '@/admin/components/DownloadTransfers'
-import { ecosystemLabel, operatorEcosystems } from '@/admin/operatorEcosystems'
+import { ecosystemLabel } from '@/admin/operatorEcosystems'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
 import { readLocalStorage, writeLocalStorage } from '@/lib/storage'
@@ -58,7 +61,7 @@ export default function CacheManage() {
   const [search, setSearch] = useState('')
   const [appliedSearch, setAppliedSearch] = useState('')
   const [kind, setKind] = useState<'all' | 'artifact' | 'metadata'>('all')
-  const [adapterType, setAdapterType] = useState('all')
+  const [ecosystems, setEcosystems] = useState<string[]>([])
   const [page, setPage] = useState(1)
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
   const [cleanupOpen, setCleanupOpen] = useState(false)
@@ -74,7 +77,8 @@ export default function CacheManage() {
   const params: CacheQuery = { page, page_size: 20 }
   if (appliedSearch) params.search = appliedSearch
   if (kind !== 'all') params.cache_kind = kind
-  if (adapterType !== 'all') params.adapter_type = adapterType
+  const adapterTypes = serializeEcosystemList(ecosystems)
+  if (adapterTypes) params.adapter_type = adapterTypes
 
   const distributionQuery = useQuery({
     queryKey: ['admin', 'cache', 'distribution'],
@@ -85,7 +89,7 @@ export default function CacheManage() {
   const distData = distributionQuery.data
   const distribution = distData?.data
 
-  const { data, error, isPending, isError, isRefetchError, isSuccess, isFetching, refetch } = useQuery({
+  const { data, error, isPending, isError, isRefetchError, isSuccess, isFetching, dataUpdatedAt, refetch } = useQuery({
     queryKey: ['admin', 'cache', params],
     queryFn: ({ signal }) => adminApi.listCache(params, { signal }),
     retry: false,
@@ -161,8 +165,10 @@ export default function CacheManage() {
   const items = data?.data?.items || []
   const total = data?.data?.total || 0
   const selectedEntry = items.find(item => item.id === deleteTarget)
-  const hasFilters = Boolean(appliedSearch || adapterType !== 'all' || kind !== 'all')
-  function clearFilters() { setSearch(''); setAppliedSearch(''); setAdapterType('all'); setKind('all'); setPage(1) }
+  const hasFilters = Boolean(appliedSearch || ecosystems.length > 0 || kind !== 'all')
+  function clearFilters() { setSearch(''); setAppliedSearch(''); setEcosystems([]); setKind('all'); setPage(1) }
+  function chooseEcosystems(ids: string[]) { setEcosystems(ids); setPage(1) }
+  function refreshAll() { void refetch(); void distributionQuery.refetch() }
   const apiError = getApiError(error)
   const errorMessage = apiError.status === 403 ? t('common.permissionDenied') : apiError.message
   const distributionApiError = getApiError(distributionQuery.error)
@@ -171,8 +177,10 @@ export default function CacheManage() {
   return (
     <AdminPage
       description={t('cache.subtitle')}
-      actions={canWrite ? (
+      actions={(
         <>
+          <RefreshControl updatedAt={dataUpdatedAt} fetching={isFetching || distributionQuery.isFetching} onRefresh={refreshAll} />
+          {canWrite && <>
           <Button type="button" variant="outline" size="sm" onClick={() => { setWarmupOpen(true); setWarmupState({ status: 'idle' }) }}>
             <Icon name="download" size="sm" />
             {t('cache.warmup')}
@@ -181,8 +189,9 @@ export default function CacheManage() {
             <Icon name="delete_sweep" size="sm" />
             {t('cache.cleanExpired')}
           </Button>
+          </>}
         </>
-      ) : undefined}
+      )}
     >
       <div className="space-y-6">
       <section aria-label={t('cache.storageOverview')} className="space-y-3">
@@ -222,15 +231,12 @@ export default function CacheManage() {
           />
           <Button type="submit" variant="outline" className="shrink-0 sm:order-last">{t('search')}</Button>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:contents">
-          <NativeSelect className="min-h-10 sm:w-auto" aria-label={t('cache.ecosystemFilter')} value={adapterType} onChange={(e) => { setAdapterType(e.target.value); setPage(1) }}>
-            <option value="all">{t('all')}</option>
-            {operatorEcosystems.map(ecosystem => <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>)}
-          </NativeSelect>
+        <div className="flex min-w-0 flex-col gap-2 sm:contents">
         <NativeSelect className="min-h-10 sm:w-auto" aria-label={t('cache.kindFilter')} value={kind} onChange={event => { setKind(event.target.value as typeof kind); setPage(1) }}><option value="all">{t('cache.allKinds')}</option><option value="artifact">{t('cache.artifact')}</option><option value="metadata">{t('cache.metadata')}</option></NativeSelect>
         </div>
         {hasFilters && <Button type="button" variant="ghost" className="sm:order-last" onClick={clearFilters}>{t('cache.clearFilters')}</Button>}
       </form>
+      <EcosystemChips counts={data?.data.ecosystems} selected={ecosystems} onChange={chooseEcosystems} />
 
       <div data-cache-list>
       {isPending ? (

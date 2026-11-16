@@ -1,4 +1,5 @@
 import { ecosystemLabel } from '@/admin/operatorEcosystems'
+import { isKnownEcosystemId } from '@/admin/operatorEcosystems'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { TableContainer, Table, TableCaption, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty'
@@ -11,7 +12,10 @@ import { useTranslation } from 'react-i18next'
 
 import AdminPage from '@/admin/components/AdminPage'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
-import { standardUpstreamEcosystems } from '@/admin/operatorEcosystems'
+import EcosystemChips from '@/admin/components/EcosystemChips'
+import TimeRangeControl from '@/admin/components/TimeRangeControl'
+import { parseEcosystemList, parseTimeRange, resolveTimeWindow, serializeEcosystemList, writeTimeRange, type TimePreset, type TimeRangeValue } from '@/admin/listFilters'
+import { formatTime as formatClock } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import EcosystemIcon from '@/components/EcosystemIcon'
@@ -33,6 +37,9 @@ import {
 
 type ResultFilter = 'all' | UpstreamUpdateResult
 
+/** Refresh records open on everything kept, as before. */
+const DEFAULT_RANGE: TimePreset = 'all'
+
 const updateResults: UpstreamUpdateResult[] = ['error', 'updated', 'unchanged']
 
 function isUpdateResult(value: string | null): value is UpstreamUpdateResult {
@@ -53,10 +60,13 @@ export default function UpstreamUpdates() {
 
   const locale = i18n.resolvedLanguage?.startsWith('zh') ? 'zh-CN' : 'en-US'
   const packageFilter = searchParams.get('package')?.trim() ?? ''
-  const requestedEcosystem = searchParams.get('ecosystem')?.trim() ?? ''
-  const ecosystemFilter = standardUpstreamEcosystems.some(
-    ecosystem => ecosystem.id === requestedEcosystem,
-  ) ? requestedEcosystem : 'all'
+  const ecosystems = parseEcosystemList(searchParams.get('ecosystem'), id => isKnownEcosystemId(id))
+  const ecosystemFilter = serializeEcosystemList(ecosystems) ?? 'all'
+  const timeRange = parseTimeRange(searchParams, DEFAULT_RANGE)
+  // Presets count back from this moment; a manual refresh moves it to now.
+  const [anchor, setAnchor] = useState(() => Date.now())
+  // The list polls every 30 s for new events, so a preset stays open-ended.
+  const timeWindow = resolveTimeWindow(timeRange, anchor, { openEnd: true })
   const requestedResult = searchParams.get('result')
   const resultFilter: ResultFilter = isUpdateResult(requestedResult)
     ? requestedResult
@@ -88,8 +98,10 @@ export default function UpstreamUpdates() {
     if (packageFilter) params.package = packageFilter
     if (ecosystemFilter !== 'all') params.ecosystem = ecosystemFilter
     if (resultFilter !== 'all') params.result = resultFilter
+    if (timeWindow.start) params.start = timeWindow.start
+    if (timeWindow.end) params.end = timeWindow.end
     return params
-  }, [ecosystemFilter, packageFilter, resultFilter])
+  }, [ecosystemFilter, packageFilter, resultFilter, timeWindow.start, timeWindow.end])
 
   const queryKey = ['admin', 'upstream-updates', filterQuery] as const
   const query = useInfiniteQuery({
@@ -127,6 +139,7 @@ export default function UpstreamUpdates() {
   const hasFilters = Boolean(packageFilter)
     || ecosystemFilter !== 'all'
     || resultFilter !== 'all'
+    || timeRange.preset !== DEFAULT_RANGE
   const apiError = getApiError(query.error)
   const errorMessage = apiError.status === 403
     ? t('common.permissionDenied')
@@ -146,7 +159,33 @@ export default function UpstreamUpdates() {
     'metadata refresh failed; inspect server logs': t('upstreamUpdates.details.failed'),
   }
 
-  function updateFilter(name: 'ecosystem' | 'result', value: string) {
+  // Like the result filter, a chip or range change also applies the package
+  // text being typed, which the filter-change effect would otherwise reset.
+  function updateParams(mutator: (next: URLSearchParams) => void) {
+    const next = new URLSearchParams(searchParamsRef.current)
+    const normalizedPackage = packageDraft.trim()
+    if (normalizedPackage) next.set('package', normalizedPackage)
+    else next.delete('package')
+    mutator(next)
+    next.delete('cursor')
+    searchParamsRef.current = next
+    setSearchParams(next, { replace: true })
+  }
+
+  function setEcosystems(ids: string[]) {
+    updateParams(next => {
+      const value = serializeEcosystemList(ids)
+      if (value) next.set('ecosystem', value)
+      else next.delete('ecosystem')
+    })
+  }
+
+  function setTimeRange(value: TimeRangeValue) {
+    setAnchor(Date.now())
+    updateParams(next => writeTimeRange(next, value, DEFAULT_RANGE))
+  }
+
+  function updateFilter(name: 'result', value: string) {
     const normalizedPackage = packageDraft.trim()
     const next = new URLSearchParams(searchParamsRef.current)
     if (normalizedPackage) next.set('package', normalizedPackage)
@@ -174,12 +213,19 @@ export default function UpstreamUpdates() {
     next.delete('package')
     next.delete('ecosystem')
     next.delete('result')
+    writeTimeRange(next, { preset: DEFAULT_RANGE }, DEFAULT_RANGE)
     next.delete('cursor')
     searchParamsRef.current = next
     setSearchParams(next, { replace: true })
   }
 
   async function refreshLatest() {
+    // A relative window moves to now, which is a new first page.
+    if (timeRange.preset !== 'custom' && timeRange.preset !== 'all') {
+      setManualRefreshError(false)
+      setAnchor(Date.now())
+      return
+    }
     if (!autoRefreshPaused) {
       setManualRefreshError(false)
       await query.refetch()
@@ -281,7 +327,12 @@ export default function UpstreamUpdates() {
   return (
     <AdminPage
       description={t('upstreamUpdates.subtitle')}
-      actions={(
+      actions={(<>
+        {query.dataUpdatedAt > 0 && (
+          <span className="text-[12px] tabular-nums text-muted-foreground" data-refresh-updated>
+            {t('filters.updatedAt', { time: formatClock(new Date(query.dataUpdatedAt).toISOString(), 'time') })}
+          </span>
+        )}
         <Button
           type="button"
           variant="outline"
@@ -302,7 +353,7 @@ export default function UpstreamUpdates() {
               ? t('upstreamUpdates.refreshing')
               : t('upstreamUpdates.refresh')}
         </Button>
-      )}
+      </>)}
     >
       <div className="space-y-5">
         <form
@@ -335,18 +386,7 @@ export default function UpstreamUpdates() {
             </Button>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center">
-            <NativeSelect
-              aria-label={t('upstreamUpdates.filterEcosystem')}
-              className="min-h-10 sm:w-[160px]"
-              value={ecosystemFilter}
-              onChange={event => updateFilter('ecosystem', event.target.value)}
-            >
-              <option value="all">{t('upstreamUpdates.allEcosystems')}</option>
-              {standardUpstreamEcosystems.map(ecosystem => (
-                <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>
-              ))}
-            </NativeSelect>
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
             <NativeSelect
               aria-label={t('upstreamUpdates.filterResult')}
               className="min-h-10 sm:w-[150px]"
@@ -358,6 +398,7 @@ export default function UpstreamUpdates() {
                 <option key={result} value={result}>{resultLabels[result]}</option>
               ))}
             </NativeSelect>
+            <TimeRangeControl value={timeRange} onChange={setTimeRange} />
           </div>
 
           <div className="flex flex-wrap items-center gap-2 lg:order-last">
@@ -372,6 +413,7 @@ export default function UpstreamUpdates() {
             )}
           </div>
         </form>
+        <EcosystemChips counts={query.data?.pages[0]?.ecosystems} selected={ecosystems} onChange={setEcosystems} />
 
         {query.data && (
           <div

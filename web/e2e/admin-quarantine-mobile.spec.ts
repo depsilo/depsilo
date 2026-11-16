@@ -120,6 +120,7 @@ test('quarantine events and approvals can reach older pages, and filtering reset
       return {
         items: [{ id: offset + 1, ecosystem: 'npm', package: filtered ? 'filtered' : `event-${offset + 1}`, version: '1.0', action: 'blocked', reason: 'too new', created_at: '2026-10-06T10:00:00Z' }],
         total: filtered ? 1 : 101,
+        ecosystems: [{ id: 'npm', count: filtered ? 1 : 101 }],
       }
     },
     'GET /api/v1/admin/quarantine/approvals': (request: Request) => {
@@ -134,7 +135,7 @@ test('quarantine events and approvals can reach older pages, and filtering reset
   await expect(events).toContainText('event-1')
   await page.getByRole('navigation', { name: '分页' }).getByRole('button', { name: '下一页' }).click()
   await expect(events).toContainText('event-51')
-  await page.getByRole('combobox', { name: '生态' }).selectOption('npm')
+  await page.getByRole('group', { name: '按生态筛选' }).locator('[data-ecosystem-chip="npm"]').click()
   await expect(events).toContainText('filtered')
   await expect(page.locator('[data-admin-pagination]')).toHaveCount(0)
 

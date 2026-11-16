@@ -44,7 +44,7 @@ func TestAccessLogListAndExportShareFilters(t *testing.T) {
 	if err := json.Unmarshal(listRec.Body.Bytes(), &listBody); err != nil {
 		t.Fatalf("decode list: %v", err)
 	}
-	assertExactKeys(t, listBody, "items", "total", "page", "page_size")
+	assertExactKeys(t, listBody, "items", "total", "page", "page_size", "ecosystems")
 	var items []map[string]json.RawMessage
 	if err := json.Unmarshal(listBody["items"], &items); err != nil {
 		t.Fatalf("decode items: %v", err)
@@ -380,6 +380,52 @@ func assertExactKeys(t *testing.T, object map[string]json.RawMessage, keys ...st
 	for key := range want {
 		if _, ok := object[key]; !ok {
 			t.Fatalf("missing key %q in %#v", key, object)
+		}
+	}
+}
+
+func TestAccessLogListFiltersSeveralEcosystemsAndAWindow(t *testing.T) {
+	database := newAccessLogTestDB(t)
+	now := time.Date(2026, 7, 10, 8, 30, 0, 0, time.UTC)
+	rows := []db.AccessLog{
+		{AdapterType: "pypi", Method: "GET", PackageName: "requests", CacheKey: "pypi/a", Hit: true, StatusCode: 200, CreatedAt: now},
+		{AdapterType: "npm", Method: "GET", PackageName: "react", CacheKey: "npm/a", Hit: true, StatusCode: 200, CreatedAt: now.Add(-time.Hour)},
+		{AdapterType: "cargo", Method: "GET", PackageName: "serde", CacheKey: "cargo/a", Hit: true, StatusCode: 200, CreatedAt: now.Add(-2 * time.Hour)},
+		{AdapterType: "pypi", Method: "GET", PackageName: "flask", CacheKey: "pypi/b", Hit: true, StatusCode: 200, CreatedAt: now.Add(-48 * time.Hour)},
+	}
+	if err := database.Create(&rows).Error; err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	r := newAccessLogTestRouter(database)
+
+	start := now.Add(-3 * time.Hour).Format(time.RFC3339)
+	rec := performAccessLogRequest(r, "/logs?adapter_type=pypi,npm&start="+start)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var body accessLogListResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	// Both chosen ecosystems, only inside the window.
+	if body.Total != 2 {
+		t.Fatalf("total = %d, want 2 (pypi and npm since start)", body.Total)
+	}
+	// Counts ignore the ecosystem choice but keep the window, so cargo is a
+	// choice and the two-day-old pypi row is not counted.
+	want := []ecosystemCount{{ID: "cargo", Count: 1}, {ID: "npm", Count: 1}, {ID: "pypi", Count: 1}}
+	if !reflect.DeepEqual(body.Ecosystems, want) {
+		t.Fatalf("ecosystems = %+v, want %+v", body.Ecosystems, want)
+	}
+
+	repeated := performAccessLogRequest(r, "/logs?adapter_type=pypi&adapter_type=cargo")
+	if err := json.Unmarshal(repeated.Body.Bytes(), &body); err != nil || body.Total != 3 {
+		t.Fatalf("repeated values: total = %d, err = %v, want 3", body.Total, err)
+	}
+
+	for _, bad := range []string{"start=yesterday", "start=2026-07-10T10:00:00Z&end=2026-07-10T09:00:00Z"} {
+		if rec := performAccessLogRequest(r, "/logs?"+bad); rec.Code != http.StatusBadRequest {
+			t.Fatalf("%s: status = %d, want 400", bad, rec.Code)
 		}
 	}
 }

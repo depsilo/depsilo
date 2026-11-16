@@ -33,18 +33,32 @@ func (h *AuditHandler) SetAnchor(anchor *audit.Anchor) {
 
 // List returns paginated audit log entries.
 func (h *AuditHandler) List(c *gin.Context) {
-	q := h.parseQuery(c)
+	q, err := h.parseQuery(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": err.Error()})
+		return
+	}
 	result, err := audit.RunQuery(h.db, q)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, toAuditListResponse(result, principalCanViewCredentials(c)))
+	ecosystems, err := audit.EcosystemCounts(h.db, q)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, toAuditListResponse(result, ecosystems, principalCanViewCredentials(c)))
 }
 
 // Export returns audit log entries as a CSV download.
 func (h *AuditHandler) Export(c *gin.Context) {
-	items, err := audit.RunExportQuery(h.db, h.parseQuery(c))
+	q, err := h.parseQuery(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": err.Error()})
+		return
+	}
+	items, err := audit.RunExportQuery(h.db, q)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "EXPORT_ERROR", "message": err.Error()})
 		return
@@ -83,7 +97,7 @@ func (h *AuditHandler) Integrity(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"integrity": report, "anchors": anchors, "anchor_feed": feed})
 }
 
-func (h *AuditHandler) parseQuery(c *gin.Context) audit.Query {
+func (h *AuditHandler) parseQuery(c *gin.Context) (audit.Query, error) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "50"))
 
@@ -95,8 +109,12 @@ func (h *AuditHandler) parseQuery(c *gin.Context) audit.Query {
 		}
 	}
 
+	ecosystems, err := parseEcosystemFilter(c, "ecosystem")
+	if err != nil {
+		return audit.Query{}, err
+	}
 	q := audit.Query{
-		Ecosystem:   c.Query("ecosystem"),
+		Ecosystems:  ecosystems,
 		PackageName: packageName,
 		ClientIP:    c.Query("ip"),
 		CacheResult: c.Query("result"),
@@ -104,16 +122,13 @@ func (h *AuditHandler) parseQuery(c *gin.Context) audit.Query {
 		PageSize:    pageSize,
 	}
 
-	if s := c.Query("start"); s != "" {
-		if t, err := time.Parse(time.RFC3339, s); err == nil {
-			q.StartTime = t
-		}
+	// A malformed time used to be ignored silently, widening the result to
+	// all time; it is now a 400 like the other Admin lists.
+	window, err := parseTimeWindow(c)
+	if err != nil {
+		return audit.Query{}, err
 	}
-	if s := c.Query("end"); s != "" {
-		if t, err := time.Parse(time.RFC3339, s); err == nil {
-			q.EndTime = t
-		}
-	}
+	q.StartTime, q.EndTime = window.Start, window.End
 
-	return q
+	return q, nil
 }

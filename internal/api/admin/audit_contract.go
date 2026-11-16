@@ -30,6 +30,8 @@ type auditListResponse struct {
 	Items []auditLogResponse `json:"items"`
 	Total int64              `json:"total"`
 	Page  int                `json:"page"`
+	// Ecosystems counts the rows every other filter matches, per ecosystem.
+	Ecosystems []audit.EcosystemCount `json:"ecosystems"`
 }
 
 func toAuditLogResponse(item db.AuditLog, canViewCredentials bool) auditLogResponse {
@@ -58,8 +60,11 @@ func toAuditLogResponses(rows []db.AuditLog, canViewCredentials bool) []auditLog
 	return items
 }
 
-func toAuditListResponse(result *audit.QueryResult, canViewCredentials bool) auditListResponse {
-	return auditListResponse{Items: toAuditLogResponses(result.Items, canViewCredentials), Total: result.Total, Page: result.Page}
+func toAuditListResponse(result *audit.QueryResult, ecosystems []audit.EcosystemCount, canViewCredentials bool) auditListResponse {
+	if ecosystems == nil {
+		ecosystems = []audit.EcosystemCount{}
+	}
+	return auditListResponse{Items: toAuditLogResponses(result.Items, canViewCredentials), Total: result.Total, Page: result.Page, Ecosystems: ecosystems}
 }
 
 func encodeAuditCSV(items []auditLogResponse) ([]byte, error) {
