@@ -367,6 +367,25 @@ test('the local token command names a listening port other than the default', as
   ])
 })
 
+test('the local token command names a listener that 127.0.0.1 does not reach', async ({ page }) => {
+  // `depsilo serve --host ::1 --port 24646`: without --host the command would
+  // ask 127.0.0.1, where nothing listens.
+  await mockAdminApi(page, {
+    'GET /api/v1/setup/status': {
+      needs_setup: true, token_required: true, listen_port: 24646,
+      token_command: 'depsilo setup token --port 24646 --host ::1',
+    },
+  })
+
+  await page.goto('/')
+  const commands = page.getByRole('region', { name: '获取初始化令牌' }).locator('pre')
+  await expect(commands).toHaveText([
+    'docker exec depsilo depsilo setup token',
+    'docker compose exec depsilo depsilo setup token',
+    'depsilo setup token --port 24646 --host ::1',
+  ])
+})
+
 for (const labels of [
   {
     locale: 'zh' as const, advanced: '高级设置',

@@ -102,7 +102,7 @@ function validHTTPURL(value: string) {
 }
 
 export default function SetupWizard({ status }: SetupWizardProps) {
-  const { tokenRequired, listenPort, configExists } = status
+  const { tokenRequired, listenPort, tokenCommand, configExists } = status
   const { t } = useTranslation()
   // Start from the port in use: the value is written to config.toml, so a
   // fixed default would move a server started with another port.
@@ -137,12 +137,16 @@ export default function SetupWizard({ status }: SetupWizardProps) {
   // The same test as for a directory password: HTTPS, or HTTP that stays on
   // this machine. Anything else sends the token and the password in the clear.
   const unencrypted = !ldapBrowserCredentialsAllowed(window.location.origin)
-  // The bare command asks the default port, so a server listening elsewhere
-  // has to be named or the token comes from a different instance. Inside a
-  // container the port is the default whatever the host publishes.
-  const localTokenCommand = listenPort === undefined || listenPort === defaultListenPort
-    ? 'depsilo setup token'
-    : `depsilo setup token --port ${listenPort}`
+  // The bare command asks 127.0.0.1 on the default port, so a server
+  // listening elsewhere has to be named or the token comes from a different
+  // instance. The server sends the command with the flags it needs, built by
+  // the same rule as its startup summary; an older server sends only the
+  // port. Inside a container the port is the default whatever the host
+  // publishes.
+  const localTokenCommand = tokenCommand
+    ?? (listenPort === undefined || listenPort === defaultListenPort
+      ? 'depsilo setup token'
+      : `depsilo setup token --port ${listenPort}`)
   const submitting = phase === 'saving'
   const reconnecting = phase === 'restarting' || phase === 'ready'
   const selectedList = ecosystemDefaults.filter((ecosystem) => selectedEcosystems.has(ecosystem.key))

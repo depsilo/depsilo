@@ -329,6 +329,8 @@ export interface SetupRequired {
   tokenRequired: boolean
   /** The port the server listens on now; absent from an older server. */
   listenPort?: number
+  /** The command that prints the bootstrap token on this server; absent from an older server. */
+  tokenCommand?: string
   /** A configuration file already exists and setup will replace it. */
   configExists: boolean
 }
@@ -344,14 +346,21 @@ function decodeSetupStatus(value: unknown): SetupDecision {
     throw new TypeError('Invalid setup status response')
   }
   if (!status.needs_setup) return { kind: 'configured' }
-  // listen_port and config_exists are later additions that an older server
-  // omits, so neither is required and a malformed value counts as absent.
+  // listen_port, token_command and config_exists are later additions that
+  // an older server omits, so none is required and a malformed value counts
+  // as absent.
   const port = status.listen_port
+  const command = status.token_command
   return {
     kind: 'setup-required',
     tokenRequired: status.token_required,
     listenPort: typeof port === 'number' && Number.isInteger(port) && port >= 1 && port <= 65535
       ? port
+      : undefined,
+    // Shown for the operator to copy, so only the command it is meant to be.
+    tokenCommand: typeof command === 'string' && command.length <= 300
+      && /^depsilo setup token(?: .+)?$/.test(command) && !/\p{Cc}/u.test(command)
+      ? command
       : undefined,
     configExists: status.config_exists === true,
   }

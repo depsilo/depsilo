@@ -361,6 +361,10 @@ func TestSetupTokenCommandNamesOnlyWhatItsDefaultsDoNotReach(t *testing.T) {
 		{"192.0.2.10", 23333, "depsilo setup token --host 192.0.2.10"},
 		{"2001:db8::10", 24646, "depsilo setup token --port 24646 --host 2001:db8::10"},
 		{"depsilo.internal", 23333, "depsilo setup token --host depsilo.internal"},
+		{"fe80::1%en0", 23333, "depsilo setup token --host fe80::1%en0"},
+		// A zone is free text: anything a shell would read is quoted.
+		{"::1%$(id)", 23333, "depsilo setup token --host '::1%$(id)'"},
+		{"::1%a'b", 23333, `depsilo setup token --host '::1%a'\''b'`},
 	} {
 		if got := SetupTokenCommand(test.host, test.port, false); got != test.want {
 			t.Errorf("SetupTokenCommand(%q, %d) = %q, want %q", test.host, test.port, got, test.want)
@@ -1469,11 +1473,13 @@ func setupStatusFields(t *testing.T, handler *SetupHandler) map[string]any {
 func TestSetupStatusReportsListenPortAndExistingConfigWhilePending(t *testing.T) {
 	handler, cfg, _, _ := newSetupTestHandler(t)
 	cfg.Server.Port = 24646
+	cfg.Server.Host = " ::1 "
 
 	want := map[string]any{
 		"needs_setup":    true,
 		"token_required": true,
 		"listen_port":    float64(24646),
+		"token_command":  "depsilo setup token --port 24646 --host ::1",
 		"config_exists":  false,
 	}
 	if got := setupStatusFields(t, handler); !reflect.DeepEqual(got, want) {

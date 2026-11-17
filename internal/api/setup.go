@@ -78,9 +78,27 @@ func SetupTokenCommand(bindHost string, port int, inContainer bool) string {
 		command += " --port " + strconv.Itoa(port)
 	}
 	if host := setupTokenCommandHost(bindHost); host != "" {
-		command += " --host " + host
+		command += " --host " + shellWord(host)
 	}
 	return command
+}
+
+// shellWord returns s ready to paste into a POSIX shell: unchanged when it
+// holds only characters a host name or address uses, single-quoted otherwise.
+// An IPv6 zone is free text that the listener accepts, so a configured host
+// could otherwise carry shell syntax into the command an operator copies.
+func shellWord(s string) string {
+	safe := s != ""
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune(".:-_%", r)) {
+			safe = false
+			break
+		}
+	}
+	if safe {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // setupTokenCommandHost returns the host "depsilo setup token" must be given
@@ -207,10 +225,14 @@ func (h *SetupHandler) Status(c *gin.Context) {
 		"token_required": h.cfg.IsDefault,
 	}
 	if h.cfg.IsDefault {
-		// The wizard writes a port into config.toml and warns before replacing
-		// an existing file. Both facts matter only while setup is pending; this
-		// unauthenticated route discloses nothing else.
+		// The wizard writes a port into config.toml, shows the command that
+		// prints the bootstrap token on this server, and warns before replacing
+		// an existing file. These facts matter only while setup is pending;
+		// this unauthenticated route discloses nothing else. The command names
+		// the listen host only when 127.0.0.1 does not reach it, so a wildcard
+		// or loopback bind sends no address.
 		status["listen_port"] = h.cfg.Server.Port
+		status["token_command"] = SetupTokenCommand(h.cfg.Server.Host, h.cfg.Server.Port, false)
 		configExists := config.SetupReplacesConfig(h.cfg)
 		if h.configBackedUp {
 			configExists = h.previousConfigKept

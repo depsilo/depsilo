@@ -1111,6 +1111,11 @@ export interface SetupStatusResponse {
   token_required: boolean
   /** The port the server listens on. Sent only while setup is pending. */
   listen_port?: number
+  /**
+   * The command that prints the bootstrap token on this server, with the
+   * --port and --host it needs. Sent only while setup is pending.
+   */
+  token_command?: string
   /** Whether a configuration file already exists. Sent only while setup is pending. */
   config_exists?: boolean
 }

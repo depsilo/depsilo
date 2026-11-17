@@ -18,15 +18,20 @@ async function decode(body: unknown) {
 
 describe('setup status decoding', () => {
   it('reads the listening port and the existing-configuration flag', async () => {
-    expect(await decode({ needs_setup: true, token_required: true, listen_port: 24646, config_exists: true }))
-      .toEqual({ kind: 'setup-required', tokenRequired: true, listenPort: 24646, configExists: true })
+    expect(await decode({
+      needs_setup: true, token_required: true, listen_port: 24646,
+      token_command: 'depsilo setup token --port 24646 --host ::1', config_exists: true,
+    })).toEqual({
+      kind: 'setup-required', tokenRequired: true, listenPort: 24646,
+      tokenCommand: 'depsilo setup token --port 24646 --host ::1', configExists: true,
+    })
     expect(await decode({ needs_setup: false, token_required: false, listen_port: 24646 }))
       .toEqual({ kind: 'configured' })
   })
 
   it('accepts an older server that reports neither', async () => {
     expect(await decode({ needs_setup: true, token_required: false }))
-      .toEqual({ kind: 'setup-required', tokenRequired: false, listenPort: undefined, configExists: false })
+      .toEqual({ kind: 'setup-required', tokenRequired: false, listenPort: undefined, tokenCommand: undefined, configExists: false })
   })
 
   it('treats a listening port that cannot be one as absent', async () => {
@@ -38,6 +43,18 @@ describe('setup status decoding', () => {
     for (const port of [1, 65535]) {
       expect(await decode({ needs_setup: true, token_required: true, listen_port: port }), String(port))
         .toMatchObject({ listenPort: port })
+    }
+  })
+
+  it('shows only a token command that is one', async () => {
+    for (const command of [1, null, {}, '', 'rm -rf /', 'depsilo setup tokens', 'depsilo setup token\nrm -rf /',
+      `depsilo setup token --host ${'x'.repeat(300)}`]) {
+      const status = await decode({ needs_setup: true, token_required: true, token_command: command })
+      expect(status, String(command)).toMatchObject({ kind: 'setup-required', tokenCommand: undefined })
+    }
+    for (const command of ['depsilo setup token', "depsilo setup token --host '::1%$(id)'"]) {
+      expect(await decode({ needs_setup: true, token_required: true, token_command: command }), command)
+        .toMatchObject({ tokenCommand: command })
     }
   })
 
