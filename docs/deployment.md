@@ -450,7 +450,9 @@ start a hand-written `config.toml` without the setup page, see
 - **Every Upstream is failing.** Clients get `502` with
   `all upstreams are unhealthy`, and Admin → Upstreams shows every Upstream
   as failed. The usual cause is the DNS of the host: proxy software in fake-IP
-  mode, or an overlay network. Run `depsilo doctor` and follow
+  mode, or an overlay network. With `upstream_proxy` set, it can also be the
+  proxy, when it does not run or cannot reach the Upstreams. Run
+  `depsilo doctor` and follow
   [Upstream network egress](#upstream-network-egress).
 
 ## Scripted setup
@@ -1379,6 +1381,32 @@ boundary, and a plain-HTTP Upstream sends its requests, credentials included,
 through the proxy unencrypted. The cascade relay and vulnerability or
 blocklist sync keep their own settings.
 
+Depsilo never resolves the host names of a package Upstream that a proxy
+carries; the proxy does. `upstream_proxy` therefore also carries an Upstream
+on your own network, such as a mirror on the LAN, unless `no_proxy` lists it.
+List an Upstream that must stay direct in `no_proxy` by the host in its URL
+and restart; Depsilo then connects to it directly. `no_proxy` does not apply
+to an Upstream with its own proxy: clear that proxy, and, unless the Upstream
+is a cascade, also list its host in `no_proxy` when `upstream_proxy` is set,
+or the default proxy carries it instead. The check of a
+proxied Upstream reads a failure at the proxy as follows (see
+**Finding the reason**):
+
+- `egress_proxy` when Depsilo cannot connect to the proxy, or when the proxy
+  answers `CONNECT` for an `https` Upstream with a status other than `200`,
+  such as `407` when it asks for credentials, `403` when its rules deny the
+  host, or a `5xx` when it cannot reach the host. Admin shows that status.
+- `connection_refused` or `network` when the proxy closes the connection
+  instead. Proxy software such as Clash, mihomo and sing-box answers
+  `CONNECT` with `200` before it connects to the host, and closes the
+  connection when it cannot reach it, so an `https` Upstream that such
+  software cannot reach fails this way.
+- `http_status` for a plain-`http` Upstream, which needs no `CONNECT`, when
+  the proxy answers with a `5xx`, such as the `502` that Clash and mihomo
+  answer for a host they cannot reach. A `4xx` answer from the proxy passes
+  the check, as the Upstream's own would.
+- `timeout` when the proxy does not answer in time.
+
 A Docker registry that `upstream_proxy` applies to is routed per request
 instead. Depsilo resolves the host of every request itself: the registry's,
 its Bearer realm's and each redirect target's. A host whose answer is private
@@ -1415,7 +1443,7 @@ mode, its pulls otherwise fail with the fake-IP `502` described under
 
 Inside a container, `127.0.0.1` is the container itself, not the Docker host
 on which the proxy software runs; every Upstream then fails with
-`connection_refused`, and Docker pulls fail with `502` and
+`egress_proxy`, and Docker pulls fail with `502` and
 `connection to the egress proxy failed`, while the server log shows
 `proxyconnect tcp: dial tcp 127.0.0.1:7890: connect: connection refused`.
 Give the host's address as the container sees it, for example
@@ -1536,10 +1564,17 @@ Depsilo shows it in four places:
   and their counts, for example `failure codes: egress_fake_ip x2, timeout x1`.
   Without a token, doctor prints a general hint.
 - The `502` answer to a package client. When every Upstream of the ecosystem
-  was refused for the same egress reason, the message names it, for example:
+  failed for the same egress reason, a refusal by the outbound guard or a
+  failure at the egress proxy, the message names it, for example:
 
   ```text
   all upstreams are unhealthy: the outbound guard refused every upstream (egress_fake_ip) because DNS returned fake-IP addresses; set [egress] upstream_proxy in config.toml (in a container, the environment variable DEPSILO_EGRESS_UPSTREAM_PROXY) and restart, see docs/deployment.md#upstream-network-egress
+  ```
+
+  or, when every check failed at the proxy:
+
+  ```text
+  all upstreams are unhealthy: every upstream failed at the egress proxy (egress_proxy); check that the proxy runs and that [egress] upstream_proxy or an upstream's own proxy points at it; to keep hosts on your own network off upstream_proxy, list them in [egress] no_proxy and restart, see docs/deployment.md#upstream-network-egress
   ```
 
   In every other case the message is `all upstreams are unhealthy` alone.
@@ -1550,12 +1585,13 @@ Depsilo shows it in four places:
 | `egress_shared_address` | The host resolved into `100.64.0.0/10`, and no `private_ranges` entry covers the address |
 | `egress_reserved` | The host resolved to another special-purpose address, or the DNS answer mixed network scopes |
 | `egress_private` | The request was directed to a private or loopback address that this Upstream may not reach |
+| `egress_proxy` | The request failed at the proxy that carries the Upstream, `upstream_proxy` or its own: Depsilo could not connect to the proxy, or the proxy answered `CONNECT` for an `https` Upstream with a status other than `200`, which Admin shows. Other failures at the proxy read as the codes below; see the list for proxied Upstreams above |
 | `dns` | The host name could not be resolved |
-| `timeout` | The connection or the response timed out |
+| `timeout` | The connection or the response timed out, also when the egress proxy does not answer in time |
 | `tls` | The TLS handshake or certificate verification failed |
-| `connection_refused` | The connection was refused or reset |
-| `http_status` | The Upstream answered with an HTTP status that marks it unhealthy |
-| `network` | Any other network failure |
+| `connection_refused` | The connection was refused or reset; through an egress proxy, also a tunnel that the proxy reset |
+| `http_status` | The Upstream answered with an HTTP status that marks it unhealthy; for a plain-`http` Upstream, also a `5xx` that its egress proxy answered |
+| `network` | Any other network failure; through an egress proxy, also a tunnel that the proxy closed |
 
 A Docker registry has no check, so Admin and doctor show no failure code for
 it. A Docker request that Depsilo cannot complete against the registry gets a

@@ -177,6 +177,25 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   `upstream_proxy` remedy. Admin and "Connect a client" speak of fake-IP
   ranges, naming `198.18.0.0/15` and `2001:2::/48`, instead of the
   benchmarking range.
+- Egress: a package Upstream check that fails at its proxy (`upstream_proxy`
+  or the Upstream's own, also toward a cascade parent) records the new
+  failure code `egress_proxy` when Depsilo cannot connect to the proxy
+  (instead of `connection_refused`, `dns`, `tls` or `network`) or when the
+  proxy answers `CONNECT` for an `https` Upstream with a status other than
+  `200` (instead of `network`). Admin says which of the two happened, with
+  that status, and asks to check the proxy and to list an Upstream on your
+  own network in `[egress] no_proxy`, or, for an Upstream with its own proxy,
+  which `no_proxy` does not bypass, to clear that proxy and, unless it is a
+  cascade, to list its host in `no_proxy` too when `upstream_proxy` is set.
+  The check's error text gives that status instead of the proxy's status
+  text. When every
+  Upstream of an ecosystem failed there, the `502` message
+  `all upstreams are unhealthy` names `egress_proxy` and that remedy. Other
+  failures through a proxy keep their codes: `timeout` when it does not
+  answer in time, `connection_refused` or `network` when it closes the
+  connection, which is how Clash, mihomo and sing-box fail an `https`
+  Upstream they cannot reach because they accept `CONNECT` first, and
+  `http_status` for a `5xx` that it answers for a plain-`http` Upstream.
 - npm: unsigned tarball paths (`/npm/<package>/-/<file>.tgz` and the scoped
   form) still answer `404`, now with a JSON body, code
   `NPM_UNSIGNED_TARBALL`, and a recovery message; npm `404` and `502` bodies

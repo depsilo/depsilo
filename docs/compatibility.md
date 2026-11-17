@@ -168,6 +168,20 @@ consequence.
   [Upstream network egress](deployment.md#upstream-network-egress)); it never
   repeats an answer body, error message, status phrase, or URL path or query.
   The request ID is the one in the `X-Request-ID` header and the access log.
+- A package Upstream check that fails at the proxy that carries it,
+  `upstream_proxy` or the Upstream's own, records the failure code
+  `egress_proxy` in the Upstream's `last_failure` and in the check's
+  `failure`. When the proxy answers `CONNECT` for an `https` Upstream with a
+  status other than `200`, `status` holds that status (the check recorded
+  `network`); when Depsilo cannot connect to the proxy, `status` is absent (it
+  recorded `connection_refused`, `dns`, `tls` or `network`, after the cause).
+  Other failures through a proxy keep their codes: `timeout` for a proxy that
+  does not answer in time, `connection_refused` or `network` for a connection
+  that the proxy closes, also after it answered `CONNECT` with `200`, and
+  `http_status` for a `5xx` that the proxy answers for a plain-`http`
+  Upstream. The package-route `502` message `all upstreams are unhealthy`
+  names `egress_proxy` when every Upstream of an ecosystem failed at the
+  proxy.
 
 ## Configuration
 
