@@ -130,6 +130,8 @@ test('an ecosystem AI tab hands over only that ecosystem', async ({ page }) => {
   await expect(pane.locator('[data-manager-description]')).toContainText('only this project\'s Node.js dependency settings')
   await expect(pane.locator('pre').first()).toContainText(`${origin}/api/v1/integration-prompt?ecosystem=node `)
   await expect(pane.locator('pre').first()).toContainText('route only this project\'s Node.js dependency installs')
+  // The guide lets the agent rewrite a package-lock.json the user approved.
+  await expect(pane).toContainText('checksums and signature checks are untouched and no lockfile changed without your approval')
 
   const full = pane.locator('[data-quickstart-full-prompt]')
   await expect(full.locator('summary')).toContainText('Show the full prompt · 2 lines')
@@ -352,6 +354,159 @@ test('manager rail switches the focused configuration without hiding choices', a
   await primary.getByRole('button', { name: /^Debian\b/ }).click()
   await primary.getByRole('button', { name: /^Python\b/ }).click()
   await expect(managerPicker.getByRole('button', { name: 'AI setup' })).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('Node.js setup keeps each Yarn and pnpm generation on the setting it reads', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
+  await page.goto('/')
+  const address = new URL(page.url())
+  const primary = page.locator('[data-quickstart-primary]')
+  const description = primary.locator('[data-manager-description]')
+  const configuration = primary.locator('.code-block').first()
+
+  await openManager(page, /^Node\.js\b/, 'Yarn 2+')
+  await expect(primary.getByRole('group', { name: 'Package manager' })).toContainText('5 managers')
+  await expect(description).toHaveText('Yarn 2 and later (Berry), configured in .yarnrc.yml')
+  await expect(configuration).toContainText(`npmRegistryServer: "${address.origin}/npm/"`)
+  // Yarn rejects a plain-HTTP whitelist entry that carries the port.
+  await expect(configuration).toContainText(`- "${address.hostname}"`)
+  await expect(configuration).not.toContainText(address.host + '"')
+  // The command form needs the same whitelist, or Yarn fails with YN0081.
+  await primary.locator('[data-quickstart-pane="node"]').getByText('Other ways to connect').click()
+  await expect(primary.locator('[data-quickstart-pane="node"] details pre')).toHaveText(
+    `yarn config set npmRegistryServer ${address.origin}/npm/\nyarn config set unsafeHttpWhitelist --json '["${address.hostname}"]'`)
+
+  // Yarn 1 installs from `registry`; it only stores and echoes npmRegistryServer.
+  await openManager(page, /^Node\.js\b/, 'Yarn 1')
+  await expect(description).toHaveText('Yarn 1.x (Classic), configured in .yarnrc')
+  await expect(configuration).toContainText('~/.yarnrc')
+  await expect(configuration).toContainText(`registry "${address.origin}/npm/"`)
+  const pane = primary.locator('[data-quickstart-pane="node"]')
+  await expect(pane).toContainText('yarn config get registry')
+  await expect(pane).not.toContainText('npmRegistryServer')
+
+  // pnpm 11 and later ignore NPM_CONFIG_REGISTRY.
+  await openManager(page, /^Node\.js\b/, 'pnpm')
+  await pane.getByText('Other ways to connect').click()
+  for (const [label, variable] of [
+    ['Environment variable (pnpm 11 and later)', 'PNPM_CONFIG_REGISTRY'],
+    ['Environment variable (pnpm 10 and earlier)', 'NPM_CONFIG_REGISTRY'],
+  ]) {
+    const method = pane.locator('details > div > div').filter({ hasText: label })
+    await expect(method.locator('pre')).toHaveText(`${variable}=${address.origin}/npm/ pnpm install lodash`)
+  }
+})
+
+test('Bundler setup labels each command with the scope it writes', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
+  await page.goto('/')
+  const origin = new URL(page.url()).origin
+  const pane = page.locator('[data-quickstart-primary] [data-quickstart-pane="ruby"]')
+
+  await openManager(page, /^Ruby\b/, 'Bundler')
+  await expect(pane.locator('.code-block').first()).toContainText('.bundle/config')
+  // These commands write configuration that stays, so the heading claims nothing about persistence.
+  await expect(pane.getByText('Use a command or an environment variable instead of the configuration above', { exact: true })).toBeVisible()
+  await pane.getByText('Other ways to connect').click()
+  for (const [label, flag] of [
+    ['Command line (this project)', '--local'],
+    ['Command line (current user)', '--global'],
+  ]) {
+    const method = pane.locator('details > div > div').filter({ hasText: label })
+    await expect(method.locator('pre')).toHaveText(`bundle config set ${flag} mirror.https://rubygems.org ${origin}/rubygems/`)
+  }
+  // Bundler 1.x accepts `config set` silently and sets nothing.
+  const notes = pane.getByRole('region', { name: 'Notes' })
+  await expect(notes).toContainText('The set and get subcommands need Bundler 2.1 or later.')
+  await expect(notes.locator('pre')).toHaveText(
+    `bundle config --local mirror.https://rubygems.org ${origin}/rubygems/\nbundle config mirror.https://rubygems.org`)
+})
+
+test('the .NET add-source instructions say which SDKs accept the plain-HTTP flag', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await setUiPreferences(page, 'light', 'en')
+  await page.goto('/')
+  const origin = new URL(page.url()).origin
+  const primary = page.locator('[data-quickstart-primary]')
+  const notes = primary.getByRole('region', { name: 'Notes' })
+
+  // The suite runs over http, where the generated command carries the flag
+  // that only .NET SDK 9 and later accept.
+  for (const manager of ['dotnet CLI', 'NuGet.Config']) {
+    await openManager(page, /^\.NET\b/, manager)
+    await expect(primary.locator('[data-quickstart-pane="dotnet"]'), manager).toContainText('--allow-insecure-connections')
+    await expect(notes, manager).toContainText(
+      'The --allow-insecure-connections option needs .NET SDK 9 or later. .NET SDK 8 and earlier reject it and only warn about a plain-HTTP source, so add the source without it there.')
+    await expect(notes.locator('pre'), manager).toHaveText(`dotnet nuget add source ${origin}/nuget/v3/index.json -n depsilo`)
+  }
+})
+
+test('Node.js and Go setup carry the lockfile and checksum-database notes in both languages', async ({ page }) => {
+  // The pane fades in on every manager change; axe must not sample mid-fade.
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await setUiPreferences(page, 'light', 'en')
+  await page.goto('/')
+  const primary = page.locator('[data-quickstart-primary]')
+  const notes = primary.getByRole('region', { name: 'Notes' })
+
+  // npm can keep its lockfile: rewrite it without resolved URLs, then install.
+  await openManager(page, /^Node\.js\b/, 'npm')
+  await expect(notes.getByRole('listitem')).toHaveCount(2)
+  await expect(notes).toContainText('fails through Depsilo with 404, because Depsilo serves only the tarball URLs it issued')
+  await expect(notes.locator('pre').first())
+    .toHaveText('npm install --package-lock-only --omit-lockfile-registry-resolved\nnpm ci')
+  await expect(notes.locator('pre').nth(1)).toHaveText('omit-lockfile-registry-resolved=true')
+  await expect(notes).toContainText('records URLs of this instance, so it depends on this address and on the configured npm upstream')
+
+  // Bun, like npm, fails only on registry.npmjs.org URLs and follows others'.
+  await openManager(page, /^Node\.js\b/, 'Bun')
+  await expect(notes).toContainText(
+    'A bun.lock with registry.npmjs.org URLs fails through Depsilo with 404, and one with another registry\'s URLs installs from that registry and bypasses Depsilo; regenerate the lockfile through Depsilo.')
+  await expect(notes).not.toContainText('A lockfile recorded against another registry')
+  await expect(notes).toContainText('records URLs of this instance, so it depends on this address and on the configured npm upstream')
+  for (const manager of ['Yarn 2+', 'pnpm']) {
+    await openManager(page, /^Node\.js\b/, manager)
+    await expect(notes, manager).toContainText('Regenerate the lockfile through Depsilo.')
+    await expect(notes, manager).toContainText('records URLs of this instance, so it depends on this address and on the configured npm upstream')
+  }
+  // pnpm 11 and later refuse that regenerated lockfile without a project setting.
+  await expect(notes).toContainText('unless the project\'s pnpm-workspace.yaml sets trustLockfile.')
+  await expect(notes.locator('pre')).toHaveText('trustLockfile: true')
+  // Yarn 1 does not fail on such a lockfile; it never reaches Depsilo.
+  await openManager(page, /^Node\.js\b/, 'Yarn 1')
+  await expect(notes).toContainText('bypasses Depsilo without an error')
+
+  await openManager(page, /^Go\b/, 'go env')
+  await expect(notes).toContainText(
+    'Checksum verification goes through Depsilo when one of its Go upstreams mirrors the checksum database (the default first upstream, goproxy.cn, does; proxy.golang.org does not). Otherwise the go command contacts sum.golang.org directly; where that is unreachable, set GOSUMDB=sum.golang.google.cn.')
+  await expect(notes.locator('pre')).toHaveText('go env -w GOSUMDB=sum.golang.google.cn')
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations).toEqual([])
+
+  // uv.lock names the index as the registry of every package, also when the
+  // index comes from uv.toml or UV_INDEX_URL.
+  await openManager(page, /^Python\b/, 'uv')
+  await expect(notes).toHaveText(
+    'NotesA uv.lock generated while Depsilo is the index records this instance\'s address, '
+    + 'however the index is set (pyproject.toml, uv.toml or an environment variable), so it depends on this address.')
+
+  // A manager without caveats shows no empty section.
+  await openManager(page, /^Rust\b/, 'Cargo')
+  await expect(primary.locator('[data-quickstart-pane="rust"]')).toContainText('cargo fetch')
+  await expect(notes).toHaveCount(0)
+
+  await setUiPreferences(page, 'light', 'zh')
+  await page.goto('/')
+  const zhNotes = primary.getByRole('region', { name: '注意事项' })
+  await primary.getByRole('button', { name: /^Go\b/ }).first().click()
+  await primary.getByRole('button', { name: 'go env', exact: true }).click()
+  await expect(zhNotes).toContainText('只要 Depsilo 配置的某个 Go 上游源镜像了校验和数据库（默认的第一个上游源 goproxy.cn 有，proxy.golang.org 没有），校验就经过 Depsilo；否则 go 命令直接访问 sum.golang.org，无法访问时，设置 GOSUMDB=sum.golang.google.cn。')
+  await primary.getByRole('button', { name: /^Node\.js\b/ }).first().click()
+  await primary.getByRole('button', { name: 'npm', exact: true }).click()
+  await expect(zhNotes).toContainText('经 Depsilo 安装会返回 404，因为 Depsilo 只提供它自己签发的 tarball 地址')
+  await expect(primary.locator('summary').filter({ hasText: '其他接入方式' }))
+    .toContainText('用命令或环境变量接入，代替上面的配置')
+  await page.setViewportSize({ width: 320, height: 844 })
+  await expectNoDocumentOverflow(page)
 })
 
 test('Quick Start says when its commands only work on this machine', async ({ page, baseURL }) => {

@@ -2,7 +2,7 @@
 //
 // navigator.clipboard.writeText only works in a Secure Context — that means
 // HTTPS, localhost, or 127.0.0.1. Most Depsilo deployments are reached at a
-// LAN IP over plain HTTP (e.g. http://10.4.20.52:23333), where the modern
+// LAN IP over plain HTTP (e.g. http://192.0.2.10:23333), where the modern
 // API silently fails. We fall back to the deprecated-but-universally-supported
 // document.execCommand('copy') via a hidden textarea.
 //

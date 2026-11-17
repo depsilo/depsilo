@@ -208,7 +208,7 @@ test('connection verification requires an artifact delivery and a matching cache
   await expect(page).toHaveURL(/\/admin\/connect\?new=1$/)
   await expect(page.getByRole('heading', { name: 'Connect a client' })).toBeVisible()
   await page.getByRole('button', { name: 'Copy configuration', exact: true }).click()
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain(`python -m pip config --user set global.index-url '${new URL(page.url()).origin}/pypi/simple/'`)
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain(`python3 -m pip config --user set global.index-url '${new URL(page.url()).origin}/pypi/simple/'`)
   await expect(page.getByRole('heading', { name: 'Waiting for a related request' })).toBeVisible()
   await page.clock.fastForward(2_600)
   await expect(page.getByRole('heading', { name: 'Related request detected' })).toBeVisible()
@@ -433,9 +433,102 @@ test('client controls and code remain usable across acceptance widths without do
     await expect(page.getByRole('complementary', { name: 'Verification result', exact: true })).toBeVisible()
   }
   await selectClientOption(page, 'Ecosystem', 'Node.js')
-  await selectClientOption(page, 'Package manager', 'Yarn')
+  await selectClientOption(page, 'Package manager', 'Yarn 2+')
   await expect(page.getByRole('button', { name: 'Copy test command', exact: true })).toHaveCount(0)
+  // Yarn rejects a plain-HTTP whitelist entry that carries the port.
+  const address = new URL(page.url())
+  await expect(page.locator('.connection-instructions pre').first()).toContainText(`unsafeHttpWhitelist:\n  - "${address.hostname}"`)
+  // Yarn 1 installs from `registry`; it only stores and echoes npmRegistryServer.
+  await selectClientOption(page, 'Package manager', 'Yarn 1')
+  await expect(page.getByRole('heading', { name: 'Configure Yarn 1', exact: true })).toBeVisible()
+  await expect(page.locator('.connection-instructions pre').first()).toHaveText(`yarn config set registry ${address.origin}/npm/`)
+  await expect(page.locator('.connection-instructions')).toContainText('yarn config get registry')
+  await expect(page.locator('.connection-instructions')).not.toContainText('npmRegistryServer')
   await expect(page.getByRole('complementary', { name: 'Verification result', exact: true })).toBeVisible()
+})
+
+test('the Bundler command names the project scope it is shown under', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
+  await mockAdminApi(page, { 'GET /api/v1/admin/onboarding/status': response() })
+  await page.goto('/admin/connect')
+  const origin = new URL(page.url()).origin
+  const instructions = page.locator('.connection-instructions')
+
+  await selectClientOption(page, 'Ecosystem', 'Ruby')
+  await selectClientOption(page, 'Package manager', 'Bundler')
+  await expect(page.getByRole('heading', { name: 'Configure Bundler', exact: true })).toBeVisible()
+  await expect(instructions.locator('pre').first())
+    .toHaveText(`bundle config set --local mirror.https://rubygems.org ${origin}/rubygems/`)
+  await expect(instructions).toContainText('Run on the device that uses this package manager · Current project')
+  await expect(instructions).toContainText(
+    'Run it in the project directory. It writes .bundle/config there, which takes precedence over ~/.bundle/config.')
+  // Bundler 1.x accepts `config set` silently and sets nothing.
+  const notes = page.getByRole('region', { name: 'Notes', exact: true })
+  await expect(notes).toContainText('The set and get subcommands need Bundler 2.1 or later.')
+  await expect(notes.locator('pre')).toHaveText(
+    `bundle config --local mirror.https://rubygems.org ${origin}/rubygems/\nbundle config mirror.https://rubygems.org`)
+
+  await setUiPreferences(page, 'light', 'zh')
+  await page.reload()
+  await expect(instructions).toContainText('当前项目')
+  await expect(instructions).toContainText('在项目目录中执行。命令写入该目录的 .bundle/config，优先于 ~/.bundle/config。')
+  await expect(page.getByRole('region', { name: '注意事项', exact: true }))
+    .toContainText('set 和 get 子命令需要 Bundler 2.1 或更高版本。')
+})
+
+test('the .NET instructions say which SDKs accept the plain-HTTP flag', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
+  await mockAdminApi(page, { 'GET /api/v1/admin/onboarding/status': response() })
+  await page.goto('/admin/connect')
+  const origin = new URL(page.url()).origin
+  const notes = page.getByRole('region', { name: 'Notes', exact: true })
+
+  // The suite runs over http, where the primary command carries the flag
+  // that only .NET SDK 9 and later accept.
+  await selectClientOption(page, 'Ecosystem', '.NET')
+  await expect(page.getByRole('heading', { name: 'Configure dotnet CLI', exact: true })).toBeVisible()
+  await expect(page.locator('.connection-instructions pre').first())
+    .toHaveText(`dotnet nuget add source ${origin}/nuget/v3/index.json -n depsilo --allow-insecure-connections`)
+  await expect(notes).toContainText('The --allow-insecure-connections option needs .NET SDK 9 or later.')
+  await expect(notes.locator('pre')).toHaveText(`dotnet nuget add source ${origin}/nuget/v3/index.json -n depsilo`)
+
+  await setUiPreferences(page, 'light', 'zh')
+  await page.reload()
+  await expect(page.getByRole('region', { name: '注意事项', exact: true }))
+    .toContainText('--allow-insecure-connections 参数需要 .NET SDK 9 或更高版本。')
+})
+
+test('the Node.js and Go instructions carry the lockfile and checksum-database notes', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
+  await mockAdminApi(page, { 'GET /api/v1/admin/onboarding/status': response() })
+  await page.goto('/admin/connect')
+  const notes = page.getByRole('region', { name: 'Notes', exact: true })
+  // pip has no caveat, so the section is absent rather than empty.
+  await expect(page.getByRole('button', { name: 'Copy configuration', exact: true })).toBeVisible()
+  await expect(notes).toHaveCount(0)
+
+  await selectClientOption(page, 'Ecosystem', 'Node.js')
+  await expect(page.getByRole('heading', { name: 'Configure npm', exact: true })).toBeVisible()
+  await expect(notes).toContainText('fails through Depsilo with 404, because Depsilo serves only the tarball URLs it issued')
+  await expect(notes.locator('pre').first())
+    .toHaveText('npm install --package-lock-only --omit-lockfile-registry-resolved\nnpm ci')
+  await expect(notes.locator('pre').nth(1)).toHaveText('omit-lockfile-registry-resolved=true')
+  await expect(notes).toContainText('records URLs of this instance, so it depends on this address and on the configured npm upstream')
+  await page.setViewportSize({ width: 320, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
+  await page.setViewportSize({ width: 1280, height: 1000 })
+
+  await selectClientOption(page, 'Package manager', 'pnpm')
+  await expect(notes).toContainText('Regenerate the lockfile through Depsilo.')
+  await expect(notes).toContainText('unless the project\'s pnpm-workspace.yaml sets trustLockfile.')
+  await expect(notes.locator('pre')).toHaveText('trustLockfile: true')
+
+  await selectClientOption(page, 'Ecosystem', 'Go')
+  await expect(notes).toContainText(
+    'Checksum verification goes through Depsilo when one of its Go upstreams mirrors the checksum database (the default first upstream, goproxy.cn, does; proxy.golang.org does not). Otherwise the go command contacts sum.golang.org directly; where that is unreachable, set GOSUMDB=sum.golang.google.cn.')
+  // The option list is still closing right after a selection.
+  await expect(page.getByRole('listbox')).toHaveCount(0)
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations).toEqual([])
 })
 
 for (const outcome of [
@@ -605,9 +698,16 @@ test('upstreams refused for fake-IP DNS show the cause and the remedy before the
     + 'Set upstream_proxy under [egress] in config.toml (or the environment variable DEPSILO_EGRESS_UPSTREAM_PROXY) '
     + 'to the proxy software\'s HTTP port (for example http://127.0.0.1:7890) and restart, '
     + 'or give Depsilo a DNS server that returns real addresses. '
-    + 'Inside a container, 127.0.0.1 is the container itself; use the host\'s address there, for example http://host.docker.internal:7890.',
+    + 'Inside a container, 127.0.0.1 is the container itself: remove the container and run it again with '
+    + 'DEPSILO_EGRESS_UPSTREAM_PROXY=http://host.docker.internal:7890 (docker restart keeps the old environment), '
+    + 'adding --add-host=host.docker.internal:host-gateway on Docker Engine for Linux. '
+    + 'Details: "Upstream network egress" in the deployment guide.',
   )
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
+  // #root clips overflow, so scrollWidth alone would not see a remedy whose
+  // unbreakable variable runs past the right edge.
+  const remedy = await warning.locator('[data-connect-upstream-failure="egress_fake_ip"]').boundingBox()
+  expect(remedy!.x + remedy!.width).toBeLessThanOrEqual(320)
   expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations).toEqual([])
 
   // An ecosystem whose upstreams fail for another reason keeps the plain warning.

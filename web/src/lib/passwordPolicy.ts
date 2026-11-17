@@ -20,8 +20,8 @@ export const passwordLimits = {
   maxBytes: PASSWORD_MAX_BYTES,
 }
 
-/** Compared with the lower-cased password. */
-const commonPasswords = new Set([
+/** Compared with the lower-cased password. The same entries as policy.go, no more and no fewer. */
+export const commonPasswords: ReadonlySet<string> = new Set([
   'adminadminadmin',
   'password123!',
   'change-me-in-production',

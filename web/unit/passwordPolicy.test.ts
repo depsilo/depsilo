@@ -6,6 +6,7 @@ import {
   PASSWORD_MIN_CHARACTERS,
   PASSWORD_MIN_CLASSES,
   PASSWORD_PASSPHRASE_CHARACTERS,
+  commonPasswords,
   passwordIssue,
 } from '../src/lib/passwordPolicy'
 
@@ -55,8 +56,11 @@ describe('browser password policy', () => {
   it('lists the common passwords of internal/credential/policy.go', () => {
     const list = /commonPasswords = \[\]string\{([^}]*)\}/.exec(policySource)
     expect(list).not.toBeNull()
-    for (const quoted of list![1].split(',')) {
-      const common = JSON.parse(quoted.trim()) as string
+    const serverList = list![1].split(',').map(quoted => JSON.parse(quoted.trim()) as string)
+    // Both directions: an entry only the browser has would block a password
+    // the server accepts.
+    expect([...commonPasswords].sort()).toEqual([...serverList].sort())
+    for (const common of serverList) {
       // Two entries are shorter than a passphrase and have too few classes, so
       // the class rule reports them first; none may ever be accepted.
       expect(['common', 'weak']).toContain(passwordIssue('', common))

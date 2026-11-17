@@ -156,7 +156,7 @@ for (const labels of [
     token: '初始化令牌',
     helpHint: '在服务器的部署或配置目录运行命令，获取初始化令牌。',
     tokenMissing: '请获取并填写初始化令牌。',
-    tokenRejected: '服务器没有接受这个初始化令牌。每次重启 Depsilo 都会更换令牌，请重新获取当前的令牌并再次粘贴。',
+    tokenRejected: '服务器没有接受这个初始化令牌。除非用 DEPSILO_BOOTSTRAP_TOKEN 指定了令牌，否则每次重启 Depsilo 都会更换令牌，请重新获取当前的令牌并再次粘贴。',
     passwordHint: /不能包含用户名/,
     password: '管理员密码',
     confirm: '确认密码',
@@ -173,7 +173,7 @@ for (const labels of [
     token: 'Bootstrap token',
     helpHint: 'Run in the server deployment or configuration directory to get the bootstrap token.',
     tokenMissing: 'Get and enter the bootstrap token.',
-    tokenRejected: 'The server did not accept this bootstrap token. It changes every time Depsilo restarts, so print the current one and paste it again.',
+    tokenRejected: 'The server did not accept this bootstrap token. It changes every time Depsilo restarts unless DEPSILO_BOOTSTRAP_TOKEN sets it, so print the current one and paste it again.',
     passwordHint: /must not contain the username/,
     password: 'Administrator password',
     confirm: 'Confirm password',
@@ -251,6 +251,34 @@ for (const labels of [
     await token.fill('another-token')
     await expect(page.getByRole('alert')).toHaveCount(0)
     await expect(token).not.toHaveAttribute('aria-invalid', 'true')
+  })
+}
+
+for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+  test(`a rejected token is focused with its label in view at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport)
+    await setUiPreferences(page, 'light', 'zh')
+    await mockAdminApi(page, {
+      // A reopened setup shows the config.toml notice above the fields.
+      'GET /api/v1/setup/status': { needs_setup: true, token_required: true, listen_port: 23333, config_exists: true },
+      'POST /api/v1/setup/complete': {
+        status: 403,
+        body: { code: 'BOOTSTRAP_TOKEN_REQUIRED', message: 'A valid bootstrap token is required to complete initial setup' },
+      },
+    })
+    await page.goto('/')
+    const token = page.getByLabel('初始化令牌', { exact: true })
+    await token.fill('incorrect-token')
+    await page.getByLabel('管理员密码', { exact: true }).fill('Tr0ub4dor&Correct')
+    await page.getByLabel('确认密码').fill('Tr0ub4dor&Correct')
+    await page.getByRole('button', { name: '完成初始化' }).click()
+    await expect(page.getByRole('alert')).toContainText('服务器没有接受这个初始化令牌。')
+    await expect(token).toBeFocused()
+    const label = page.locator('label').filter({ hasText: /^初始化令牌$/ })
+    await expect.poll(async () => {
+      const [labelBox, tokenBox] = [await label.boundingBox(), await token.boundingBox()]
+      return labelBox !== null && tokenBox !== null && labelBox.y >= 0 && tokenBox.y + tokenBox.height <= viewport.height
+    }).toBe(true)
   })
 }
 

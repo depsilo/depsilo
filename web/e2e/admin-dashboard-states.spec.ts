@@ -201,7 +201,7 @@ test('Overview with no usage evidence offers a real connection flow without inve
   await expect(track.locator('[data-slot="meter-indicator"]')).toHaveCSS('width', '0px')
   await connect.click()
   await expect(page).toHaveURL(/\/admin\/connect$/)
-  await expect(page.getByRole('main')).toContainText(`python -m pip config --user set global.index-url '${new URL(page.url()).origin}/pypi/simple/'`)
+  await expect(page.getByRole('main')).toContainText(`python3 -m pip config --user set global.index-url '${new URL(page.url()).origin}/pypi/simple/'`)
 })
 
 test('Overview first-use guidance follows durable history and never regresses after a recorded success', async ({ page }) => {

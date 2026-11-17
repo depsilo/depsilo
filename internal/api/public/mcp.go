@@ -662,7 +662,8 @@ func (h *MCPHandler) toolConfigure(c *gin.Context, ecosystem string) (any, error
 			"env":    fmt.Sprintf("npm_config_registry=%s/npm/", base),
 			"config": fmt.Sprintf("# ~/.npmrc\nregistry=%s/npm/", base),
 			"verify": "npm view express version",
-			// The bootstrap prompt's lockfile note (internal/prompts).
+			// The npm part of the bootstrap prompt's lockfile note
+			// (internal/prompts); this tool configures npm alone.
 			"note": `A project that commits package-lock.json should also set omit-lockfile-registry-resolved=true in its .npmrc. An existing lockfile whose "resolved" URLs point at registry.npmjs.org fails through Depsilo with 404; one whose URLs point at another registry installs from there and bypasses Depsilo. Rewrite either with "npm install --package-lock-only --omit-lockfile-registry-resolved" (adding the flag to "npm ci" alone does not help); ask before rewriting it.`,
 		},
 		"go": {

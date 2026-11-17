@@ -16,8 +16,11 @@ const chunkBudgetBytes = 500_000
 // page-local leave prompts; no dependency version or lazy route seam changes.
 // Raised to 713 kB by the shared UI layer: the base border-colour reset, the
 // shared <details> chevron, and the Admin brand/filter/severity utilities.
+// Raised to 714 kB for headroom by the first-run surface (browser-language
+// default, first-run and loopback hints, client notes), which measured
+// 712.99 kB after reshaping.
 // Keep <2 kB headroom; the existing 320 kB transfer limit remains unchanged.
-const initialAssetsBudgetBytes = 713_000
+const initialAssetsBudgetBytes = 714_000
 const initialAssetsTransferBudgetBytes = 320_000
 const lazyModules = ['PortalApp-', 'SetupWizard-', 'AdminApp-', 'AdminShell-']
 

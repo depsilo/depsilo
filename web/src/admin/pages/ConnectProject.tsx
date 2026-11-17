@@ -249,6 +249,14 @@ function ConnectionWorkspace({ connection, restored, managerName, selectors, onR
             <Link to="/" target="_blank" rel="noreferrer">{t('onboarding.connectionDocs')}<Icon name="arrow_forward" size="sm" /></Link>
           </details>
         </section>
+        {connection.notes.length > 0 && <section className="connection-section connection-notes" aria-labelledby="connection-notes-title">
+          <header className="connection-section-heading"><h2 id="connection-notes-title">{t('quickstart.notesTitle')}</h2></header>
+          {connection.notes.map(note => <div key={note.text}>
+            <p className="connection-note">{t(note.text)}</p>
+            {note.body && <CodeBlock key={note.body} wrap filename={note.file ?? t('onboarding.terminal')} code={note.body} language={note.lang}
+              copyName={note.file ?? t('quickstart.notesTitle')} />}
+          </div>)}
+        </section>}
       </div>
       <aside className="connection-verification" aria-label={t('onboarding.verificationResult')}>
         <div className={`connection-result connection-result-${tone}`}>

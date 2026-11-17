@@ -36,7 +36,52 @@ export interface ManagerConfig {
   verify: { lang: string; body: string }
   paths: ManagerPath[]
   tutorial: string[]
+  /**
+   * Caveats shown with the instructions. `text` is a translation key; `body`
+   * is an optional command, or a line for `file`, the note tells the reader
+   * to use.
+   */
+  notes?: ManagerNote[]
 }
+
+export interface ManagerNote {
+  text: string
+  file?: string
+  lang?: string
+  body?: string
+  /** About a plain-HTTP opt-in, so not shown for an https address. */
+  plainHttpOnly?: boolean
+}
+
+// A lockfile recorded against another registry asks for tarball paths Depsilo
+// never issued, and one generated through Depsilo records this instance's URLs.
+const LOCKFILE_REGENERATE: ManagerNote = { text: 'quickstart.note.lockfileRegenerate' }
+const LOCKFILE_BOUND: ManagerNote = { text: 'quickstart.note.lockfileBound' }
+// Bun, like npm, moves registry.npmjs.org URLs of bun.lock to the configured
+// registry and follows other registries' URLs as recorded.
+const BUN_LOCKFILE: ManagerNote = { text: 'quickstart.note.bunLockfile' }
+// uv.lock names the index as the registry of every package, whether the index
+// comes from pyproject.toml, uv.toml or UV_INDEX_URL, so its sentence names no
+// file. poetry.lock writes the url of the configured source under every
+// package it supplied, and Pipfile.lock lists the Pipfile's sources.
+const UV_LOCKFILE_BOUND: ManagerNote = { text: 'quickstart.note.uvLockfileBound' }
+const PYTHON_LOCKFILE_BOUND: ManagerNote = { text: 'quickstart.note.pythonLockfileBound' }
+// Yarn 2+ refuses an http registry (YN0081) until the host name is
+// whitelisted; the second line is dropped for an https address.
+const YARN_BERRY_SET = 'yarn config set npmRegistryServer {URL}/npm/\n'
+  + 'yarn config set unsafeHttpWhitelist --json \'["{HOSTNAME}"]\''
+// Depsilo relays /sumdb/ to its Go upstreams and answers 404 when none
+// mirrors the database, which sends the go command there directly.
+const GO_SUMDB: ManagerNote = { text: 'quickstart.note.goSumdb', lang: 'sh', body: 'go env -w GOSUMDB=sum.golang.google.cn' }
+// `dotnet nuget add source` has --allow-insecure-connections since .NET SDK 9;
+// earlier SDKs reject the option and only warn about an http source.
+const DOTNET_INSECURE_FLAG: ManagerNote = { text: 'quickstart.note.dotnetInsecureFlag', plainHttpOnly: true,
+  lang: 'sh', body: 'dotnet nuget add source {URL}/nuget/v3/index.json -n depsilo' }
+// `bundle config set` and `get` exist since Bundler 2.1. Bundler 1.x exits 0,
+// stores the arguments under a BUNDLE_SET key and leaves the mirror unset;
+// the flag-first form and the bare query work on 1.x and 2.x alike.
+const BUNDLER_LEGACY: ManagerNote = { text: 'quickstart.note.bundlerLegacy', lang: 'sh',
+  body: 'bundle config --local mirror.https://rubygems.org {URL}/rubygems/\nbundle config mirror.https://rubygems.org' }
 
 /**
  * Catalog grouping for the QuickStart ecosystem picker.
@@ -71,17 +116,17 @@ const LANGUAGE_DEFINITIONS: Language[] = [
     managers: [
       {
         id: 'pip', name: 'pip', hint: 'PyPA package installer',
-        quick:      { lang: 'sh', body: 'pip install -i {URL}/pypi/simple/ requests' },
+        quick:      { lang: 'sh', body: 'pip install -i {URL}/pypi/simple/ --trusted-host {HOST} requests' },
         configure:  { lang: 'sh', body: 'pip config set global.index-url {URL}/pypi/simple/\npip config set global.trusted-host {HOST}' },
         test:       { purpose: 'artifact', targetPackage: 'six', targetVersion: '1.17.0',
           ...getIsolatedArtifactCommand('pip') },
         methods: [
-          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'pip install -i {URL}/pypi/simple/ requests' },
-          { label: 'quickstart.method.envvar', lang: 'sh', body: 'PIP_INDEX_URL={URL}/pypi/simple/ pip install requests' },
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'pip install -i {URL}/pypi/simple/ --trusted-host {HOST} requests' },
+          { label: 'quickstart.method.envvar', lang: 'sh', body: 'PIP_INDEX_URL={URL}/pypi/simple/ PIP_TRUSTED_HOST={HOST} pip install requests' },
         ],
         persistent: { file: '~/.config/pip/pip.conf', lang: 'ini',
           body: '[global]\nindex-url = {URL}/pypi/simple/\ntrusted-host = {HOST}' },
-        verify:     { lang: 'sh', body: 'pip install -i {URL}/pypi/simple/ --dry-run six' },
+        verify:     { lang: 'sh', body: 'pip install -i {URL}/pypi/simple/ --trusted-host {HOST} --dry-run six' },
         paths: [
           { os: 'macOS / Linux', path: '~/.config/pip/pip.conf' },
           { os: 'Linux (legacy)', path: '~/.pip/pip.conf' },
@@ -117,24 +162,25 @@ const LANGUAGE_DEFINITIONS: Language[] = [
           'For shell-wide setup, export UV_INDEX_URL in ~/.zshrc.',
           'uv lock will rewrite uv.lock to point at the new index.',
         ],
+        notes: [UV_LOCKFILE_BOUND],
       },
       {
         id: 'venv', name: 'venv', hint: 'Project-local virtualenv',
-        quick:      { lang: 'sh', body: 'python -m venv .venv && source .venv/bin/activate && pip install -i {URL}/pypi/simple/ requests' },
+        quick:      { lang: 'sh', body: 'python3 -m venv .venv && source .venv/bin/activate && pip install -i {URL}/pypi/simple/ --trusted-host {HOST} requests' },
         test:       { purpose: 'artifact', targetPackage: 'six', targetVersion: '1.17.0',
           ...getIsolatedArtifactCommand('pip') },
         methods: [
-          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'python -m venv .venv && source .venv/bin/activate\npip install -i {URL}/pypi/simple/ requests' },
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'python3 -m venv .venv && source .venv/bin/activate\npip install -i {URL}/pypi/simple/ --trusted-host {HOST} requests' },
         ],
         persistent: { file: '.venv/pip.conf', lang: 'ini',
           body: '[global]\nindex-url = {URL}/pypi/simple/\ntrusted-host = {HOST}' },
-        verify:     { lang: 'sh', body: 'pip install -i {URL}/pypi/simple/ -r requirements.txt' },
+        verify:     { lang: 'sh', body: 'pip install -i {URL}/pypi/simple/ --trusted-host {HOST} -r requirements.txt' },
         paths: [
           { os: 'venv-local', path: '.venv/pip.conf' },
           { os: 'venv-local', path: '.venv/Lib/pip.ini (Windows)' },
         ],
         tutorial: [
-          'Create the venv: python -m venv .venv',
+          'Create the venv: python3 -m venv .venv',
           'Activate it: source .venv/bin/activate',
           'Drop pip.conf inside .venv so the config is scoped to the venv only.',
           'Reinstall: pip install -r requirements.txt',
@@ -161,6 +207,7 @@ const LANGUAGE_DEFINITIONS: Language[] = [
           'Lock new deps with poetry lock --no-update.',
           'Verify resolution with poetry install --dry-run.',
         ],
+        notes: [PYTHON_LOCKFILE_BOUND],
       },
       {
         id: 'pipenv', name: 'Pipenv', hint: 'Pipfile + virtualenv',
@@ -180,6 +227,7 @@ const LANGUAGE_DEFINITIONS: Language[] = [
           'PIPENV_PYPI_MIRROR overrides all sources without editing Pipfile — useful in CI.',
           'Run pipenv lock to regenerate Pipfile.lock with the new source.',
         ],
+        notes: [PYTHON_LOCKFILE_BOUND],
       },
       {
         id: 'pdm', name: 'PDM', hint: 'PEP 517 manager',
@@ -256,6 +304,12 @@ const LANGUAGE_DEFINITIONS: Language[] = [
           'Use scoped overrides (@your-org:registry=…) when only some packages route through Depsilo.',
           'Verify with npm config get registry.',
         ],
+        notes: [
+          { text: 'quickstart.note.npmLockfile', lang: 'sh',
+            body: 'npm install --package-lock-only --omit-lockfile-registry-resolved\nnpm ci' },
+          { text: 'quickstart.note.npmLockfileSetting', file: './.npmrc', lang: 'ini',
+            body: 'omit-lockfile-registry-resolved=true' },
+        ],
       },
       {
         id: 'pnpm', name: 'pnpm', hint: 'Hard-linked store',
@@ -264,39 +318,67 @@ const LANGUAGE_DEFINITIONS: Language[] = [
         test:       { lang: 'sh', purpose: 'metadata', targetPackage: 'is-number', body: 'pnpm view is-number version' },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'pnpm install --registry={URL}/npm/ lodash' },
-          { label: 'quickstart.method.envvar', lang: 'sh', body: 'NPM_CONFIG_REGISTRY={URL}/npm/ pnpm install lodash' },
+          { label: 'quickstart.method.envvarPnpm11', lang: 'sh', body: 'PNPM_CONFIG_REGISTRY={URL}/npm/ pnpm install lodash' },
+          { label: 'quickstart.method.envvarPnpm10', lang: 'sh', body: 'NPM_CONFIG_REGISTRY={URL}/npm/ pnpm install lodash' },
         ],
         persistent: { file: '~/.npmrc', lang: 'ini',
-          body: 'registry={URL}/npm/\nstore-dir=~/.pnpm-store' },
+          body: 'registry={URL}/npm/' },
         verify:     { lang: 'sh', body: 'pnpm config get registry' },
         paths: [
           { os: 'User',        path: '~/.npmrc' },
           { os: 'Per-project', path: './.npmrc' },
+          { os: 'Env (pnpm 11+)',  path: 'PNPM_CONFIG_REGISTRY' },
+          { os: 'Env (pnpm ≤ 10)', path: 'NPM_CONFIG_REGISTRY' },
         ],
         tutorial: [
-          'pnpm reads the same .npmrc as npm.',
-          'Set store-dir to keep your hard-linked store in a known location.',
-          'pnpm config set registry {URL}/npm/ writes to ~/.npmrc.',
+          'pnpm reads the registry setting from the same .npmrc as npm.',
+          'pnpm 11 and later ignore NPM_CONFIG_REGISTRY and npm_config_registry; set PNPM_CONFIG_REGISTRY. pnpm 10 and earlier read NPM_CONFIG_REGISTRY.',
         ],
+        notes: [LOCKFILE_REGENERATE, LOCKFILE_BOUND,
+          { text: 'quickstart.note.pnpmLockfileMismatch', file: 'pnpm-workspace.yaml', lang: 'yaml', body: 'trustLockfile: true' }],
       },
       {
-        id: 'yarn', name: 'Yarn', hint: 'Berry & Classic',
-        quick:      { lang: 'sh', body: 'yarn config set npmRegistryServer {URL}/npm/' },
+        // Yarn 1 accepts and echoes npmRegistryServer but installs from
+        // `registry`, so the two generations never share an instruction.
+        id: 'yarn', name: 'Yarn 2+', hint: 'Yarn 2 and later (Berry)',
+        quick:      { lang: 'sh', body: YARN_BERRY_SET },
         methods: [
-          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'yarn config set npmRegistryServer {URL}/npm/' },
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: YARN_BERRY_SET },
         ],
         persistent: { file: './.yarnrc.yml', lang: 'yaml',
-          body: 'npmRegistryServer: "{URL}/npm/"\nunsafeHttpWhitelist:\n  - {HOST}' },
+          body: 'npmRegistryServer: "{URL}/npm/"\nunsafeHttpWhitelist:\n  - "{HOSTNAME}"' },
         verify:     { lang: 'sh', body: 'yarn config get npmRegistryServer' },
         paths: [
-          { os: 'Berry (Yarn 2+)', path: './.yarnrc.yml' },
-          { os: 'Classic (Yarn 1)', path: '~/.yarnrc' },
+          { os: 'Per-project', path: './.yarnrc.yml' },
+          { os: 'User',        path: '~/.yarnrc.yml' },
         ],
         tutorial: [
-          'Yarn 2+ (Berry) uses .yarnrc.yml — commit it to share with the team.',
-          'Add Depsilo host to unsafeHttpWhitelist if not on HTTPS.',
-          'Yarn Classic uses ~/.yarnrc with a different syntax (registry "{URL}/npm/").',
+          'Yarn 2 and later (Berry) read .yarnrc.yml — commit it to share with the team.',
+          'On plain HTTP, list the Depsilo host name in unsafeHttpWhitelist without the port; Yarn rejects an entry that includes one.',
         ],
+        notes: [LOCKFILE_REGENERATE, LOCKFILE_BOUND],
+      },
+      {
+        id: 'yarn-classic', name: 'Yarn 1', hint: 'Yarn Classic (1.x)',
+        quick:      { lang: 'sh', body: 'yarn config set registry {URL}/npm/' },
+        configure:  { lang: 'sh', body: 'yarn config set registry {URL}/npm/' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'yarn config set registry {URL}/npm/' },
+        ],
+        persistent: { file: '~/.yarnrc', lang: 'conf',
+          body: 'registry "{URL}/npm/"' },
+        verify:     { lang: 'sh', body: 'yarn config get registry' },
+        paths: [
+          { os: 'User',        path: '~/.yarnrc' },
+          { os: 'Per-project', path: './.yarnrc' },
+        ],
+        tutorial: [
+          'Yarn 1 (Classic) installs from the registry setting in .yarnrc.',
+          'It accepts and echoes npmRegistryServer without using it, so check with yarn config get registry.',
+        ],
+        // Yarn 1 does not fail on a foreign lockfile: it downloads from the
+        // recorded URLs and never reaches Depsilo.
+        notes: [{ text: 'quickstart.note.yarnClassicLockfile' }, LOCKFILE_BOUND],
       },
       {
         id: 'bun', name: 'Bun', hint: 'JS runtime + manager',
@@ -316,6 +398,7 @@ const LANGUAGE_DEFINITIONS: Language[] = [
           'For private registries, set a scoped key under [install.scopes].',
           'Clear the cache with bun pm cache rm to force re-fetch.',
         ],
+        notes: [BUN_LOCKFILE, LOCKFILE_BOUND],
       },
     ],
   },
@@ -348,7 +431,7 @@ const LANGUAGE_DEFINITIONS: Language[] = [
         quick:      { lang: 'sh', body: 'gradle build --refresh-dependencies' },
         methods: [],
         persistent: { file: '~/.gradle/init.gradle', lang: 'groovy',
-          body: 'allprojects {\n  repositories {\n    maven { url "{URL}/maven/" }\n  }\n}' },
+          body: 'allprojects {\n  repositories {\n    maven {\n      url "{URL}/maven/"\n      allowInsecureProtocol = true\n    }\n  }\n}' },
         verify:     { lang: 'sh', body: 'gradle dependencies --refresh-dependencies' },
         paths: [
           { os: 'User',        path: '~/.gradle/init.gradle' },
@@ -358,6 +441,7 @@ const LANGUAGE_DEFINITIONS: Language[] = [
           'Gradle has no built-in CLI flag to override repository URLs — use an init.gradle script instead.',
           'init.gradle is applied to every project on this machine.',
           'For per-project setup, add maven { url "{URL}/maven/" } to the repositories block in build.gradle(.kts).',
+          'Gradle 7 and later refuse a plain HTTP repository unless it sets allowInsecureProtocol = true (isAllowInsecureProtocol = true in Kotlin DSL); leave it out for HTTPS.',
           'Use --refresh-dependencies to bypass the local cache for verification.',
         ],
       },
@@ -428,8 +512,10 @@ const LANGUAGE_DEFINITIONS: Language[] = [
         tutorial: [
           'go env -w writes to ~/.config/go/env, persisting across shells.',
           ',direct is used only after a 404/410 response; it is not outage failover.',
-          'Keep GOSUMDB enabled so Go continues verifying public module checksums.',
+          'Keep GOSUMDB at its default so Go continues verifying public module checksums.',
+          'Depsilo relays checksum lookups to a Go upstream that mirrors the checksum database; without one the go command contacts sum.golang.org directly, and GOSUMDB=sum.golang.google.cn is the alternative where that is unreachable.',
         ],
+        notes: [GO_SUMDB],
       },
       {
         id: 'shell', name: 'GOPROXY env', hint: 'Shell-level',
@@ -450,6 +536,7 @@ const LANGUAGE_DEFINITIONS: Language[] = [
           'Shell exports take precedence over go env values in the current session.',
           'Reload with source ~/.zshrc after editing.',
         ],
+        notes: [GO_SUMDB],
       },
     ],
   },
@@ -568,11 +655,14 @@ const LANGUAGE_DEFINITIONS: Language[] = [
         ],
       },
       {
+        // Without --local or --global the file `bundle config` writes depends
+        // on the Bundler version and the directory, so every command names one.
         id: 'bundler', name: 'Bundler', hint: 'bundle config',
-        quick:      { lang: 'sh', body: 'bundle config mirror.https://rubygems.org {URL}/rubygems/' },
-        configure:  { lang: 'sh', body: 'bundle config mirror.https://rubygems.org {URL}/rubygems/' },
+        quick:      { lang: 'sh', body: 'bundle config set --local mirror.https://rubygems.org {URL}/rubygems/' },
+        configure:  { lang: 'sh', body: 'bundle config set --local mirror.https://rubygems.org {URL}/rubygems/' },
         methods: [
-          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'bundle config mirror.https://rubygems.org {URL}/rubygems/' },
+          { label: 'quickstart.method.cmdlineProject', lang: 'sh', body: 'bundle config set --local mirror.https://rubygems.org {URL}/rubygems/' },
+          { label: 'quickstart.method.cmdlineUser', lang: 'sh', body: 'bundle config set --global mirror.https://rubygems.org {URL}/rubygems/' },
         ],
         persistent: { file: '.bundle/config', lang: 'yaml',
           body: 'BUNDLE_MIRROR__HTTPS://RUBYGEMS__ORG/: "{URL}/rubygems/"' },
@@ -582,9 +672,10 @@ const LANGUAGE_DEFINITIONS: Language[] = [
           { os: 'Per-user',    path: '~/.bundle/config' },
         ],
         tutorial: [
-          'bundle config mirror writes to .bundle/config in the current directory.',
-          'Add --global to write to ~/.bundle/config instead.',
+          'bundle config set --local writes .bundle/config in the project directory.',
+          'bundle config set --global writes ~/.bundle/config for the current user.',
         ],
+        notes: [BUNDLER_LEGACY],
       },
     ],
   },
@@ -595,12 +686,12 @@ const LANGUAGE_DEFINITIONS: Language[] = [
       {
         id: 'cli', name: 'dotnet CLI', hint: 'nuget add source',
         quick:      { lang: 'sh', body: 'dotnet restore --source {URL}/nuget/v3/index.json' },
-        configure:  { lang: 'sh', body: 'dotnet nuget add source {URL}/nuget/v3/index.json -n depsilo' },
+        configure:  { lang: 'sh', body: 'dotnet nuget add source {URL}/nuget/v3/index.json -n depsilo --allow-insecure-connections' },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'dotnet restore --source {URL}/nuget/v3/index.json' },
         ],
         persistent: { file: 'dotnet nuget add source', lang: 'sh',
-          body: 'dotnet nuget add source {URL}/nuget/v3/index.json -n depsilo' },
+          body: 'dotnet nuget add source {URL}/nuget/v3/index.json -n depsilo --allow-insecure-connections' },
         verify:     { lang: 'sh', body: 'dotnet nuget list source' },
         paths: [
           { os: 'User (macOS/Linux)', path: '~/.nuget/NuGet/NuGet.Config' },
@@ -609,17 +700,19 @@ const LANGUAGE_DEFINITIONS: Language[] = [
         ],
         tutorial: [
           'CLI add source writes to your user-level NuGet.Config.',
+          '.NET SDK 9 and later fail a plain HTTP source with NU1302 unless it is added with --allow-insecure-connections; leave the flag out for HTTPS.',
           'For repo-level setup, commit a NuGet.Config next to your .sln.',
         ],
+        notes: [DOTNET_INSECURE_FLAG],
       },
       {
         id: 'nuget', name: 'NuGet.Config', hint: 'Per-project',
         quick:      { lang: 'sh', body: 'dotnet restore --source {URL}/nuget/v3/index.json' },
         methods: [
-          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'dotnet nuget add source {URL}/nuget/v3/index.json -n depsilo' },
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'dotnet nuget add source {URL}/nuget/v3/index.json -n depsilo --allow-insecure-connections' },
         ],
         persistent: { file: 'NuGet.Config', lang: 'xml',
-          body: '<configuration>\n  <packageSources>\n    <add key="depsilo" value="{URL}/nuget/v3/index.json" />\n  </packageSources>\n</configuration>' },
+          body: '<configuration>\n  <packageSources>\n    <add key="depsilo" value="{URL}/nuget/v3/index.json" allowInsecureConnections="true" />\n  </packageSources>\n</configuration>' },
         verify:     { lang: 'sh', body: 'dotnet restore --verbosity normal' },
         paths: [
           { os: 'Per-project',  path: './NuGet.Config' },
@@ -628,7 +721,9 @@ const LANGUAGE_DEFINITIONS: Language[] = [
         tutorial: [
           'Place NuGet.Config next to your .sln for solution-wide effect.',
           'Use <clear /> inside <packageSources> to drop default nuget.org.',
+          '.NET SDK 9 and later fail a plain HTTP source with NU1302 unless it carries allowInsecureConnections="true"; leave the attribute out for HTTPS.',
         ],
+        notes: [DOTNET_INSECURE_FLAG],
       },
     ],
   },
@@ -788,6 +883,24 @@ const LANGUAGE_DEFINITIONS: Language[] = [
     ],
   },
 ]
+
+/** The translation key of a catalog group's section header. */
+export function groupLabelKey(group: LanguageGroup): string {
+  return `quickstart.group${group.charAt(0).toUpperCase()}${group.slice(1)}`
+}
+
+/** The translation key of an ecosystem's subtitle in the Quick Start catalog. */
+export function ecosystemLabelKey(subtitleKey: string): string {
+  return `quickstart.eco${subtitleKey.charAt(0).toUpperCase()}${subtitleKey.slice(1)}`
+}
+
+/** The translation key of a package manager's one-line description. */
+export function managerHintKey(managerId: string): string {
+  const normalized = managerId.replace(/-([a-z])/g, (_, letter: string) =>
+    letter.toUpperCase(),
+  )
+  return `quickstart.managerHints.${normalized}`
+}
 
 /**
  * Canonical package-manager catalog shared by Portal quick start and Admin

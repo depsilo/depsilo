@@ -1,7 +1,7 @@
-import { LANGUAGES, type Language, type ManagerConfig } from './ecosystemData'
+import { LANGUAGES, type Language, type ManagerConfig, type ManagerNote } from './ecosystemData'
 import { getIsolatedArtifactCommand } from './artifactTestCommands'
 import type { EcosystemType } from './ecosystemTypes'
-import { renderManagerTemplate, resolveServiceOrigin } from './packageManagerConfig'
+import { renderManagerNotes, renderManagerTemplate, resolveServiceOrigin } from './packageManagerConfig'
 
 export type PipScope = 'temporary' | 'user' | 'venv'
 export type ConnectionShell = 'posix' | 'powershell'
@@ -24,6 +24,8 @@ export interface ClientConnection {
   shell: ConnectionShell
   shellOptions: readonly ConnectionShell[]
   verifyConfig?: ConnectionCommand
+  /** The manager's catalog caveats, with any command filled for this instance. */
+  notes: ManagerNote[]
   test: {
     purpose: 'artifact' | 'metadata' | 'manual'
     command?: ConnectionCommand
@@ -57,6 +59,7 @@ const CONFIG_INSPECTION: Record<string, string> = {
   npm: 'npm config get registry',
   pnpm: 'pnpm config get registry',
   yarn: 'yarn config get npmRegistryServer',
+  'yarn-classic': 'yarn config get registry',
   goenv: 'go env GOPROXY',
   shell: 'go env GOPROXY',
   gem: 'gem sources',
@@ -104,12 +107,16 @@ export function getClientConnection(
     verifyConfig: CONFIG_INSPECTION[managerId]
       ? { lang: 'sh', body: CONFIG_INSPECTION[managerId] }
       : undefined,
+    notes: renderManagerNotes(manager.notes, endpoint),
     test: connectionTest(manager, endpoint),
   }
 
   if (managerId === 'pip') {
     const scope = options.pipScope ?? 'user'
-    connection.verifyConfig = { lang: 'sh', body: 'python -m pip config debug' }
+    // Homebrew Python and Debian or Ubuntu without python-is-python3 have no
+    // `python`; the Windows installer has no `python3` outside the Store alias.
+    const python = shell === 'powershell' ? 'python' : 'python3'
+    connection.verifyConfig = { lang: 'sh', body: `${python} -m pip config debug` }
     connection.shellOptions = SHELL_OPTIONS
     connection.test.hintKey = 'onboarding.testIsolatedArtifactHint'
     connection.test.command = getIsolatedArtifactCommand('pip', shell, {
@@ -122,13 +129,13 @@ export function getClientConnection(
       return connection
     }
     const scopeFlag = scope === 'venv' ? '--site' : '--user'
-    const statements = [`python -m pip config ${scopeFlag} set global.index-url '${endpoint}/pypi/simple/'`]
+    const statements = [`${python} -m pip config ${scopeFlag} set global.index-url '${endpoint}/pypi/simple/'`]
     if (new URL(endpoint).protocol === 'http:') {
-      statements.push(`python -m pip config ${scopeFlag} set global.trusted-host '${new URL(endpoint).host}'`)
+      statements.push(`${python} -m pip config ${scopeFlag} set global.trusted-host '${new URL(endpoint).host}'`)
     }
     // `pip config` deliberately ignores --require-virtualenv. Without this
     // check --site could write to the base Python installation instead.
-    const guard = 'python -c "import sys; sys.exit(0 if sys.prefix != sys.base_prefix else \'Activate a virtual environment first.\')"'
+    const guard = `${python} -c "import sys; sys.exit(0 if sys.prefix != sys.base_prefix else 'Activate a virtual environment first.')"`
     const configure = scope === 'venv'
       ? shell === 'powershell'
         ? `${guard}\nif ($LASTEXITCODE -eq 0) {\n  ${statements.join('\n  ')}\n}`
@@ -159,6 +166,10 @@ export function getClientConnection(
     connection.shellOptions = SHELL_OPTIONS
     connection.test.hintKey = 'onboarding.testIsolatedArtifactHint'
     connection.test.command = getIsolatedArtifactCommand('npm', shell)
+  } else if (managerId === 'bundler') {
+    // The command is --local: it writes .bundle/config in the project root
+    // (the directory of the Gemfile).
+    connection.scope = { id: 'catalog', labelKey: 'onboarding.scopeProject', hintKey: 'onboarding.scopeBundlerProjectHint' }
   } else if (managerId === 'docker') {
     // Manifest events have image/tag identity; shared blob keys do not.
     // Keep the strict target so an unrelated Docker pull cannot satisfy it.

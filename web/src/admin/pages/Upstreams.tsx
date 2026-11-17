@@ -502,6 +502,15 @@ export default function Upstreams() {
   }
 
   const isSaving = createMutation.isPending || updateMutation.isPending
+  // Tarball URLs Depsilo issued name the npm upstream (its name, endpoint and
+  // own proxy) they came from, so a lockfile that recorded them stops
+  // resolving once any of them changes. The hint goes under the first changed
+  // field of URL, proxy and name.
+  const saved = editId !== null ? allUpstreams.find(candidate => candidate.id === editId) : undefined
+  const npmSaved = form.adapter_type === 'npm' && saved !== undefined
+  const npmURLChanged = npmSaved && form.url.trim() !== saved.url
+  const npmProxyChanged = npmSaved && !npmURLChanged && form.proxy.trim() !== (saved.proxy ?? '')
+  const npmNameChanged = npmSaved && !npmURLChanged && !npmProxyChanged && form.name.trim() !== saved.name
   const saveError = editId !== null ? updateMutation.error : createMutation.error
   const apiError = getApiError(error)
   const errorMessage = apiError.status === 403 ? t('common.permissionDenied') : apiError.message
@@ -709,7 +718,7 @@ export default function Upstreams() {
                   <AlertTitle>{t('upstreams.sharedFailureTitle', { count: fakeIPFailureCount })}</AlertTitle>
                   <AlertDescription>
                     <p>{t('upstreams.failure.egress_fake_ip.shared')}</p>
-                    <p>{t('upstreams.failure.egress_fake_ip.action')}</p>
+                    <p className="[overflow-wrap:anywhere]">{t('upstreams.failure.egress_fake_ip.action')}</p>
                   </AlertDescription>
                 </Alert>
               </div>
@@ -879,6 +888,7 @@ export default function Upstreams() {
                     required
                   />
                   {(fieldErrors.name) && <FieldError match>{fieldErrors.name}</FieldError>}
+                  {npmNameChanged && <FieldDescription data-npm-source-change>{t('upstreams.npmSourceChangeHint')}</FieldDescription>}
                 </Field>
                 <Field invalid={Boolean(fieldErrors.url)}>
                   <FieldLabel>{t('upstreams.url')}</FieldLabel>
@@ -895,6 +905,7 @@ export default function Upstreams() {
                     required
                   />
                   {(fieldErrors.url) && <FieldError match>{fieldErrors.url}</FieldError>}
+                  {npmURLChanged && <FieldDescription data-npm-source-change>{t('upstreams.npmSourceChangeHint')}</FieldDescription>}
                 </Field>
                 <Field invalid={Boolean(fieldErrors.proxy)}>
                   <FieldLabel>{t('upstreams.httpProxy')}</FieldLabel>
@@ -909,6 +920,7 @@ export default function Upstreams() {
                     placeholder="http://127.0.0.1:7890"
                   />
                   {(fieldErrors.proxy) ? <FieldError match>{fieldErrors.proxy}</FieldError> : (t('upstreams.proxyHint')) ? <FieldDescription>{t('upstreams.proxyHint')}</FieldDescription> : null}
+                  {npmProxyChanged && <FieldDescription data-npm-source-change>{t('upstreams.npmSourceChangeHint')}</FieldDescription>}
                 </Field>
                 <Field>
                   <FieldLabel>{t('upstreams.via')}</FieldLabel>

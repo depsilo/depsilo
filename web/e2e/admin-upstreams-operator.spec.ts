@@ -320,6 +320,57 @@ test('an upstream with a removed cascade peer can be switched back to direct egr
   expect(submitted?.via).toBe('')
 })
 
+test('changing the URL, proxy or name of an existing npm upstream warns that lockfiles generated through Depsilo stop working', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/upstreams': listResponse([
+      makeUpstream(1, { adapter_type: 'npm', name: 'npmjs', url: 'https://registry.npmjs.org' }),
+      makeUpstream(2),
+    ]),
+  })
+  await page.goto('/admin/upstreams')
+  const dialog = page.getByRole('dialog', { name: 'Edit Upstream' })
+  const hint = dialog.locator('[data-npm-source-change]')
+  const message = 'Changing the name, URL or proxy of this npm upstream invalidates lockfiles generated through Depsilo: '
+    + 'the tarball URLs they record return 404 afterwards, so regenerate them after saving.'
+
+  await page.getByRole('button', { name: 'Edit npmjs', exact: true }).click()
+  const address = dialog.getByLabel('URL', { exact: true })
+  await expect(address).toHaveValue('https://registry.npmjs.org')
+  await expect(hint).toHaveCount(0)
+  await address.fill('https://registry.npmmirror.com')
+  await expect(hint).toHaveText(message)
+  await expect(address).toHaveAccessibleDescription(/invalidates lockfiles generated through Depsilo/)
+  // Restoring the saved URL changes nothing, so the warning goes away.
+  await address.fill(' https://registry.npmjs.org ')
+  await expect(hint).toHaveCount(0)
+  // Signed tarball URLs also carry the upstream's own proxy and its name.
+  const proxy = dialog.getByLabel('HTTP Proxy (optional)', { exact: true })
+  await proxy.fill('http://10.0.0.9:3128')
+  await expect(hint).toHaveText(message)
+  await expect(proxy).toHaveAccessibleDescription(/invalidates lockfiles generated through Depsilo/)
+  await proxy.fill(' ')
+  await expect(hint).toHaveCount(0)
+  const name = dialog.getByLabel('Name', { exact: true })
+  await name.fill('npm-official')
+  await expect(hint).toHaveText(message)
+  await expect(name).toHaveAccessibleDescription(/invalidates lockfiles generated through Depsilo/)
+  // With both changed, the hint is shown once.
+  await address.fill('https://registry.npmmirror.com')
+  await expect(hint).toHaveCount(1)
+  await name.fill(' npmjs ')
+  await address.fill('https://registry.npmjs.org')
+  await expect(hint).toHaveCount(0)
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(dialog).toBeHidden()
+
+  // Other ecosystems do not issue instance-bound URLs.
+  await page.getByRole('button', { name: 'Edit source-2', exact: true }).click()
+  await dialog.getByLabel('URL', { exact: true }).fill('https://other.example/simple')
+  await dialog.getByLabel('Name', { exact: true }).fill('renamed')
+  await expect(hint).toHaveCount(0)
+})
+
 test('pending or failed cascade reads do not mislabel an existing peer as removed', async ({ page }) => {
   const upstream = makeUpstream(1, { via: 'existing-parent' })
   let releaseCascade: (() => void) | undefined
@@ -397,9 +448,13 @@ test('a fake-IP egress denial is explained on the card and in check results', as
   // A container operator sets the proxy in the environment, not in config.toml.
   await expect(card.locator('[data-upstream-failure="egress_fake_ip"]')).toContainText(
     'upstream_proxy under [egress] in config.toml (or the environment variable DEPSILO_EGRESS_UPSTREAM_PROXY)')
-  // The loopback example is wrong inside a container, so the remedy names the host's address too.
+  // The loopback example is wrong inside a container, and a container keeps
+  // the environment it was created with, so the remedy says to run it again.
   await expect(card.locator('[data-upstream-failure="egress_fake_ip"]')).toContainText(
-    'Inside a container, 127.0.0.1 is the container itself; use the host\'s address there, for example http://host.docker.internal:7890.',
+    'Inside a container, 127.0.0.1 is the container itself: remove the container and run it again with '
+    + 'DEPSILO_EGRESS_UPSTREAM_PROXY=http://host.docker.internal:7890 (docker restart keeps the old environment), '
+    + 'adding --add-host=host.docker.internal:host-gateway on Docker Engine for Linux. '
+    + 'Details: "Upstream network egress" in the deployment guide.',
   )
   // A failed upstream's average is not a response latency.
   await expect(card).not.toContainText('5 ms')
@@ -429,10 +484,16 @@ test('fake-IP DNS failing every upstream is explained once for the page', async 
   await expect(cardReasons).toHaveCount(3)
   await expect(cardReasons.first()).toHaveText('DNS returned the fake-IP address 198.18.0.1; not connected.')
 
+  // The remedy's variable cannot break at a space; it must still wrap on a phone.
+  await page.setViewportSize({ width: 320, height: 844 })
+  const remedy = await notice.getByText('DEPSILO_EGRESS_UPSTREAM_PROXY=http://host.docker.internal:7890').boundingBox()
+  expect(remedy!.x + remedy!.width).toBeLessThanOrEqual(320)
+
   await setUiPreferences(page, 'light', 'zh')
   await page.reload()
   await expect(notice).toContainText('把 upstream_proxy（或环境变量 DEPSILO_EGRESS_UPSTREAM_PROXY）设为代理软件的 HTTP 端口')
-  await expect(notice).toContainText('在容器里 127.0.0.1 指的是容器自己，要填宿主机的地址，例如 http://host.docker.internal:7890。')
+  await expect(notice).toContainText('在容器里 127.0.0.1 指的是容器自己：要删除容器，再带上 DEPSILO_EGRESS_UPSTREAM_PROXY=http://host.docker.internal:7890 重新运行（docker restart 沿用旧的环境变量），'
+    + 'Linux 上的 Docker Engine 还要加 --add-host=host.docker.internal:host-gateway。详见部署指南的“Upstream network egress”一节。')
 })
 
 test('bulk checking is capped at four requests and leaves a durable outcome summary', async ({ page }) => {

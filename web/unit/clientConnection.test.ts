@@ -10,6 +10,8 @@ import {
   getClientSelection,
 } from '../src/lib/clientConnection'
 import { LANGUAGES } from '../src/lib/ecosystemData'
+import en from '../src/i18n/en'
+import zh from '../src/i18n/zh'
 
 describe('client connection selection', () => {
   it('uses catalog managers while treating venv as a pip scope', () => {
@@ -40,7 +42,7 @@ describe('pip configuration scope', () => {
     expect(connection?.scope.id).toBe('user')
     expect(connection?.configuration?.command?.body).toContain('config --user set global.index-url')
     expect(connection?.configuration?.command?.body).toContain("global.trusted-host '10.0.0.2:23333'")
-    expect(connection?.verifyConfig?.body).toBe('python -m pip config debug')
+    expect(connection?.verifyConfig?.body).toBe('python3 -m pip config debug')
   })
 
   it('uses a one-command source without exposing a persistent configuration step', () => {
@@ -49,7 +51,7 @@ describe('pip configuration scope', () => {
         const connection = getClientConnection('python', 'pip', origin, { pipScope: 'temporary', shell })
         expect(connection?.configuration).toBeUndefined()
         expect(connection?.scope.id).toBe('temporary')
-        expect(connection?.verifyConfig?.body).toBe('python -m pip config debug')
+        expect(connection?.verifyConfig?.body).toBe(shell === 'posix' ? 'python3 -m pip config debug' : 'python -m pip config debug')
         expect(connection?.test).toMatchObject({ purpose: 'artifact', targetPackage: 'six', targetVersion: '1.17.0' })
         const command = connection?.test.command?.body ?? ''
         expect(command).toContain(`--index-url '${origin}/pypi/simple/'`)
@@ -66,7 +68,8 @@ describe('pip configuration scope', () => {
       const body = connection?.configuration?.command?.body ?? ''
       expect(body).toContain('sys.prefix != sys.base_prefix')
       expect(body.indexOf('sys.prefix')).toBeLessThan(body.indexOf('config --site'))
-      expect(body).toContain(shell === 'posix' ? '&&\npython -m pip' : 'if ($LASTEXITCODE -eq 0)')
+      expect(body).toContain(shell === 'posix' ? '&&\npython3 -m pip' : 'if ($LASTEXITCODE -eq 0)')
+      expect(body.startsWith(shell === 'posix' ? 'python3 -c ' : 'python -c ')).toBe(true)
       expect(body).not.toContain('--user')
       expect(body).not.toContain('trusted-host')
       expect(connection?.configuration?.body).not.toContain('trusted-host')
@@ -82,7 +85,8 @@ describe('connection checks and artifact tests', () => {
       const npm = getClientConnection('node', 'npm', 'https://depsilo.example', { shell })?.test
       expect(pip).toMatchObject({ purpose: 'artifact', targetPackage: 'six', targetVersion: '1.17.0' })
       expect(npm).toMatchObject({ purpose: 'artifact', targetPackage: 'is-number', targetVersion: '7.0.0' })
-      expect(pip?.command?.body).toContain('pip download')
+      // POSIX systems may have no `python`; Windows may have no `python3`.
+      expect(pip?.command?.body).toContain(shell === 'posix' ? 'python3 -m pip download' : 'python -m pip download')
       expect(pip?.command?.body).toContain('--no-cache-dir')
       expect(pip?.command?.body).toContain('--only-binary=:all:')
       expect(pip?.command?.body).toContain('--no-deps')
@@ -113,6 +117,171 @@ describe('connection checks and artifact tests', () => {
       expect(connection?.test.purpose).toBe('manual')
       expect(connection?.test.command).toBeUndefined()
       expect(connection?.verifyConfig).toBeUndefined()
+    }
+  })
+
+  it('tells every Node.js client what to do with a lockfile recorded against another registry', () => {
+    const notes = (manager: string) => getClientConnection('node', manager, 'http://10.0.0.2:23333')?.notes ?? []
+    // npm can keep its lockfile: rewrite it without resolved URLs, then install.
+    expect(notes('npm')).toEqual([
+      { text: 'quickstart.note.npmLockfile', lang: 'sh',
+        body: 'npm install --package-lock-only --omit-lockfile-registry-resolved\nnpm ci' },
+      { text: 'quickstart.note.npmLockfileSetting', file: './.npmrc', lang: 'ini',
+        body: 'omit-lockfile-registry-resolved=true' },
+    ])
+    // The others have no such flag; their lockfile then records this instance.
+    for (const manager of ['pnpm', 'yarn']) {
+      expect(notes(manager).map(note => note.text).slice(0, 2), manager)
+        .toEqual(['quickstart.note.lockfileRegenerate', 'quickstart.note.lockfileBound'])
+    }
+    // Bun, like npm, fails only on registry.npmjs.org URLs and bypasses Depsilo on others.
+    expect(notes('bun').map(note => note.text))
+      .toEqual(['quickstart.note.bunLockfile', 'quickstart.note.lockfileBound'])
+    // pnpm 11 and later refuse the regenerated lockfile without this setting.
+    expect(notes('pnpm')[2]).toEqual({ text: 'quickstart.note.pnpmLockfileMismatch',
+      file: 'pnpm-workspace.yaml', lang: 'yaml', body: 'trustLockfile: true' })
+    // Yarn 1 does not fail: it downloads from the recorded URLs instead.
+    expect(notes('yarn-classic').map(note => note.text))
+      .toEqual(['quickstart.note.yarnClassicLockfile', 'quickstart.note.lockfileBound'])
+    expect(getClientConnection('python', 'pip', 'http://10.0.0.2:23333')?.notes).toEqual([])
+  })
+
+  it('tells uv, Poetry and Pipenv users that a lockfile written with this index records this instance', () => {
+    const notes = (manager: string) => getClientConnection('python', manager, 'http://10.0.0.2:23333')?.notes
+    // uv.lock names the index as the registry of every package, also when the
+    // index comes from uv.toml or UV_INDEX_URL, so its sentence names no file.
+    expect(notes('uv')).toEqual([{ text: 'quickstart.note.uvLockfileBound' }])
+    // poetry.lock writes the url of the configured source under every
+    // package it supplied; Pipfile.lock lists the Pipfile's sources.
+    for (const manager of ['poetry', 'pipenv']) {
+      expect(notes(manager), manager).toEqual([{ text: 'quickstart.note.pythonLockfileBound' }])
+    }
+    // pip writes no lockfile, and pdm.lock stores file names only.
+    for (const manager of ['pip', 'pdm']) {
+      expect(notes(manager), manager).toEqual([])
+    }
+    // The npm sentence names the npm upstream, so Python has its own.
+    expect(en.translation.quickstart.note.uvLockfileBound)
+      .toBe("A uv.lock generated while Depsilo is the index records this instance's address, however the index is set (pyproject.toml, uv.toml or an environment variable), so it depends on this address.")
+    expect(zh.translation.quickstart.note.uvLockfileBound)
+      .toBe('只要索引指向 Depsilo，不论写在 pyproject.toml、uv.toml 还是环境变量里，生成的 uv.lock 记录的都是本实例的地址，因此依赖这个服务地址。')
+    expect(en.translation.quickstart.note.pythonLockfileBound)
+      .toBe("A lockfile generated with Depsilo as the index in the project file records this instance's address, so it depends on this address.")
+    expect(zh.translation.quickstart.note.pythonLockfileBound)
+      .toBe('项目文件把索引指向 Depsilo 后生成的 lockfile 记录的是本实例的地址，因此依赖这个服务地址。')
+  })
+
+  it('says where Go checksum lookups go and names the reachable alternative', () => {
+    for (const manager of ['goenv', 'shell']) {
+      expect(getClientConnection('go', manager, 'http://10.0.0.2:23333')?.notes, manager).toEqual([
+        { text: 'quickstart.note.goSumdb', lang: 'sh', body: 'go env -w GOSUMDB=sum.golang.google.cn' },
+      ])
+    }
+    // Depsilo relays the checksum database to a Go upstream that mirrors it,
+    // so the note must not send every reader to sum.golang.org.
+    for (const text of [en.translation.quickstart.note.goSumdb, zh.translation.quickstart.note.goSumdb]) {
+      for (const name of ['goproxy.cn', 'proxy.golang.org', 'sum.golang.org', 'GOSUMDB=sum.golang.google.cn']) {
+        expect(text).toContain(name)
+      }
+    }
+    expect(en.translation.quickstart.note.goSumdb).not.toContain('not through Depsilo')
+    expect(zh.translation.quickstart.note.goSumdb).not.toContain('不经过 Depsilo')
+  })
+
+  it('lets the reviewer accept a lockfile change the user approved', () => {
+    // The integration guide allows rewriting a package-lock.json recorded
+    // against another registry once the user approves it in the plan.
+    const { ai } = en.translation.quickstart
+    for (const text of [ai.reviewDescription, ai.reviewScopedDescription]) {
+      expect(text).toContain('no lockfile changed without your approval')
+      expect(text).not.toContain('lockfiles, checksums, and signature checks are untouched')
+    }
+    const zhAi = zh.translation.quickstart.ai
+    for (const text of [zhAi.reviewDescription, zhAi.reviewScopedDescription]) {
+      expect(text).toContain('lockfile 没有未经你同意的改动')
+    }
+    // Quick Start says "lockfile" in Chinese too, as its notes do.
+    expect(JSON.stringify(zh.translation.quickstart)).not.toContain('锁文件')
+    // The setting exists so that later changes record no resolved URLs.
+    expect(zh.translation.quickstart.note.npmLockfileSetting).toContain('这样以后的改动就不会把 resolved 地址写进 lockfile')
+  })
+
+  it('configures and inspects the setting each Yarn generation installs from', () => {
+    const berry = getClientConnection('node', 'yarn', 'http://127.0.0.1:24526')
+    expect(berry?.configuration?.file).toBe('./.yarnrc.yml')
+    expect(berry?.configuration?.command).toBeUndefined()
+    expect(berry?.configuration?.body).toContain('unsafeHttpWhitelist:\n  - "127.0.0.1"')
+    expect(berry?.verifyConfig?.body).toBe('yarn config get npmRegistryServer')
+    // Yarn 1 stores and echoes npmRegistryServer without installing from it.
+    const classic = getClientConnection('node', 'yarn-classic', 'http://127.0.0.1:24526')
+    expect(classic?.configuration?.command?.body).toBe('yarn config set registry http://127.0.0.1:24526/npm/')
+    expect(classic?.verifyConfig?.body).toBe('yarn config get registry')
+  })
+
+  it('names the scope in every Bundler command and beside it', () => {
+    // Without --local or --global, the file `bundle config` writes depends on
+    // the Bundler version and on the directory it runs in.
+    const local = 'bundle config set --local mirror.https://rubygems.org http://10.0.0.2:23333/rubygems/'
+    const bundler = LANGUAGES.find(language => language.id === 'ruby')?.managers.find(manager => manager.id === 'bundler')
+    const methods = Object.fromEntries((bundler?.methods ?? [])
+      .map(method => [method.label, method.body.replace('{URL}', 'http://10.0.0.2:23333')]))
+    expect(methods).toEqual({
+      'quickstart.method.cmdlineProject': local,
+      'quickstart.method.cmdlineUser': 'bundle config set --global mirror.https://rubygems.org http://10.0.0.2:23333/rubygems/',
+    })
+    expect(bundler?.quick.body.replace('{URL}', 'http://10.0.0.2:23333')).toBe(local)
+    // The first path is the file shown with the instructions: the project's.
+    expect(bundler?.persistent.file).toBe('.bundle/config')
+    expect(bundler?.paths).toEqual([
+      { os: 'Per-project', path: '.bundle/config' },
+      { os: 'Per-user', path: '~/.bundle/config' },
+    ])
+
+    const connection = getClientConnection('ruby', 'bundler', 'http://10.0.0.2:23333')
+    expect(connection?.configuration?.command?.body).toBe(local)
+    expect(connection?.configuration?.file).toBe('.bundle/config')
+    expect(connection?.scope).toEqual({
+      id: 'catalog', labelKey: 'onboarding.scopeProject', hintKey: 'onboarding.scopeBundlerProjectHint',
+    })
+  })
+
+  it('gives Bundler 1.x the forms it understands beside the set and get commands', () => {
+    // Bundler 1.x has no `set` or `get` subcommand: it exits 0, stores the
+    // arguments under a BUNDLE_SET key and leaves the mirror unset.
+    const http = 'http://10.0.0.2:23333'
+    const connection = getClientConnection('ruby', 'bundler', http)
+    expect(connection?.configuration?.command?.body).toContain('bundle config set ')
+    expect(connection?.verifyConfig?.body).toContain('bundle config get ')
+    expect(connection?.notes).toEqual([{
+      text: 'quickstart.note.bundlerLegacy', lang: 'sh',
+      body: `bundle config --local mirror.https://rubygems.org ${http}/rubygems/\nbundle config mirror.https://rubygems.org`,
+    }])
+    for (const text of [en.translation.quickstart.note.bundlerLegacy, zh.translation.quickstart.note.bundlerLegacy]) {
+      for (const name of ['Bundler 2.1', 'Bundler 1.x', '--global']) expect(text).toContain(name)
+    }
+  })
+
+  it('adds the Gradle and NuGet plain-HTTP opt-ins only for an http address', () => {
+    const http = 'http://10.0.0.2:23333'
+    const https = 'https://depsilo.example'
+    expect(getClientConnection('java', 'gradle', http)?.configuration?.body).toContain('allowInsecureProtocol = true')
+    expect(getClientConnection('java', 'gradle', https)?.configuration?.body).not.toContain('allowInsecure')
+    expect(getClientConnection('dotnet', 'nuget', http)?.configuration?.body).toContain('allowInsecureConnections="true"')
+    expect(getClientConnection('dotnet', 'nuget', https)?.configuration?.body).not.toContain('allowInsecure')
+    expect(getClientConnection('dotnet', 'cli', http)?.configuration?.command?.body)
+      .toBe(`dotnet nuget add source ${http}/nuget/v3/index.json -n depsilo --allow-insecure-connections`)
+    expect(getClientConnection('dotnet', 'cli', https)?.configuration?.command?.body)
+      .toBe(`dotnet nuget add source ${https}/nuget/v3/index.json -n depsilo`)
+  })
+
+  it('says which .NET SDKs accept the plain-HTTP flag wherever the flag is generated', () => {
+    const http = 'http://10.0.0.2:23333'
+    for (const manager of ['cli', 'nuget']) {
+      expect(getClientConnection('dotnet', manager, http)?.notes, manager).toEqual([{
+        text: 'quickstart.note.dotnetInsecureFlag', plainHttpOnly: true, lang: 'sh',
+        body: `dotnet nuget add source ${http}/nuget/v3/index.json -n depsilo`,
+      }])
+      expect(getClientConnection('dotnet', manager, 'https://depsilo.example')?.notes, manager).toEqual([])
     }
   })
 
@@ -188,7 +357,7 @@ printf 'package manager diagnostic\\n' >&2
 if [ -n "$DEPSILO_STUB_SIGNAL" ]; then kill -"$DEPSILO_STUB_SIGNAL" "$PPID"; fi
 exit "$DEPSILO_STUB_STATUS"
 `
-  for (const name of ['python', 'npm']) writeFileSync(join(bin, name), stub, { mode: 0o755 })
+  for (const name of ['python', 'python3', 'npm']) writeFileSync(join(bin, name), stub, { mode: 0o755 })
   // macOS's no-template mktemp can ignore TMPDIR; still create a real unique
   // directory, with a template that keeps every test's files inside its fixture.
   writeFileSync(join(bin, 'mktemp'), '#!/bin/sh\nexec /usr/bin/mktemp "$@" "$DEPSILO_STUB_TEMPORARY/download.XXXXXXXX"\n', { mode: 0o755 })

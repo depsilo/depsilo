@@ -45,7 +45,7 @@ export function getIsolatedArtifactCommand(
       '  trap \'exit 130\' HUP INT TERM',
       ...(manager === 'pip'
         ? [
-            '  python -m pip download --no-deps --no-cache-dir --only-binary=:all: \\',
+            '  python3 -m pip download --no-deps --no-cache-dir --only-binary=:all: \\',
             ...(pipSource
               ? ['    --disable-pip-version-check -d "$depsilo_tmp" \\', `   ${pipSource} six==1.17.0`]
               : ['    --disable-pip-version-check -d "$depsilo_tmp" six==1.17.0']),

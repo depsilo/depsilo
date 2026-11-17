@@ -6,7 +6,7 @@ import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon, { type IconName } from '@/components/Icon'
 import { Input } from '@/components/ui/input'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
-import { LANGUAGES, type Language, type LanguageGroup } from '@/lib/ecosystemData'
+import { LANGUAGES, ecosystemLabelKey, groupLabelKey, type Language, type LanguageGroup } from '@/lib/ecosystemData'
 
 /** A catalog entry that is not a package ecosystem, e.g. AI setup. */
 export interface CatalogEntry {
@@ -42,14 +42,6 @@ interface EntryButtonProps {
 
 const GROUP_ORDER: LanguageGroup[] = ['os', 'lang', 'data', 'infra']
 const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
-
-function groupLabelKey(group: LanguageGroup): string {
-  return `quickstart.group${group.charAt(0).toUpperCase()}${group.slice(1)}`
-}
-
-function ecoLabelKey(subtitleKey: string): string {
-  return `quickstart.eco${subtitleKey.charAt(0).toUpperCase()}${subtitleKey.slice(1)}`
-}
 
 function EntryButton({
   id,
@@ -176,7 +168,7 @@ export default function EcosystemCatalog({ selected, onSelect, leading = [], opt
         normalizedQuery,
         language.id,
         language.name,
-        t(ecoLabelKey(language.subtitleKey)),
+        t(ecosystemLabelKey(language.subtitleKey)),
         ...language.managers.flatMap(manager => [manager.id, manager.name]),
       ))
     : LANGUAGES
@@ -249,7 +241,7 @@ export default function EcosystemCatalog({ selected, onSelect, leading = [], opt
                 <EntryButton
                   id={language.id}
                   name={language.name}
-                  subtitle={t(ecoLabelKey(language.subtitleKey))}
+                  subtitle={t(ecosystemLabelKey(language.subtitleKey))}
                   icon={languageIcon(language, 14)}
                   selected={selected}
                   onSelect={onSelect}
@@ -277,7 +269,7 @@ export default function EcosystemCatalog({ selected, onSelect, leading = [], opt
             key={language.id}
             id={language.id}
             name={language.name}
-            subtitle={t(ecoLabelKey(language.subtitleKey))}
+            subtitle={t(ecosystemLabelKey(language.subtitleKey))}
             icon={languageIcon(language, 13)}
             selected={selected}
             onSelect={onSelect}

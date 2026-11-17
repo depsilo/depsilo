@@ -177,9 +177,12 @@ export default function SetupWizard({ status }: SetupWizardProps) {
     : undefined
 
   // The server refused the token: the field is enabled again in the same
-  // render that marks it invalid, so move focus to it here.
+  // render that marks it invalid, so move focus to it here. A plain focus()
+  // scrolls only the input into view and can leave its label above the top.
   useEffect(() => {
-    if (tokenRejected) tokenInputRef.current?.focus()
+    if (!tokenRejected) return
+    tokenInputRef.current?.focus({ preventScroll: true })
+    tokenInputRef.current?.closest('[data-slot="field"]')?.scrollIntoView({ block: 'center' })
   }, [tokenRejected])
 
   useEffect(() => () => {

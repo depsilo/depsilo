@@ -4,8 +4,8 @@ import { useTranslation } from 'react-i18next'
 import CodeBlock from '@/portal/components/CodeBlock'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
-import { LANGUAGES, type ManagerConfig } from '@/lib/ecosystemData'
-import { renderManagerTemplate, resolveServiceOrigin } from '@/lib/packageManagerConfig'
+import { LANGUAGES, managerHintKey, type ManagerConfig } from '@/lib/ecosystemData'
+import { renderManagerNotes, renderManagerTemplate, resolveServiceOrigin } from '@/lib/packageManagerConfig'
 import { AIIntegrationSteps } from '@/portal/components/AIIntegration'
 import PyTorchIndexNotice from '@/portal/components/PyTorchIndexNotice'
 import StepHeading from '@/portal/components/StepHeading'
@@ -22,13 +22,6 @@ interface Props {
    * When true, the parent surface owns the border and radius.
    */
   flush?: boolean
-}
-
-function managerHintKey(managerId: string): string {
-  const normalized = managerId.replace(/-([a-z])/g, (_, letter: string) =>
-    letter.toUpperCase(),
-  )
-  return `quickstart.managerHints.${normalized}`
 }
 
 function ManagerChoice({
@@ -231,6 +224,7 @@ export default function ConfigurePane({
         : null
 
   const fill = (source: string) => renderManagerTemplate(source, resolvedEndpoint)
+  const notes = renderManagerNotes(manager.notes, resolvedEndpoint)
 
   return (
     <div
@@ -359,6 +353,35 @@ export default function ConfigurePane({
               flat
             />
           </section>
+
+          {notes.length > 0 && (
+            <section data-quickstart-notes aria-labelledby="quickstart-notes-title">
+              <h4
+                id="quickstart-notes-title"
+                className="m-0 mb-2 text-[13px] font-[600] leading-[1.35] text-[var(--text)]"
+              >
+                {t('quickstart.notesTitle')}
+              </h4>
+              <ul className="m-0 flex list-none flex-col gap-3 p-0">
+                {notes.map(note => (
+                  <li key={note.text} className="flex flex-col gap-2">
+                    <p className="m-0 max-w-[72ch] text-[13px] leading-[1.5] text-[var(--text-muted)]">
+                      {t(note.text)}
+                    </p>
+                    {note.body && (
+                      <CodeBlock
+                        filename={note.file}
+                        code={note.body}
+                        language={note.lang}
+                        copyName={note.file ?? t('quickstart.notesTitle')}
+                        flat
+                      />
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           {language.id === 'python' && pytorchClient && pytorchIndexPath && (
             <PyTorchIndexNotice
