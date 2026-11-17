@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -116,6 +117,94 @@ func TestCreateCapturesCommittedWALDataAndRecordsChecksums(t *testing.T) {
 	}
 	if value != "committed-in-wal" {
 		t.Fatalf("archived value = %q, want committed WAL transaction", value)
+	}
+}
+
+// "depsilo backup --out <state>/backups/depsilo-backup.tar.gz" is what the
+// container documentation tells operators to run; the directory does not
+// exist on a new instance.
+func TestCreateMakesAMissingOutputDirectoryPrivate(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Chmod(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(root, "config.toml")
+	databasePath := filepath.Join(root, "depsilo.db")
+	writeTestState(t, configPath, databasePath)
+
+	directory := filepath.Join(root, "backups", "nightly")
+	archivePath := filepath.Join(directory, "depsilo-backup.tar.gz")
+	archive, err := backup.Create(context.Background(), backup.Paths{Config: configPath, Database: databasePath}, archivePath)
+	if err != nil {
+		t.Fatalf("Create() into a missing directory: %v", err)
+	}
+	if archive.Path != archivePath || archive.Size == 0 {
+		t.Fatalf("Create() = %+v, want a non-empty archive at %s", archive, archivePath)
+	}
+	if _, ok := readArchive(t, archivePath)["depsilo.db"]; !ok {
+		t.Fatal("archive in the created directory has no database snapshot")
+	}
+	if runtime.GOOS != "windows" {
+		for _, created := range []string{filepath.Dir(directory), directory} {
+			info, err := os.Stat(created)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if permissions := info.Mode().Perm(); permissions != 0o700 {
+				t.Errorf("created directory %s has mode %#o, want 0700", created, permissions)
+			}
+		}
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("output directory holds %d entries after the backup, want only the archive", len(entries))
+	}
+}
+
+func TestCreateNamesTheOutputDirectoryItCannotWrite(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs POSIX file permissions and a non-root user")
+	}
+	root := t.TempDir()
+	if err := os.Chmod(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(root, "config.toml")
+	databasePath := filepath.Join(root, "depsilo.db")
+	writeTestState(t, configPath, databasePath)
+	readOnly := filepath.Join(root, "read-only")
+	if err := os.Mkdir(readOnly, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(readOnly)
+	workingDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, test := range []struct {
+		name, output, wantDirectory string
+	}{
+		{name: "relative output in the working directory", output: "depsilo-backup.tar.gz", wantDirectory: workingDirectory},
+		{name: "existing directory", output: filepath.Join(readOnly, "depsilo-backup.tar.gz"), wantDirectory: readOnly},
+		{name: "directory that cannot be created", output: filepath.Join(readOnly, "backups", "depsilo-backup.tar.gz"), wantDirectory: filepath.Join(readOnly, "backups")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := backup.Create(context.Background(), backup.Paths{Config: configPath, Database: databasePath}, test.output)
+			var directoryErr *backup.OutputDirectoryError
+			if !errors.As(err, &directoryErr) {
+				t.Fatalf("Create() error = %v, want an OutputDirectoryError", err)
+			}
+			if directoryErr.Directory != test.wantDirectory || !errors.Is(err, os.ErrPermission) {
+				t.Fatalf("error names %q (%v), want %q with a permission cause", directoryErr.Directory, err, test.wantDirectory)
+			}
+			if want := "cannot write the backup into " + test.wantDirectory + ": permission denied"; err.Error() != want {
+				t.Fatalf("error text = %q, want %q", err.Error(), want)
+			}
+		})
 	}
 }
 

@@ -58,11 +58,15 @@ func installJournaled(ctx context.Context, files map[string]extractedFile, targe
 	if operations.publish == nil {
 		operations.publish = publishFile
 	}
+	if operations.ownership.newEntryOwner == nil {
+		operations.ownership = processEntryOwnership
+	}
+	ownership := operations.ownership
 	if err := ctx.Err(); err != nil {
 		return RestoreResult{}, err
 	}
 	for label, target := range map[string]string{"config": targets.Config, "database": targets.Database} {
-		if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+		if err := ownership.makeDirectories(filepath.Dir(target)); err != nil {
 			return RestoreResult{}, fmt.Errorf("create %s restore directory: %w", label, err)
 		}
 		canonical, err := canonicalRestoreTarget(target, label)
@@ -117,10 +121,10 @@ func installJournaled(ctx context.Context, files map[string]extractedFile, targe
 		_ = syncRestoreDirectories(journal)
 	}()
 
-	if err := copyFileExclusive(ctx, files["config.toml"].path, journal.Config.Candidate); err != nil {
+	if err := copyFileExclusive(ctx, files["config.toml"].path, journal.Config.Candidate, ownership); err != nil {
 		return RestoreResult{}, fmt.Errorf("stage config restore candidate: %w", err)
 	}
-	if err := copyFileExclusive(ctx, files["depsilo.db"].path, journal.Database.Candidate); err != nil {
+	if err := copyFileExclusive(ctx, files["depsilo.db"].path, journal.Database.Candidate, ownership); err != nil {
 		return RestoreResult{}, fmt.Errorf("stage database restore candidate: %w", err)
 	}
 	if err := verifyJournalFile(journal.Config.Candidate, journal.Config.NewSize, journal.Config.NewSHA256); err != nil {
@@ -131,7 +135,7 @@ func installJournaled(ctx context.Context, files map[string]extractedFile, targe
 	}
 
 	for _, entry := range []*restoreJournalEntry{&journal.Config, &journal.Database, &journal.Sidecars[0], &journal.Sidecars[1]} {
-		if err := preserveLiveFile(ctx, entry, transaction); err != nil {
+		if err := preserveLiveFile(ctx, entry, transaction, ownership); err != nil {
 			return RestoreResult{}, err
 		}
 		if entry.HadPrevious {
@@ -141,7 +145,7 @@ func installJournaled(ctx context.Context, files map[string]extractedFile, targe
 	if err := syncRestoreDirectories(journal); err != nil {
 		return RestoreResult{}, fmt.Errorf("sync prepared restore files: %w", err)
 	}
-	if err := writeRestoreJournal(journal); err != nil {
+	if err := writeRestoreJournal(journal, ownership); err != nil {
 		var publicationError *journalPublicationError
 		if errors.As(err, &publicationError) {
 			journalDurable = true
@@ -164,7 +168,7 @@ func installJournaled(ctx context.Context, files map[string]extractedFile, targe
 		return RestoreResult{}, interruptedRestoreError(err)
 	}
 	journal.Phase = restoreConfigCommitted
-	if err := writeRestoreJournal(journal); err != nil {
+	if err := writeRestoreJournal(journal, ownership); err != nil {
 		return RestoreResult{}, interruptedRestoreError(err)
 	}
 
@@ -175,7 +179,7 @@ func installJournaled(ctx context.Context, files map[string]extractedFile, targe
 		return RestoreResult{}, interruptedRestoreError(err)
 	}
 	journal.Phase = restoreSidecarsDetached
-	if err := writeRestoreJournal(journal); err != nil {
+	if err := writeRestoreJournal(journal, ownership); err != nil {
 		return RestoreResult{}, interruptedRestoreError(err)
 	}
 
@@ -189,7 +193,7 @@ func installJournaled(ctx context.Context, files map[string]extractedFile, targe
 		return RestoreResult{}, interruptedRestoreError(err)
 	}
 	journal.Phase = restoreDatabaseCommitted
-	if err := writeRestoreJournal(journal); err != nil {
+	if err := writeRestoreJournal(journal, ownership); err != nil {
 		return RestoreResult{}, interruptedRestoreError(err)
 	}
 	if err := validateSQLite(ctx, targets.Database); err != nil {
@@ -216,6 +220,10 @@ func recoverPendingRestoreWith(databasePath string, operations fileOperations) e
 	if operations.publish == nil {
 		operations.publish = publishFile
 	}
+	if operations.ownership.newEntryOwner == nil {
+		operations.ownership = processEntryOwnership
+	}
+	ownership := operations.ownership
 	journalPath := databasePath + restoreJournalSuffix
 	info, err := os.Lstat(journalPath)
 	if errors.Is(err, os.ErrNotExist) {
@@ -270,7 +278,7 @@ func recoverPendingRestoreWith(databasePath string, operations fileOperations) e
 
 	if journal.Phase == restorePrepared {
 		journal.Phase = restoreConfigCommitted
-		if err := writeRestoreJournal(journal); err != nil {
+		if err := writeRestoreJournal(journal, ownership); err != nil {
 			return err
 		}
 	}
@@ -279,7 +287,7 @@ func recoverPendingRestoreWith(databasePath string, operations fileOperations) e
 	}
 	if journal.Phase == restoreConfigCommitted {
 		journal.Phase = restoreSidecarsDetached
-		if err := writeRestoreJournal(journal); err != nil {
+		if err := writeRestoreJournal(journal, ownership); err != nil {
 			return err
 		}
 	}
@@ -301,7 +309,7 @@ func recoverPendingRestoreWith(databasePath string, operations fileOperations) e
 		}
 	}
 	journal.Phase = restoreDatabaseCommitted
-	if err := writeRestoreJournal(journal); err != nil {
+	if err := writeRestoreJournal(journal, ownership); err != nil {
 		return err
 	}
 	if err := validateSQLite(context.Background(), journal.Database.Target); err != nil {
@@ -398,7 +406,7 @@ func validateRestoreJournal(journal restoreJournal, databasePath string) error {
 	return nil
 }
 
-func preserveLiveFile(ctx context.Context, entry *restoreJournalEntry, transaction string) error {
+func preserveLiveFile(ctx context.Context, entry *restoreJournalEntry, transaction string, ownership entryOwnership) error {
 	info, err := os.Lstat(entry.Target)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
@@ -410,7 +418,7 @@ func preserveLiveFile(ctx context.Context, entry *restoreJournalEntry, transacti
 		return fmt.Errorf("existing %s target must be a regular file, not a symbolic link or special file", entry.Name)
 	}
 	entry.Previous = restorePreviousPath(entry.Target, transaction)
-	if err := copyFileExclusive(ctx, entry.Target, entry.Previous); err != nil {
+	if err := copyFileExclusive(ctx, entry.Target, entry.Previous, ownership); err != nil {
 		_ = removeRegularIfExists(entry.Previous)
 		return fmt.Errorf("preserve existing %s: %w", entry.Name, err)
 	}
@@ -497,7 +505,7 @@ func removeRestoreJournal(journal restoreJournal) error {
 	return syncRestoreDirectories(journal)
 }
 
-func writeRestoreJournal(journal restoreJournal) error {
+func writeRestoreJournal(journal restoreJournal, ownership entryOwnership) error {
 	data, err := json.MarshalIndent(journal, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode restore journal: %w", err)
@@ -518,8 +526,10 @@ func writeRestoreJournal(journal restoreJournal) error {
 			_ = os.Remove(temporaryPath)
 		}
 	}()
+	// A journal that outlives this process is read by the next server start,
+	// so it is handed over like the files it describes.
 	_, writeErr := temporary.Write(data)
-	err = errors.Join(writeErr, temporary.Chmod(0o600), temporary.Sync(), temporary.Close())
+	err = errors.Join(writeErr, temporary.Chmod(0o600), ownership.giveNewFile(temporary), temporary.Sync(), temporary.Close())
 	if err != nil {
 		return fmt.Errorf("persist restore journal: %w", err)
 	}
@@ -547,7 +557,11 @@ type journalPublicationError struct{ err error }
 func (err *journalPublicationError) Error() string { return err.err.Error() }
 func (err *journalPublicationError) Unwrap() error { return err.err }
 
-func copyFileExclusive(ctx context.Context, source, target string) error {
+// copyFileExclusive creates target, which must not exist, as a private copy
+// of source. The new file is handed over under the ownership rule while it is
+// open and before it receives any content, so a restore candidate is renamed
+// into place with its final owner. The caller removes target after an error.
+func copyFileExclusive(ctx context.Context, source, target string, ownership entryOwnership) error {
 	in, err := os.Open(source)
 	if err != nil {
 		return err
@@ -557,8 +571,11 @@ func copyFileExclusive(ctx context.Context, source, target string) error {
 		_ = in.Close()
 		return err
 	}
-	_, copyErr := copyContext(ctx, out, in)
-	return errors.Join(copyErr, in.Close(), out.Chmod(0o600), out.Sync(), out.Close())
+	err = ownership.giveNewFile(out)
+	if err == nil {
+		_, err = copyContext(ctx, out, in)
+	}
+	return errors.Join(err, in.Close(), out.Chmod(0o600), out.Sync(), out.Close())
 }
 
 func verifyJournalFile(path string, size int64, digest string) error {

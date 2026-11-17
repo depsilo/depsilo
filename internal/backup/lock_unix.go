@@ -36,9 +36,9 @@ func openLockFile(path string) (file *os.File, created bool, err error) {
 	return nil, false, err
 }
 
-// openLockDirectory opens the lease directory itself: a symbolic link or
-// anything else at that name is an error.
-func openLockDirectory(path string) (*os.File, error) {
+// openNewDirectory opens the directory itself: a symbolic link or anything
+// else at that name is an error.
+func openNewDirectory(path string) (*os.File, error) {
 	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
 	if err != nil {
 		return nil, err
@@ -46,17 +46,17 @@ func openLockDirectory(path string) (*os.File, error) {
 	return os.NewFile(uintptr(fd), path), nil
 }
 
-// verifyNewLockDirectory checks that an opened directory can be the lease
-// directory this process created a moment ago.
-func verifyNewLockDirectory(directory *os.File) error {
-	return newLockDirectoryProblem(os.Geteuid(), directory)
+// verifyNewDirectory checks that an opened directory can be the one this
+// process created a moment ago.
+func verifyNewDirectory(directory *os.File) error {
+	return newDirectoryProblem(os.Geteuid(), directory)
 }
 
-// newLockDirectoryProblem reports why an opened directory is not one the
+// newDirectoryProblem reports why an opened directory is not one the
 // process just created: a new directory belongs to its creator and is empty.
 // A directory that passes and is not the created one is another empty
 // directory of the creator's, which holds nothing to give away.
-func newLockDirectoryProblem(effectiveUID int, directory *os.File) error {
+func newDirectoryProblem(effectiveUID int, directory *os.File) error {
 	info, err := directory.Stat()
 	if err != nil {
 		return err
@@ -78,18 +78,18 @@ func newLockDirectoryProblem(effectiveUID int, directory *os.File) error {
 	return nil
 }
 
-func processNewLeaseEntryOwner(databaseDirectory os.FileInfo) (uid, gid int, change bool) {
-	return newLeaseEntryOwner(os.Geteuid(), databaseDirectory)
+func processNewEntryOwner(receivingDirectory os.FileInfo) (uid, gid int, change bool) {
+	return newEntryOwnerFor(os.Geteuid(), receivingDirectory)
 }
 
-// newLeaseEntryOwner decides who owns a lease entry the process created in
-// the directory that holds the database. Root working in another account's
-// directory (an operator running restore or reset-password with sudo) would
+// newEntryOwnerFor decides who owns an entry the process created, from the
+// directory that receives it. Root working in another account's directory
+// (an operator running backup, restore or reset-password with sudo) would
 // leave entries that account cannot open, and the service's next start would
-// fail to acquire its lease: such entries go to the directory's owner and
-// group. Everyone else, and root in its own directory, keeps what it created.
-func newLeaseEntryOwner(effectiveUID int, databaseDirectory os.FileInfo) (uid, gid int, change bool) {
-	stat, ok := databaseDirectory.Sys().(*syscall.Stat_t)
+// fail on them: such entries go to the directory's owner and group. Everyone
+// else, and root in its own directory, keeps what it created.
+func newEntryOwnerFor(effectiveUID int, receivingDirectory os.FileInfo) (uid, gid int, change bool) {
+	stat, ok := receivingDirectory.Sys().(*syscall.Stat_t)
 	if effectiveUID != 0 || !ok || stat.Uid == 0 {
 		return 0, 0, false
 	}

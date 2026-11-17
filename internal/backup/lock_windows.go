@@ -31,16 +31,16 @@ func openLockFile(path string) (file *os.File, created bool, err error) {
 	return os.NewFile(uintptr(handle), path), false, nil
 }
 
-// processNewLeaseEntryOwner keeps every lease entry as it was created.
-func processNewLeaseEntryOwner(os.FileInfo) (uid, gid int, change bool) { return 0, 0, false }
+// processNewEntryOwner keeps every entry as it was created.
+func processNewEntryOwner(os.FileInfo) (uid, gid int, change bool) { return 0, 0, false }
 
-// openLockDirectory is never reached: no entry changes owner on Windows.
-func openLockDirectory(string) (*os.File, error) {
-	return nil, errors.New("lease entries have no owner to change on Windows")
+// openNewDirectory is never reached: no entry changes owner on Windows.
+func openNewDirectory(string) (*os.File, error) {
+	return nil, errors.New("entries have no owner to change on Windows")
 }
 
-// verifyNewLockDirectory is never reached either.
-func verifyNewLockDirectory(*os.File) error { return nil }
+// verifyNewDirectory is never reached either.
+func verifyNewDirectory(*os.File) error { return nil }
 
 func validateLeaseParent(string) error { return nil }
 

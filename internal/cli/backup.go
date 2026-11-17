@@ -11,6 +11,11 @@ import (
 	"depsilo/internal/config"
 )
 
+// containerBackupExample is an output path the service user of the official
+// container image can write: the image's working directory, where the default
+// output goes, belongs to root.
+const containerBackupExample = "/root/.depsilo/backups/depsilo-backup.tar.gz"
+
 func runBackup(args []string) int {
 	jsonMode, args := stripJSONFlag(args)
 	output, err := backupOutputPath(args)
@@ -32,6 +37,10 @@ func runBackup(args []string) int {
 		Config: cfg.ConfigPath, Database: cfg.Database.DSN,
 	}, output)
 	if err != nil {
+		var directoryErr *backup.OutputDirectoryError
+		if errors.As(err, &directoryErr) {
+			err = fmt.Errorf("%v. Pass --out with a writable path; in the official container image the state directory is writable, for example: --out %s", directoryErr, containerBackupExample)
+		}
 		return printBackupError(jsonMode, err)
 	}
 	if jsonMode {

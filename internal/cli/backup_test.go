@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"depsilo/internal/config"
@@ -109,6 +111,97 @@ func TestBackupRestoreIntoFreshDefaultInstancePreservesSigningKey(t *testing.T) 
 	}
 	if value != "original-instance" {
 		t.Fatal("restore did not preserve the original database contents")
+	}
+}
+
+// The official container image runs backup from /app, which the service user
+// cannot write. The answer has to say what to do, not which temporary name
+// could not be created.
+func TestBackupExplainsAnUnwritableOutputDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs POSIX file permissions and a non-root user")
+	}
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(root)
+	for _, key := range []string{
+		"DEPSILO_CONFIG", "DEPSILO_DATABASE_DRIVER", "DEPSILO_DATABASE_DSN",
+		"DEPSILO_STORAGE_PATH", "DEPSILO_COMPILE_CACHE_STORAGE_PATH",
+		"DEPSILO_AUTH_JWT_SECRET", "DEPSILO_SERVER_HOST", "DEPSILO_SERVER_PORT",
+		"DEPSILO_ADMIN_USERNAME", "DEPSILO_ADMIN_PASSWORD", "DEPSILO_BOOTSTRAP_TOKEN",
+	} {
+		t.Setenv(key, "")
+	}
+	home := filepath.Join(root, "home")
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	instance, err := config.LoadForServer()
+	if err != nil {
+		t.Fatalf("initialize instance: %v", err)
+	}
+	request := config.SetupRequest{}
+	request.Database.Driver = instance.Database.Driver
+	request.Database.DSN = instance.Database.DSN
+	request.Auth.JWTSecret = instance.Auth.JWTSecret
+	request.Auth.Managed = true
+	if err := config.WriteConfig(instance.ConfigPath, request); err != nil {
+		t.Fatalf("write configuration: %v", err)
+	}
+	database, err := db.Open(instance.Database.Driver, instance.Database.DSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDatabase, err := database.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sqlDatabase.Close(); err != nil {
+		t.Fatal(err)
+	}
+	workingDirectory := filepath.Join(root, "app")
+	if err := os.Mkdir(workingDirectory, 0o555); err != nil {
+		t.Fatal(err)
+	}
+
+	run := func(args ...string) (string, string, int) {
+		command := exec.Command(os.Args[0], append([]string{"-test.run=^TestCLIHelperProcess$", "--"}, args...)...)
+		command.Dir = workingDirectory
+		command.Env = append(os.Environ(), cliHelperEnv+"=1")
+		var stdout, stderr strings.Builder
+		command.Stdout, command.Stderr = &stdout, &stderr
+		_ = command.Run()
+		return stdout.String(), stderr.String(), command.ProcessState.ExitCode()
+	}
+
+	want := "cannot write the backup into " + workingDirectory + ": permission denied. " +
+		"Pass --out with a writable path; in the official container image the state directory is writable, " +
+		"for example: --out /root/.depsilo/backups/depsilo-backup.tar.gz"
+	if stdout, stderr, exitCode := run("backup"); exitCode != 1 || stdout != "" || stderr != "Error: "+want+"\n" {
+		t.Fatalf("backup in an unwritable working directory: exit=%d stdout=%q stderr=%q, want the line %q", exitCode, stdout, stderr, want)
+	}
+	stdout, stderr, exitCode := run("backup", "--json")
+	var failure struct {
+		OK    bool   `json:"ok"`
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &failure); err != nil || exitCode != 1 || failure.OK || failure.Error != want {
+		t.Fatalf("backup --json in an unwritable working directory: exit=%d stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	// The remedy the message names: a path in the state directory, whose
+	// backups directory does not exist yet.
+	archive := filepath.Join(filepath.Dir(instance.ConfigPath), "backups", "depsilo-backup.tar.gz")
+	if stdout, stderr, exitCode := run("backup", "--out", archive); exitCode != 0 || !strings.Contains(stdout, "Backup created: "+archive) {
+		t.Fatalf("backup --out into the state directory: exit=%d stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+	info, err := os.Stat(filepath.Dir(archive))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if permissions := info.Mode().Perm(); permissions != 0o700 {
+		t.Fatalf("created backups directory has mode %#o, want 0700", permissions)
 	}
 }
 

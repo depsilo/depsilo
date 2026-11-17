@@ -39,7 +39,18 @@ type extractedFile struct {
 // Restore fully stages and validates an archive before replacing either
 // target. Publication is journaled so an interrupted process is completed on
 // the next Restore or server start without ever removing both live files.
+//
+// When root restores into a directory that belongs to another account (an
+// operator running the command with sudo, or as UID 0 in a container), every
+// file and directory Restore creates or replaces there is given to that
+// directory's owner and group, so the service can open its state afterwards.
+// The owner comes from the directory that receives the entry, never from the
+// archive, and entries Restore does not replace keep theirs.
 func Restore(ctx context.Context, archivePath string, targets Paths) (RestoreResult, error) {
+	return restoreWith(ctx, archivePath, targets, processEntryOwnership)
+}
+
+func restoreWith(ctx context.Context, archivePath string, targets Paths, ownership entryOwnership) (RestoreResult, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -133,11 +144,11 @@ func Restore(ctx context.Context, archivePath string, targets Paths) (RestoreRes
 		return RestoreResult{}, fmt.Errorf("backup database is invalid: %w", err)
 	}
 
-	lease, err := HoldDatabase(targets.Database)
+	lease, err := holdDatabase(targets.Database, ownership)
 	if err != nil {
 		return RestoreResult{}, fmt.Errorf("restore requires the Depsilo server to be stopped: %w", err)
 	}
-	operations := fileOperations{publish: publishFile}
+	operations := fileOperations{publish: publishFile, ownership: ownership}
 	if concrete, ok := lease.(*databaseLease); ok {
 		if err := concrete.validate(); err != nil {
 			_ = lease.Close()
@@ -420,6 +431,9 @@ type fileOperations struct {
 	publish       func(string, string) error
 	checkpoint    func(string) error
 	validateLease func() error
+	// ownership is the rule for the entries a restore creates; the zero
+	// value stands for processEntryOwnership.
+	ownership entryOwnership
 }
 
 func installStateWith(ctx context.Context, files map[string]extractedFile, targets Paths, operations fileOperations) (RestoreResult, error) {

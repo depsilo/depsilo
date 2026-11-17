@@ -103,12 +103,17 @@ const flushUsageDetails = `Flags:
 
 const backupUsageDetails = `Flags:
     --out, -o FILE       Archive to write (default: depsilo-backup.tar.gz in
-                         the working directory)
+                         the working directory); a missing directory is
+                         created, readable by this user only
 ` + jsonFlagUsage + `
 The archive holds config.toml, the instance's signing key and a consistent
 SQLite snapshot; cache objects are not included. The server may keep
 running. The configuration is found like the server finds it (DEPSILO_CONFIG,
 then the standard search paths).
+
+In the official container image the working directory is not writable; write
+into the state directory instead:
+    docker exec <container> depsilo backup --out ` + containerBackupExample + `
 `
 
 const restoreUsageDetails = `Arguments:

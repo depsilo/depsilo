@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 )
 
 // ErrDatabaseInUse means a Depsilo server still owns the target database.
@@ -33,70 +32,23 @@ type databaseLease struct {
 // shared namespace. Container volumes should be owned by the service account
 // and initialized with mode 0750 or 0700.
 //
-// The lease directory and file are created on first use. When root creates
-// them in a database directory that belongs to another account (an operator
-// running an offline command with sudo), they are given to that account, so
-// the service can still acquire its lease afterwards.
+// The lease directory and file are created on first use, and so is a missing
+// database directory. When root creates them in a directory that belongs to
+// another account (an operator running an offline command with sudo), they
+// are given to that account, so the service can still acquire its lease
+// afterwards.
 func HoldDatabase(databaseDSN string) (io.Closer, error) {
-	return holdDatabase(databaseDSN, processLeaseOwnership)
+	return holdDatabase(databaseDSN, processEntryOwnership)
 }
 
-// leaseOwnership decides who owns the lease entries HoldDatabase creates.
-// Only tests replace processLeaseOwnership.
-type leaseOwnership struct {
-	// newEntryOwner reports the owner and group to give an entry this call
-	// created, from the directory that holds the database. It reports false
-	// when the entry stays as it was created.
-	newEntryOwner func(databaseDirectory os.FileInfo) (uid, gid int, change bool)
-	// chown changes the owner of an open entry. Working on the open entry,
-	// not on its name, means a link put at that name is never followed.
-	chown func(entry *os.File, uid, gid int) error
-}
-
-var processLeaseOwnership = leaseOwnership{
-	newEntryOwner: processNewLeaseEntryOwner,
-	chown:         (*os.File).Chown,
-}
-
-// giveNewDirectory hands a lease directory this call created to the owner
-// of the database directory, when the ownership rule asks for that.
-//
-// A directory that could not be handed over is removed again. Left behind,
-// it would be an existing entry for the next call, which never changes the
-// owner of existing entries: the failure would be reported once and the
-// creator would keep the directory. Rmdir removes an empty directory only,
-// never a file and never what a link names.
-func (ownership leaseOwnership) giveNewDirectory(path, databaseDirectory string) (err error) {
-	defer func() {
-		if err != nil {
-			_ = syscall.Rmdir(path)
-		}
-	}()
-	uid, gid, change, err := ownership.ownerOfNewEntries(databaseDirectory)
-	if err != nil || !change {
-		return err
-	}
-	directory, err := openLockDirectory(path)
-	if err != nil {
-		return fmt.Errorf("open new database lease directory %q to give it to uid %d, gid %d: %w", path, uid, gid, err)
-	}
-	defer directory.Close()
-	// Creating a directory does not open it, so the owner of the database
-	// directory can put another directory at this name before it is opened
-	// here. What is given away must be the directory this call created.
-	if err := verifyNewLockDirectory(directory); err != nil {
-		return fmt.Errorf("database lease directory %q changed while acquiring it: %w", path, err)
-	}
-	return ownership.give(directory, uid, gid)
-}
-
-// giveNewFile does the same for a lease file this call created. The file was
-// created exclusively and is open, so it is the one this call created; it is
-// removed again, for the same reason, when it cannot be handed over.
-func (ownership leaseOwnership) giveNewFile(file *os.File, path, databaseDirectory string) error {
+// giveNewLeaseFile hands a lease file this call created to the owner of the
+// database directory, when the ownership rule asks for that. The file was
+// created exclusively and is open, so it is the one this call created; like a
+// new directory, it is removed again when it cannot be handed over.
+func (ownership entryOwnership) giveNewLeaseFile(file *os.File, path, databaseDirectory string) error {
 	uid, gid, change, err := ownership.ownerOfNewEntries(databaseDirectory)
 	if err == nil && change {
-		err = ownership.give(file, uid, gid)
+		err = ownership.give(file, databaseDirectory, uid, gid)
 	}
 	if err != nil && verifyLockedFile(file, path) == nil {
 		_ = os.Remove(path)
@@ -104,23 +56,7 @@ func (ownership leaseOwnership) giveNewFile(file *os.File, path, databaseDirecto
 	return err
 }
 
-func (ownership leaseOwnership) ownerOfNewEntries(databaseDirectory string) (uid, gid int, change bool, err error) {
-	info, err := os.Stat(databaseDirectory)
-	if err != nil {
-		return 0, 0, false, fmt.Errorf("inspect owner of database directory %q: %w", databaseDirectory, err)
-	}
-	uid, gid, change = ownership.newEntryOwner(info)
-	return uid, gid, change, nil
-}
-
-func (ownership leaseOwnership) give(entry *os.File, uid, gid int) error {
-	if err := ownership.chown(entry, uid, gid); err != nil {
-		return fmt.Errorf("give new database lease entry %q to uid %d, gid %d, the owner of the database directory: %w", entry.Name(), uid, gid, err)
-	}
-	return nil
-}
-
-func holdDatabase(databaseDSN string, ownership leaseOwnership) (io.Closer, error) {
+func holdDatabase(databaseDSN string, ownership entryOwnership) (io.Closer, error) {
 	if isMemoryDatabase(databaseDSN) {
 		return nopCloser{}, nil
 	}
@@ -133,7 +69,7 @@ func holdDatabase(databaseDSN string, ownership leaseOwnership) (io.Closer, erro
 		return nil, fmt.Errorf("resolve database lease identity: %w", err)
 	}
 	databaseDirectory := filepath.Dir(databasePath)
-	if err := os.MkdirAll(databaseDirectory, 0o700); err != nil {
+	if err := ownership.makeDirectories(databaseDirectory); err != nil {
 		return nil, fmt.Errorf("create database lease directory: %w", err)
 	}
 	if err := validateLeaseParent(databaseDirectory); err != nil {
@@ -156,7 +92,7 @@ func holdDatabase(databaseDSN string, ownership leaseOwnership) (io.Closer, erro
 		return nil, fmt.Errorf("open database lease: %w", err)
 	}
 	if fileCreated {
-		if err := ownership.giveNewFile(f, lockPath, databaseDirectory); err != nil {
+		if err := ownership.giveNewLeaseFile(f, lockPath, databaseDirectory); err != nil {
 			_ = f.Close()
 			return nil, fmt.Errorf("acquire database lease: %w", err)
 		}
@@ -176,7 +112,7 @@ func holdDatabase(databaseDSN string, ownership leaseOwnership) (io.Closer, erro
 		return nil, fmt.Errorf("database lease file changed while acquiring it: %w", err)
 	}
 	lease := &databaseLease{file: f, lockPath: lockPath}
-	if err := recoverPendingRestoreWith(databasePath, fileOperations{publish: publishFile, validateLease: lease.validate}); err != nil {
+	if err := recoverPendingRestoreWith(databasePath, fileOperations{publish: publishFile, validateLease: lease.validate, ownership: ownership}); err != nil {
 		_ = lease.Close()
 		return nil, fmt.Errorf("recover interrupted database restore: %w", err)
 	}

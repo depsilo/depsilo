@@ -67,7 +67,7 @@ func (directory ownedDirectory) Sys() any {
 
 // An operator who runs restore or reset-password with sudo must not leave
 // lease entries the service account cannot open.
-func TestNewLeaseEntryOwnerIsTheDirectoryOwnerOnlyForRoot(t *testing.T) {
+func TestNewEntryOwnerIsTheDirectoryOwnerOnlyForRoot(t *testing.T) {
 	info, err := os.Stat(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -85,9 +85,9 @@ func TestNewLeaseEntryOwnerIsTheDirectoryOwnerOnlyForRoot(t *testing.T) {
 		{name: "another unprivileged account", effectiveUID: 501, directoryUID: 10001, directoryGID: 10002},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			uid, gid, change := newLeaseEntryOwner(test.effectiveUID, ownedDirectory{FileInfo: info, uid: test.directoryUID, gid: test.directoryGID})
+			uid, gid, change := newEntryOwnerFor(test.effectiveUID, ownedDirectory{FileInfo: info, uid: test.directoryUID, gid: test.directoryGID})
 			if uid != test.wantUID || gid != test.wantGID || change != test.wantChange {
-				t.Fatalf("newLeaseEntryOwner = (%d, %d, %v), want (%d, %d, %v)", uid, gid, change, test.wantUID, test.wantGID, test.wantChange)
+				t.Fatalf("newEntryOwnerFor = (%d, %d, %v), want (%d, %d, %v)", uid, gid, change, test.wantUID, test.wantGID, test.wantChange)
 			}
 		})
 	}
@@ -95,13 +95,13 @@ func TestNewLeaseEntryOwnerIsTheDirectoryOwnerOnlyForRoot(t *testing.T) {
 
 // recordedLeaseOwnership stands in for root in a directory that belongs to
 // uid 10001, gid 10002, and records what would change owner.
-func recordedLeaseOwnership(t *testing.T, databaseDirectory string, given *[]string) leaseOwnership {
+func recordedLeaseOwnership(t *testing.T, databaseDirectory string, given *[]string) entryOwnership {
 	t.Helper()
 	want, err := os.Stat(databaseDirectory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return leaseOwnership{
+	return entryOwnership{
 		newEntryOwner: func(directory os.FileInfo) (int, int, bool) {
 			if !os.SameFile(directory, want) {
 				t.Errorf("the owner was read from %q, not from the database directory", directory.Name())
@@ -258,7 +258,7 @@ func TestHoldDatabaseGivesAwayOnlyTheDirectoryItCreated(t *testing.T) {
 					t.Fatal(err)
 				}
 			},
-			wantError: "changed while acquiring it: it is not empty",
+			wantError: "changed after it was created: it is not empty",
 		},
 		{
 			name: "a symbolic link to a directory",
@@ -267,7 +267,7 @@ func TestHoldDatabaseGivesAwayOnlyTheDirectoryItCreated(t *testing.T) {
 					t.Fatal(err)
 				}
 			},
-			wantError: "open new database lease directory",
+			wantError: "open new directory",
 		},
 		{
 			name: "a regular file",
@@ -276,7 +276,7 @@ func TestHoldDatabaseGivesAwayOnlyTheDirectoryItCreated(t *testing.T) {
 					t.Fatal(err)
 				}
 			},
-			wantError: "open new database lease directory",
+			wantError: "open new directory",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -332,27 +332,27 @@ func TestHoldDatabaseGivesAwayOnlyTheDirectoryItCreated(t *testing.T) {
 	}
 }
 
-func TestNewLockDirectoryBelongsToItsCreatorAndIsEmpty(t *testing.T) {
+func TestNewDirectoryBelongsToItsCreatorAndIsEmpty(t *testing.T) {
 	path := t.TempDir()
 	open := func() *os.File {
 		t.Helper()
-		directory, err := openLockDirectory(path)
+		directory, err := openNewDirectory(path)
 		if err != nil {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { _ = directory.Close() })
 		return directory
 	}
-	if err := newLockDirectoryProblem(os.Geteuid(), open()); err != nil {
+	if err := newDirectoryProblem(os.Geteuid(), open()); err != nil {
 		t.Fatalf("an empty directory of the creator's: %v", err)
 	}
-	if err := newLockDirectoryProblem(os.Geteuid()+1, open()); err == nil || !strings.Contains(err.Error(), "belongs to uid") {
+	if err := newDirectoryProblem(os.Geteuid()+1, open()); err == nil || !strings.Contains(err.Error(), "belongs to uid") {
 		t.Fatalf("a directory of another user's: %v, want a refusal that names its owner", err)
 	}
 	if err := os.WriteFile(filepath.Join(path, "entry"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := newLockDirectoryProblem(os.Geteuid(), open()); err == nil || !strings.Contains(err.Error(), "not empty") {
+	if err := newDirectoryProblem(os.Geteuid(), open()); err == nil || !strings.Contains(err.Error(), "not empty") {
 		t.Fatalf("a directory with content: %v, want a refusal", err)
 	}
 }
@@ -500,7 +500,7 @@ func TestHoldDatabaseAsRootLeavesEntriesTheDirectoryOwnerCanUse(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(private, "secret"), []byte("secret"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	ownership := processLeaseOwnership
+	ownership := processEntryOwnership
 	ownership.newEntryOwner = func(directory os.FileInfo) (int, int, bool) {
 		if err := os.Remove(lockDirectory); err != nil {
 			t.Fatal(err)
@@ -508,14 +508,14 @@ func TestHoldDatabaseAsRootLeavesEntriesTheDirectoryOwnerCanUse(t *testing.T) {
 		if err := os.Rename(private, lockDirectory); err != nil {
 			t.Fatal(err)
 		}
-		return processNewLeaseEntryOwner(directory)
+		return processNewEntryOwner(directory)
 	}
 	lease, err := holdDatabase(filepath.Join(root, "depsilo.db"), ownership)
 	if err == nil {
 		_ = lease.Close()
 		t.Fatal("a directory this call did not create was accepted as its new lease directory")
 	}
-	if !strings.Contains(err.Error(), "changed while acquiring it") {
+	if !strings.Contains(err.Error(), "changed after it was created") {
 		t.Fatalf("holdDatabase() error = %v, want the refusal of a replaced lease directory", err)
 	}
 	if owner(lockDirectory) != "0:0" || owner(filepath.Join(lockDirectory, "secret")) != "0:0" {

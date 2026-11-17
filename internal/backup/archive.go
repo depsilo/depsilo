@@ -58,11 +58,51 @@ type manifestFile struct {
 	SHA256 string `json:"sha256"`
 }
 
-// Create writes a versioned, checksummed archive to output. SQLite's VACUUM
+// OutputDirectoryError reports that the directory a backup archive is written
+// into could not be created or written. Directory is absolute, so the message
+// names a real place when the output path was relative.
+type OutputDirectoryError struct {
+	Directory string
+	Err       error
+}
+
+func (e *OutputDirectoryError) Error() string {
+	// The path in the underlying error is a temporary name inside Directory;
+	// only its cause is worth repeating.
+	cause := e.Err
+	var pathErr *os.PathError
+	if errors.As(cause, &pathErr) {
+		cause = pathErr.Err
+	}
+	return fmt.Sprintf("cannot write the backup into %s: %v", e.Directory, cause)
+}
+
+func (e *OutputDirectoryError) Unwrap() error { return e.Err }
+
+func newOutputDirectoryError(directory string, err error) error {
+	if absolute, absErr := filepath.Abs(directory); absErr == nil {
+		directory = absolute
+	}
+	return &OutputDirectoryError{Directory: directory, Err: err}
+}
+
+// Create writes a versioned, checksummed archive to output. A missing parent
+// directory of output is created with mode 0700. SQLite's VACUUM
 // INTO statement supplies a transactionally consistent snapshot, including
 // commits that still live in the WAL, while a running server continues to
 // serve requests.
+//
+// An archive written into the instance's state (the directory of the config
+// file or of the database, or beneath one of them) follows the ownership
+// rule of Restore: when root writes it into a directory that belongs to
+// another account, the archive and the directories created for it are given
+// to the owner of the directory that receives them. Anywhere else the archive
+// stays with the user who wrote it.
 func Create(ctx context.Context, paths Paths, output string) (Archive, error) {
+	return createWith(ctx, paths, output, processEntryOwnership)
+}
+
+func createWith(ctx context.Context, paths Paths, output string, ownership entryOwnership) (Archive, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -91,9 +131,23 @@ func Create(ctx context.Context, paths Paths, output string) (Archive, error) {
 	}
 
 	outputDir := filepath.Dir(output)
+	if !insideStateDirectory(outputDir, paths.Config, databasePath) {
+		ownership = ownership.keepingEveryEntry()
+	}
+	// A missing directory for the archive is created, private to its owner:
+	// the archive carries the instance's signing key.
+	if err := ownership.makeDirectories(outputDir); err != nil {
+		if errors.As(err, new(handoverError)) {
+			return Archive{}, fmt.Errorf("create backup directory: %w", err)
+		}
+		return Archive{}, newOutputDirectoryError(outputDir, err)
+	}
+	// The workspace stays with the user who runs the backup, whatever the
+	// rule says: it is removed below, and until then nobody else may place
+	// entries where the snapshots are written.
 	workspace, err := os.MkdirTemp(outputDir, ".depsilo-backup-work-")
 	if err != nil {
-		return Archive{}, fmt.Errorf("create backup workspace: %w", err)
+		return Archive{}, newOutputDirectoryError(outputDir, err)
 	}
 	defer os.RemoveAll(workspace)
 
@@ -141,6 +195,12 @@ func Create(ctx context.Context, paths Paths, output string) (Archive, error) {
 			_ = os.Remove(partialPath)
 		}
 	}()
+	// Like a restored file, the archive changes owner while it is open and
+	// before it is renamed into place.
+	if err := ownership.giveNewFile(partial); err != nil {
+		_ = partial.Close()
+		return Archive{}, fmt.Errorf("create backup archive: %w", err)
+	}
 
 	gw := gzip.NewWriter(partial)
 	tw := tar.NewWriter(gw)
