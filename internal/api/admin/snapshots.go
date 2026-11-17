@@ -135,6 +135,12 @@ func (h *SnapshotsHandler) Import(c *gin.Context) {
 	body := http.MaxBytesReader(c.Writer, c.Request.Body, maxSnapshotImportBytes)
 	record, err := h.store.Import(c.Request.Context(), body, name, requestUsername(c))
 	if err != nil {
+		if errors.Is(err, snapshot.ErrInvalidManifest) {
+			// The upload is not a manifest the store accepts: that is the
+			// client's error, with the code and message it always had.
+			c.JSON(http.StatusBadRequest, gin.H{"code": "SNAPSHOT_FAILED", "message": err.Error()})
+			return
+		}
 		writeSnapshotError(c, err)
 		return
 	}

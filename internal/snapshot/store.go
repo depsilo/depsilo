@@ -43,6 +43,10 @@ var (
 	ErrSnapshotNameTaken = errors.New("a snapshot with this name already exists")
 	// ErrSnapshotActive marks an attempt to delete the active snapshot.
 	ErrSnapshotActive = errors.New("the active snapshot cannot be deleted; deactivate snapshot-only mode first")
+	// ErrInvalidManifest marks an import whose manifest cannot be decoded or
+	// breaks one of the rules Import checks before it writes anything. The
+	// error Import returns keeps its own message; match it with errors.Is.
+	ErrInvalidManifest = errors.New("invalid snapshot manifest")
 )
 
 // Store owns snapshot persistence and the in-memory active snapshot pointer.
@@ -349,8 +353,20 @@ func (s *Store) Export(ctx context.Context, id uint, writer io.Writer) error {
 	return err
 }
 
+// invalidManifest marks err as an ErrInvalidManifest without changing its
+// message, so callers can tell a rejected upload from a failed apply.
+func invalidManifest(err error) error { return invalidManifestError{err: err} }
+
+type invalidManifestError struct{ err error }
+
+func (e invalidManifestError) Error() string        { return e.err.Error() }
+func (e invalidManifestError) Unwrap() error        { return e.err }
+func (e invalidManifestError) Is(target error) bool { return target == ErrInvalidManifest }
+
 // Import creates a snapshot from an exported manifest. The name may be
 // overridden so the same manifest can be imported into several instances.
+// A manifest that cannot be decoded or breaks a rule is reported as
+// ErrInvalidManifest before anything is written.
 func (s *Store) Import(ctx context.Context, reader io.Reader, nameOverride, actor string) (*db.Snapshot, error) {
 	var manifest struct {
 		Format string         `json:"format"`
@@ -360,23 +376,23 @@ func (s *Store) Import(ctx context.Context, reader io.Reader, nameOverride, acto
 	}
 	decoder := json.NewDecoder(reader)
 	if err := decoder.Decode(&manifest); err != nil {
-		return nil, fmt.Errorf("decode snapshot manifest: %w", err)
+		return nil, invalidManifest(fmt.Errorf("decode snapshot manifest: %w", err))
 	}
 	if manifest.Format != Format {
-		return nil, fmt.Errorf("unsupported snapshot manifest format %q", manifest.Format)
+		return nil, invalidManifest(fmt.Errorf("unsupported snapshot manifest format %q", manifest.Format))
 	}
 	name := strings.TrimSpace(nameOverride)
 	if name == "" {
 		name = strings.TrimSpace(manifest.Name)
 	}
 	if name == "" {
-		return nil, errors.New("snapshot name is required")
+		return nil, invalidManifest(errors.New("snapshot name is required"))
 	}
 	if len(manifest.Items) == 0 {
 		return nil, ErrEmptySnapshot
 	}
 	if len(manifest.Items) > ImportItemLimit {
-		return nil, fmt.Errorf("snapshot manifest has %d items; the import limit is %d", len(manifest.Items), ImportItemLimit)
+		return nil, invalidManifest(fmt.Errorf("snapshot manifest has %d items; the import limit is %d", len(manifest.Items), ImportItemLimit))
 	}
 	items := make([]db.SnapshotItem, 0, len(manifest.Items))
 	seen := make(map[string]bool, len(manifest.Items))
@@ -388,16 +404,16 @@ func (s *Store) Import(ctx context.Context, reader io.Reader, nameOverride, acto
 		cacheKey := strings.TrimSpace(entry.CacheKey)
 		hash := strings.ToLower(strings.TrimSpace(entry.SHA256))
 		if ecosystem == "" || pkg == "" || version == "" || cacheKey == "" {
-			return nil, errors.New("snapshot item is missing an identity field")
+			return nil, invalidManifest(errors.New("snapshot item is missing an identity field"))
 		}
 		if len(hash) != 64 {
-			return nil, fmt.Errorf("snapshot item %s@%s has an invalid SHA-256", pkg, version)
+			return nil, invalidManifest(fmt.Errorf("snapshot item %s@%s has an invalid SHA-256", pkg, version))
 		}
 		if _, err := hex.DecodeString(hash); err != nil {
-			return nil, fmt.Errorf("snapshot item %s@%s has an invalid SHA-256", pkg, version)
+			return nil, invalidManifest(fmt.Errorf("snapshot item %s@%s has an invalid SHA-256", pkg, version))
 		}
 		if entry.Size < 0 {
-			return nil, fmt.Errorf("snapshot item %s@%s has a negative size", pkg, version)
+			return nil, invalidManifest(fmt.Errorf("snapshot item %s@%s has a negative size", pkg, version))
 		}
 		key := ecosystem + "\x00" + pkg + "\x00" + version + "\x00" + cacheKey
 		if seen[key] {

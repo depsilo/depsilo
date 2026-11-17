@@ -227,3 +227,51 @@ func TestSnapshotExportImportRoundTrip(t *testing.T) {
 		t.Fatal("invalid hash was accepted")
 	}
 }
+
+// A manifest Import refuses before writing anything is reported as
+// ErrInvalidManifest with its own message, so a caller can answer it as the
+// client's error. A failure while applying a valid manifest is not.
+func TestImportMarksRejectedManifestsAsInvalid(t *testing.T) {
+	const item = `{"ecosystem":"npm","package":"a","version":"1","cache_key":"npm/files/a-1.tgz","sha256":"` +
+		"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" + `","size":1}`
+	withItem := func(entry string) string {
+		return `{"format":"` + Format + `","name":"golden","items":[` + entry + `]}`
+	}
+	for _, test := range []struct {
+		name, body, message string
+	}{
+		{"not JSON", "not a manifest", "decode snapshot manifest: invalid character 'o' in literal null (expecting 'u')"},
+		{"another format", `{"format":"other","name":"golden","items":[` + item + `]}`, `unsupported snapshot manifest format "other"`},
+		{"no name", `{"format":"` + Format + `","items":[` + item + `]}`, "snapshot name is required"},
+		{"missing identity field", withItem(`{"ecosystem":"npm"}`), "snapshot item is missing an identity field"},
+		{"short SHA-256", withItem(strings.Replace(item, strings.Repeat("b", 64), "bb", 1)), "snapshot item a@1 has an invalid SHA-256"},
+		{"negative size", withItem(strings.Replace(item, `"size":1`, `"size":-1`, 1)), "snapshot item a@1 has a negative size"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := newSnapshotTestStore(t).Import(context.Background(), strings.NewReader(test.body), "", "operator")
+			if !errors.Is(err, ErrInvalidManifest) || err.Error() != test.message {
+				t.Fatalf("Import error = %v (invalid manifest: %t), want %q marked as ErrInvalidManifest",
+					err, errors.Is(err, ErrInvalidManifest), test.message)
+			}
+		})
+	}
+
+	t.Run("empty item list keeps its own error", func(t *testing.T) {
+		_, err := newSnapshotTestStore(t).Import(context.Background(),
+			strings.NewReader(`{"format":"`+Format+`","name":"golden","items":[]}`), "", "operator")
+		if !errors.Is(err, ErrEmptySnapshot) || errors.Is(err, ErrInvalidManifest) {
+			t.Fatalf("Import error = %v, want ErrEmptySnapshot only", err)
+		}
+	})
+
+	t.Run("a failed apply is not an invalid manifest", func(t *testing.T) {
+		store := newSnapshotTestStore(t)
+		if _, err := store.Import(context.Background(), strings.NewReader(withItem(item)), "", "operator"); err != nil {
+			t.Fatal(err)
+		}
+		_, err := store.Import(context.Background(), strings.NewReader(withItem(item)), "", "operator")
+		if !errors.Is(err, ErrSnapshotNameTaken) || errors.Is(err, ErrInvalidManifest) {
+			t.Fatalf("second import with the same name: error = %v, want ErrSnapshotNameTaken only", err)
+		}
+	})
+}
