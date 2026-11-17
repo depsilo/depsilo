@@ -115,7 +115,9 @@ PY
 command -v docker >/dev/null || { echo 'docker is required' >&2; exit 2; }
 umask 077
 work=$(mktemp -d "${TMPDIR:-/tmp}/depsilo-benchmark.XXXXXX")
-trap 'rm -r "$work"' EXIT
+# shellcheck source=exit-guard.sh
+source "$root/scripts/exit-guard.sh"
+trap 'exit_guard rm -r "$work"' EXIT
 # Retain command output next to the report; only disposable client caches are removed.
 evidence=$(mktemp -d "${out}.logs.XXXXXX")
 mkdir "$evidence/input"
@@ -159,6 +161,8 @@ PYPROFILE
 fi
 raw="$evidence/raw.tsv"; : > "$raw"
 docker_run=(docker run --rm --add-host=host.docker.internal:host-gateway)
+# pull_args and trust_args are often empty, and bash before 4.4 (macOS ships
+# 3.2) treats an empty array as unset under "set -u": expand both guarded.
 pull_args=()
 if [[ -n "$client_platform" ]]; then
   docker_run+=(--platform "$client_platform")
@@ -179,7 +183,7 @@ install() {
   if [[ "$eco" == pypi ]]; then
     capture "$log" "${docker_run[@]}" -v "$cache:$mount" -v "$input_snapshot:/input:ro" "$image" \
       python -m pip --isolated install --disable-pip-version-check --no-input \
-      --timeout "$pip_timeout" --cache-dir "$mount" --index-url "$endpoint" "${trust_args[@]}" \
+      --timeout "$pip_timeout" --cache-dir "$mount" --index-url "$endpoint" ${trust_args[@]+"${trust_args[@]}"} \
       --require-hashes --only-binary=:all: --ignore-installed --target /tmp/bench \
       -r /input/requirements.txt
   else
@@ -221,11 +225,11 @@ fetch(process.argv[1], {signal: AbortSignal.timeout(20000), redirect: "error"})
 image_reference=$image
 capture docker-version.log docker --version
 [[ "$command_status" == 0 ]] || { cat "$evidence/docker-version.log" >&2; exit 1; }
-capture image.json docker image inspect "${pull_args[@]}" "$image_reference"
+capture image.json docker image inspect ${pull_args[@]+"${pull_args[@]}"} "$image_reference"
 if [[ "$command_status" != 0 ]]; then
-  capture image-pull.log docker pull "${pull_args[@]}" "$image_reference"
+  capture image-pull.log docker pull ${pull_args[@]+"${pull_args[@]}"} "$image_reference"
   [[ "$command_status" == 0 ]] || { cat "$evidence/image-pull.log" >&2; exit 1; }
-  capture image.json docker image inspect "${pull_args[@]}" "$image_reference"
+  capture image.json docker image inspect ${pull_args[@]+"${pull_args[@]}"} "$image_reference"
 fi
 [[ "$command_status" == 0 ]] || { cat "$evidence/image.json" >&2; exit 1; }
 if [[ -n "$client_platform" ]]; then
@@ -236,9 +240,9 @@ print(identity.get('Os', '') + '/' + identity.get('Architecture', ''))
 PYPLATFORM
 )
   if [[ "$actual_platform" != "$client_platform" ]]; then
-    capture image-pull.log docker pull "${pull_args[@]}" "$image_reference"
+    capture image-pull.log docker pull ${pull_args[@]+"${pull_args[@]}"} "$image_reference"
     [[ "$command_status" == 0 ]] || { cat "$evidence/image-pull.log" >&2; exit 1; }
-    capture image.json docker image inspect "${pull_args[@]}" "$image_reference"
+    capture image.json docker image inspect ${pull_args[@]+"${pull_args[@]}"} "$image_reference"
     [[ "$command_status" == 0 ]] || exit 1
   fi
 fi
@@ -354,3 +358,4 @@ print(f'Benchmark status: {status}; report: {out}; raw output: {evidence}')
 if status != 'complete':
     raise SystemExit(1)
 PY
+exit_guard_complete

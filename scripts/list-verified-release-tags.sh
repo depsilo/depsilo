@@ -53,7 +53,8 @@ while [[ $current_type == tag ]]; do
         exit 1
     fi
     tag_depth=$((tag_depth + 1))
-    for seen_sha in "${seen_tag_shas[@]}"; do
+    # bash before 4.4 treats an empty array as unset under "set -u".
+    for seen_sha in ${seen_tag_shas[@]+"${seen_tag_shas[@]}"}; do
         if [[ $seen_sha == "$current_sha" ]]; then
             echo "annotated release tag contains a cycle" >&2
             exit 1

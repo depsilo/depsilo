@@ -25,7 +25,9 @@ assert_not_contains() {
 }
 
 TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
+# shellcheck source=exit-guard.sh
+source "$ROOT/scripts/exit-guard.sh"
+trap 'exit_guard rm -rf "$TMP"' EXIT
 cd "$TMP"
 
 printf 'trusted release bytes' > depsilo_test.tar.gz
@@ -141,3 +143,4 @@ if (
 fi
 
 echo "install checksum tests passed"
+exit_guard_complete

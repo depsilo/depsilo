@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# make prints paths below its physical CURDIR, so resolve the checkout the
+# same way: the assertions compare both, and a checkout reached through a
+# symlink (any directory under /tmp on macOS) would otherwise never match.
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
 TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
+# shellcheck source=exit-guard.sh
+source "$ROOT/scripts/exit-guard.sh"
+trap 'exit_guard rm -rf "$TMP"' EXIT
 
 fail() {
     echo "makefile test failed: $*" >&2
@@ -228,11 +233,13 @@ if ! dind_smoke_output=$(
             echo "docker client used ${DOCKER_HOST:-<unset>} instead of nested daemon socket" >&2
             return 1
         fi
+        # bash 3.2 ends a command substitution at the first unmatched ")",
+        # so every pattern here needs its opening parenthesis.
         case "$*" in
-            info) ;;
-            'pull alpine:3.18') : > "$dind_pull_marker" ;;
-            'image inspect alpine:3.18') ;;
-            *) echo "unexpected docker command: $*" >&2; return 1 ;;
+            (info) ;;
+            ('pull alpine:3.18') : > "$dind_pull_marker" ;;
+            ('image inspect alpine:3.18') ;;
+            (*) echo "unexpected docker command: $*" >&2; return 1 ;;
         esac
     }
     # shellcheck disable=SC1090 -- generated directly from the owned fixture.
@@ -281,9 +288,33 @@ grep -Eq '^rm -rf ([^[:space:]]+[[:space:]]+)*data([[:space:]]|$)' <<<"$clean_al
     || fail "make clean-all no longer removes local runtime data"
 assert_contains "$clean_all_dry_run" '.dev-jwt-secret'
 
+# verify-scripts begins by syntax-checking the installer and every script.
+# "bash -n a.sh b.sh" reads only a.sh and passes the rest to it as arguments,
+# so run the real recipe where one script does not parse: it must name that
+# script and stop before the first test. The broken script sorts between two
+# valid ones: a loop that only reports its last check would pass over it.
+# Flags of the make invocation that runs this test, such as -i or -n, must
+# not reach it.
+syntax_fixture="$TMP/syntax-gate"
+mkdir -p "$syntax_fixture/scripts"
+cp "$ROOT/Makefile" "$syntax_fixture/Makefile"
+printf '%s\n' '#!/usr/bin/env bash' 'echo ok' > "$syntax_fixture/install.sh"
+cp "$syntax_fixture/install.sh" "$syntax_fixture/scripts/a-valid.sh"
+printf '%s\n' '#!/usr/bin/env bash' 'if true; then' > "$syntax_fixture/scripts/b-broken.sh"
+cp "$syntax_fixture/install.sh" "$syntax_fixture/scripts/c-valid.sh"
+if syntax_gate_output=$(env -u MAKEFLAGS -u MFLAGS \
+    make -C "$syntax_fixture" --no-print-directory verify-scripts 2>&1); then
+    fail "verify-scripts accepted a script that does not parse"
+fi
+assert_contains "$syntax_gate_output" 'scripts/b-broken.sh: line '
+if [[ "$syntax_gate_output" == *'bash scripts/test-'* ]]; then
+    fail "verify-scripts ran its tests after a script failed the syntax check: $syntax_gate_output"
+fi
+
 metadata=$(make -s -C "$ROOT" version \
     VERSION=1.2.3 COMMIT=abc123 BUILD_DATE=2026-01-01T00:00:00Z)
 [[ "$metadata" == $'version=1.2.3\ncommit=abc123\nbuild_date=2026-01-01T00:00:00Z' ]] \
     || fail "build metadata overrides are no longer reproducible"
 
 echo "makefile workflow tests passed"
+exit_guard_complete

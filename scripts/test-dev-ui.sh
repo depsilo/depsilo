@@ -17,7 +17,9 @@ cleanup() {
     wait "$HELPER_PID" "$BACKEND_PID" 2>/dev/null || true
     rm -rf "$TMP"
 }
-trap cleanup EXIT
+# shellcheck source=exit-guard.sh
+source "$ROOT/scripts/exit-guard.sh"
+trap 'exit_guard cleanup' EXIT
 
 fail() {
     echo "dev-ui test failed: $*" >&2
@@ -132,3 +134,4 @@ wait "$BACKEND_PID" || true
 BACKEND_PID=""
 
 echo "dev-ui lifecycle tests passed"
+exit_guard_complete

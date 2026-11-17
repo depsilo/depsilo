@@ -7,7 +7,10 @@ fixture=$(mktemp -d "${TMPDIR:-/tmp}/depsilo-release-notes-test.XXXXXX")
 cleanup() {
     find "$fixture" -depth -delete >/dev/null 2>&1 || true
 }
-trap cleanup EXIT INT TERM
+# shellcheck source=exit-guard.sh
+source "$root/scripts/exit-guard.sh"
+trap 'exit_guard cleanup' EXIT
+trap cleanup INT TERM
 
 cat >"$fixture/CHANGELOG.md" <<'EOF'
 # Changelog
@@ -59,3 +62,4 @@ for required in \
 done
 
 echo 'release notes extraction tests passed'
+exit_guard_complete

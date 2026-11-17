@@ -13,7 +13,10 @@ fixture=$(cd "$fixture" && pwd -P)
 cleanup() {
     find "$fixture" -depth -delete >/dev/null 2>&1 || true
 }
-trap cleanup EXIT INT TERM
+# shellcheck source=exit-guard.sh
+source "$root/scripts/exit-guard.sh"
+trap 'exit_guard cleanup' EXIT
+trap cleanup INT TERM
 
 # GNU coreutils and BSD/macOS tools report inode ownership and modes through
 # different flags; both spellings below print the same values.
@@ -288,3 +291,4 @@ grep -Fq '71e9f029877e66ae9fdb353e134358bfa55c280c' "$real_qualification"
 grep -Fq '8aba53b51aa8c8c953fe28f5edc2981b4350172c1a3fc4ead0303cf868a3b34a' "$real_qualification"
 
 echo 'v0.9 compose preparation safety tests passed'
+exit_guard_complete

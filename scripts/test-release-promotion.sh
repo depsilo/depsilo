@@ -9,7 +9,9 @@ TEST_TMP=$(mktemp -d)
 cleanup() {
     find "$TEST_TMP" -depth -delete
 }
-trap cleanup EXIT
+# shellcheck source=exit-guard.sh
+source "$ROOT/scripts/exit-guard.sh"
+trap 'exit_guard cleanup' EXIT
 
 FAKE_GH="$TEST_TMP/gh"
 cat >"$FAKE_GH" <<'EOF'
@@ -256,3 +258,4 @@ if bash "$ROOT/scripts/validate-release-tag.sh" v1.2.3+build.7 >/dev/null 2>&1; 
 fi
 
 echo "release promotion planner tests passed"
+exit_guard_complete

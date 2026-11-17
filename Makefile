@@ -415,7 +415,8 @@ security: prepare-go            ## 扫描 Go 与全部前端依赖漏洞（需�
 	npm --prefix $(WEB_DIR) audit --audit-level=moderate
 
 verify-scripts:                 # 内部：安装、开发与发布脚本回归测试
-	bash -n install.sh scripts/*.sh
+	for script in install.sh scripts/*.sh; do bash -n "$$script" || exit 1; done
+	bash scripts/test-exit-guard.sh
 	bash scripts/test-install-checksum.sh
 	bash scripts/test-makefile.sh
 	bash scripts/test-make-dev-run.sh

@@ -3,7 +3,9 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
+# shellcheck source=exit-guard.sh
+source "$ROOT/scripts/exit-guard.sh"
+trap 'exit_guard rm -rf "$TMP"' EXIT
 
 FAKE_BIN="$TMP/depsilo"
 SECRET_FILE="$TMP/dev-jwt-secret"
@@ -174,3 +176,4 @@ if grep -Fq 'npm --prefix web run build' <<<"$dev_ui_dry_run"; then
 fi
 
 echo "make development runner tests passed"
+exit_guard_complete

@@ -13,7 +13,9 @@ WORKFLOW="$ROOT/.github/workflows/release.yml"
 # The installer reports the paths it resolved; compare against the physical
 # path because the temporary directory is behind a symlink on macOS.
 TMP=$(cd "$(mktemp -d)" && pwd -P)
-trap 'rm -rf "$TMP"' EXIT
+# shellcheck source=exit-guard.sh
+source "$ROOT/scripts/exit-guard.sh"
+trap 'exit_guard rm -rf "$TMP"' EXIT
 
 fail() {
     echo "linux tray installer test failed: $*" >&2
@@ -349,3 +351,4 @@ output=$(installer bash "$ARCHIVE/install-linux.sh" install 2>&1) ||
 assert_installed
 
 echo "linux tray installer tests passed"
+exit_guard_complete

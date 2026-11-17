@@ -86,6 +86,12 @@ weekly run keeps the smaller all-package-client matrix.
   matrix can reuse it; after an interrupted or failed run, execute
   `make test-clean` before retrying, otherwise the next attempt can talk to
   the stale server and report misleading client errors.
+- A bash test that `make verify-scripts` runs and that sets an EXIT trap
+  sources `scripts/exit-guard.sh`, installs the trap as
+  `trap 'exit_guard <cleanup command>' EXIT`, and ends with
+  `exit_guard_complete` as its last line. Without the guard, bash 3.2 (macOS
+  `/bin/bash`) reports success for a test that stopped halfway;
+  `scripts/test-exit-guard.sh` fails the gate for a test that omits it.
 
 The [controlled npm/PyPI benchmark](../../testground/README.md#controlled-cache-and-cascade-evidence)
 owns disposable nodes and verifies direct/peer traffic with native clients;
