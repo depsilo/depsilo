@@ -90,7 +90,19 @@ func (h *AuditExporterHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
 		return
 	}
-	if err := h.db.Create(&exporter).Error; err != nil {
+	// GORM writes the column default (true) in place of a false bool on
+	// Create, so a disabled exporter is switched off in the same transaction,
+	// before the forwarder can see the row.
+	enabled := exporter.Enabled
+	if err := h.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&exporter).Error; err != nil {
+			return err
+		}
+		if enabled {
+			return nil
+		}
+		return tx.Model(&exporter).Update("enabled", false).Error
+	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "CREATE_FAILED", "message": err.Error()})
 		return
 	}

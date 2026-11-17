@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -160,5 +161,61 @@ func TestAuditExporterValidationAndTestDelivery(t *testing.T) {
 	router.ServeHTTP(test, httptest.NewRequest(http.MethodPost, "/audit/exporters/2/test", nil))
 	if test.Code != http.StatusBadGateway || !strings.Contains(test.Body.String(), "DELIVERY_FAILED") {
 		t.Fatalf("failing delivery status=%d body=%s", test.Code, test.Body.String())
+	}
+}
+
+// An exporter created disabled must stay disabled: GORM writes the column
+// default in place of a false bool, which would start delivery at once.
+func TestAuditExporterCreateStoresTheRequestedEnabledState(t *testing.T) {
+	router, database := newAuditExporterTestRouter(t)
+	create := func(body string) (bool, bool) {
+		t.Helper()
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/audit/exporters", bytes.NewBufferString(body)))
+		if recorder.Code != http.StatusCreated {
+			t.Fatalf("create status=%d body=%s", recorder.Code, recorder.Body.String())
+		}
+		var created struct {
+			ID      uint `json:"id"`
+			Enabled bool `json:"enabled"`
+		}
+		if err := json.Unmarshal(recorder.Body.Bytes(), &created); err != nil {
+			t.Fatal(err)
+		}
+		var stored db.AuditExporter
+		if err := database.First(&stored, created.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+		return created.Enabled, stored.Enabled
+	}
+
+	if answered, stored := create(`{"name":"off","kind":"ndjson","url":"https://collector.example/off","enabled":false}`); answered || stored {
+		t.Fatalf("exporter created with enabled=false: answered %v, stored %v; want false for both", answered, stored)
+	}
+	if answered, stored := create(`{"name":"on","kind":"ndjson","url":"https://collector.example/on","enabled":true}`); !answered || !stored {
+		t.Fatalf("exporter created with enabled=true: answered %v, stored %v; want true for both", answered, stored)
+	}
+	if answered, stored := create(`{"name":"default","kind":"ndjson","url":"https://collector.example/default"}`); !answered || !stored {
+		t.Fatalf("exporter created without enabled: answered %v, stored %v; want the default true", answered, stored)
+	}
+
+	// Updates still switch an exporter either way.
+	for _, step := range []struct {
+		id      string
+		enabled bool
+	}{{"1", true}, {"2", false}} {
+		update := httptest.NewRecorder()
+		router.ServeHTTP(update, httptest.NewRequest(http.MethodPut, "/audit/exporters/"+step.id,
+			bytes.NewBufferString(`{"enabled":`+strconv.FormatBool(step.enabled)+`}`)))
+		if update.Code != http.StatusOK {
+			t.Fatalf("update status=%d body=%s", update.Code, update.Body.String())
+		}
+		var stored db.AuditExporter
+		if err := database.First(&stored, step.id).Error; err != nil {
+			t.Fatal(err)
+		}
+		if stored.Enabled != step.enabled {
+			t.Fatalf("exporter %s after update: enabled %v, want %v", step.id, stored.Enabled, step.enabled)
+		}
 	}
 }
