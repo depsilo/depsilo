@@ -159,8 +159,24 @@ func (s *Syncer) Interval() time.Duration { return s.interval }
 func (s *Syncer) SyncOnce(ctx context.Context) (int64, error) {
 	// Phase 1: fetch + parse everything.
 	fetched := make(map[string][]db.MaliciousPackage, len(SyncedEcosystems()))
+	// The dataset always carries some advisories the importer cannot use, so
+	// a warning per advisory repeats on every sync and buries the rest of the
+	// log. Report them once per sync; the individual advisories are logged at
+	// debug level by fetchEcosystem.
+	skipped := 0
+	skippedByEcosystem := make(map[string]int)
+	defer func() {
+		if skipped > 0 {
+			zap.L().Warn("blocklist: skipped malformed advisories; set server.log_level to debug to list them",
+				zap.Int("count", skipped), zap.Any("by_ecosystem", skippedByEcosystem))
+		}
+	}()
 	for _, eco := range SyncedEcosystems() {
-		rows, err := s.fetchEcosystem(ctx, eco)
+		rows, malformed, err := s.fetchEcosystem(ctx, eco)
+		if malformed > 0 {
+			skipped += malformed
+			skippedByEcosystem[eco] = malformed
+		}
 		if err != nil {
 			return 0, fmt.Errorf("%s: %w", eco, err)
 		}
@@ -197,65 +213,69 @@ func (s *Syncer) SyncOnce(ctx context.Context) (int64, error) {
 // and extracts the MAL-* entries. The zip member NAME carries the
 // advisory id ("MAL-2026-1234.json"), so non-malicious advisories are
 // skipped without parsing their JSON — the npm archive holds tens of
-// thousands of GHSA entries we never open.
-func (s *Syncer) fetchEcosystem(ctx context.Context, eco string) ([]db.MaliciousPackage, error) {
+// thousands of GHSA entries we never open. The second result counts the
+// MAL advisories that were skipped as malformed.
+func (s *Syncer) fetchEcosystem(ctx context.Context, eco string) ([]db.MaliciousPackage, int, error) {
 	osvName := ecosystem.OSVNameFor(eco)
 	reqURL := fmt.Sprintf("%s/%s/all.zip", s.mirror, url.PathEscape(osvName))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	req.Header.Set("User-Agent", "depsilo-blocklist-sync")
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("fetch %s: %w", reqURL, err)
+		return nil, 0, fmt.Errorf("fetch %s: %w", reqURL, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fetch %s: HTTP %d", reqURL, resp.StatusCode)
+		return nil, 0, fmt.Errorf("fetch %s: HTTP %d", reqURL, resp.StatusCode)
 	}
 
 	tmp, err := os.CreateTemp("", "depsilo-osv-*.zip")
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer os.Remove(tmp.Name())
 	defer tmp.Close()
 
 	if _, err := io.Copy(tmp, resp.Body); err != nil {
-		return nil, fmt.Errorf("download %s: %w", reqURL, err)
+		return nil, 0, fmt.Errorf("download %s: %w", reqURL, err)
 	}
 
 	zr, err := zip.OpenReader(tmp.Name())
 	if err != nil {
-		return nil, fmt.Errorf("open zip: %w", err)
+		return nil, 0, fmt.Errorf("open zip: %w", err)
 	}
 	defer zr.Close()
 
 	importedAt := s.now()
 	var rows []db.MaliciousPackage
+	malformed := 0
 	for _, f := range zr.File {
 		if !strings.HasPrefix(baseName(f.Name), "MAL-") {
 			continue
 		}
 		rc, err := f.Open()
 		if err != nil {
-			return nil, fmt.Errorf("open %s: %w", f.Name, err)
+			return nil, malformed, fmt.Errorf("open %s: %w", f.Name, err)
 		}
 		entryRows, err := parseAdvisory(rc, eco, osvName, importedAt)
 		rc.Close()
 		if err != nil {
 			// One malformed advisory shouldn't unprotect the rest of
-			// the ecosystem — log and keep going.
-			zap.L().Warn("blocklist: skipping malformed advisory",
-				zap.String("file", f.Name), zap.Error(err))
+			// the ecosystem — count it and keep going. SyncOnce reports
+			// the total in one line.
+			malformed++
+			zap.L().Debug("blocklist: skipping malformed advisory",
+				zap.String("ecosystem", eco), zap.String("file", f.Name), zap.Error(err))
 			continue
 		}
 		rows = append(rows, entryRows...)
 	}
-	return rows, nil
+	return rows, malformed, nil
 }
 
 func baseName(p string) string {

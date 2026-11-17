@@ -54,6 +54,13 @@ func registerFrontendFS(engine *gin.Engine, distFS fs.FS, extraProxyPrefixes ...
 			return
 		}
 
+		// A client that only knows the base URL gets a machine-readable pointer
+		// to the endpoint list instead of a bare 404.
+		if hasMachinePrefix(requestPath, jsonAPIPrefixes) {
+			writeUnknownAPIRoute(c)
+			return
+		}
+
 		if hasMachinePrefix(requestPath, machinePrefixes) ||
 			!frontendBrowserNavigation(c.Request) ||
 			frontendPathLooksLikeFile(requestPath) {
@@ -239,6 +246,19 @@ func acceptsFrontendHTML(accept string) bool {
 func frontendPathLooksLikeFile(requestPath string) bool {
 	name := path.Base(requestPath)
 	return name != "." && name != "/" && path.Ext(name) != ""
+}
+
+// jsonAPIPrefixes are the machine roots whose routes answer with the JSON
+// error body, so an unknown route below them does too.
+var jsonAPIPrefixes = []string{"/api"}
+
+func writeUnknownAPIRoute(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.JSON(http.StatusNotFound, gin.H{
+		"code":    "NOT_FOUND",
+		"message": "unknown API route; GET /api/v1/discover lists the available endpoints",
+	})
 }
 
 func writeFrontendError(c *gin.Context, status int) {

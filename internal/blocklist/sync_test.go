@@ -11,6 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
+
 	"depsilo/internal/asyncruntime"
 )
 
@@ -301,6 +304,74 @@ func TestSyncOnce(t *testing.T) {
 			t.Errorf("unexpected state: %+v", st)
 		}
 	})
+}
+
+func TestSyncOnceReportsMalformedAdvisoriesInOneLine(t *testing.T) {
+	archive := buildZip(t, map[string]string{
+		"MAL-2026-1111.json": malAllVersions,
+		"MAL-2026-3333.json": `{not json`,
+		"MAL-2026-4444.json": `{also not json`,
+	})
+	srv := newMockOSV(t, archive)
+	defer srv.Close()
+
+	syncer, err := NewSyncer(testStore(t), Config{MirrorURL: srv.URL, SyncInterval: "6h"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	core, logs := observer.New(zap.DebugLevel)
+	t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
+
+	if _, err := syncer.SyncOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	// The mock serves the same archive for every ecosystem, so both
+	// malformed advisories are skipped once per ecosystem.
+	want := 2 * len(SyncedEcosystems())
+	warnings := logs.FilterLevelExact(zap.WarnLevel).All()
+	if len(warnings) != 1 {
+		t.Fatalf("warnings = %+v, want one summary line", warnings)
+	}
+	if got := warnings[0].ContextMap()["count"]; got != int64(want) {
+		t.Fatalf("summary count = %v, want %d", got, want)
+	}
+	if !strings.Contains(warnings[0].Message, "skipped malformed advisories") {
+		t.Fatalf("summary message = %q", warnings[0].Message)
+	}
+
+	details := logs.FilterLevelExact(zap.DebugLevel).FilterMessage("blocklist: skipping malformed advisory").All()
+	if len(details) != want {
+		t.Fatalf("debug detail lines = %d, want %d", len(details), want)
+	}
+	files := make(map[string]bool)
+	for _, entry := range details {
+		files[entry.ContextMap()["file"].(string)] = true
+	}
+	if !files["MAL-2026-3333.json"] || !files["MAL-2026-4444.json"] || len(files) != 2 {
+		t.Fatalf("debug lines name %v, want both malformed advisories", files)
+	}
+}
+
+func TestSyncOnceStaysQuietWithoutMalformedAdvisories(t *testing.T) {
+	srv := newMockOSV(t, buildZip(t, map[string]string{"MAL-2026-1111.json": malAllVersions}))
+	defer srv.Close()
+
+	syncer, err := NewSyncer(testStore(t), Config{MirrorURL: srv.URL, SyncInterval: "6h"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	core, logs := observer.New(zap.WarnLevel)
+	t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
+
+	if _, err := syncer.SyncOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if logs.Len() != 0 {
+		t.Fatalf("warnings = %+v, want none", logs.All())
+	}
 }
 
 func TestSyncFailureKeepsLastGoodData(t *testing.T) {

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"mime"
 	"net/http"
 	"net/http/httptest"
@@ -63,7 +64,6 @@ func TestFrontendFallbackDoesNotCaptureMachineRoutes(t *testing.T) {
 		"/apt/debian-security",
 		"/apt/debian-security/nope",
 		"/apt-security/dists/trixie-security/InRelease",
-		"/api/v1/does-not-exist",
 		"/pypi/",
 		"/npm/",
 		"/p/example/apt/debian",
@@ -74,7 +74,6 @@ func TestFrontendFallbackDoesNotCaptureMachineRoutes(t *testing.T) {
 		"/livez",
 		"/metric",
 		"/metricsz",
-		"/API/v1/does-not-exist",
 		// Common aliases for protocol endpoints are invalid and must not look
 		// like successful Portal navigation.
 		"/cargo/index/config.json",
@@ -91,6 +90,54 @@ func TestFrontendFallbackDoesNotCaptureMachineRoutes(t *testing.T) {
 			)
 
 			assertPlainFrontendError(t, response, http.StatusNotFound)
+		})
+	}
+}
+
+func TestFrontendFallbackPointsUnknownAPIRoutesAtDiscover(t *testing.T) {
+	engine := newFrontendTestEngine()
+
+	for _, test := range []struct {
+		method string
+		path   string
+		accept string
+	}{
+		{http.MethodGet, "/api/v1/does-not-exist", "text/html"},
+		{http.MethodGet, "/api/v1/does-not-exist", "application/json"},
+		{http.MethodGet, "/api/v1/does-not-exist", ""},
+		{http.MethodGet, "/api/v1/does-not-exist.json", "*/*"},
+		{http.MethodGet, "/API/v1/does-not-exist", "text/html"},
+		{http.MethodGet, "/api", ""},
+		{http.MethodGet, "/api/", ""},
+		{http.MethodPost, "/api/v1/discover", "application/json"},
+	} {
+		t.Run(test.method+" "+test.path+" "+test.accept, func(t *testing.T) {
+			headers := map[string]string{}
+			if test.accept != "" {
+				headers["Accept"] = test.accept
+			}
+			response := serveFrontendRequest(engine, test.method, test.path, headers)
+
+			if response.Code != http.StatusNotFound {
+				t.Fatalf("status = %d, want 404; body=%q", response.Code, response.Body.String())
+			}
+			if contentType := mediaType(response.Header().Get("Content-Type")); contentType != "application/json" {
+				t.Fatalf("content-type = %q, want application/json", contentType)
+			}
+			if cacheControl := response.Header().Get("Cache-Control"); cacheControl != "no-store" {
+				t.Fatalf("Cache-Control = %q, want no-store", cacheControl)
+			}
+			if nosniff := response.Header().Get("X-Content-Type-Options"); nosniff != "nosniff" {
+				t.Fatalf("X-Content-Type-Options = %q, want nosniff", nosniff)
+			}
+			var body map[string]any
+			if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+				t.Fatalf("decode body %q: %v", response.Body.String(), err)
+			}
+			message, _ := body["message"].(string)
+			if len(body) != 2 || body["code"] != "NOT_FOUND" || !strings.Contains(message, "GET /api/v1/discover") {
+				t.Fatalf("body = %v, want {code: NOT_FOUND, message naming GET /api/v1/discover}", body)
+			}
 		})
 	}
 }

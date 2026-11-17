@@ -1,7 +1,9 @@
 package db
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -52,13 +54,86 @@ func sqliteConnectionLimit(dsn string) int {
 	return sqliteMaxOpenConnections
 }
 
+// sqliteDatabaseDirectory returns the directory that holds the database file
+// a DSN names, or "" when the DSN names no local file. Options are not part of
+// the path: a plain path ends at the first "?", and a "file:" URI carries its
+// path in front of the query. These are the forms internal/backup's
+// sqliteFilePath reads, so the directory created here is the one a backup or
+// restore later looks in.
+func sqliteDatabaseDirectory(dsn string) string {
+	dsn = strings.TrimSpace(dsn)
+	// The connection limit is 1 exactly for the in-memory forms.
+	if dsn == "" || sqliteConnectionLimit(dsn) == 1 {
+		return ""
+	}
+	path := dsn
+	if strings.HasPrefix(dsn, "file:") {
+		parsed, err := url.Parse(dsn)
+		if err != nil || parsed.Host != "" && parsed.Host != "localhost" {
+			return ""
+		}
+		switch {
+		case parsed.Path != "":
+			path = parsed.Path
+		case parsed.Opaque != "":
+			path = parsed.Opaque
+		default:
+			return ""
+		}
+	} else if index := strings.IndexByte(path, '?'); index >= 0 {
+		path = path[:index]
+	}
+	return filepath.Dir(filepath.FromSlash(path))
+}
+
+// newQueryLogger reports failed and slow statements, like GORM's default
+// logger at warn level, with two differences. A lookup that finds no row is an
+// ordinary outcome that callers handle (a first start performs a dozen of
+// them), so ErrRecordNotFound is not logged. Output carries no ANSI colour
+// codes, because it usually lands in a file or a log collector. A logged
+// statement shows placeholders instead of its values, because values include
+// password hashes, token digests and other credentials.
+func newQueryLogger() logger.Interface {
+	return warnCappedLogger{logger.New(log.New(os.Stdout, "\r\n", log.LstdFlags), logger.Config{
+		SlowThreshold:             200 * time.Millisecond,
+		LogLevel:                  logger.Warn,
+		IgnoreRecordNotFoundError: true,
+		ParameterizedQueries:      true,
+		Colorful:                  false,
+	})}
+}
+
+// warnCappedLogger refuses to be raised above warn level. The SQLite driver's
+// migrator calls DB.Debug() while it reads index lists, which would otherwise
+// print an info-level SQL trace for those statements on every start.
+type warnCappedLogger struct {
+	logger.Interface
+}
+
+func (l warnCappedLogger) LogMode(level logger.LogLevel) logger.Interface {
+	if level > logger.Warn {
+		level = logger.Warn
+	}
+	return warnCappedLogger{l.Interface.LogMode(level)}
+}
+
+// ParamsFilter forwards to the wrapped logger, which drops statement values.
+// GORM finds the filter by type assertion on the logger it holds, so the
+// wrapper must carry the method itself.
+func (l warnCappedLogger) ParamsFilter(ctx context.Context, sql string, params ...interface{}) (string, []interface{}) {
+	if filter, ok := l.Interface.(gorm.ParamsFilter); ok {
+		return filter.ParamsFilter(ctx, sql, params...)
+	}
+	return sql, nil
+}
+
 func Open(driver, dsn string) (*gorm.DB, error) {
 	var dialector gorm.Dialector
 
 	switch driver {
 	case "sqlite":
 		// Ensure parent directory exists
-		if dir := filepath.Dir(dsn); dir != "" && dir != "." {
+		if dir := sqliteDatabaseDirectory(dsn); dir != "" && dir != "." {
 			if err := os.MkdirAll(dir, 0755); err != nil {
 				return nil, fmt.Errorf("create database directory: %w", err)
 			}
@@ -74,7 +149,7 @@ func Open(driver, dsn string) (*gorm.DB, error) {
 	// stored zone-suffix differs from the query parameter's zone — the
 	// root cause of the audit-log filter returning empty.
 	db, err := gorm.Open(dialector, &gorm.Config{
-		Logger:  logger.Default.LogMode(logger.Warn),
+		Logger:  newQueryLogger(),
 		NowFunc: func() time.Time { return time.Now().UTC() },
 	})
 	if err != nil {

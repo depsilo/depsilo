@@ -76,6 +76,11 @@ func load(keyMode signingKeyLoadMode) (*Config, error) {
 		"distribution.storage.region",
 		"distribution.storage.access_key",
 		"distribution.storage.secret_key",
+		// [egress] has no defaults, so AutomaticEnv alone never surfaces these
+		// keys to Unmarshal. The two lists take comma-separated values.
+		"egress.upstream_proxy",
+		"egress.no_proxy",
+		"egress.private_ranges",
 	} {
 		if err := v.BindEnv(key); err != nil {
 			return nil, fmt.Errorf("bind %s environment override: %w", key, err)
@@ -383,6 +388,12 @@ func decodeViper(v *viper.Viper) (*Config, error) {
 	}
 	if err := validateCascadeConfig(cfg); err != nil {
 		return nil, err
+	}
+	// A comma-separated environment list is commonly written "a, b".
+	for _, entries := range [][]string{cfg.Egress.NoProxy, cfg.Egress.PrivateRanges} {
+		for index := range entries {
+			entries[index] = strings.TrimSpace(entries[index])
+		}
 	}
 	if _, err := cfg.Egress.Policy(); err != nil {
 		return nil, err
