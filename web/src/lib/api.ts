@@ -324,9 +324,16 @@ export const adminApi = {
 }
 
 // Setup wizard (no auth)
-export type SetupDecision =
-  | { kind: 'configured' }
-  | { kind: 'setup-required'; tokenRequired: boolean }
+export interface SetupRequired {
+  kind: 'setup-required'
+  tokenRequired: boolean
+  /** The port the server listens on now; absent from an older server. */
+  listenPort?: number
+  /** A configuration file already exists and setup will replace it. */
+  configExists: boolean
+}
+
+export type SetupDecision = { kind: 'configured' } | SetupRequired
 
 function decodeSetupStatus(value: unknown): SetupDecision {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -336,9 +343,18 @@ function decodeSetupStatus(value: unknown): SetupDecision {
   if (typeof status.needs_setup !== 'boolean' || typeof status.token_required !== 'boolean') {
     throw new TypeError('Invalid setup status response')
   }
-  return status.needs_setup
-    ? { kind: 'setup-required', tokenRequired: status.token_required }
-    : { kind: 'configured' }
+  if (!status.needs_setup) return { kind: 'configured' }
+  // listen_port and config_exists are later additions that an older server
+  // omits, so neither is required and a malformed value counts as absent.
+  const port = status.listen_port
+  return {
+    kind: 'setup-required',
+    tokenRequired: status.token_required,
+    listenPort: typeof port === 'number' && Number.isInteger(port) && port >= 1 && port <= 65535
+      ? port
+      : undefined,
+    configExists: status.config_exists === true,
+  }
 }
 
 export const setupApi = {

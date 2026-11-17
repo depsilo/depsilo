@@ -1109,6 +1109,10 @@ export interface SetupRequest {
 export interface SetupStatusResponse {
   needs_setup: boolean
   token_required: boolean
+  /** The port the server listens on. Sent only while setup is pending. */
+  listen_port?: number
+  /** Whether a configuration file already exists. Sent only while setup is pending. */
+  config_exists?: boolean
 }
 
 export interface SetupCompleteResponse {

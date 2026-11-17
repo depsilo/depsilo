@@ -11,37 +11,27 @@ import { Input } from '@/components/ui/input'
 import LangToggle from '../components/LangToggle'
 import Logo from '../components/Logo'
 import ThemeToggle from '../components/ThemeToggle'
-import { adminApi, authApi, setupApi } from '../lib/api'
+import { adminApi, authApi, setupApi, type SetupRequired } from '../lib/api'
 import { adminLoginURL } from '../lib/adminLoginDestination'
+import { ldapBrowserCredentialsAllowed } from '../lib/ldapBrowserOrigin'
+import { passwordIssue, passwordLimits } from '../lib/passwordPolicy'
 import { writeLocalStorage } from '../lib/storage'
 import CodeBlock from '../portal/components/CodeBlock'
 import { ecosystemDefaults, type UpstreamDefault } from './defaults'
 
 interface SetupWizardProps {
-  tokenRequired?: boolean
+  /** What GET /api/v1/setup/status reported for this instance. */
+  status: SetupRequired
 }
 
-type SetupPhase = 'editing' | 'saving' | 'restarting' | 'failed' | 'ready'
-type PasswordIssue =
-  | 'required'
-  | 'too_short'
-  | 'too_long'
-  | 'control_character'
-  | 'weak'
-  | 'contains_username'
-  | 'common'
-  | null
+type SetupPhase = 'editing' | 'saving' | 'restarting' | 'restart_required' | 'failed' | 'ready'
 
 const reconnectTimeoutMs = 30_000
 const reconnectInitialDelayMs = 1_500
 const reconnectIntervalMs = 1_000
 const reconnectAttemptTimeoutMs = 2_500
-const commonPasswords = new Set([
-  'adminadminadmin',
-  'password123!',
-  'change-me-in-production',
-  'qwerty123456',
-])
+// Used only when the server does not report its listening port.
+const defaultListenPort = 23333
 
 function abortableDelay(ms: number, signal: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
@@ -102,29 +92,6 @@ function usernameValid(username: string) {
   return /^[\p{L}\p{N}][\p{L}\p{N}._-]{2,63}$/u.test(username)
 }
 
-function passwordIssue(username: string, password: string): PasswordIssue {
-  if (!password) return 'required'
-  const characters = Array.from(password).length
-  if (characters < 12) return 'too_short'
-  if (new TextEncoder().encode(password).length > 72) return 'too_long'
-  if (/\p{Cc}/u.test(password)) return 'control_character'
-
-  const classes = [
-    /\p{Ll}/u.test(password),
-    /\p{Lu}/u.test(password),
-    /\p{N}/u.test(password),
-    /[^\p{L}\p{N}]/u.test(password),
-  ].filter(Boolean).length
-  if (characters < 20 && classes < 3) return 'weak'
-
-  const normalizedPassword = password.toLocaleLowerCase()
-  if (username && normalizedPassword.includes(username.toLocaleLowerCase())) {
-    return 'contains_username'
-  }
-  if (commonPasswords.has(normalizedPassword)) return 'common'
-  return null
-}
-
 function validHTTPURL(value: string) {
   try {
     const parsed = new URL(value)
@@ -134,9 +101,12 @@ function validHTTPURL(value: string) {
   }
 }
 
-export default function SetupWizard({ tokenRequired = false }: SetupWizardProps) {
+export default function SetupWizard({ status }: SetupWizardProps) {
+  const { tokenRequired, listenPort, configExists } = status
   const { t } = useTranslation()
-  const [port, setPort] = useState(23333)
+  // Start from the port in use: the value is written to config.toml, so a
+  // fixed default would move a server started with another port.
+  const [port, setPort] = useState(listenPort ?? defaultListenPort)
   const [storagePath, setStoragePath] = useState('./data/cache')
   const [adminUsername, setAdminUsername] = useState('admin')
   const [adminPassword, setAdminPassword] = useState('')
@@ -157,11 +127,22 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
   const [attemptedSubmit, setAttemptedSubmit] = useState(false)
   const [phase, setPhase] = useState<SetupPhase>('editing')
   const [submitError, setSubmitError] = useState('')
+  const [tokenRejected, setTokenRejected] = useState(false)
   const [reconnectURL, setReconnectURL] = useState('')
   const formRef = useRef<HTMLFormElement>(null)
+  const tokenInputRef = useRef<HTMLInputElement>(null)
   const reconnectAbortRef = useRef<AbortController | null>(null)
   const redirectTimerRef = useRef<number | null>(null)
 
+  // The same test as for a directory password: HTTPS, or HTTP that stays on
+  // this machine. Anything else sends the token and the password in the clear.
+  const unencrypted = !ldapBrowserCredentialsAllowed(window.location.origin)
+  // The bare command asks the default port, so a server listening elsewhere
+  // has to be named or the token comes from a different instance. Inside a
+  // container the port is the default whatever the host publishes.
+  const localTokenCommand = listenPort === undefined || listenPort === defaultListenPort
+    ? 'depsilo setup token'
+    : `depsilo setup token --port ${listenPort}`
   const submitting = phase === 'saving'
   const reconnecting = phase === 'restarting' || phase === 'ready'
   const selectedList = ecosystemDefaults.filter((ecosystem) => selectedEcosystems.has(ecosystem.key))
@@ -169,9 +150,10 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
   const usernameError = attemptedSubmit && !usernameValid(adminUsername)
     ? t('setup.admin_username_error')
     : undefined
-  const currentPasswordIssue = passwordIssue(adminUsername, adminPassword)
+  // An empty field asks for a password instead of calling it too short.
+  const currentPasswordIssue = adminPassword ? passwordIssue(adminUsername, adminPassword) : 'required'
   const passwordError = (attemptedSubmit || adminPassword.length > 0) && currentPasswordIssue
-    ? t(`setup.password_${currentPasswordIssue}`)
+    ? t(`setup.password_${currentPasswordIssue}`, passwordLimits)
     : undefined
   const confirmPasswordError = attemptedSubmit || confirmPassword.length > 0
     ? !confirmPassword
@@ -180,15 +162,25 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
         ? t('setup.password_mismatch')
         : undefined
     : undefined
-  const bootstrapTokenError = attemptedSubmit && tokenRequired && !bootstrapToken.trim()
-    ? t('setup.bootstrap_token_required')
-    : undefined
+  const bootstrapTokenError = !tokenRequired
+    ? undefined
+    : attemptedSubmit && !bootstrapToken.trim()
+      ? t('setup.bootstrap_token_required')
+      : tokenRejected
+        ? t('setup.bootstrap_token_rejected')
+        : undefined
   const portError = attemptedSubmit && (port < 1 || port > 65535)
     ? t('setup.port_error')
     : undefined
   const storageError = attemptedSubmit && !storagePath.trim()
     ? t('setup.storage_path_error')
     : undefined
+
+  // The server refused the token: the field is enabled again in the same
+  // render that marks it invalid, so move focus to it here.
+  useEffect(() => {
+    if (tokenRejected) tokenInputRef.current?.focus()
+  }, [tokenRejected])
 
   useEffect(() => () => {
     reconnectAbortRef.current?.abort()
@@ -257,6 +249,18 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
     return null
   }
 
+  // Codes of POST /api/v1/setup/complete that the operator can act on. Any
+  // other code keeps the server's own message.
+  function localizedSetupError(code: unknown) {
+    switch (code) {
+      case 'BOOTSTRAP_TOKEN_REQUIRED': return t('setup.bootstrap_token_rejected')
+      case 'ALREADY_CONFIGURED': return t('setup.error_already_configured')
+      case 'ADMIN_CREDENTIALS_MISMATCH': return t('setup.error_admin_credentials_mismatch')
+      case 'WRITE_FAILED': return t('setup.error_write_failed')
+      default: return undefined
+    }
+  }
+
   function focusFirstInvalidField() {
     window.requestAnimationFrame(() => {
       formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
@@ -313,6 +317,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
     event.preventDefault()
     setAttemptedSubmit(true)
     setSubmitError('')
+    setTokenRejected(false)
 
     const configurationIssue = firstConfigurationIssue()
     const accountInvalid = !usernameValid(adminUsername) || currentPasswordIssue !== null ||
@@ -356,18 +361,21 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
       const target = new URL('/', window.location.origin).toString()
       setReconnectURL(target)
       if (response.data.restart_strategy === 'supervisor_required') {
-        setPhase('failed')
-        setSubmitError(t('setup.supervisor_required'))
+        // Setup succeeded; this platform cannot restart in place. That is a
+        // step for the operator, not a failure.
+        setPhase('restart_required')
         return
       }
       void monitorReconnect(target)
     } catch (error) {
       setPhase('failed')
-      if (axios.isAxiosError(error)) {
-        setSubmitError(error.response?.data?.message || t('setup.save_failed'))
-      } else {
-        setSubmitError(t('setup.save_failed'))
+      const body = axios.isAxiosError(error) ? error.response?.data : undefined
+      if (body?.code === 'BOOTSTRAP_TOKEN_REQUIRED' && tokenRequired) {
+        // Shown as the token field's own error instead of the form alert.
+        setTokenRejected(true)
+        return
       }
+      setSubmitError(localizedSetupError(body?.code) || body?.message || t('setup.save_failed'))
     }
   }
 
@@ -393,16 +401,29 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
       )
     }
 
+    const restartRequired = phase === 'restart_required'
     return (
-      <section className="flex min-h-[300px] flex-col items-center justify-center px-5 py-12 text-center">
-        <span className="mb-5 grid h-11 w-11 place-items-center rounded-lg bg-[var(--danger-fill)] text-[var(--danger-text)]">
-          <Icon name="warning" />
-        </span>
+      <section
+        data-setup-state={restartRequired ? 'restart-required' : 'failed'}
+        className="flex min-h-[300px] flex-col items-center justify-center px-5 py-12 text-center"
+      >
+        {restartRequired ? (
+          <span className="mb-5 grid h-11 w-11 place-items-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand-text)]">
+            <Icon name="save" />
+          </span>
+        ) : (
+          <span className="mb-5 grid h-11 w-11 place-items-center rounded-lg bg-[var(--danger-fill)] text-[var(--danger-text)]">
+            <Icon name="warning" />
+          </span>
+        )}
         <h1 className="text-[24px] font-[650] text-[var(--text)]">
-          {t('setup.restart_failed_title')}
+          {restartRequired ? t('setup.restart_required_title') : t('setup.restart_failed_title')}
         </h1>
-        <p role="alert" className="mt-2 max-w-[52ch] text-[13px] leading-6 text-[var(--text-muted)]">
-          {submitError}
+        <p
+          role={restartRequired ? 'status' : 'alert'}
+          className="mt-2 max-w-[52ch] text-[13px] leading-6 text-[var(--text-muted)]"
+        >
+          {restartRequired ? t('setup.supervisor_required') : submitError}
         </p>
         {reconnectURL && (
           <p className="mt-3 max-w-full break-all font-mono text-[12px] text-[var(--text-soft)]">
@@ -430,7 +451,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[13px] font-[600] text-[var(--text)]">{t('setup.advanced_settings')}</span>
-            <span className="mt-0.5 block truncate text-[12px] text-[var(--text-muted)]">
+            <span className="mt-0.5 block text-[12px] text-[var(--text-muted)]">
               {t('setup.advanced_summary', { port, count: selectedEcosystems.size })}
             </span>
           </span>
@@ -638,7 +659,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
           data-setup-surface="single-page"
           className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-[var(--shadow-card)]"
         >
-          {reconnecting || reconnectFailure ? renderReconnectState() : (
+          {reconnecting || reconnectFailure || phase === 'restart_required' ? renderReconnectState() : (
             <form ref={formRef} noValidate onSubmit={handleSubmit}>
               <div className="px-5 pb-6 pt-6 sm:px-8 sm:pb-8 sm:pt-8">
                 <header className="mb-7">
@@ -649,6 +670,15 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                     {t('setup.description')}
                   </p>
                 </header>
+
+                {configExists && (
+                  <p
+                    role="note"
+                    className="mb-7 rounded-md border border-[var(--warn-border)] bg-[var(--warn-fill)] px-3 py-2.5 text-[12px] leading-5 text-[var(--warn-text)]"
+                  >
+                    {t('setup.config_exists_notice')}
+                  </p>
+                )}
 
                 <section aria-labelledby="setup-admin-heading" className="mb-7">
                   <h2 id="setup-admin-heading" className="text-[15px] font-[600] text-[var(--text)]">
@@ -671,14 +701,23 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                     {tokenRequired && (
                       <Field invalid={Boolean(bootstrapTokenError)} disabled={submitting}>
                         <FieldLabel>{t('setup.bootstrap_token')}</FieldLabel>
+                        {/* A pasted one-time value that the terminal already printed:
+                            keep it readable so a bad paste is visible. */}
                         <Input aria-invalid={Boolean(bootstrapTokenError) || undefined} className="font-mono"
-                          type="password"
+                          type="text"
                           autoComplete="off"
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          spellCheck={false}
+                          ref={tokenInputRef}
                           value={bootstrapToken}
                           disabled={submitting}
-                          onChange={(event) => setBootstrapToken(event.target.value)}
+                          onChange={(event) => {
+                            setBootstrapToken(event.target.value)
+                            setTokenRejected(false)
+                          }}
                         />
-                        {(bootstrapTokenError) ? <FieldError match>{bootstrapTokenError}</FieldError> : (bootstrapTokenError ? undefined : t('setup.bootstrap_token_hint')) ? <FieldDescription>{bootstrapTokenError ? undefined : t('setup.bootstrap_token_hint')}</FieldDescription> : null}
+                        {(bootstrapTokenError) ? <FieldError match>{bootstrapTokenError}</FieldError> : <FieldDescription>{t('setup.bootstrap_token_hint')}</FieldDescription>}
                       </Field>
                     )}
                     <Field invalid={Boolean(passwordError)} disabled={submitting}>
@@ -690,7 +729,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                         disabled={submitting}
                         onChange={(event) => setAdminPassword(event.target.value)}
                       />
-                      {(passwordError) ? <FieldError match>{passwordError}</FieldError> : (passwordError ? undefined : t('setup.admin_password_hint')) ? <FieldDescription>{passwordError ? undefined : t('setup.admin_password_hint')}</FieldDescription> : null}
+                      {(passwordError) ? <FieldError match>{passwordError}</FieldError> : <FieldDescription>{t('setup.admin_password_hint', passwordLimits)}</FieldDescription>}
                     </Field>
                     <Field invalid={Boolean(confirmPasswordError)} disabled={submitting}>
                       <FieldLabel>{t('setup.confirm_password')}</FieldLabel>
@@ -704,6 +743,14 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                       {(confirmPasswordError) && <FieldError match>{confirmPasswordError}</FieldError>}
                     </Field>
                   </div>
+                  {unencrypted && (
+                    <p
+                      data-setup-notice="unencrypted"
+                      className="mt-4 text-[12px] leading-5 text-[var(--text-muted)]"
+                    >
+                      {t('setup.unencrypted_notice')}
+                    </p>
+                  )}
                   {tokenRequired && (
                     <section aria-labelledby="setup-token-help-heading" className="mt-5 min-w-0">
                       <h3 id="setup-token-help-heading" className="text-[13px] font-[600] text-[var(--text)]">
@@ -714,6 +761,11 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                       </p>
                       <div className="space-y-3">
                         <CodeBlock
+                          filename="Docker"
+                          copyName="Docker"
+                          code="docker exec depsilo depsilo setup token"
+                        />
+                        <CodeBlock
                           filename="Docker Compose"
                           copyName="Docker Compose"
                           code="docker compose exec depsilo depsilo setup token"
@@ -721,9 +773,12 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                         <CodeBlock
                           filename={t('setup.bootstrap_token_local')}
                           copyName={t('setup.bootstrap_token_local')}
-                          code="depsilo setup token"
+                          code={localTokenCommand}
                         />
                       </div>
+                      <p className="mt-3 text-[12px] leading-5 text-[var(--text-muted)]">
+                        {t('setup.bootstrap_token_help_output')}
+                      </p>
                     </section>
                   )}
                 </section>

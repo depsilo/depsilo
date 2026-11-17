@@ -92,7 +92,7 @@ export default function SetupGate({ children }: { children: ReactNode }) {
   }
 
   if (status.data.kind === 'setup-required') {
-    return <SetupWizard tokenRequired={status.data.tokenRequired} />
+    return <SetupWizard status={status.data} />
   }
 
   return <>{children}</>
