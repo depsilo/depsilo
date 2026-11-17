@@ -142,27 +142,131 @@ func TestSetupTokenCLIRejectsStaleOrUnavailableToken(t *testing.T) {
 			if strings.Contains(stderr, setupTestToken) || redirectRequests.Load() != 0 {
 				t.Fatal("setup token exposed a token in an error or followed a status redirect")
 			}
+			// "Already complete" may be another instance's answer, so the
+			// error must say which listener gave it.
+			probed := fmt.Sprintf("http://127.0.0.1:%d/api/v1/setup/status", port)
+			if test.wantError == "already complete" && !strings.Contains(stderr, probed) {
+				t.Fatalf("the already-complete error does not name the probed URL %s: %q", probed, stderr)
+			}
 		})
 	}
 }
 
-func TestSetupTokenCLIHelpAndInvalidArguments(t *testing.T) {
+// After `depsilo serve --port N` the instance listens on a port that neither
+// config.toml nor the caller's environment names. The bare command then asked
+// the configured port and reported whatever instance answered there.
+func TestSetupTokenCLIAsksTheListenerSelectedByFlags(t *testing.T) {
+	var otherRequests atomic.Int32
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		otherRequests.Add(1)
+		_, _ = fmt.Fprint(w, `{"needs_setup":false,"token_required":false}`)
+	}))
+	defer other.Close()
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if r.URL.Path != "/api/v1/setup/status" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = fmt.Fprint(w, `{"needs_setup":true,"token_required":true}`)
+	}))
+	defer server.Close()
+	port := strconv.Itoa(setupServerPort(t, server))
+	otherPort := setupServerPort(t, other)
+
 	for _, test := range []struct {
-		args    []string
-		success bool
+		name       string
+		configHost string
+		configPort int
+		env        []string
+		args       []string
 	}{
-		{[]string{"setup", "--help"}, true},
-		{[]string{"setup", "token", "--help"}, true},
-		{[]string{"setup"}, false},
-		{[]string{"setup", "unknown"}, false},
-		{[]string{"setup", "token", "--config"}, false},
-		{[]string{"setup", "token", "--config="}, false},
-		{[]string{"setup", "token", "unexpected"}, false},
+		{name: "port flag", configHost: "0.0.0.0", configPort: otherPort, args: []string{"--port", port}},
+		{name: "short port flag", configHost: "0.0.0.0", configPort: otherPort, args: []string{"-p", port}},
+		{name: "flag beats environment", configHost: "0.0.0.0", configPort: otherPort,
+			env: []string{"DEPSILO_SERVER_PORT=" + strconv.Itoa(otherPort)}, args: []string{"--port=" + port}},
+		// The fake instance listens on 127.0.0.1 only, so the configured
+		// IPv6 loopback reaches nothing until --host overrides it.
+		{name: "host flag", configHost: "::1", configPort: setupServerPort(t, server), args: []string{"--host", "127.0.0.1"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			configPath := filepath.Join(root, "config.toml")
+			content := fmt.Sprintf("config_version = 1\n[server]\nhost = '%s'\nport = %d\n", test.configHost, test.configPort)
+			if err := os.WriteFile(configPath, []byte(content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			writeSetupCLIToken(t, configPath)
+
+			args := append([]string{"setup", "token", "--config", configPath}, test.args...)
+			stdout, stderr, err := runSetupCLI(t, root, test.env, args...)
+			if err != nil || stdout != setupTestToken+"\n" || stderr != "" {
+				t.Fatalf("setup token did not ask the selected listener: error=%v, stdout length=%d, stderr=%q", err, len(stdout), stderr)
+			}
+
+			// Without the flags the same configuration reaches the wrong
+			// listener, which proves the flags made the difference.
+			stdout, _, err = runSetupCLI(t, root, test.env, "setup", "token", "--config", configPath)
+			if err == nil || stdout != "" {
+				t.Fatalf("the configuration alone already reached the instance; the case does not exercise the flag (stdout length=%d)", len(stdout))
+			}
+		})
+	}
+	if requests.Load() != 4 {
+		t.Fatalf("selected listener received %d status requests, want 4", requests.Load())
+	}
+	if otherRequests.Load() != 3 {
+		t.Fatalf("the configured listener received %d requests, want only the 3 from the runs without flags", otherRequests.Load())
+	}
+}
+
+func TestSetupHelpNamesListenerFlagsAndBothDockerForms(t *testing.T) {
+	_, stderr, err := runSetupCLI(t, t.TempDir(), nil, "setup", "--help")
+	if err != nil {
+		t.Fatalf("setup --help: %v", err)
+	}
+	for _, want := range []string{
+		"depsilo setup token [--config PATH] [--port N] [--host H]",
+		"--port, -p N",
+		"--host H",
+		"docker exec <container> depsilo setup token",
+		"docker compose exec depsilo depsilo setup token",
+	} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("setup help omits %q; help=%s", want, stderr)
+		}
+	}
+}
+
+func TestSetupTokenCLIHelpAndInvalidArguments(t *testing.T) {
+	// No case here may reach a server. Should a check regress, the command
+	// then asks a port nothing listens on instead of the default 23333,
+	// where a developer's own instance may be running.
+	env := []string{"DEPSILO_SERVER_PORT=" + strconv.Itoa(availablePort(t))}
+	for _, test := range []struct {
+		args       []string
+		success    bool
+		wantStderr string
+	}{
+		{[]string{"setup", "--help"}, true, "Usage:"},
+		{[]string{"setup", "token", "--help"}, true, "Usage:"},
+		{[]string{"setup"}, false, "Usage:"},
+		{[]string{"setup", "unknown"}, false, "expected 'depsilo setup token'"},
+		{[]string{"setup", "token", "--config"}, false, "flag needs an argument"},
+		{[]string{"setup", "token", "--config="}, false, "--config requires a non-empty path"},
+		{[]string{"setup", "token", "--port"}, false, "flag needs an argument"},
+		// A port outside the range must stop the command here. Left alone,
+		// -1 counts as unset and the command asks the default listener,
+		// which may be another instance.
+		{[]string{"setup", "token", "--port", "70000"}, false, "--port out of range: 70000"},
+		{[]string{"setup", "token", "--port", "-1"}, false, "--port out of range: -1"},
+		{[]string{"setup", "token", "unexpected"}, false, "does not accept positional arguments"},
 	} {
 		t.Run(strings.Join(test.args, " "), func(t *testing.T) {
-			stdout, stderr, err := runSetupCLI(t, t.TempDir(), nil, test.args...)
-			if (err == nil) != test.success || stdout != "" || stderr == "" {
-				t.Fatalf("unexpected argument handling: error=%v, stdout=%q, stderr=%q", err, stdout, stderr)
+			stdout, stderr, err := runSetupCLI(t, t.TempDir(), env, test.args...)
+			if (err == nil) != test.success || stdout != "" || !strings.Contains(stderr, test.wantStderr) {
+				t.Fatalf("unexpected argument handling: error=%v, stdout=%q, stderr=%q, want stderr to contain %q", err, stdout, stderr, test.wantStderr)
 			}
 		})
 	}

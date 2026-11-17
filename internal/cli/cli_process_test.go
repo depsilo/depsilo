@@ -327,8 +327,8 @@ func TestDaemonStartupFailureReturnsNonZeroAndRemovesPID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read failed daemon log: %v", err)
 	}
-	if !strings.Contains(string(logBody), "failed to start server") || !strings.Contains(string(logBody), "address already in use") {
-		t.Fatalf("daemon log omitted listen failure; log=%s", logBody)
+	if !strings.Contains(string(logBody), fmt.Sprintf("Port %d is already in use.", port)) || strings.Contains(string(logBody), "stacktrace") {
+		t.Fatalf("daemon log did not explain the listen failure in one plain line; log=%s", logBody)
 	}
 }
 
@@ -366,6 +366,146 @@ func TestServeStartupFailureReturnsExitCode(t *testing.T) {
 	}
 	if string(returned) != "1" {
 		t.Fatalf("RunServe returned %q, want 1; output=%s", returned, output)
+	}
+}
+
+func TestServeExplainsOccupiedPortWithoutStackTrace(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("occupy serve port: %v", err)
+	}
+	defer listener.Close()
+	port := listener.Addr().(*net.TCPAddr).Port
+
+	for _, test := range []struct {
+		name       string
+		serverURL  string
+		wantStatus string
+	}{
+		{name: "status asks another instance", serverURL: "",
+			wantStatus: fmt.Sprintf(`(try "DEPSILO_URL=http://127.0.0.1:%d depsilo status")`, port)},
+		{name: "status asks this port", serverURL: fmt.Sprintf("http://localhost:%d", port),
+			wantStatus: `(try "depsilo status")`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestCLIHelperProcess$", "--", "serve",
+				"--host", "127.0.0.1", "--port", strconv.Itoa(port))
+			cmd.Env = append(os.Environ(),
+				cliHelperEnv+"=1",
+				"HOME="+t.TempDir(),
+				"DEPSILO_CONFIG=",
+				"DEPSILO_PORT=",
+				"DEPSILO_URL="+test.serverURL,
+				"DEPSILO_AUTH_JWT_SECRET=0123456789abcdef0123456789abcdef",
+				"DEPSILO_BOOTSTRAP_TOKEN=0123456789abcdef01234567",
+			)
+			output, runErr := cmd.CombinedOutput()
+			var exitErr *exec.ExitError
+			if !errors.As(runErr, &exitErr) || exitErr.ExitCode() != 1 {
+				t.Fatalf("serve on an occupied port: error=%v, want exit code 1; output=%s", runErr, output)
+			}
+			want := fmt.Sprintf("Port %d is already in use. Another Depsilo may be running %s, or choose another port with --port.", port, test.wantStatus)
+			explained := 0
+			for _, line := range strings.Split(string(output), "\n") {
+				if line == want {
+					explained++
+				}
+			}
+			if explained != 1 {
+				t.Fatalf("serve did not print the plain line %q exactly once; output=%s", want, output)
+			}
+			for _, noise := range []string{"stacktrace", "failed to start server", "serve.go"} {
+				if strings.Contains(string(output), noise) {
+					t.Fatalf("serve output still carries %q for an occupied port; output=%s", noise, output)
+				}
+			}
+		})
+	}
+}
+
+func TestStartupExplainsPermissionFailuresInOneLine(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs POSIX file permissions and a non-root user")
+	}
+	for _, test := range []struct {
+		name string
+		// prepare makes one path inaccessible under home and returns the
+		// extra environment plus the start of the expected line.
+		prepare func(t *testing.T, home string) (env []string, wantPrefix string)
+		want    string
+		reject  string
+	}{
+		{
+			// The shape of a bind mount owned by another user: the state root
+			// exists but this user cannot create anything inside it.
+			name: "unwritable state directory",
+			prepare: func(t *testing.T, home string) ([]string, string) {
+				stateDir := filepath.Join(home, ".depsilo")
+				if err := os.Mkdir(stateDir, 0o555); err != nil {
+					t.Fatal(err)
+				}
+				return nil, "Permission denied: mkdir " + filepath.Join(stateDir, "data") + "."
+			},
+			want:   "The state directory must be writable by the user Depsilo runs as",
+			reject: "access this path",
+		},
+		{
+			// A config file the service user cannot read is not the state
+			// directory, and making a directory writable does not fix it.
+			name: "unreadable config file",
+			prepare: func(t *testing.T, home string) ([]string, string) {
+				configPath := filepath.Join(home, "depsilo.toml")
+				if err := os.WriteFile(configPath, []byte("config_version = 1\n"), 0o000); err != nil {
+					t.Fatal(err)
+				}
+				return []string{"DEPSILO_CONFIG=" + configPath}, "Permission denied: open " + configPath + "."
+			},
+			want:   "Depsilo must be able to access this path as the user it runs as",
+			reject: "state directory",
+		},
+	} {
+		for _, args := range [][]string{{"serve"}, {"start", "--daemon"}} {
+			t.Run(test.name+"/"+strings.Join(args, " "), func(t *testing.T) {
+				home := t.TempDir()
+				env, wantPrefix := test.prepare(t, home)
+
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				cmd := exec.CommandContext(ctx, os.Args[0], append([]string{"-test.run=^TestCLIHelperProcess$", "--"}, args...)...)
+				cmd.Dir = home
+				for _, value := range os.Environ() {
+					if !strings.HasPrefix(value, "DEPSILO_") {
+						cmd.Env = append(cmd.Env, value)
+					}
+				}
+				cmd.Env = append(cmd.Env, cliHelperEnv+"=1", "HOME="+home, "USERPROFILE="+home,
+					"DEPSILO_SERVER_PORT="+strconv.Itoa(availablePort(t)))
+				cmd.Env = append(cmd.Env, env...)
+				output, runErr := cmd.CombinedOutput()
+				var exitErr *exec.ExitError
+				if !errors.As(runErr, &exitErr) || exitErr.ExitCode() != 1 {
+					t.Fatalf("startup with a permission failure: error=%v, want exit code 1; output=%s", runErr, output)
+				}
+				text := string(output)
+				for _, want := range []string{
+					wantPrefix,
+					test.want,
+					"UID and GID 10001",
+					"docs/deployment.md#bind-mounted-state",
+				} {
+					if !strings.Contains(text, want) {
+						t.Fatalf("startup output omits %q; output=%s", want, text)
+					}
+				}
+				for _, noise := range []string{test.reject, "stacktrace", "failed to start server", "serve.go"} {
+					if strings.Contains(text, noise) {
+						t.Fatalf("startup output carries %q; output=%s", noise, text)
+					}
+				}
+			})
+		}
 	}
 }
 

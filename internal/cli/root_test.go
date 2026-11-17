@@ -51,7 +51,8 @@ func TestHelpCommandsMatchTheCommandList(t *testing.T) {
 }
 
 // The --json line of the help once named three commands while eleven accepted
-// the flag. The expected list is every handler that calls stripJSONFlag.
+// the flag. The expected list is kept by hand: it was read off the handlers
+// that call stripJSONFlag, and changes when one gains or loses the flag.
 func TestHelpListsTheCommandsThatAcceptJSON(t *testing.T) {
 	_, rest, found := strings.Cut(helpText, "--json, -j")
 	if !found {
@@ -79,7 +80,7 @@ func TestHelpUsesProductAndBootstrapTokenWording(t *testing.T) {
 	if !strings.HasPrefix(helpText, "Depsilo - self-hosted dependency cache and distribution service\n") {
 		t.Errorf("help does not open with the product description: %q", strings.SplitN(helpText, "\n", 2)[0])
 	}
-	if !strings.Contains(helpText, "setup token [--config path] Print the running instance's bootstrap token\n") {
+	if !strings.Contains(helpText, "setup token [flags]         Print the running instance's bootstrap token\n") {
 		t.Error("help does not describe `setup token` as printing the bootstrap token")
 	}
 }

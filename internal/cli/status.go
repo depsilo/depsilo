@@ -102,14 +102,16 @@ func runStatus(args []string) int {
 	statsStatus, statsErr := getJSON(baseURL+"/api/v1/stats", &stats)
 	var dist cacheDistResponse
 	distStatus, distErr := getJSON(baseURL+"/api/v1/admin/cache/distribution", &dist)
+	setupRequired := setupPending(baseURL)
 
 	if jsonMode {
 		out := map[string]any{
-			"ok":      true,
-			"url":     baseURL,
-			"version": health.Version,
-			"status":  health.Status,
-			"uptime":  health.Uptime,
+			"ok":             true,
+			"url":            baseURL,
+			"version":        health.Version,
+			"status":         health.Status,
+			"uptime":         health.Uptime,
+			"setup_required": setupRequired,
 		}
 		if statsErr == nil && statsStatus == 200 {
 			out["stats"] = stats
@@ -123,6 +125,9 @@ func runStatus(args []string) int {
 
 	fmt.Printf("Depsilo %s\n", health.Version)
 	fmt.Printf("Status:  %s\n", health.Status)
+	if setupRequired {
+		fmt.Printf("Setup:   pending; an operator must open the Portal at %s and complete initial setup\n", baseURL)
+	}
 	fmt.Printf("Uptime:  %s\n\n", health.Uptime)
 
 	if statsErr == nil && statsStatus == 200 {

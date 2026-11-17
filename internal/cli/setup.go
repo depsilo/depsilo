@@ -31,6 +31,14 @@ func runSetup(args []string) int {
 	var configPath string
 	flags.StringVar(&configPath, "config", "", "Path to the running instance's config.toml")
 	flags.StringVar(&configPath, "c", "", "Path to the running instance's config.toml")
+	// The same flags as `depsilo serve`: after `serve --port N` the instance
+	// listens where neither config.toml nor the environment of this shell
+	// says, and asking the configured port can reach a different instance.
+	var port int
+	var host string
+	flags.IntVar(&port, "port", 0, "Listen port of the running instance")
+	flags.IntVar(&port, "p", 0, "Listen port of the running instance")
+	flags.StringVar(&host, "host", "", "Listen host of the running instance")
 	if err := flags.Parse(args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -39,6 +47,10 @@ func runSetup(args []string) int {
 	}
 	if flags.NArg() != 0 {
 		fmt.Fprintln(os.Stderr, "Error: setup token does not accept positional arguments")
+		return 1
+	}
+	if port < 0 || port > 65535 {
+		fmt.Fprintf(os.Stderr, "Error: --port out of range: %d (want 1-65535)\n", port)
 		return 1
 	}
 	configFlagSet := false
@@ -69,6 +81,12 @@ func runSetup(args []string) int {
 		fmt.Fprintln(os.Stderr, "Error: cannot load local configuration; check --config or DEPSILO_CONFIG")
 		return 1
 	}
+	if port > 0 {
+		cfg.Server.Port = port
+	}
+	if host != "" {
+		cfg.Server.Host = host
+	}
 	// Use the configured listener, just like daemon readiness. DEPSILO_URL
 	// intentionally has no effect: token retrieval belongs to local state,
 	// and a different remote instance cannot validate that state's lifecycle.
@@ -88,10 +106,23 @@ func runSetup(args []string) int {
 
 func printSetupHelp() {
 	fmt.Fprintln(os.Stderr, `Usage:
-    depsilo setup token [--config PATH]
+    depsilo setup token [--config PATH] [--port N] [--host H]
 
 Print the bootstrap token for the running local instance's initial setup.
-Run as the service user, with the same config path and listener environment.
+Run as the service user, with the same config path and listener as the
+running instance.
+
+Flags:
+    --config, -c PATH    Path to the running instance's config.toml
+    --port, -p N         Listen port of the running instance; pass it when the
+                         instance was started with "depsilo serve --port N"
+    --host H             Listen host of the running instance
+
+Without --port and --host the listener comes from config.toml,
+DEPSILO_SERVER_PORT and DEPSILO_SERVER_HOST (default 127.0.0.1:23333).
+DEPSILO_URL is ignored: the token belongs to this machine's local state.
+
+In Docker:         docker exec <container> depsilo setup token
 In Docker Compose: docker compose exec depsilo depsilo setup token
 The token is not the JWT signing key and is unavailable after setup completes.`)
 }
@@ -103,7 +134,7 @@ func checkSetupTokenStatus(statusURL string) error {
 	client.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
 	response, err := client.Get(statusURL)
 	if err != nil {
-		return fmt.Errorf("cannot contact the local Depsilo server at %s; start the service and use its config path and listener environment", statusURL)
+		return fmt.Errorf("cannot contact the local Depsilo server at %s; start the service, or select its listener with --port and --host or its config path", statusURL)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
@@ -118,7 +149,7 @@ func checkSetupTokenStatus(statusURL string) error {
 		return errors.New("local Depsilo returned an invalid setup status; no token was read")
 	}
 	if !*status.NeedsSetup {
-		return errors.New("initial setup is already complete; no bootstrap token is available")
+		return fmt.Errorf("initial setup is already complete on the Depsilo at %s; no bootstrap token is available (use --port and --host to ask a different local listener)", statusURL)
 	}
 	if !*status.TokenRequired {
 		return errors.New("the running instance does not require a bootstrap token")

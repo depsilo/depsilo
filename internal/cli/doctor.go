@@ -36,6 +36,12 @@ type readinessResponse struct {
 	Checks map[string]string `json:"checks"`
 }
 
+// slowUpstreamLatencyMs is the average latency at which doctor calls a healthy
+// upstream slow. Keep it equal to publicUpstreamDegradedLatency in
+// internal/api/public/stats.go and DEGRADED_LATENCY_MS in
+// web/src/lib/upstreamStatus.ts, so doctor, status and the Portal agree.
+const slowUpstreamLatencyMs = 1000
+
 func runDoctor(args []string) int {
 	jsonMode, _ := stripJSONFlag(args)
 	baseURL := getServerURL()
@@ -57,13 +63,30 @@ func runDoctor(args []string) int {
 			Message: msg,
 			Hint:    "start the server: depsilo serve  (or: depsilo start --daemon)",
 		})
-		return finalizeDoctor(checks, jsonMode, baseURL, true)
+		return finalizeDoctor(checks, jsonMode, baseURL, true, false)
 	}
 	checks = append(checks, doctorCheck{
 		Name:    "Service reachable",
 		Level:   levelOK,
 		Message: baseURL,
 	})
+
+	// A healthy process that still waits for first-run setup has no
+	// administrator, and a blank one serves no packages. Report it as a failure
+	// so a caller does not read "healthy" as "usable". A reopened setup keeps
+	// serving the configured ecosystems, so the message does not claim
+	// otherwise. It names who must act and where, and deliberately carries no
+	// way to obtain the bootstrap token.
+	setupRequired := setupPending(baseURL)
+	if setupRequired {
+		checks = append(checks, doctorCheck{
+			Name:    "Initial setup",
+			Level:   levelFail,
+			Message: "not finished; no administrator can sign in yet",
+			Hint:    "an operator must open the Portal at " + baseURL + " and complete initial setup",
+		})
+		hasFail = true
+	}
 
 	switch health.Status {
 	case "healthy":
@@ -194,10 +217,18 @@ func runDoctor(args []string) int {
 			Level:   levelInfo,
 			Message: "public stats endpoint unreachable",
 		})
-		return finalizeDoctor(checks, jsonMode, baseURL, hasFail)
+		return finalizeDoctor(checks, jsonMode, baseURL, hasFail, setupRequired)
 	}
 
-	if len(stats.Upstreams) == 0 {
+	if len(stats.Upstreams) == 0 && setupRequired {
+		// Upstreams cannot be managed before setup finishes, so advising the
+		// caller to add them would point away from the real next step.
+		checks = append(checks, doctorCheck{
+			Name:    "Upstream health",
+			Level:   levelInfo,
+			Message: "no upstreams configured (initial setup is not finished)",
+		})
+	} else if len(stats.Upstreams) == 0 {
 		checks = append(checks, doctorCheck{
 			Name:    "Upstream health",
 			Level:   levelWarn,
@@ -213,7 +244,7 @@ func runDoctor(args []string) int {
 			switch {
 			case !u.Healthy:
 				failed = append(failed, u.Adapter+"/"+u.Name)
-			case u.AvgLatencyMs > 150:
+			case u.AvgLatencyMs >= slowUpstreamLatencyMs:
 				degraded++
 				highLatency = append(highLatency, fmt.Sprintf("%s/%s (%dms)", u.Adapter, u.Name, u.AvgLatencyMs))
 			default:
@@ -223,11 +254,16 @@ func runDoctor(args []string) int {
 		total := len(stats.Upstreams)
 		switch {
 		case len(failed) > 0:
+			message := fmt.Sprintf("%d/%d failed: %s", len(failed), total, strings.Join(failed, ", "))
+			codes, asked := upstreamFailureCodes(baseURL)
+			if len(codes) > 0 {
+				message += "; failure codes: " + formatFailureCodes(codes)
+			}
 			checks = append(checks, doctorCheck{
 				Name:    "Upstream health",
 				Level:   levelFail,
-				Message: fmt.Sprintf("%d/%d failed: %s", len(failed), total, strings.Join(failed, ", ")),
-				Hint:    "open /admin/upstreams or verify network reachability",
+				Message: message,
+				Hint:    upstreamFailureHint(codes, asked),
 			})
 			hasFail = true
 		case degraded > 0:
@@ -255,11 +291,15 @@ func runDoctor(args []string) int {
 			Message: "service uptime < 1h, not enough data yet",
 		})
 	case stats.Today.TotalRequests == 0:
+		hint := "configure a client: depsilo activate"
+		if setupRequired {
+			hint = "" // no client can be served before setup finishes
+		}
 		checks = append(checks, doctorCheck{
 			Name:    "Cache hit rate",
 			Level:   levelInfo,
 			Message: "no traffic today",
-			Hint:    "configure a client: depsilo activate",
+			Hint:    hint,
 		})
 	default:
 		hr := stats.Today.HitRate * 100
@@ -286,7 +326,118 @@ func runDoctor(args []string) int {
 		}
 	}
 
-	return finalizeDoctor(checks, jsonMode, baseURL, hasFail)
+	return finalizeDoctor(checks, jsonMode, baseURL, hasFail, setupRequired)
+}
+
+// setupPending reports whether the instance still waits for first-run setup.
+// GET /api/v1/setup/status needs no credentials. A server without the
+// endpoint, or one that does not answer it, counts as not pending so the
+// diagnosis of an older or degraded server keeps working.
+func setupPending(baseURL string) bool {
+	var status struct {
+		NeedsSetup bool `json:"needs_setup"`
+	}
+	code, err := getJSON(baseURL+"/api/v1/setup/status", &status)
+	return err == nil && code == 200 && status.NeedsSetup
+}
+
+const (
+	upstreamGenericHint = "open /admin/upstreams or verify network reachability"
+	egressGuideAnchor   = "docs/deployment.md#upstream-network-egress"
+	// failureFakeIP mirrors upstream.FailureFakeIP, the stable Admin API
+	// value for a DNS answer from a local proxy in fake-IP mode.
+	failureFakeIP = "egress_fake_ip"
+)
+
+// upstreamFailureCodes counts why unhealthy upstreams failed their last
+// check, as GET /api/v1/admin/upstreams reports it. That endpoint needs a
+// token: asked is false when none is configured or the request fails. An
+// accepted request can still yield no codes, because an upstream may be
+// unhealthy without a failed check on record (an open circuit breaker, or
+// state restored after a restart).
+// Only last_failure.code is decoded: the address and range the Admin API
+// also returns never reach doctor's output.
+func upstreamFailureCodes(baseURL string) (codes map[string]int, asked bool) {
+	if getToken() == "" {
+		return nil, false
+	}
+	var list struct {
+		Items []struct {
+			Healthy     bool `json:"healthy"`
+			LastFailure *struct {
+				Code string `json:"code"`
+			} `json:"last_failure"`
+		} `json:"items"`
+	}
+	status, err := getJSON(baseURL+"/api/v1/admin/upstreams", &list)
+	if err != nil || status != 200 {
+		return nil, false
+	}
+	codes = map[string]int{}
+	for _, item := range list.Items {
+		if item.Healthy || item.LastFailure == nil {
+			continue
+		}
+		codes[failureCodeLabel(item.LastFailure.Code)]++
+	}
+	return codes, true
+}
+
+// failureCodeLabel keeps a code only when it has the shape of the documented
+// ones (lower-case words joined by underscores), so nothing else a server
+// puts in that field is echoed to the terminal.
+func failureCodeLabel(code string) string {
+	if code == "" || len(code) > 40 {
+		return "other"
+	}
+	for _, r := range code {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '_' {
+			return "other"
+		}
+	}
+	return code
+}
+
+// formatFailureCodes lists codes with their counts, most frequent first.
+func formatFailureCodes(codes map[string]int) string {
+	names := make([]string, 0, len(codes))
+	for code := range codes {
+		names = append(names, code)
+	}
+	sort.Slice(names, func(i, j int) bool {
+		if codes[names[i]] != codes[names[j]] {
+			return codes[names[i]] > codes[names[j]]
+		}
+		return names[i] < names[j]
+	})
+	parts := make([]string, 0, len(names))
+	for _, code := range names {
+		parts = append(parts, fmt.Sprintf("%s x%d", code, codes[code]))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// upstreamFailureHint turns the failure codes into the next step. Without
+// codes it can only name the most common cause on a workstation or Homelab.
+// asked says whether the Admin API answered: only when it did not is a token
+// the thing to fix.
+func upstreamFailureHint(codes map[string]int, asked bool) string {
+	if !asked {
+		return upstreamGenericHint + ". If proxy software in TUN/fake-IP mode runs on this host, every upstream fails until Depsilo is routed around it: see " +
+			egressGuideAnchor + " (doctor names the failure codes when DEPSILO_TOKEN or ~/.config/depsilo/token holds a valid Admin token)"
+	}
+	if len(codes) == 0 {
+		return upstreamGenericHint + " (the server has no failure reason on record for these upstreams yet)"
+	}
+	if codes[failureFakeIP] == 0 {
+		return upstreamGenericHint
+	}
+	hint := failureFakeIP + " means DNS answered with fake-IP addresses, as proxy software in TUN/fake-IP mode does: " +
+		"set upstream_proxy under [egress] in config.toml, or give Depsilo a DNS server that returns real addresses; see " + egressGuideAnchor
+	if len(codes) > 1 {
+		hint += ". For the other codes, " + upstreamGenericHint
+	}
+	return hint
 }
 
 func formatReadiness(readiness readinessResponse) string {
@@ -304,13 +455,14 @@ func formatReadiness(readiness readinessResponse) string {
 	return readiness.Status + " (" + strings.Join(parts, ", ") + ")"
 }
 
-func finalizeDoctor(checks []doctorCheck, jsonMode bool, baseURL string, hasFail bool) int {
+func finalizeDoctor(checks []doctorCheck, jsonMode bool, baseURL string, hasFail bool, setupRequired bool) int {
 	if jsonMode {
 		printJSON(map[string]any{
-			"ok":      !hasFail,
-			"url":     baseURL,
-			"checks":  checks,
-			"summary": summarize(checks),
+			"ok":             !hasFail,
+			"url":            baseURL,
+			"setup_required": setupRequired,
+			"checks":         checks,
+			"summary":        summarize(checks),
 		})
 		if hasFail {
 			return 1

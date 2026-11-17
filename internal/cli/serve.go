@@ -2,12 +2,17 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
+	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"go.uber.org/zap"
@@ -156,6 +161,10 @@ func RunServe(args []string) int {
 
 	srv, err := server.StartServer(ctx, logLevel)
 	if err != nil {
+		if line, ok := startupFailureLine(err); ok {
+			fmt.Fprintln(os.Stderr, line)
+			return 1
+		}
 		zap.L().Error("failed to start server", zap.Error(err))
 		return 1
 	}
@@ -169,4 +178,65 @@ func RunServe(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+// windowsAddressInUse is WSAEADDRINUSE. Windows reports it instead of the
+// portable syscall.EADDRINUSE value, and no other platform uses the number.
+const windowsAddressInUse = syscall.Errno(10048)
+
+// statusProbesLocalPort reports whether "depsilo status", in this
+// environment, asks a loopback address on the given port.
+func statusProbesLocalPort(port int) bool {
+	target, err := url.Parse(getServerURL())
+	if err != nil || target.Port() != strconv.Itoa(port) {
+		return false
+	}
+	switch target.Hostname() {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	}
+	return false
+}
+
+// startupFailureLine recognises the startup failures an operator fixes
+// without reading a Go error chain, and returns the one plain line that
+// replaces the logged error and its stack trace. ok is false for every other
+// error, which keeps its full structured log entry.
+func startupFailureLine(err error) (line string, ok bool) {
+	if errors.Is(err, syscall.EADDRINUSE) || errors.Is(err, windowsAddressInUse) {
+		subject, statusCommand := "The listen address", "depsilo status"
+		var opErr *net.OpError
+		if errors.As(err, &opErr) {
+			if addr, isTCP := opErr.Addr.(*net.TCPAddr); isTCP && addr.Port > 0 {
+				subject = "Port " + strconv.Itoa(addr.Port)
+				host := ""
+				if len(addr.IP) > 0 {
+					host = addr.IP.String()
+				}
+				// A bare "depsilo status" asks DEPSILO_URL or port 23333,
+				// which may be a different instance than the one in the way.
+				if !statusProbesLocalPort(addr.Port) {
+					statusCommand = "DEPSILO_URL=" + strings.TrimSuffix(daemonReadinessURL(host, addr.Port), "/ready") + " depsilo status"
+				}
+			}
+		}
+		return fmt.Sprintf("%s is already in use. Another Depsilo may be running (try \"%s\"), or choose another port with --port.",
+			subject, statusCommand), true
+	}
+
+	var pathErr *fs.PathError
+	if errors.As(err, &pathErr) && errors.Is(pathErr, fs.ErrPermission) {
+		// Startup creates directories only inside its own state. Any other
+		// operation may be a read of a file that is not state, such as the
+		// config.toml named by --config, so that line asks for access to the
+		// path instead of a writable state directory.
+		need := "Depsilo must be able to access this path as the user it runs as"
+		if pathErr.Op == "mkdir" {
+			need = "The state directory must be writable by the user Depsilo runs as"
+		}
+		return fmt.Sprintf("Permission denied: %s %s. %s; "+
+			"the official container image runs as UID and GID 10001. See docs/deployment.md#bind-mounted-state",
+			pathErr.Op, pathErr.Path, need), true
+	}
+	return "", false
 }
