@@ -188,6 +188,13 @@ consequence.
   `private_ranges`. The two lists take comma-separated values, and an
   environment list replaces the file list as a whole. Environment values pass
   the same validation as file values, so an invalid one fails startup.
+- `[egress] upstream_proxy` is also the proxy of every `[[docker.registries]]`
+  entry without its own `proxy`, chosen from the registry URL as for a package
+  Upstream: a loopback host or a host matched by `no_proxy` stays direct, and
+  a registry's own `proxy` always wins. When a proxy carries a registry
+  request, a host name whose every DNS answer lies in `198.18.0.0/15` counts
+  as public; without a proxy such an answer is refused, and the `502` message
+  names the host, the address, and `[egress] upstream_proxy`.
 - `[server] host` and `DEPSILO_SERVER_HOST` accept an IPv6 address with or
   without brackets (`::1` or `[::1]`).
 - Optional `[auth.sources.<id>]` configuration declares stable source IDs and

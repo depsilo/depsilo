@@ -104,6 +104,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   `all upstreams are unhealthy` appends the code and points at `[egress]`
   and `docs/deployment.md#upstream-network-egress` (plus the proxy variable
   for `egress_fake_ip`) until the Upstream succeeds again.
+- Docker: a registry without its own `proxy` follows
+  `[egress] upstream_proxy` (or `DEPSILO_EGRESS_UPSTREAM_PROXY`) and
+  `no_proxy` like a package Upstream; a loopback registry stays direct and a
+  registry's own `proxy` still wins. Through a proxy, a registry, Bearer
+  realm or redirect host whose every DNS answer is a fake-IP address
+  (`198.18.0.0/15`) is left to the proxy to resolve, so pulls work behind
+  proxy software in TUN/fake-IP mode; real private or loopback answers, mixed
+  answers and literal `198.18.x.x` hosts are still refused. Without a proxy,
+  the `502` names the host, its fake-IP address and `[egress] upstream_proxy`
+  instead of `unsafe Docker dial target`. The startup log names each
+  registry's route in a `docker registry egress` line.
 - npm: unsigned tarball paths (`/npm/<package>/-/<file>.tgz` and the scoped
   form) still answer `404`, now with a JSON body, code
   `NPM_UNSIGNED_TARBALL`, and a recovery message; npm `404` and `502` bodies
@@ -260,6 +271,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - The `DEPSILO_EGRESS_*` variables now take effect: before upgrading, check
   the service environment for leftovers, which override `[egress]`, replace
   file lists whole, and stop startup when invalid.
+- With `[egress] upstream_proxy` set, Docker registries without their own
+  `proxy` now go through it. Add the host of a registry that must stay
+  direct, for example a private registry the proxy cannot reach, to
+  `no_proxy` (or `DEPSILO_EGRESS_NO_PROXY`); loopback registries stay direct.
 - `GET /api/v1/integration-prompt` and `depsilo prompt --url` reject a `url`
   that is not a bare origin (`400 INVALID_URL`, exit 1); pass
   `?url=http://depsilo.example.com:23333`.

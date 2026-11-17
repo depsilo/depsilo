@@ -58,8 +58,10 @@ lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
 # 上游出站网络（重启生效，详见 docs/deployment.md#upstream-network-egress）。
 # 本机代理软件开启 TUN/fake-IP 时，公网域名会被解析到 198.18.0.0/15，
 # Depsilo 默认不连接这类地址：把 upstream_proxy 设为代理软件的 HTTP 端口。
-# 它是所有未单独配置代理、也未走级联的包上游的默认代理；no_proxy 中的
-# 上游主机保持直连。Tailscale / Headscale / NetBird 节点地址在 100.64.0.0/10，
+# 它是所有未单独配置代理、也未走级联的包上游，以及未单独配置 proxy 的
+# Docker registry 的默认代理；no_proxy 中的上游和 registry 主机保持直连，
+# 代理到不了的私有 registry 要写进 no_proxy。回环地址始终直连。
+# Tailscale / Headscale / NetBird 节点地址在 100.64.0.0/10，
 # 需要在 private_ranges 中声明后才能作为上游或级联父节点。
 # 这三项也可以用环境变量设置，环境变量优先于本文件：DEPSILO_EGRESS_UPSTREAM_PROXY、
 # DEPSILO_EGRESS_NO_PROXY、DEPSILO_EGRESS_PRIVATE_RANGES（后两项用逗号分隔）。
@@ -407,8 +409,12 @@ url      = "https://registry-1.docker.io"
 # username = ""
 # password = ""
 # proxy    = "http://127.0.0.1:7890"
+# Without its own proxy, a registry uses [egress] upstream_proxy unless its
+# host is loopback or listed in [egress] no_proxy.
 # Every registry, Bearer realm, and redirect hostname is resolved locally and
 # checked against the registry's pinned network scope before a proxied request.
+# A hostname whose every answer is a fake-IP address (198.18.0.0/15) is left to
+# the proxy to resolve; without a proxy such an answer is refused.
 # A forward proxy can resolve the same hostname differently, so its DNS policy
 # and egress ACL remain a trust boundary and must reject unintended internal
 # targets. Registries may nominate a public cross-origin Bearer realm (Docker

@@ -1349,28 +1349,31 @@ the failing Upstream and in its check result.
 **Proxy software in fake-IP mode.** Clash, mihomo, Surge and sing-box in
 TUN/fake-IP mode answer DNS queries for public hosts with addresses from
 `198.18.0.0/15`. Depsilo refuses those addresses, so every Upstream fails its
-check. Route Upstreams through the proxy software's HTTP port instead, or give
-Depsilo a DNS server that returns real addresses. Prefer the proxy port:
-proxy software in TUN mode can also answer queries addressed to another DNS
-server, and a container started with `--dns` then still receives fake-IP
-addresses.
+check and Docker pulls fail with `502`. Route Upstreams and Docker registries
+through the proxy software's HTTP port instead, or give Depsilo a DNS server
+that returns real addresses. Prefer the proxy port: proxy software in TUN mode
+can also answer queries addressed to another DNS server, and a container
+started with `--dns` then still receives fake-IP addresses.
 
 ```toml
 [egress]
 upstream_proxy = "http://127.0.0.1:7890"   # the proxy software's HTTP or mixed port
-no_proxy = ["mirror.lan", "192.168.0.0/16"] # optional: Upstream hosts that stay direct
+no_proxy = ["mirror.lan", "192.168.0.0/16"] # optional: Upstream and registry hosts that stay direct
 ```
 
 `upstream_proxy` is the default HTTP(S) proxy for every package Upstream and
-extra index that has neither its own proxy nor a cascade parent; it is chosen
-once per Upstream from its configured host. An Upstream's own proxy always
-wins, loopback hosts are never proxied, and `no_proxy` accepts host names,
-domains (a leading `.` matches subdomains only), IP addresses and CIDR ranges.
+extra index that has neither its own proxy nor a cascade parent, and for every
+Docker registry without its own `proxy`; it is chosen once per Upstream or
+registry from its configured host. An own proxy always wins, loopback hosts
+are never proxied, and `no_proxy` accepts host names, domains (a leading `.`
+matches subdomains only), IP addresses and CIDR ranges. List a registry that
+must stay direct there, for example a private registry the proxy cannot reach.
 Like an Upstream's own proxy, the proxy then resolves and connects to every
-host that Upstream uses, so its egress rules become part of the boundary.
-Docker registries, the cascade relay and vulnerability or blocklist sync keep
-their own settings; Docker registry requests still need real DNS answers (see
-below).
+host that Upstream or registry uses, so its egress rules become part of the
+boundary. Before the proxy carries a Docker registry request, Depsilo still
+checks the host it names; see
+[Docker Registry forward-proxy boundary](#docker-registry-forward-proxy-boundary).
+The cascade relay and vulnerability or blocklist sync keep their own settings.
 
 Inside a container, `127.0.0.1` is the container itself, not the Docker host
 on which the proxy software runs; every Upstream then fails with
@@ -1482,21 +1485,41 @@ Depsilo shows it in four places:
 | `http_status` | The Upstream answered with an HTTP status that marks it unhealthy |
 | `network` | Any other network failure |
 
+A Docker registry has no check and no failure code. When a registry without a
+proxy, its Bearer realm or a redirect target resolves to a fake-IP address,
+the Docker client receives `502` with a message that names the host and the
+address, for example:
+
+```text
+auth discovery failed: Get "https://registry-1.docker.io/v2/": registry-1.docker.io resolved to 198.18.0.10, a fake-IP address from proxy software in TUN/fake-IP mode; set [egress] upstream_proxy or DEPSILO_EGRESS_UPSTREAM_PROXY to the proxy software's HTTP port and restart, see docs/deployment.md#upstream-network-egress
+```
+
+At startup the server log names each registry's route in a
+`docker registry egress` line: `own proxy`, `default proxy` or `direct`.
+
 ## Docker Registry forward-proxy boundary
 
-Before each Docker Registry request is handed to an explicitly configured
-forward proxy, Depsilo resolves the registry, Bearer realm, or redirect
-hostname locally. It rejects unresolved targets, mixed network scopes, unsafe
-special-purpose addresses, and a target that crosses the registry's pinned
-public/private/loopback scope. The proxy socket itself may intentionally be a
-local service such as `http://127.0.0.1:7890` and is not classified as an
+Before a forward proxy carries a Docker Registry request (the registry's own
+`proxy`, or `[egress] upstream_proxy` for a registry without one), Depsilo
+resolves the registry, Bearer realm, or redirect hostname locally. It rejects
+unresolved targets, mixed network scopes, unsafe special-purpose addresses, and
+a target that crosses the registry's pinned public/private/loopback scope. One
+answer is the exception: when every address a host name resolves to lies in
+`198.18.0.0/15`, the answer comes from proxy software in fake-IP mode and says
+nothing about the real address, so Depsilo treats the host as public and lets
+the proxy resolve it. An answer that mixes such addresses with others and a
+`198.18.x.x` address written in a URL are still rejected, and without a proxy
+a fake-IP answer is rejected too. The proxy socket itself may intentionally be
+a local service such as `http://127.0.0.1:7890` and is not classified as an
 Upstream target.
 
 This preflight is not an end-to-end DNS pin when the forward proxy performs its
 own name resolution. In split-DNS deployments, the proxy can receive a
-different address from the one Depsilo checked. Treat the proxy's resolver and
-egress ACL as part of the security boundary: block loopback, link-local,
-metadata-service, and unintended private destinations there as well.
+different address from the one Depsilo checked, and for a host answered with
+fake-IP addresses the proxy's resolution is the only one. Treat the proxy's
+resolver and egress ACL as part of the security boundary: block loopback,
+link-local, metadata-service, and unintended private destinations there as
+well.
 
 Docker authentication services are commonly on a different public origin from
 the registry itself; Docker Hub, for example, delegates authentication to

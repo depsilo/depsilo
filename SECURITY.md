@@ -76,11 +76,14 @@ The following are known limitations, not vulnerabilities:
   relies on HTTPS for upstream transport. The tamper detector compares
   immutable bytes with the first-seen digest, but that first observation is not
   an independent proof of upstream authenticity.
-- An explicitly configured Docker Registry forward proxy is a trusted egress
-  component. Depsilo locally resolves and checks every registry, Bearer realm,
-  and redirect target before handing the request to that proxy, but cannot
-  require the proxy to receive the same DNS answer. Configure the proxy's DNS
-  policy and ACLs to reject loopback, link-local, metadata, and unintended
+- A forward proxy that carries Docker Registry requests (a registry's own
+  `proxy`, or `[egress] upstream_proxy` for a registry without one) is a
+  trusted egress component. Depsilo locally resolves and checks every
+  registry, Bearer realm, and redirect target before handing the request to
+  that proxy, but cannot require the proxy to receive the same DNS answer. A
+  host name whose every local answer is a fake-IP address in `198.18.0.0/15`
+  counts as public and is left to the proxy to resolve. Configure the proxy's
+  DNS policy and ACLs to reject loopback, link-local, metadata, and unintended
   private targets. A configured registry may nominate a public cross-origin
   Bearer realm, so registry credentials also trust that authentication
   delegation; this is required for registries such as Docker Hub.

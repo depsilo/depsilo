@@ -358,14 +358,25 @@ local file.
 
 The guarded dialer rejects loopback/link-local/multicast/unspecified targets,
 re-checks the resolved address at connect time (closing the DNS
-check/use race), and rejects HTTPS→HTTP downgrades. Docker registry
-resolution checks registries, Bearer realms, and redirect targets before
-handing the request to a configured forward proxy. MCP resource reads never
-fetch caller-supplied hosts.
+check/use race), and rejects HTTPS→HTTP downgrades. A Docker registry without
+its own proxy follows `[egress] upstream_proxy` and `no_proxy` as a package
+upstream does. Before a proxy carries a registry request, Depsilo resolves the
+registry, Bearer realm, and redirect host names locally and refuses a failed
+resolution, an answer with an unsafe address or mixed network scopes, a
+literal special-purpose address, an HTTPS downgrade, and a target outside the
+registry's pinned network scope. One exception applies only when a proxy
+carries the request: a host name (not localhost, and not an address in any
+notation) whose every DNS answer lies in `198.18.0.0/15` counts as public,
+because proxy software in TUN/fake-IP mode answers that way for public hosts,
+such an answer says nothing about the real address, and the proxy resolves
+the name itself. An answer that mixes such addresses with others is still
+refused, and without a proxy a fake-IP answer is refused too. MCP resource
+reads never fetch caller-supplied hosts.
 
 **Residual:** an operator-configured HTTP proxy owns DNS for proxied
-upstreams, and registry Bearer realms may be cross-origin by protocol
-(both documented in `SECURITY.md`).
+upstreams and Docker registries, and is the only resolver for a registry host
+whose local answer was fake-IP; registry Bearer realms may be cross-origin by
+protocol (both documented in `SECURITY.md`).
 
 ### 5.10 Denial of service and resource exhaustion
 
@@ -433,7 +444,7 @@ These are deliberate, documented, and not vulnerabilities:
 | Minimum release age provenance | `internal/adapter/*/provenance_test.go` (including Docker's tag-resolve/observe/pin flow), `internal/quarantine/policy_capability_test.go`, `docs/specs/2026-10-06-min-release-age-provenance.md` |
 | Tamper detection | `internal/tamper/recorder_test.go`, `internal/cache` tamper paths |
 | Snapshot-only mode | `internal/snapshot`, `internal/quarantine/snapshot_gate_test.go`, `docs/specs/2026-10-06-freeze-snapshot.md` |
-| SSRF and redirect guards | `internal/upstream/request` tests, `internal/api/mcp_ssrf_test.go`, Docker resolver tests |
+| SSRF and redirect guards | `internal/upstream/request` tests, `internal/api/mcp_ssrf_test.go`, Docker resolver and egress tests (`internal/adapter/docker/egress_test.go`) |
 | Capability groups and Pro gates | `internal/api/router_permissions_test.go`, `web/e2e` permission cases |
 | Preset bootstrap token rule | `internal/config/loader_test.go` |
 | Local password reset (`depsilo reset-password`) | `internal/cli/resetpassword_test.go` |

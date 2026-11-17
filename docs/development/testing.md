@@ -65,9 +65,9 @@ public registries to reserved/private synthetic IPs (for example `198.18.0.0/15`
 Depsilo's outbound safety policy rejects the mirror request; Docker may
 silently fall back to Hub and this check correctly fails. Use public DNS for
 this network-dependent test; do not weaken the outbound checks. Package
-Upstreams on such hosts can use `[egress] upstream_proxy`
-([deployment](../deployment.md#upstream-network-egress)); Docker registries
-still preflight the registry address locally.
+Upstreams and Docker registries on such hosts can use `[egress] upstream_proxy`
+([deployment](../deployment.md#upstream-network-egress)); without a proxy,
+Docker registries still refuse fake-IP answers.
 
 The tag-triggered release workflow invokes the real-client workflow in release
 qualification mode. GitHub release assets wait for all 14 package clients,
