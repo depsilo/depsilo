@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -20,6 +19,7 @@ import (
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/egress"
+	"depsilo/internal/requestid"
 )
 
 const manifestAccept = "application/vnd.docker.distribution.manifest.v2+json, " +
@@ -36,25 +36,22 @@ const quarantineProvenanceFirstObserved = "first_observed"
 // errMissingManifestDigest marks a registry that answered a manifest request
 // without Docker-Content-Digest: identity cannot be proven, so the armed gate
 // refuses instead of guessing.
-var errMissingManifestDigest = errors.New("docker registry did not return a manifest digest")
+var errMissingManifestDigest = &refusal{text: "docker registry did not return a manifest digest"}
 
-// proxyConnectFailure stands in a 502 body for the transport's text about a
-// failed connection to the registry's proxy.
-const proxyConnectFailure = "connection to the egress proxy failed (details in the Depsilo server log)"
+// requestIDField names the request in a log line, so an operator can find
+// the line from the request ID of a 502 body, an access log or the
+// X-Request-ID header.
+func requestIDField(c *gin.Context) zap.Field {
+	return zap.String("request_id", requestid.FromContext(c.Request.Context()))
+}
 
-// clientErrorMessage is the message of a 502 body, which anonymous clients
-// read. The transport's "proxyconnect" error names the proxy's host and port,
-// so that part is replaced; the server log keeps the full error.
-func clientErrorMessage(err error) string {
-	message := err.Error()
-	var proxyErr *net.OpError
-	if !errors.As(err, &proxyErr) || proxyErr.Op != "proxyconnect" {
-		return message
-	}
-	if detail := proxyErr.Error(); strings.Contains(message, detail) {
-		return strings.Replace(message, detail, proxyConnectFailure, 1)
-	}
-	return proxyConnectFailure
+// writeBadGateway answers 502 with err explained for this request; see
+// clientErrorMessage.
+func writeBadGateway(c *gin.Context, code string, err error) {
+	c.JSON(http.StatusBadGateway, gin.H{
+		"code":    code,
+		"message": clientErrorMessage(err, requestid.FromContext(c.Request.Context())),
+	})
 }
 
 type Handler struct {
@@ -148,14 +145,14 @@ func (h *Handler) handleManifest(c *gin.Context, reg *Registry, imageName, endpo
 				c.Status(status)
 				return
 			}
-			zap.L().Error("docker manifest digest resolution failed", zap.String("image", imageName), zap.String("ref", reference), zap.Error(err))
+			zap.L().Error("docker manifest digest resolution failed", requestIDField(c), zap.String("image", imageName), zap.String("ref", reference), logError(err))
 			adapter.LogAccess(c.Request.Context(), h.db, "docker", c.Request.Method, ManifestCacheKey(reg.Name, imageName, reference), false, reg.Name, time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
-			c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": clientErrorMessage(err)})
+			writeBadGateway(c, "UPSTREAM_UNAVAILABLE", err)
 			return
 		}
 		firstSeen, err := h.observations.Observe(c.Request.Context(), reg.Name, digest)
 		if err != nil {
-			zap.L().Error("docker observation failed", zap.String("image", imageName), zap.String("digest", digest), zap.Error(err))
+			zap.L().Error("docker observation failed", requestIDField(c), zap.String("image", imageName), zap.String("digest", digest), zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"code": "OBSERVATION_FAILED", "message": "docker observation store unavailable"})
 			return
 		}
@@ -193,12 +190,12 @@ func (h *Handler) handleManifest(c *gin.Context, reg *Registry, imageName, endpo
 	}
 
 	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "docker", ttl, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
-		body, ct, sz, err := h.fetchFromUpstream(ctx, reg, imageName, "manifests/"+resolved, scope, true)
+		body, ct, sz, err := h.fetchFromUpstream(ctx, reg, imageName, "manifests/"+resolved, scope, stageManifest)
 		return body, ct, sz, reg.Name, err
 	})
 	if err != nil {
-		zap.L().Error("docker manifest fetch failed", zap.String("image", imageName), zap.String("ref", reference), zap.Error(err))
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": clientErrorMessage(err)})
+		zap.L().Error("docker manifest fetch failed", requestIDField(c), zap.String("image", imageName), zap.String("ref", reference), logError(err))
+		writeBadGateway(c, "UPSTREAM_UNAVAILABLE", err)
 		adapter.LogAccess(c.Request.Context(), h.db, "docker", c.Request.Method, cacheKey, false, reg.Name, time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		return
 	}
@@ -213,12 +210,12 @@ func (h *Handler) handleBlob(c *gin.Context, reg *Registry, imageName, endpoint 
 	scope := fmt.Sprintf("repository:%s:pull", imageName)
 
 	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "docker", h.cacheCfg.TTLBlob, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
-		body, ct, sz, err := h.fetchFromUpstream(ctx, reg, imageName, "blobs/"+digest, scope, false)
+		body, ct, sz, err := h.fetchFromUpstream(ctx, reg, imageName, "blobs/"+digest, scope, stageBlob)
 		return body, ct, sz, reg.Name, err
 	})
 	if err != nil {
-		zap.L().Error("docker blob fetch failed", zap.String("digest", digest), zap.Error(err))
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": clientErrorMessage(err)})
+		zap.L().Error("docker blob fetch failed", requestIDField(c), zap.String("digest", digest), logError(err))
+		writeBadGateway(c, "UPSTREAM_UNAVAILABLE", err)
 		adapter.LogAccess(c.Request.Context(), h.db, "docker", c.Request.Method, cacheKey, false, reg.Name, time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		return
 	}
@@ -237,12 +234,12 @@ func (h *Handler) handleTagList(c *gin.Context, reg *Registry, imageName, rawQue
 	}
 
 	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "docker", h.cacheCfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
-		body, ct, sz, err := h.fetchFromUpstream(ctx, reg, imageName, upstreamEndpoint, scope, false)
+		body, ct, sz, err := h.fetchFromUpstream(ctx, reg, imageName, upstreamEndpoint, scope, stageTagList)
 		return body, ct, sz, reg.Name, err
 	})
 	if err != nil {
-		zap.L().Error("docker tags list failed", zap.String("image", imageName), zap.Error(err))
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": clientErrorMessage(err)})
+		zap.L().Error("docker tags list failed", requestIDField(c), zap.String("image", imageName), logError(err))
+		writeBadGateway(c, "UPSTREAM_UNAVAILABLE", err)
 		adapter.LogAccess(c.Request.Context(), h.db, "docker", c.Request.Method, cacheKey, false, reg.Name, time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		return
 	}
@@ -277,16 +274,17 @@ func (h *Handler) resolveManifestDigest(ctx context.Context, reg *Registry, imag
 
 	response, err := reg.Client.Do(request)
 	if err != nil {
-		return "", 0, err
+		return "", 0, transportFailure(stageTagResolution, request, response, err)
 	}
 	defer response.Body.Close()
-	_, _ = io.Copy(io.Discard, response.Body)
 	if response.StatusCode != http.StatusOK {
+		failure := statusFailure(stageTagResolution, request, response)
 		if response.StatusCode >= 400 && response.StatusCode < 500 {
-			return "", response.StatusCode, fmt.Errorf("registry returned %d for %s", response.StatusCode, reference)
+			return "", response.StatusCode, failure
 		}
-		return "", 0, fmt.Errorf("registry returned %d for %s", response.StatusCode, reference)
+		return "", 0, failure
 	}
+	_, _ = io.Copy(io.Discard, response.Body)
 	digest := strings.TrimSpace(response.Header.Get("Docker-Content-Digest"))
 	if digest == "" {
 		return "", 0, errMissingManifestDigest
@@ -301,15 +299,20 @@ func (h *Handler) handleHead(c *gin.Context, reg *Registry, imageName, endpoint,
 			return
 		}
 		// A HEAD answer has no body, so only the log carries the reason.
-		zap.L().Error("docker manifest HEAD failed", zap.String("image", imageName), zap.String("endpoint", endpoint), zap.Error(err))
-		c.JSON(http.StatusBadGateway, gin.H{"code": "AUTH_FAILED", "message": clientErrorMessage(err)})
+		zap.L().Error("docker manifest HEAD failed", requestIDField(c), zap.String("image", imageName), zap.String("endpoint", redactLogURL(endpoint)), logError(err))
+		writeBadGateway(c, "AUTH_FAILED", err)
+		adapter.LogAccess(c.Request.Context(), h.db, "docker", http.MethodHead, cacheKey, false, reg.Name, time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		return
 	}
 
 	upstreamURL := fmt.Sprintf("%s/v2/%s/%s", reg.URL, imageName, endpoint)
 	req, err := http.NewRequestWithContext(c.Request.Context(), "HEAD", upstreamURL, nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "REQUEST_ERROR", "message": err.Error()})
+		// The parse error quotes the registry URL, userinfo included, so
+		// only the log carries it.
+		zap.L().Error("docker manifest HEAD request invalid", requestIDField(c), zap.String("image", imageName), zap.String("endpoint", redactLogURL(endpoint)), logError(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "REQUEST_ERROR", "message": "invalid Docker request path"})
+		adapter.LogAccess(c.Request.Context(), h.db, "docker", http.MethodHead, cacheKey, false, reg.Name, time.Since(start), http.StatusInternalServerError, c.ClientIP(), 0)
 		return
 	}
 	req.Header.Set("User-Agent", "docker/27.0.0 depsilo")
@@ -320,24 +323,32 @@ func (h *Handler) handleHead(c *gin.Context, reg *Registry, imageName, endpoint,
 
 	resp, err := reg.Client.Do(req)
 	if err != nil {
-		if h.headFromCache(c, reg, cacheKey, ttl, start, err) {
+		failure := transportFailure(stageManifestHead, req, resp, err)
+		if h.headFromCache(c, reg, cacheKey, ttl, start, failure) {
 			return
 		}
-		zap.L().Error("docker manifest HEAD failed", zap.String("image", imageName), zap.String("endpoint", endpoint), zap.Error(err))
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": clientErrorMessage(err)})
+		zap.L().Error("docker manifest HEAD failed", requestIDField(c), zap.String("image", imageName), zap.String("endpoint", redactLogURL(endpoint)), logError(failure))
+		writeBadGateway(c, "UPSTREAM_UNAVAILABLE", failure)
+		adapter.LogAccess(c.Request.Context(), h.db, "docker", http.MethodHead, cacheKey, false, reg.Name, time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		return
 	}
 	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode >= http.StatusInternalServerError &&
-			h.headFromCache(c, reg, cacheKey, ttl, start, fmt.Errorf("registry returned %d", resp.StatusCode)) {
-			return
+		failure := statusFailure(stageManifestHead, req, resp)
+		if resp.StatusCode >= http.StatusInternalServerError {
+			if h.headFromCache(c, reg, cacheKey, ttl, start, failure) {
+				return
+			}
+			// The registry's own 5xx passes on without a body, so only the
+			// log carries the reason.
+			zap.L().Error("docker manifest HEAD failed", requestIDField(c), zap.String("image", imageName), zap.String("endpoint", redactLogURL(endpoint)), logError(failure))
 		}
 		c.Status(resp.StatusCode)
+		adapter.LogAccess(c.Request.Context(), h.db, "docker", http.MethodHead, cacheKey, false, reg.Name, time.Since(start), resp.StatusCode, c.ClientIP(), 0)
 		return
 	}
+	_, _ = io.Copy(io.Discard, resp.Body)
 
 	if ct := resp.Header.Get("Content-Type"); ct != "" {
 		c.Header("Content-Type", ct)
@@ -374,7 +385,7 @@ func (h *Handler) headFromCache(c *gin.Context, reg *Registry, cacheKey string, 
 		return false
 	}
 	zap.L().Warn("docker registry unavailable; answering manifest HEAD from cache",
-		zap.String("key", cacheKey), zap.Error(cause))
+		requestIDField(c), zap.String("key", cacheKey), logError(cause))
 	if result.ContentType != "" {
 		c.Header("Content-Type", result.ContentType)
 	}
@@ -385,7 +396,10 @@ func (h *Handler) headFromCache(c *gin.Context, reg *Registry, cacheKey string, 
 	return true
 }
 
-func (h *Handler) fetchFromUpstream(ctx context.Context, reg *Registry, imageName, endpoint, scope string, isManifest bool) (io.ReadCloser, string, int64, error) {
+// fetchFromUpstream GETs a manifest, blob or tag list from the registry.
+// stage only names the request in its failures; the endpoint decides how
+// the request is made.
+func (h *Handler) fetchFromUpstream(ctx context.Context, reg *Registry, imageName, endpoint, scope string, stage registryStage) (io.ReadCloser, string, int64, error) {
 	token, err := h.auth.GetToken(ctx, reg.Client, reg.URL, reg.Name, reg.Username, reg.Password, scope)
 	if err != nil {
 		return nil, "", 0, err
@@ -400,25 +414,25 @@ func (h *Handler) fetchFromUpstream(ctx context.Context, reg *Registry, imageNam
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-	if isManifest {
+	if strings.HasPrefix(endpoint, "manifests/") {
 		req.Header.Set("Accept", manifestAccept)
 	}
 
 	zap.L().Info("fetching from docker upstream",
 		zap.String("registry", reg.Name),
 		zap.String("image", imageName),
-		zap.String("endpoint", endpoint),
+		zap.String("endpoint", redactLogURL(endpoint)),
 	)
 
 	resp, err := reg.Client.Do(req)
 	if err != nil {
-		return nil, "", 0, err
+		return nil, "", 0, transportFailure(stage, req, resp, err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		body := readBoundedErrorBody(resp.Body)
+		failure := statusFailure(stage, req, resp)
 		_ = resp.Body.Close()
-		return nil, "", 0, fmt.Errorf("upstream returned %d: %s", resp.StatusCode, body)
+		return nil, "", 0, failure
 	}
 
 	return resp.Body, resp.Header.Get("Content-Type"), resp.ContentLength, nil
@@ -436,7 +450,7 @@ func (h *Handler) streamResponse(c *gin.Context, result *cache.GetResult, cacheK
 	c.Status(http.StatusOK)
 	written, copyErr := io.Copy(c.Writer, result.Reader)
 	if copyErr != nil {
-		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
+		zap.L().Warn("copy to client failed", requestIDField(c), zap.String("key", cacheKey), logError(copyErr))
 	}
 
 	adapter.LogAccessDelivery(c.Request.Context(), h.db, "docker", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written, copyErr)

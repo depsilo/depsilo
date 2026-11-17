@@ -3,8 +3,6 @@ package docker
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -24,6 +22,22 @@ type tokenEntry struct {
 }
 
 const maxDockerErrorBodyBytes = 64 << 10
+
+// Refusals of a registry's authentication answers and of its Bearer realm.
+// Their fixed text may appear in a 502 body.
+var (
+	errMissingChallenge      = &refusal{text: "no WWW-Authenticate header"}
+	errUnsupportedChallenge  = &refusal{text: "unsupported authentication challenge"}
+	errChallengeWithoutRealm = &refusal{text: "Bearer challenge missing realm"}
+	errInvalidRealmURL       = &refusal{text: "invalid HTTP URL"}
+	errRealmDowngrade        = &refusal{text: "HTTPS downgrade"}
+	errUnsafeRealmTarget     = &refusal{text: "unsafe network target"}
+	errLoopbackRealmTarget   = &refusal{text: "loopback network target"}
+	errPrivateRealmTarget    = &refusal{text: "private network target"}
+	errTokenRedirectLimit    = &refusal{text: "token redirect limit exceeded"}
+	errUnsafeTokenRedirect   = &refusal{text: "unsafe token redirect"}
+	errTokenResponseTooLarge = &refusal{text: "token endpoint response exceeds 64 KiB"}
+)
 
 type AuthManager struct {
 	mu     sync.RWMutex
@@ -60,18 +74,21 @@ func (a *AuthManager) GetToken(ctx context.Context, client *http.Client, registr
 
 		realm, service, err := a.discoverAuth(ctx, client, registryURL)
 		if err != nil {
-			return "", fmt.Errorf("auth discovery failed: %w", err)
+			return "", err
 		}
 		if realm == "" {
 			return "", nil
 		}
 		if err := validateAuthRealm(registryURL, realm); err != nil {
-			return "", fmt.Errorf("unsafe bearer realm: %w", err)
+			// The refused realm is the hop of this failure; an unparsable
+			// one has no origin to show.
+			realmURL, _ := url.Parse(realm)
+			return "", &registryFailure{stage: stageToken, hop: realmURL, cause: &refusal{text: "unsafe bearer realm", cause: err}}
 		}
 
 		token, expiresIn, err := a.fetchToken(ctx, client, registryURL, realm, service, scope, username, password)
 		if err != nil {
-			return "", fmt.Errorf("token fetch failed: %w", err)
+			return "", err
 		}
 
 		a.mu.Lock()
@@ -100,10 +117,10 @@ func validateAuthRealm(registryURL, realm string) error {
 	if originErr != nil || targetErr != nil || target == nil || !target.IsAbs() ||
 		(target.Scheme != "http" && target.Scheme != "https") || target.Host == "" ||
 		target.User != nil || target.Fragment != "" {
-		return errors.New("invalid HTTP URL")
+		return errInvalidRealmURL
 	}
 	if strings.EqualFold(origin.Scheme, "https") && strings.EqualFold(target.Scheme, "http") {
-		return errors.New("HTTPS downgrade")
+		return errRealmDowngrade
 	}
 
 	originScope, originKnown := literalNetworkScope(origin.Hostname())
@@ -113,14 +130,14 @@ func validateAuthRealm(registryURL, realm string) error {
 	}
 	switch targetScope {
 	case networkUnsafe:
-		return errors.New("unsafe network target")
+		return errUnsafeRealmTarget
 	case networkLoopback:
 		if !originKnown || originScope != networkLoopback {
-			return errors.New("loopback network target")
+			return errLoopbackRealmTarget
 		}
 	case networkPrivate:
 		if !originKnown || (originScope != networkPrivate && originScope != networkLoopback) {
-			return errors.New("private network target")
+			return errPrivateRealmTarget
 		}
 	}
 	return nil
@@ -203,50 +220,51 @@ func isSpecialPurposeDockerAddress(ip net.IP) bool {
 	return false
 }
 
-// discoverAuth sends GET /v2/ and parses the WWW-Authenticate header.
+// discoverAuth sends GET /v2/ and parses the WWW-Authenticate header. Its
+// errors are registryFailures of the auth discovery stage.
 func (a *AuthManager) discoverAuth(ctx context.Context, client *http.Client, registryURL string) (realm, service string, err error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", registryURL+"/v2/", nil)
 	if err != nil {
-		return "", "", err
+		return "", "", &registryFailure{stage: stageAuthDiscovery, cause: &refusal{text: errInvalidRegistryURL.text, cause: err}}
 	}
 	req.Header.Set("User-Agent", "docker/27.0.0 depsilo")
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", "", err
+		return "", "", transportFailure(stageAuthDiscovery, req, resp, err)
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxDockerErrorBodyBytes+1))
 
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusUnauthorized {
+		return "", "", statusFailure(stageAuthDiscovery, req, resp)
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxDockerErrorBodyBytes+1))
 	if resp.StatusCode == http.StatusOK {
 		return "", "", nil // no auth needed
 	}
 
-	if resp.StatusCode != http.StatusUnauthorized {
-		return "", "", fmt.Errorf("unexpected status %d from /v2/", resp.StatusCode)
-	}
-
 	challenge := resp.Header.Get("WWW-Authenticate")
 	if challenge == "" {
-		return "", "", fmt.Errorf("no WWW-Authenticate header")
+		return "", "", responseFailure(stageAuthDiscovery, req, resp, errMissingChallenge)
 	}
 	scheme, parameters, ok := strings.Cut(strings.TrimSpace(challenge), " ")
 	if !ok || !strings.EqualFold(scheme, "Bearer") {
-		return "", "", fmt.Errorf("unsupported authentication challenge")
+		return "", "", responseFailure(stageAuthDiscovery, req, resp, errUnsupportedChallenge)
 	}
 
 	realm = ParseAuthParam(parameters, "realm")
 	service = ParseAuthParam(parameters, "service")
 	if realm == "" {
-		return "", "", fmt.Errorf("Bearer challenge missing realm")
+		return "", "", responseFailure(stageAuthDiscovery, req, resp, errChallengeWithoutRealm)
 	}
 	return realm, service, nil
 }
 
-// fetchToken requests a bearer token from the auth endpoint.
+// fetchToken requests a bearer token from the auth endpoint. Its errors are
+// registryFailures of the token stage.
 func (a *AuthManager) fetchToken(ctx context.Context, client *http.Client, registryURL, realm, service, scope, username, password string) (string, int, error) {
 	tokenURL, err := url.ParseRequestURI(realm)
 	if err != nil {
-		return "", 0, err
+		return "", 0, &registryFailure{stage: stageToken, cause: &refusal{text: "unsafe bearer realm", cause: err}}
 	}
 	query := tokenURL.Query()
 	query.Set("service", service)
@@ -255,7 +273,7 @@ func (a *AuthManager) fetchToken(ctx context.Context, client *http.Client, regis
 
 	req, err := http.NewRequestWithContext(ctx, "GET", tokenURL.String(), nil)
 	if err != nil {
-		return "", 0, err
+		return "", 0, &registryFailure{stage: stageToken, hop: tokenURL, cause: &refusal{text: "unsafe bearer realm", cause: err}}
 	}
 	req.Header.Set("User-Agent", "docker/27.0.0 depsilo")
 	if username != "" {
@@ -266,10 +284,10 @@ func (a *AuthManager) fetchToken(ctx context.Context, client *http.Client, regis
 	previousCheck := tokenClient.CheckRedirect
 	tokenClient.CheckRedirect = func(redirect *http.Request, via []*http.Request) error {
 		if len(via) >= 10 {
-			return errors.New("token redirect limit exceeded")
+			return errTokenRedirectLimit
 		}
 		if err := validateAuthRealm(registryURL, redirect.URL.String()); err != nil {
-			return errors.New("unsafe token redirect")
+			return errUnsafeTokenRedirect
 		}
 		redirect.Header.Del("Referer")
 		redirect.Header.Del("Proxy-Authorization")
@@ -284,12 +302,12 @@ func (a *AuthManager) fetchToken(ctx context.Context, client *http.Client, regis
 	}
 	resp, err := tokenClient.Do(req)
 	if err != nil {
-		return "", 0, err
+		return "", 0, transportFailure(stageToken, req, resp, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", 0, fmt.Errorf("token endpoint returned %d: %s", resp.StatusCode, readBoundedErrorBody(resp.Body))
+		return "", 0, statusFailure(stageToken, req, resp)
 	}
 
 	var tokenResp struct {
@@ -299,13 +317,13 @@ func (a *AuthManager) fetchToken(ctx context.Context, client *http.Client, regis
 	}
 	tokenBody, err := io.ReadAll(io.LimitReader(resp.Body, maxDockerErrorBodyBytes+1))
 	if err != nil {
-		return "", 0, err
+		return "", 0, responseFailure(stageToken, req, resp, err)
 	}
 	if len(tokenBody) > maxDockerErrorBodyBytes {
-		return "", 0, errors.New("token endpoint response exceeds 64 KiB")
+		return "", 0, responseFailure(stageToken, req, resp, errTokenResponseTooLarge)
 	}
 	if err := json.Unmarshal(tokenBody, &tokenResp); err != nil {
-		return "", 0, err
+		return "", 0, responseFailure(stageToken, req, resp, &refusal{text: "token endpoint returned invalid JSON", cause: err})
 	}
 
 	token := tokenResp.Token
@@ -319,14 +337,6 @@ func (a *AuthManager) fetchToken(ctx context.Context, client *http.Client, regis
 
 	zap.L().Debug("docker auth token acquired", zap.String("service", service), zap.String("scope", scope), zap.Int("expires_in", expiresIn))
 	return token, expiresIn, nil
-}
-
-func readBoundedErrorBody(body io.Reader) string {
-	data, _ := io.ReadAll(io.LimitReader(body, maxDockerErrorBodyBytes+1))
-	if len(data) > maxDockerErrorBodyBytes {
-		return string(data[:maxDockerErrorBodyBytes]) + "…"
-	}
-	return string(data)
 }
 
 func sameHTTPOrigin(left, right *url.URL) bool {

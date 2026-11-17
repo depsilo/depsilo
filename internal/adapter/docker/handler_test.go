@@ -3,7 +3,6 @@ package docker
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -12,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -19,6 +19,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
+	"gorm.io/gorm"
 
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
@@ -139,17 +140,24 @@ func TestManifestBoundsUpstreamErrorBody(t *testing.T) {
 	router := gin.New()
 	handler.Register(router.Group("/v2"))
 
-	response := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/v2/library/widget/manifests/latest", nil)
-	router.ServeHTTP(response, request)
-	if response.Code != http.StatusBadGateway {
-		t.Fatalf("status = %d, body=%s", response.Code, response.Body.String())
+	core, logs := observer.New(zap.ErrorLevel)
+	t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
+	response := serveWithRequestID(router, http.MethodGet, "/v2/library/widget/manifests/latest", testRequestID)
+	// The registry's answer stays out of the 502 body: only its status is
+	// repeated, because it did not use the distribution error format.
+	code, message := badGatewayBody(t, response)
+	want := "manifest failed at " + registry.URL + ": returned 502" + testRequestSuffix
+	if code != "UPSTREAM_UNAVAILABLE" || message != want {
+		t.Fatalf("answer = %s %q, want UPSTREAM_UNAVAILABLE %q", code, message, want)
 	}
-	if strings.Contains(response.Body.String(), "DO_NOT_INCLUDE") {
-		t.Fatal("public error included bytes beyond the bounded diagnostic prefix")
+	if strings.Contains(response.Body.String(), "xxxx") || strings.Contains(response.Body.String(), "DO_NOT_INCLUDE") {
+		t.Fatalf("502 body repeats the registry's answer: %.200s", response.Body.String())
 	}
-	if response.Body.Len() > maxDockerErrorBodyBytes+1024 {
-		t.Fatalf("public error bytes = %d, want bounded response", response.Body.Len())
+	// The server log keeps a bounded prefix of the answer for diagnosis.
+	logged := loggedErrorsOf(logs, testRequestID)
+	if len(logged) != 1 || !strings.Contains(logged[0], strings.Repeat("x", 1024)) ||
+		strings.Contains(logged[0], "DO_NOT_INCLUDE") || len(logged[0]) > maxDockerErrorBodyBytes+1024 {
+		t.Fatalf("logged error has %d bytes, want the answer's first %d bytes", len(strings.Join(logged, "")), maxDockerErrorBodyBytes)
 	}
 }
 
@@ -229,7 +237,7 @@ func TestManifestHeadAnswersFromCacheWhileTheRegistryIsUnreachable(t *testing.T)
 }
 
 // newRoutedDockerRouter serves one registry whose client resolves and dials
-// through the given fakes.
+// through the given fakes. It returns the database that holds the access log.
 func newRoutedDockerRouter(
 	t *testing.T,
 	registry config.RegistryConfig,
@@ -237,7 +245,7 @@ func newRoutedDockerRouter(
 	lookup ipResolver,
 	dialContext func(context.Context, string, string) (net.Conn, error),
 	observationRequired bool,
-) *gin.Engine {
+) (*gin.Engine, *gorm.DB) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "docker-routed.db"))
@@ -263,12 +271,14 @@ func newRoutedDockerRouter(
 	handler.SetProvenanceRequired(observationRequired)
 	router := gin.New()
 	handler.Register(router.Group("/v2"))
-	return router
+	return router, database
 }
 
 // A HEAD answer has no body, and the observation gate's tag resolution fails
 // before any fetch is logged, so the server log is where an operator reads
 // why such a manifest request answered 502, for example the fake-IP remedy.
+// The log line and the access log carry the request ID that the 502 message
+// names, so Admin, MCP and the log lead to each other.
 func TestManifestBadGatewayLogsItsReason(t *testing.T) {
 	registry := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.URL.Path == "/v2/" {
@@ -280,19 +290,26 @@ func TestManifestBadGatewayLogsItsReason(t *testing.T) {
 	}))
 	t.Cleanup(registry.Close)
 
+	const remedy = ", a fake-IP address from proxy software in TUN/fake-IP mode; " +
+		"set [egress] upstream_proxy or DEPSILO_EGRESS_UPSTREAM_PROXY to the proxy software's HTTP port and restart, " +
+		"see docs/deployment.md#upstream-network-egress"
 	fakeIPRegistry := staticIPResolver{"registry.example": {{IP: net.ParseIP("198.18.0.10")}}}
 	for _, tt := range []struct {
 		name        string
 		method      string
 		observation bool
 		answers     staticIPResolver
+		wantCode    string
+		wantMessage string
 		wantLogged  string
 	}{
 		{
-			name:       "HEAD whose token discovery is refused",
-			method:     http.MethodHead,
-			answers:    fakeIPRegistry,
-			wantLogged: "registry.example resolved to 198.18.0.10, a fake-IP address",
+			name:        "HEAD whose token discovery is refused",
+			method:      http.MethodHead,
+			answers:     fakeIPRegistry,
+			wantCode:    "AUTH_FAILED",
+			wantMessage: "auth discovery failed at http://registry.example: registry.example resolved to 198.18.0.10" + remedy,
+			wantLogged:  "registry.example resolved to 198.18.0.10, a fake-IP address",
 		},
 		{
 			name:   "HEAD whose redirect is refused",
@@ -301,13 +318,17 @@ func TestManifestBadGatewayLogsItsReason(t *testing.T) {
 				"registry.example": {{IP: net.ParseIP("93.184.216.34")}},
 				"cdn.example":      {{IP: net.ParseIP("198.18.0.12")}},
 			},
-			wantLogged: "cdn.example resolved to 198.18.0.12, a fake-IP address",
+			wantCode:    "UPSTREAM_UNAVAILABLE",
+			wantMessage: "manifest HEAD failed at http://cdn.example: cdn.example resolved to 198.18.0.12" + remedy,
+			wantLogged:  "cdn.example resolved to 198.18.0.12, a fake-IP address",
 		},
 		{
 			name:        "GET whose tag resolution for the observation gate is refused",
 			method:      http.MethodGet,
 			observation: true,
 			answers:     fakeIPRegistry,
+			wantCode:    "UPSTREAM_UNAVAILABLE",
+			wantMessage: "auth discovery failed at http://registry.example: registry.example resolved to 198.18.0.10" + remedy,
 			wantLogged:  "registry.example resolved to 198.18.0.10, a fake-IP address",
 		},
 	} {
@@ -315,22 +336,149 @@ func TestManifestBadGatewayLogsItsReason(t *testing.T) {
 			core, logs := observer.New(zap.ErrorLevel)
 			t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
 			dialer := &routedDialer{direct: registry.Listener.Addr().String()}
-			router := newRoutedDockerRouter(t, config.RegistryConfig{Name: "hub", URL: "http://registry.example"},
+			router, database := newRoutedDockerRouter(t, config.RegistryConfig{Name: "hub", URL: "http://registry.example"},
 				egress.Policy{}, tt.answers, dialer.DialContext, tt.observation)
 
-			response := httptest.NewRecorder()
-			router.ServeHTTP(response, httptest.NewRequest(tt.method, "/v2/library/widget/manifests/latest", nil))
-			if response.Code != http.StatusBadGateway {
-				t.Fatalf("status = %d, want 502", response.Code)
+			response := serveWithRequestID(router, tt.method, "/v2/library/widget/manifests/latest", testRequestID)
+			code, message := badGatewayBody(t, response)
+			if want := tt.wantMessage + testRequestSuffix; code != tt.wantCode || message != want {
+				t.Fatalf("answer = %s %q, want %s %q", code, message, tt.wantCode, want)
 			}
-			var logged []string
-			for _, entry := range logs.All() {
-				logged = append(logged, fmt.Sprint(entry.ContextMap()["error"]))
-			}
+			logged := loggedErrorsOf(logs, testRequestID)
 			if !slices.ContainsFunc(logged, func(text string) bool { return strings.Contains(text, tt.wantLogged) }) {
-				t.Fatalf("logged errors = %q, want one containing %q", logged, tt.wantLogged)
+				t.Fatalf("errors logged under request %s = %q, want one containing %q", testRequestID, logged, tt.wantLogged)
+			}
+
+			var entries []db.AccessLog
+			if err := database.Where("request_id = ?", testRequestID).Find(&entries).Error; err != nil {
+				t.Fatal(err)
+			}
+			if len(entries) != 1 || entries[0].Method != tt.method || entries[0].StatusCode != http.StatusBadGateway ||
+				entries[0].CacheKey != ManifestCacheKey("hub", "library/widget", "latest") {
+				t.Fatalf("access log entries of request %s = %+v, want one %s answered 502", testRequestID, entries, tt.method)
 			}
 		})
+	}
+}
+
+// Manifest requests ask for every manifest and index media type, so a
+// registry does not fall back to its default format for a multi-platform
+// image; blob and tag-list requests ask for none.
+func TestManifestRequestsAskForEveryManifestMediaType(t *testing.T) {
+	var mu sync.Mutex
+	accepts := map[string]string{}
+	registry := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		mu.Lock()
+		accepts[request.Method+" "+request.URL.Path] = request.Header.Get("Accept")
+		mu.Unlock()
+		if request.URL.Path != "/v2/" {
+			w.Header().Set("Docker-Content-Digest", "sha256:4f1e")
+			_, _ = io.WriteString(w, `{}`)
+		}
+	}))
+	t.Cleanup(registry.Close)
+	router, _ := newRoutedDockerRouter(t, config.RegistryConfig{Name: "hub", URL: "http://registry.example"},
+		egress.Policy{}, staticIPResolver{"registry.example": {{IP: net.ParseIP("93.184.216.34")}}},
+		mappedDialer{"93.184.216.34:80": registry.Listener.Addr().String()}.DialContext, false)
+
+	for _, request := range []struct{ method, path, want string }{
+		{http.MethodGet, "/v2/library/widget/manifests/latest", manifestAccept},
+		{http.MethodHead, "/v2/library/widget/manifests/latest", manifestAccept},
+		{http.MethodGet, "/v2/library/widget/blobs/sha256:4f1e", ""},
+		{http.MethodGet, "/v2/library/widget/tags/list", ""},
+	} {
+		if response := serveWithRequestID(router, request.method, request.path, testRequestID); response.Code != http.StatusOK {
+			t.Fatalf("%s %s = %d %s", request.method, request.path, response.Code, response.Body.String())
+		}
+		mu.Lock()
+		got, sent := accepts[request.method+" "+request.path]
+		mu.Unlock()
+		if !sent || got != request.want {
+			t.Errorf("%s %s sent Accept %q (sent %v), want %q", request.method, request.path, got, sent, request.want)
+		}
+	}
+}
+
+// The registry's own answer to a manifest HEAD passes on with its status and
+// no body. The access log records it under the request ID, and a 5xx that no
+// cached manifest can answer also leaves its reason in the server log.
+func TestManifestHeadPassesOnTheRegistryStatusAndLogsIt(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		status int
+		// wantLogged is the error line expected under the request ID, if any.
+		wantLogged string
+	}{
+		{
+			name:       "registry error",
+			status:     http.StatusBadGateway,
+			wantLogged: "manifest HEAD failed: http://registry.example/v2/library/widget/manifests/latest returned 502",
+		},
+		{name: "unknown tag", status: http.StatusNotFound},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			registry := httptest.NewServer(answerWith(tt.status, ""))
+			t.Cleanup(registry.Close)
+			core, logs := observer.New(zap.ErrorLevel)
+			t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
+			router, database := newRoutedDockerRouter(t, config.RegistryConfig{Name: "hub", URL: "http://registry.example"},
+				egress.Policy{}, staticIPResolver{"registry.example": {{IP: net.ParseIP("93.184.216.34")}}},
+				mappedDialer{"93.184.216.34:80": registry.Listener.Addr().String()}.DialContext, false)
+
+			response := serveWithRequestID(router, http.MethodHead, "/v2/library/widget/manifests/latest", testRequestID)
+			if response.Code != tt.status || response.Body.Len() != 0 {
+				t.Fatalf("HEAD answer = %d %q, want the registry's %d without a body", response.Code, response.Body.String(), tt.status)
+			}
+			logged := loggedErrorsOf(logs, testRequestID)
+			if tt.wantLogged == "" && len(logged) != 0 ||
+				tt.wantLogged != "" && (len(logged) != 1 || !strings.Contains(logged[0], tt.wantLogged)) {
+				t.Fatalf("errors logged under request %s = %q, want %q", testRequestID, logged, tt.wantLogged)
+			}
+			var entries []db.AccessLog
+			if err := database.Where("request_id = ?", testRequestID).Find(&entries).Error; err != nil {
+				t.Fatal(err)
+			}
+			if len(entries) != 1 || entries[0].Method != http.MethodHead || entries[0].StatusCode != tt.status {
+				t.Fatalf("access log entries of request %s = %+v, want one HEAD answered %d", testRequestID, entries, tt.status)
+			}
+		})
+	}
+}
+
+// A client path that cannot form the registry URL answers 500. Go's parse
+// error quotes that URL, userinfo included, so only the log carries it.
+func TestManifestHeadWithAnInvalidPathKeepsTheRegistryURLOutOfTheAnswer(t *testing.T) {
+	registry := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if strings.HasSuffix(request.URL.Path, "/v2/") {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		http.NotFound(w, request)
+	}))
+	t.Cleanup(registry.Close)
+	core, logs := observer.New(zap.ErrorLevel)
+	t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
+	router, database := newRoutedDockerRouter(t,
+		config.RegistryConfig{Name: "hub", URL: "http://operator:registry-secret@registry.example/mirror"},
+		egress.Policy{}, staticIPResolver{"registry.example": {{IP: net.ParseIP("93.184.216.34")}}},
+		mappedDialer{"93.184.216.34:80": registry.Listener.Addr().String()}.DialContext, false)
+
+	response := serveWithRequestID(router, http.MethodHead, "/v2/library/widget/manifests/%25zz", testRequestID)
+	const want = `{"code":"REQUEST_ERROR","message":"invalid Docker request path"}`
+	if response.Code != http.StatusInternalServerError || response.Body.String() != want {
+		t.Fatalf("answer = %d %s, want 500 %s", response.Code, response.Body.String(), want)
+	}
+	logged := loggedErrorsOf(logs, testRequestID)
+	if len(logged) != 1 || !strings.Contains(logged[0], `parse "http://registry.example/mirror/v2/library/widget/manifests/%zz"`) ||
+		strings.Contains(logged[0], "registry-secret") || strings.Contains(logged[0], "operator") {
+		t.Fatalf("errors logged under request %s = %q, want the parse error without userinfo", testRequestID, logged)
+	}
+	var entries []db.AccessLog
+	if err := database.Where("request_id = ?", testRequestID).Find(&entries).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Method != http.MethodHead || entries[0].StatusCode != http.StatusInternalServerError {
+		t.Fatalf("access log entries of request %s = %+v, want one HEAD answered 500", testRequestID, entries)
 	}
 }
 
@@ -351,25 +499,22 @@ func TestUnreachableProxyAddressStaysOutOfTheBadGatewayBody(t *testing.T) {
 	core, logs := observer.New(zap.ErrorLevel)
 	t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
 	var dialer net.Dialer
-	router := newRoutedDockerRouter(t, config.RegistryConfig{Name: "hub", URL: "http://registry.example"}, policy,
+	router, _ := newRoutedDockerRouter(t, config.RegistryConfig{Name: "hub", URL: "http://registry.example"}, policy,
 		staticIPResolver{"registry.example": {{IP: net.ParseIP("93.184.216.34")}}}, dialer.DialContext, false)
 
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v2/library/widget/manifests/latest", nil))
-	var body struct{ Code, Message string }
-	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
-		t.Fatalf("status = %d, body = %s: %v", response.Code, response.Body.String(), err)
+	response := serveWithRequestID(router, http.MethodGet, "/v2/library/widget/manifests/latest", testRequestID)
+	code, message := badGatewayBody(t, response)
+	const want = "auth discovery failed at http://registry.example: connection to the egress proxy failed" + testRequestSuffix
+	if code != "UPSTREAM_UNAVAILABLE" || message != want {
+		t.Fatalf("answer = %s %q, want UPSTREAM_UNAVAILABLE %q", code, message, want)
 	}
-	const want = `auth discovery failed: Get "http://registry.example/v2/": ` +
-		"connection to the egress proxy failed (details in the Depsilo server log)"
-	if response.Code != http.StatusBadGateway || body.Code != "UPSTREAM_UNAVAILABLE" || body.Message != want {
-		t.Fatalf("answer = %d %+v, want 502 UPSTREAM_UNAVAILABLE %q", response.Code, body, want)
+	for _, hidden := range []string{proxyAddress, "proxy-secret", "operator", "proxyconnect"} {
+		if strings.Contains(response.Body.String(), hidden) {
+			t.Fatalf("502 body %s names %q", response.Body.String(), hidden)
+		}
 	}
 
-	var logged []string
-	for _, entry := range logs.All() {
-		logged = append(logged, fmt.Sprint(entry.ContextMap()["error"]))
-	}
+	logged := loggedErrorsOf(logs, testRequestID)
 	if !slices.ContainsFunc(logged, func(text string) bool {
 		return strings.Contains(text, "proxyconnect") && strings.Contains(text, proxyAddress)
 	}) {

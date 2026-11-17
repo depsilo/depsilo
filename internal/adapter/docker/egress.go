@@ -3,7 +3,6 @@ package docker
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -18,6 +17,30 @@ import (
 	"depsilo/internal/config"
 	"depsilo/internal/egress"
 )
+
+// Refusals of the registry clients' guards. Their fixed text may appear in a
+// 502 body.
+var (
+	errInvalidRegistryURL      = &refusal{text: "invalid Docker registry URL"}
+	errInvalidRegistryProxyURL = &refusal{text: "invalid Docker registry proxy URL"}
+	errInvalidProxyTarget      = &refusal{text: "invalid Docker proxy target"}
+	errUnsafeProxyTarget       = &refusal{text: "unsafe Docker proxy target"}
+	errProxyTargetCrossedScope = &refusal{text: "Docker proxy target crossed network scope"}
+	errRegistryChangedScope    = &refusal{text: "Docker registry changed network scope"}
+	errRedirectLimit           = &refusal{text: "Docker redirect limit exceeded"}
+	errUnsafeRedirectTarget    = &refusal{text: "unsafe Docker redirect target"}
+	errInvalidDialTarget       = &refusal{text: "invalid Docker dial target"}
+	errUnsafeDialTarget        = &refusal{text: "unsafe Docker dial target"}
+	errDialTargetCrossedScope  = &refusal{text: "Docker dial target crossed network scope"}
+	errUnresolvedRegistry      = &refusal{text: "resolve Docker registry"}
+	errUnsafeRegistryScope     = &refusal{text: "unsafe Docker registry network scope"}
+)
+
+// unresolvedTarget refuses a host that the guard could not resolve; the
+// lookup error, if any, is kept for the server log.
+func unresolvedTarget(text string, lookupErr error) error {
+	return &refusal{text: text, cause: lookupErr}
+}
 
 type ipResolver interface {
 	LookupIPAddr(context.Context, string) ([]net.IPAddr, error)
@@ -72,17 +95,9 @@ func registryEgressFor(registry config.RegistryConfig, policy egress.Policy) reg
 func logRegistryEgress(name, route, proxy string) {
 	fields := []zap.Field{zap.String("registry", name), zap.String("route", route)}
 	if proxy != "" {
-		fields = append(fields, zap.String("proxy", proxyOrigin(proxy)))
+		fields = append(fields, zap.String("proxy", urlOrigin(proxy)))
 	}
 	zap.L().Info("docker registry egress", fields...)
-}
-
-func proxyOrigin(raw string) string {
-	parsed, err := url.Parse(raw)
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return "***"
-	}
-	return (&url.URL{Scheme: parsed.Scheme, Host: parsed.Host}).String()
 }
 
 type guardedDialer struct {
@@ -117,7 +132,7 @@ func buildRegistryClient(
 	if err != nil || originURL == nil || !originURL.IsAbs() || originURL.Host == "" ||
 		(originURL.Scheme != "http" && originURL.Scheme != "https") ||
 		originURL.RawQuery != "" || originURL.Fragment != "" {
-		return nil, errors.New("invalid Docker registry URL")
+		return nil, errInvalidRegistryURL
 	}
 	transport := &http.Transport{
 		TLSClientConfig:       &tls.Config{InsecureSkipVerify: false},
@@ -132,9 +147,11 @@ func buildRegistryClient(
 		proxyURL, parseErr := url.Parse(proxy)
 		if parseErr != nil || proxyURL == nil || proxyURL.Host == "" ||
 			(proxyURL.Scheme != "http" && proxyURL.Scheme != "https") {
-			return nil, errors.New("invalid Docker registry proxy URL")
+			return nil, errInvalidRegistryProxyURL
 		}
 		transport.Proxy = http.ProxyURL(proxyURL)
+		// The token request shares this transport, so the hook covers it too.
+		transport.OnProxyConnectResponse = refuseProxyConnect
 		transport.DialContext = dialContext
 		clientTransport = &scopePreflightRoundTripper{
 			origin:    originURL,
@@ -171,27 +188,27 @@ func (transport *scopePreflightRoundTripper) RoundTrip(request *http.Request) (*
 func (transport *scopePreflightRoundTripper) validateTarget(request *http.Request) error {
 	if request == nil || request.URL == nil || request.URL.Hostname() == "" ||
 		(request.URL.Scheme != "http" && request.URL.Scheme != "https") {
-		return errors.New("invalid Docker proxy target")
+		return errInvalidProxyTarget
 	}
 	host := request.URL.Hostname()
 	addresses, err := transport.resolver.LookupIPAddr(request.Context(), host)
 	if err != nil || len(addresses) == 0 {
-		return errors.New("resolve Docker proxy target")
+		return unresolvedTarget("resolve Docker proxy target", err)
 	}
 	targetScope := proxiedScope(host, addresses)
 	if targetScope == networkUnsafe {
-		return errors.New("unsafe Docker proxy target")
+		return errUnsafeProxyTarget
 	}
 
 	if sameHTTPOrigin(transport.origin, request.URL) {
 		if !transport.pinOriginScope(targetScope) {
-			return errors.New("Docker registry changed network scope")
+			return errRegistryChangedScope
 		}
 		return nil
 	}
 	originScope, err := transport.scopeForOrigin(request.Context())
 	if err != nil || !scopeAllows(originScope, targetScope) {
-		return errors.New("Docker proxy target crossed network scope")
+		return errProxyTargetCrossedScope
 	}
 	return nil
 }
@@ -208,11 +225,11 @@ func (transport *scopePreflightRoundTripper) scopeForOrigin(ctx context.Context)
 	host := transport.origin.Hostname()
 	addresses, err := transport.resolver.LookupIPAddr(ctx, host)
 	if err != nil || len(addresses) == 0 {
-		return networkUnsafe, errors.New("resolve Docker registry")
+		return networkUnsafe, errUnresolvedRegistry
 	}
 	scope := proxiedScope(host, addresses)
 	if scope == networkUnsafe || !transport.pinOriginScope(scope) {
-		return networkUnsafe, errors.New("unsafe Docker registry network scope")
+		return networkUnsafe, errUnsafeRegistryScope
 	}
 	return scope, nil
 }
@@ -262,17 +279,14 @@ func allFakeIP(addresses []net.IPAddr) bool {
 	return len(addresses) > 0
 }
 
-// fakeIPDialError explains a direct dial refused for a host name answered
-// only with fake-IP addresses, the one answer a proxy would carry, and names
-// the remedy. A Docker client reads it in the 502 body, so it carries only
-// the dialed host, its first address and a fixed remedy.
+// fakeIPDialError refuses a direct dial to a host name answered only with
+// fake-IP addresses and names the remedy; see fakeIPRefusal.
 func fakeIPDialError(host string, addresses []net.IPAddr, remedy string) error {
 	if remedy == "" {
 		remedy = fakeIPRemedySetProxy
 	}
 	address, _ := netip.AddrFromSlice(addresses[0].IP)
-	return fmt.Errorf("%s resolved to %s, a fake-IP address from proxy software in TUN/fake-IP mode; %s",
-		host, address.Unmap(), remedy)
+	return &fakeIPRefusal{host: host, address: address.Unmap(), remedy: remedy}
 }
 
 func (transport *scopePreflightRoundTripper) pinOriginScope(scope networkScope) bool {
@@ -289,10 +303,10 @@ func (transport *scopePreflightRoundTripper) pinOriginScope(scope networkScope) 
 func secureRegistryRedirectCheck(origin string) func(*http.Request, []*http.Request) error {
 	return func(request *http.Request, via []*http.Request) error {
 		if len(via) >= 10 {
-			return errors.New("Docker redirect limit exceeded")
+			return errRedirectLimit
 		}
 		if err := validateAuthRealm(origin, request.URL.String()); err != nil {
-			return errors.New("unsafe Docker redirect target")
+			return errUnsafeRedirectTarget
 		}
 		request.Header.Del("Referer")
 		request.Header.Del("Proxy-Authorization")
@@ -307,11 +321,11 @@ func secureRegistryRedirectCheck(origin string) func(*http.Request, []*http.Requ
 func (dialer *guardedDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil || host == "" || port == "" {
-		return nil, errors.New("invalid Docker dial target")
+		return nil, errInvalidDialTarget
 	}
 	addresses, err := dialer.resolver.LookupIPAddr(ctx, host)
 	if err != nil || len(addresses) == 0 {
-		return nil, errors.New("resolve Docker dial target")
+		return nil, unresolvedTarget("resolve Docker dial target", err)
 	}
 	targetScope := resolvedScope(addresses)
 	if targetScope == networkUnsafe {
@@ -321,15 +335,15 @@ func (dialer *guardedDialer) DialContext(ctx context.Context, network, address s
 		if dnsHostName(host) && allFakeIP(addresses) {
 			return nil, fakeIPDialError(host, addresses, dialer.fakeIPRemedy)
 		}
-		return nil, errors.New("unsafe Docker dial target")
+		return nil, errUnsafeDialTarget
 	}
 	if !sameDialAddress(address, dialer.origin) {
 		originScope, scopeErr := dialer.scopeForOrigin(ctx)
 		if scopeErr != nil || !scopeAllows(originScope, targetScope) {
-			return nil, errors.New("Docker dial target crossed network scope")
+			return nil, errDialTargetCrossedScope
 		}
 	} else if !dialer.pinOriginScope(targetScope) {
-		return nil, errors.New("Docker registry changed network scope")
+		return nil, errRegistryChangedScope
 	}
 
 	var lastErr error
@@ -354,11 +368,11 @@ func (dialer *guardedDialer) scopeForOrigin(ctx context.Context) (networkScope, 
 
 	addresses, err := dialer.resolver.LookupIPAddr(ctx, dialer.origin.Hostname())
 	if err != nil || len(addresses) == 0 {
-		return networkUnsafe, errors.New("resolve Docker registry")
+		return networkUnsafe, errUnresolvedRegistry
 	}
 	scope := resolvedScope(addresses)
 	if scope == networkUnsafe || !dialer.pinOriginScope(scope) {
-		return networkUnsafe, errors.New("unsafe Docker registry network scope")
+		return networkUnsafe, errUnsafeRegistryScope
 	}
 	return scope, nil
 }
