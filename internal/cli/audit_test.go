@@ -195,3 +195,45 @@ func captureStdout(t *testing.T, run func()) string {
 	os.Stdout = original
 	return <-done
 }
+
+// With no configuration file and no database, the command says that it found
+// no instance, where it looked, and how to point it at one, instead of
+// reporting the signing key that a blank machine also lacks.
+func TestRunAuditVerifySaysWhenItFindsNoInstance(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("DEPSILO_CONFIG", "")
+	t.Setenv("DEPSILO_DATABASE_DSN", "")
+	workdir := t.TempDir()
+	t.Chdir(workdir)
+	databasePath := filepath.Join(home, ".depsilo", "data", "depsilo.db")
+
+	stdout, stderr, code := captureStdoutStderr(t, func() int { return runAudit([]string{"verify"}) })
+	if code != 1 || stdout != "" {
+		t.Fatalf("runAudit(verify) = %d, stdout %q; want 1 and nothing", code, stdout)
+	}
+	for _, fragment := range []string{
+		"no Depsilo instance found",
+		"config.toml, /app/config.toml, " + filepath.Join(home, ".depsilo", "config.toml"),
+		"no database at " + databasePath,
+		"set DEPSILO_CONFIG to the instance's config.toml",
+	} {
+		if !strings.Contains(stderr, fragment) {
+			t.Errorf("stderr %q missing %q", stderr, fragment)
+		}
+	}
+	if strings.Contains(stderr, "signing key") {
+		t.Errorf("stderr reports the signing key of an instance that does not exist: %q", stderr)
+	}
+
+	// A DEPSILO_CONFIG that names a missing file is the only place it looked.
+	named := filepath.Join(workdir, "missing.toml")
+	t.Setenv("DEPSILO_CONFIG", named)
+	stdout, _, code = captureStdoutStderr(t, func() int { return runAudit([]string{"verify", "--json"}) })
+	if code != 1 || !strings.Contains(stdout, "no config file at "+named+", and no database at ") {
+		t.Fatalf("runAudit(verify --json) with a missing DEPSILO_CONFIG = %d, %q", code, stdout)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".depsilo")); !os.IsNotExist(err) {
+		t.Fatalf("looking for an instance created state: %v", err)
+	}
+}

@@ -16,6 +16,9 @@ type command struct {
 	name    string
 	aliases []string
 	run     func(args []string) int
+	// usage prints what "depsilo <name> --help" shows, on standard output.
+	// Nil means the command's entry in the "Commands:" block of helpText.
+	usage func()
 }
 
 // commands is the only list of top-level commands. Main and Run both dispatch
@@ -23,40 +26,98 @@ type command struct {
 // second edit in cmd/depsilo. Every entry also belongs in the "Commands:"
 // block of helpText; a test keeps the two in step.
 var commands = []command{
-	{name: "serve", aliases: []string{"server"}, run: RunServe},
-	{name: "start", run: runStart},
-	{name: "stop", run: runStop},
-	{name: "setup", run: runSetup},
-	{name: "status", run: runStatus},
-	{name: "doctor", run: runDoctor},
-	{name: "diagnose", run: runDiagnose},
-	{name: "init-agent", run: runInitAgent},
-	{name: "prompt", run: runPrompt},
-	{name: "version", aliases: []string{"--version", "-v"}, run: runVersion},
-	{name: "activate", run: runActivate},
-	{name: "warmup", run: runWarmup},
-	{name: "flush", run: runFlush},
-	{name: "backup", run: runBackup},
-	{name: "restore", run: runRestore},
-	{name: "reset-password", run: runResetPassword},
-	{name: "distribution", run: runDistribution},
-	{name: "audit", run: runAudit},
-	{name: "help", aliases: []string{"--help", "-h"}, run: runHelp},
+	{name: "serve", aliases: []string{"server"}, run: RunServe, usage: printServeUsage},
+	{name: "start", run: runStart, usage: printStartUsage},
+	{name: "stop", run: runStop, usage: entryUsage("stop", stopUsageDetails)},
+	{name: "setup", run: runSetup, usage: func() { printSetupHelp(os.Stdout) }},
+	{name: "status", run: runStatus, usage: entryUsage("status", statusUsageDetails)},
+	{name: "doctor", run: runDoctor, usage: entryUsage("doctor", doctorUsageDetails)},
+	{name: "diagnose", run: runDiagnose, usage: entryUsage("diagnose", diagnoseUsageDetails)},
+	{name: "init-agent", run: runInitAgent, usage: printInitAgentHelp},
+	{name: "prompt", run: runPrompt, usage: printPromptHelp},
+	{name: "version", aliases: []string{"--version", "-v"}, run: runVersion, usage: entryUsage("version", versionUsageDetails)},
+	{name: "activate", run: runActivate, usage: entryUsage("activate", activateUsageDetails)},
+	{name: "warmup", run: runWarmup, usage: entryUsage("warmup", warmupUsageDetails)},
+	{name: "flush", run: runFlush, usage: entryUsage("flush", flushUsageDetails)},
+	{name: "backup", run: runBackup, usage: entryUsage("backup", backupUsageDetails)},
+	{name: "restore", run: runRestore, usage: entryUsage("restore", restoreUsageDetails)},
+	{name: "reset-password", run: runResetPassword, usage: func() { fmt.Print(resetPasswordUsage) }},
+	{name: "distribution", run: runDistribution, usage: printDistributionHelp},
+	{name: "audit", run: runAudit, usage: entryUsage("audit", auditUsageDetails)},
+	{name: "help", aliases: []string{"--help", "-h"}, run: runHelp, usage: PrintHelp},
 }
 
-// lookupCommand returns the handler for a command name or alias.
-func lookupCommand(name string) (func(args []string) int, bool) {
+// lookupCommand returns the command for a name or alias.
+func lookupCommand(name string) (command, bool) {
 	for _, c := range commands {
 		if c.name == name {
-			return c.run, true
+			return c, true
 		}
 		for _, alias := range c.aliases {
 			if alias == name {
-				return c.run, true
+				return c, true
 			}
 		}
 	}
-	return nil, false
+	return command{}, false
+}
+
+// helpRequested reports whether args ask for the command's usage: an argument
+// that is exactly "--help" or "-h", anywhere before a "--" terminator.
+func helpRequested(args []string) bool {
+	for _, arg := range args {
+		switch arg {
+		case "--":
+			return false
+		case "--help", "-h":
+			return true
+		}
+	}
+	return false
+}
+
+// dispatch is the only place a command's handler is called from. Asking for
+// help is answered here, before the handler runs, so no command can send a
+// request, touch a file or signal a process on its way to printing usage.
+func dispatch(c command, args []string) int {
+	if helpRequested(args) {
+		usage := c.usage
+		if usage == nil {
+			usage = entryUsage(c.name, "")
+		}
+		usage()
+		return 0
+	}
+	return c.run(args)
+}
+
+// commandHelpEntry returns a command's entry in the "Commands:" block of
+// helpText: its line and the continuation lines below it, each with the
+// program name in front. Empty when the block does not list the command.
+func commandHelpEntry(name string) string {
+	_, block, _ := strings.Cut(helpText, "\nCommands:\n")
+	var entry strings.Builder
+	for _, line := range strings.Split(block, "\n") {
+		if strings.TrimSpace(line) == "" {
+			break
+		}
+		rest, indented := strings.CutPrefix(line, "    ")
+		if !indented {
+			continue
+		}
+		if !strings.HasPrefix(rest, " ") {
+			if entry.Len() > 0 {
+				break
+			}
+			if fields := strings.Fields(rest); len(fields) == 0 || fields[0] != name {
+				continue
+			}
+			entry.WriteString("    depsilo " + rest + "\n")
+		} else if entry.Len() > 0 {
+			entry.WriteString("        " + rest + "\n")
+		}
+	}
+	return entry.String()
 }
 
 // Main is the whole behavior of the depsilo binary. args is os.Args[1:].
@@ -69,25 +130,25 @@ func Main(args []string) int {
 		PrintHelp()
 		return 0
 	}
-	run, ok := lookupCommand(args[0])
+	c, ok := lookupCommand(args[0])
 	if !ok {
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", args[0])
 		PrintHelp()
 		return 1
 	}
-	return run(args[1:])
+	return dispatch(c, args[1:])
 }
 
 // Run dispatches to the appropriate command handler.
 // args is os.Args[2:] — the subcommand's arguments.
 // Returns exit code (0 for success, 1 for error).
 func Run(cmd string, args []string) int {
-	run, ok := lookupCommand(cmd)
+	c, ok := lookupCommand(cmd)
 	if !ok {
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", cmd)
 		return 1
 	}
-	return run(args)
+	return dispatch(c, args)
 }
 
 func runHelp(_ []string) int {

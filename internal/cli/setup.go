@@ -14,11 +14,12 @@ import (
 )
 
 func runSetup(args []string) int {
-	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
-		printSetupHelp()
-		if len(args) == 0 {
-			return 1
-		}
+	if len(args) == 0 {
+		printSetupHelp(os.Stderr)
+		return 1
+	}
+	if args[0] == "--help" || args[0] == "-h" {
+		printSetupHelp(os.Stdout)
 		return 0
 	}
 	if args[0] != "token" {
@@ -27,7 +28,7 @@ func runSetup(args []string) int {
 	}
 	flags := flag.NewFlagSet("depsilo setup token", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
-	flags.Usage = printSetupHelp
+	flags.Usage = func() { printSetupHelp(os.Stderr) }
 	var configPath string
 	flags.StringVar(&configPath, "config", "", "Path to the running instance's config.toml")
 	flags.StringVar(&configPath, "c", "", "Path to the running instance's config.toml")
@@ -104,8 +105,8 @@ func runSetup(args []string) int {
 	return 0
 }
 
-func printSetupHelp() {
-	fmt.Fprintln(os.Stderr, `Usage:
+func printSetupHelp(w io.Writer) {
+	fmt.Fprintln(w, `Usage:
     depsilo setup token [--config PATH] [--port N] [--host H]
 
 Print the bootstrap token for the running local instance's initial setup.

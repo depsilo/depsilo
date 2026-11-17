@@ -25,24 +25,28 @@ import (
 // while still bounding responses from a misconfigured or untrusted endpoint.
 const distributionResponseLimit = 8 << 20
 
+func printDistributionHelp() {
+	fmt.Println("Usage: depsilo distribution stage --manifest FILE --objects DIR [--url URL] [--json]\n" +
+		"       depsilo distribution list [--page N] [--per-page N] [--url URL] [--json]\n" +
+		"       depsilo distribution prune [--url URL] [--json]\n" +
+		"       depsilo distribution usage [--url URL] [--json]\n" +
+		"       depsilo distribution inspect|verify|delete ID [--url URL] [--json]\n" +
+		"       depsilo distribution export ID --out FILE [--url URL] [--json]\n" +
+		"       depsilo distribution import --bundle FILE [--url URL] [--json]\n" +
+		"       depsilo distribution keygen --out FILE [--json]\n\n" +
+		"Objects are regular files named by their SHA-256 in DIR. Stage is repeatable.\n" +
+		"Delete removes the catalog entry; prune reclaims unreferenced object bytes.\n" +
+		"Export writes a signed full transfer bundle; import accepts it only from a\n" +
+		"configured trusted transfer key and never activates or serves the set.\n" +
+		"Usage reports this UTC month's export allowance; the free edition exports\n" +
+		"bundles up to 500 MiB and 5 GiB per month, and Pro removes both limits.\n" +
+		"This prepares a content-verified catalog only; it does not provide offline package serving.")
+}
+
 func runDistribution(args []string) int {
 	jsonMode, args := stripJSONFlag(args)
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
-		fmt.Println("Usage: depsilo distribution stage --manifest FILE --objects DIR [--url URL] [--json]\n" +
-			"       depsilo distribution list [--page N] [--per-page N] [--url URL] [--json]\n" +
-			"       depsilo distribution prune [--url URL] [--json]\n" +
-			"       depsilo distribution usage [--url URL] [--json]\n" +
-			"       depsilo distribution inspect|verify|delete ID [--url URL] [--json]\n" +
-			"       depsilo distribution export ID --out FILE [--url URL] [--json]\n" +
-			"       depsilo distribution import --bundle FILE [--url URL] [--json]\n" +
-			"       depsilo distribution keygen --out FILE [--json]\n\n" +
-			"Objects are regular files named by their SHA-256 in DIR. Stage is repeatable.\n" +
-			"Delete removes the catalog entry; prune reclaims unreferenced object bytes.\n" +
-			"Export writes a signed full transfer bundle; import accepts it only from a\n" +
-			"configured trusted transfer key and never activates or serves the set.\n" +
-			"Usage reports this UTC month's export allowance; the free edition exports\n" +
-			"bundles up to 500 MiB and 5 GiB per month, and Pro removes both limits.\n" +
-			"This prepares a content-verified catalog only; it does not provide offline package serving.")
+		printDistributionHelp()
 		if len(args) == 0 {
 			return 1
 		}

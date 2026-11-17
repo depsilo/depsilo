@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -28,6 +29,12 @@ func runAudit(args []string) int {
 		return 1
 	}
 
+	// On a machine with no instance, loading fails for the missing signing
+	// key, which hides what is wrong. Look for the instance first, without
+	// needing the key.
+	if err := findAuditInstance(); err != nil {
+		return printAuditError(jsonMode, err)
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		return printAuditError(jsonMode, fmt.Errorf("load config: %w", err))
@@ -103,6 +110,43 @@ func runAudit(args []string) int {
 		fmt.Println("  remote anchor configured: verify its checkpoints at the receiving end (the local database cannot prove them)")
 	}
 	return 0
+}
+
+// findAuditInstance reports that no Depsilo instance exists where the
+// command looked: neither a configuration file nor the database the
+// configuration names. Anything else is left to the full load and checks.
+func findAuditInstance() error {
+	located, err := config.LoadForRestore()
+	if err != nil || !located.IsDefault {
+		return nil
+	}
+	databasePath, err := backup.DatabaseFilePath(strings.TrimSpace(located.Database.DSN))
+	if err != nil {
+		return nil
+	}
+	if _, err := os.Stat(databasePath); !errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	// The configuration loader's search order: DEPSILO_CONFIG alone when it
+	// is set, otherwise ./config.toml, /app/config.toml, ~/.depsilo/config.toml.
+	var searched []string
+	if named := os.Getenv("DEPSILO_CONFIG"); named != "" {
+		searched = append(searched, named)
+	} else {
+		if local, err := filepath.Abs("config.toml"); err == nil {
+			searched = append(searched, local)
+		} else {
+			searched = append(searched, "./config.toml")
+		}
+		searched = append(searched, "/app/config.toml")
+		if located.ConfigPath != "" {
+			searched = append(searched, located.ConfigPath)
+		}
+	}
+	return fmt.Errorf("no Depsilo instance found: no config file at %s, and no database at %s; "+
+		"set DEPSILO_CONFIG to the instance's config.toml (and DEPSILO_DATABASE_DSN if the server sets it), "+
+		"or run the command as the service user from the server's working directory",
+		strings.Join(searched, ", "), databasePath)
 }
 
 func printAuditError(jsonMode bool, err error) int {

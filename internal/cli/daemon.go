@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"depsilo/internal/config"
 )
@@ -71,11 +73,7 @@ func runStart(args []string) int {
 	opts.ApplyEnv()
 	cfg, err := config.LoadForServer()
 	if err != nil {
-		if line, ok := startupFailureLine(err); ok {
-			fmt.Fprintln(os.Stderr, line)
-			return 1
-		}
-		fmt.Fprintf(os.Stderr, "Error loading daemon configuration: %v\n", err)
+		fmt.Fprintln(os.Stderr, configurationFailureLine(err))
 		return 1
 	}
 	readyURL := daemonReadinessURL(cfg.Server.Host, cfg.Server.Port)
@@ -111,8 +109,11 @@ func runStart(args []string) int {
 		return 1
 	}
 
+	// Truncated under the daemon lock, so everything in the file was written
+	// by this start. Opened for reading as well: a failed start reports the
+	// daemon's last message through this handle, never through the path.
 	logPath := filepath.Join(pidDir, "depsilo.log")
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0o600)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: cannot open daemon log: %v\n", err)
 		return 1
@@ -172,6 +173,11 @@ func runStart(args []string) int {
 		select {
 		case childErr := <-childDone:
 			_ = os.Remove(pidFile)
+			// The reason is the plain line "depsilo serve" printed before it
+			// gave up; without it the terminal only shows an exit status.
+			if message := daemonLastMessage(logFile); message != "" {
+				fmt.Fprintln(os.Stderr, message)
+			}
 			fmt.Fprintf(os.Stderr, "Error: daemon exited before readiness: %v (see %s)\n", childErr, logPath)
 			return 1
 		case <-deadline.C:
@@ -191,6 +197,54 @@ func runStart(args []string) int {
 			}
 		}
 	}
+}
+
+const (
+	daemonLastMessageWindow = 64 << 10
+	daemonLastMessageLimit  = 500
+)
+
+// daemonLastMessage returns the last non-empty line of the startup log, with
+// control characters removed and cut to daemonLastMessageLimit bytes. It is
+// empty when the log is empty or cannot be read.
+//
+// Call it only for a daemon that exited before readiness: the summary of a
+// successful start carries the bootstrap token. That summary is one write
+// whose last line is not a secret, so even a daemon that died right after
+// printing it gives nothing away here.
+func daemonLastMessage(log *os.File) string {
+	info, err := log.Stat()
+	if err != nil || info.Size() == 0 {
+		return ""
+	}
+	offset := max(info.Size()-daemonLastMessageWindow, 0)
+	tail := make([]byte, info.Size()-offset)
+	n, _ := log.ReadAt(tail, offset)
+	if n == 0 {
+		return ""
+	}
+	tail = tail[:n]
+	lines := strings.Split(string(tail), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(strings.Map(func(r rune) rune {
+			if unicode.IsControl(r) || r == utf8.RuneError {
+				return -1
+			}
+			return r
+		}, lines[i]))
+		if line == "" {
+			continue
+		}
+		if len(line) > daemonLastMessageLimit {
+			cut := daemonLastMessageLimit
+			for cut > 0 && !utf8.RuneStart(line[cut]) {
+				cut--
+			}
+			line = line[:cut]
+		}
+		return line
+	}
+	return ""
 }
 
 func newDaemonReadinessClient() *http.Client {

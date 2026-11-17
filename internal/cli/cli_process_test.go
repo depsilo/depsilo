@@ -14,9 +14,12 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
+
+	"depsilo/internal/api"
 )
 
 const cliHelperEnv = "GO_WANT_DEPSILO_CLI_HELPER"
@@ -39,7 +42,7 @@ func TestCLIHelperProcess(t *testing.T) {
 	command := os.Args[separator+1]
 	args := os.Args[separator+2:]
 	if command == "serve" {
-		exitCode := RunServe(args)
+		exitCode := Run(command, args)
 		if marker := os.Getenv("DEPSILO_CLI_RETURN_MARKER"); marker != "" {
 			_ = os.WriteFile(marker, []byte(strconv.Itoa(exitCode)), 0o600)
 		}
@@ -332,6 +335,87 @@ func TestDaemonStartupFailureReturnsNonZeroAndRemovesPID(t *testing.T) {
 	}
 }
 
+// The reason a daemon died at once used to reach only its startup log; the
+// terminal showed "exit status 1" and a path.
+func TestDaemonStartupFailurePrintsTheDaemonsLastMessage(t *testing.T) {
+	binary := buildDepsiloCLI(t)
+	home := t.TempDir()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("occupy daemon port: %v", err)
+	}
+	defer listener.Close()
+	port := listener.Addr().(*net.TCPAddr).Port
+	env := append(os.Environ(),
+		cliHelperEnv+"=",
+		"HOME="+home,
+		"USERPROFILE="+home,
+		"DEPSILO_CONFIG=",
+		"DEPSILO_SERVER_PORT=",
+		"DEPSILO_BOOTSTRAP_TOKEN=",
+	)
+	pidFile := filepath.Join(home, ".local", "share", "depsilo", "depsilo.pid")
+	logPath := filepath.Join(home, ".local", "share", "depsilo", "depsilo.log")
+	defer terminateDaemonFromPIDFile(pidFile)
+	// What an earlier, successful start left behind must not be repeated.
+	const earlierToken = "Bootstrap token: left-by-an-earlier-start"
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(logPath, []byte("\n  "+earlierToken+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	start := exec.CommandContext(ctx, binary, "start", "--daemon", "--host", "127.0.0.1", "--port", strconv.Itoa(port))
+	start.Env = env
+	var stdout, stderr strings.Builder
+	start.Stdout, start.Stderr = &stdout, &stderr
+	runErr := start.Run()
+	var exitErr *exec.ExitError
+	if !errors.As(runErr, &exitErr) || exitErr.ExitCode() != 1 {
+		t.Fatalf("start --daemon on an occupied port: error=%v, want exit code 1; stdout=%s stderr=%s", runErr, stdout.String(), stderr.String())
+	}
+	lines := strings.Split(strings.TrimSuffix(stderr.String(), "\n"), "\n")
+	if len(lines) != 2 ||
+		!strings.HasPrefix(lines[0], fmt.Sprintf("Port %d is already in use. Another Depsilo may be running", port)) ||
+		lines[1] != "Error: daemon exited before readiness: exit status 1 (see "+logPath+")" {
+		t.Fatalf("standard error is not the daemon's last message followed by the exit line; stderr=%q", stderr.String())
+	}
+	logBody, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read daemon log: %v", err)
+	}
+	if !strings.Contains(string(logBody), lines[0]) {
+		t.Fatalf("the printed message is not a line of the startup log; log=%s", logBody)
+	}
+	if strings.Contains(stdout.String()+stderr.String()+string(logBody), earlierToken) {
+		t.Fatalf("the failed start repeated an earlier start's log; stdout=%s stderr=%s log=%s", stdout.String(), stderr.String(), logBody)
+	}
+
+	// A configuration the server rejects after the loader accepted it is the
+	// daemon's last message too, not the start of a structured log entry.
+	t.Run("configuration the server rejects", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		start := exec.CommandContext(ctx, binary, "start", "--daemon", "--host", "127.0.0.1", "--port", strconv.Itoa(availablePort(t)))
+		start.Env = append(append([]string{}, env...), "DEPSILO_SERVER_TRUSTED_PROXIES=garbage")
+		var stderr strings.Builder
+		start.Stderr = &stderr
+		runErr := start.Run()
+		var exitErr *exec.ExitError
+		if !errors.As(runErr, &exitErr) || exitErr.ExitCode() != 1 {
+			t.Fatalf("start --daemon with an invalid trusted proxy: error=%v, want exit code 1; stderr=%s", runErr, stderr.String())
+		}
+		want := "Error: configure server.trusted_proxies: invalid IP address: garbage\n" +
+			"Error: daemon exited before readiness: exit status 1 (see " + logPath + ")\n"
+		if stderr.String() != want {
+			t.Fatalf("standard error = %q, want %q", stderr.String(), want)
+		}
+	})
+}
+
 func TestServeStartupFailureReturnsExitCode(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -509,6 +593,300 @@ func TestStartupExplainsPermissionFailuresInOneLine(t *testing.T) {
 	}
 }
 
+// With "--restart unless-stopped" a container repeats whatever a failed start
+// prints. A mistake in the configuration must be one line the operator can
+// act on, not a structured entry with a Go stack trace.
+func TestStartupReportsInvalidConfigurationInOnePlainLine(t *testing.T) {
+	runStartup := func(t *testing.T, home string, env []string, args ...string) string {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, os.Args[0], append([]string{"-test.run=^TestCLIHelperProcess$", "--"}, args...)...)
+		cmd.Dir = home
+		for _, value := range os.Environ() {
+			if !strings.HasPrefix(value, "DEPSILO_") {
+				cmd.Env = append(cmd.Env, value)
+			}
+		}
+		cmd.Env = append(cmd.Env, cliHelperEnv+"=1", "HOME="+home, "USERPROFILE="+home,
+			"DEPSILO_SERVER_PORT="+strconv.Itoa(availablePort(t)))
+		cmd.Env = append(cmd.Env, env...)
+		output, runErr := cmd.CombinedOutput()
+		var exitErr *exec.ExitError
+		if !errors.As(runErr, &exitErr) || exitErr.ExitCode() != 1 {
+			t.Fatalf("depsilo %v with an invalid configuration: error=%v, want exit code 1; output=%s", args, runErr, output)
+		}
+		for _, noise := range []string{"stacktrace", "failed to start server", "serve.go", `"level":"error"`} {
+			if strings.Contains(string(output), noise) {
+				t.Fatalf("depsilo %v output carries %q; output=%s", args, noise, output)
+			}
+		}
+		return string(output)
+	}
+
+	const proxyPassword = "proxy-secret-4711"
+	weakToken := strings.Repeat("a", 30)
+	for _, test := range []struct {
+		name   string
+		env    string
+		want   string
+		secret string
+	}{
+		{
+			name:   "predictable bootstrap token",
+			env:    "DEPSILO_BOOTSTRAP_TOKEN=" + weakToken,
+			want:   "Error: DEPSILO_BOOTSTRAP_TOKEN is too predictable: it has fewer than 8 distinct characters; set it to a random value of 32 bytes or more, or unset it so Depsilo generates a token\n",
+			secret: weakToken,
+		},
+		{
+			name: "upstream proxy that is not a URL",
+			env:  "DEPSILO_EGRESS_UPSTREAM_PROXY=not a url",
+			want: "Error: egress.upstream_proxy: must be an http:// or https:// proxy URL with a host\n",
+		},
+		{
+			name:   "upstream proxy with credentials and a path",
+			env:    "DEPSILO_EGRESS_UPSTREAM_PROXY=http://proxy-user:" + proxyPassword + "@proxy.example:3128/pac",
+			want:   "Error: egress.upstream_proxy: must not contain a path, query, or fragment\n",
+			secret: proxyPassword,
+		},
+	} {
+		for _, args := range [][]string{{"serve"}, {"start", "--daemon"}} {
+			t.Run(test.name+"/"+strings.Join(args, " "), func(t *testing.T) {
+				output := runStartup(t, t.TempDir(), []string{test.env}, args...)
+				if output != test.want {
+					t.Fatalf("depsilo %v printed %q, want exactly %q", args, output, test.want)
+				}
+				if test.secret != "" && strings.Contains(output, test.secret) {
+					t.Fatalf("depsilo %v repeated the secret value; output=%s", args, output)
+				}
+			})
+		}
+	}
+
+	// The decoder reports its findings as a heading, an empty line and one
+	// line per setting; joined, they must read as one sentence.
+	t.Run("setting the decoder rejects/serve", func(t *testing.T) {
+		output := runStartup(t, t.TempDir(), []string{"DEPSILO_CACHE_TTL_INDEX=forever"}, "serve")
+		if strings.Count(output, "\n") != 1 || !strings.HasPrefix(output, "Error: decode config schema: ") ||
+			!strings.Contains(output, ": 'cache.ttl_index' ") || strings.Contains(output, ":;") || strings.Contains(output, "; ;") {
+			t.Fatalf("serve printed %q, want one line that names cache.ttl_index without empty parts", output)
+		}
+	})
+
+	// What the loader accepts and the server then rejects. The server logs its
+	// progress as structured lines before it fails; the failure itself must be
+	// the one plain line.
+	assertOnePlainLine := func(t *testing.T, output, want string) {
+		t.Helper()
+		plain := 0
+		for _, line := range strings.Split(output, "\n") {
+			switch {
+			case line == want:
+				plain++
+			case line == "", strings.HasPrefix(line, "{"):
+			default:
+				t.Fatalf("unexpected plain line %q; output=%s", line, output)
+			}
+		}
+		if plain != 1 {
+			t.Fatalf("the start did not print the plain line %q exactly once; output=%s", want, output)
+		}
+	}
+	// A configured instance whose database has no administrator yet.
+	configuredHome := func(t *testing.T) string {
+		t.Helper()
+		home := t.TempDir()
+		stateDir := filepath.Join(home, ".depsilo")
+		if err := os.MkdirAll(stateDir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		document := "config_version = 1\n[database]\ndsn = '" + filepath.Join(stateDir, "data", "depsilo.db") + "'\n" +
+			"[storage]\npath = '" + filepath.Join(stateDir, "data", "cache") + "'\n"
+		if err := os.WriteFile(filepath.Join(stateDir, "config.toml"), []byte(document), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return home
+	}
+
+	for _, test := range []struct {
+		name string
+		env  string
+		want string
+	}{
+		{
+			name: "trusted proxy that is not an address",
+			env:  "DEPSILO_SERVER_TRUSTED_PROXIES=garbage",
+			want: "Error: configure server.trusted_proxies: invalid IP address: garbage",
+		},
+		{
+			name: "port out of range",
+			env:  "DEPSILO_SERVER_PORT=99999",
+			want: "Error: listen on 127.0.0.1:99999: listen tcp: address 99999: invalid port",
+		},
+	} {
+		t.Run(test.name+"/serve", func(t *testing.T) {
+			assertOnePlainLine(t, runStartup(t, t.TempDir(), []string{test.env}, "serve"), test.want)
+		})
+	}
+
+	// With a configuration file and no administrator the server reopens the
+	// interactive setup, and only then reads the bootstrap token.
+	t.Run("predictable bootstrap token for a configured instance/serve", func(t *testing.T) {
+		output := runStartup(t, configuredHome(t), []string{"DEPSILO_BOOTSTRAP_TOKEN=" + weakToken}, "serve")
+		assertOnePlainLine(t, output, "Error: reconcile initial administrator: reopen interactive setup: "+
+			"DEPSILO_BOOTSTRAP_TOKEN is too predictable: it has fewer than 8 distinct characters; "+
+			"set it to a random value of 32 bytes or more, or unset it so Depsilo generates a token")
+		if strings.Contains(output, weakToken) {
+			t.Fatalf("serve repeated the bootstrap token; output=%s", output)
+		}
+	})
+
+	// The administrator from the environment is created only when a
+	// configuration file exists, after the database is open.
+	t.Run("administrator password that breaks the policy/serve", func(t *testing.T) {
+		const weakPassword = "Sh0rt!pw"
+		policyErr := api.ValidateInitialAdminCredentials("admin", weakPassword)
+		if policyErr == nil {
+			t.Fatal("the test password satisfies the credential policy")
+		}
+		output := runStartup(t, configuredHome(t), []string{"DEPSILO_ADMIN_PASSWORD=" + weakPassword}, "serve")
+		assertOnePlainLine(t, output, "Error: ensure initial administrator: "+policyErr.Error()+
+			" (set by DEPSILO_ADMIN_USERNAME and DEPSILO_ADMIN_PASSWORD)")
+		if strings.Contains(output, weakPassword) {
+			t.Fatalf("serve repeated the password; output=%s", output)
+		}
+	})
+}
+
+// A hand-written config.toml that leaves the database and storage paths out
+// puts them into the working directory, which the official container image
+// does not let the service user write. Volume ownership is not the cause, so
+// the line must not send the operator there.
+func TestStartupExplainsRelativeConfigPathsInAnUnwritableWorkingDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs POSIX file permissions and a non-root user")
+	}
+	const relativeHint = "Relative paths in config.toml resolve against the working directory, "
+	const ownershipHint = "The state directory must be writable by the user Depsilo runs as; " +
+		"the official container image runs as UID and GID 10001. See docs/deployment.md#bind-mounted-state"
+
+	for _, test := range []struct {
+		name string
+		// prepare lays out root and returns the working directory, the
+		// environment, and the line the start must print.
+		prepare func(t *testing.T, root string) (workingDirectory string, env []string, want string)
+	}{
+		{
+			name: "relative defaults outside the state directory",
+			prepare: func(t *testing.T, root string) (string, []string, string) {
+				configPath := filepath.Join(root, ".depsilo", "config.toml")
+				writeStartupTestFile(t, configPath, "config_version = 1\n")
+				workingDirectory := filepath.Join(root, "app")
+				if err := os.Mkdir(workingDirectory, 0o555); err != nil {
+					t.Fatal(err)
+				}
+				return workingDirectory, nil, "Permission denied: mkdir " + filepath.Join(workingDirectory, "data") + ". " +
+					relativeHint + workingDirectory + "; set absolute paths in " + configPath +
+					" for database.dsn, storage.path (a setting left out counts: its default is relative). See docs/deployment.md#default-paths"
+			},
+		},
+		{
+			name: "only the storage path is relative",
+			prepare: func(t *testing.T, root string) (string, []string, string) {
+				configPath := filepath.Join(root, ".depsilo", "config.toml")
+				writeStartupTestFile(t, configPath, "config_version = 1\n[database]\ndsn = '"+
+					filepath.Join(root, ".depsilo", "data", "depsilo.db")+"'\n[storage]\npath = 'cache'\n")
+				workingDirectory := filepath.Join(root, "app")
+				if err := os.Mkdir(workingDirectory, 0o555); err != nil {
+					t.Fatal(err)
+				}
+				return workingDirectory, nil, "Permission denied: mkdir " + filepath.Join(workingDirectory, "cache") + ". " +
+					relativeHint + workingDirectory + "; set absolute paths in " + configPath +
+					" for storage.path (a setting left out counts: its default is relative). See docs/deployment.md#default-paths"
+			},
+		},
+		{
+			// The working directory holds config.toml: it is the state
+			// directory, and it must be writable.
+			name: "relative defaults in the state directory",
+			prepare: func(t *testing.T, root string) (string, []string, string) {
+				workingDirectory := filepath.Join(root, "app")
+				writeStartupTestFile(t, filepath.Join(workingDirectory, "config.toml"), "config_version = 1\n")
+				if err := os.Chmod(workingDirectory, 0o555); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(workingDirectory, 0o700) })
+				return workingDirectory, []string{"DEPSILO_AUTH_JWT_SECRET=0123456789abcdef0123456789abcdef"},
+					"Permission denied: mkdir " + filepath.Join(workingDirectory, "data") + ". " + ownershipHint
+			},
+		},
+		{
+			// Absolute paths that happen to lie below the working directory.
+			name: "absolute paths inside the working directory",
+			prepare: func(t *testing.T, root string) (string, []string, string) {
+				workingDirectory := filepath.Join(root, "app")
+				locked := filepath.Join(workingDirectory, "volume")
+				if err := os.Mkdir(workingDirectory, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Mkdir(locked, 0o555); err != nil {
+					t.Fatal(err)
+				}
+				writeStartupTestFile(t, filepath.Join(root, ".depsilo", "config.toml"), "config_version = 1\n[database]\ndsn = '"+
+					filepath.Join(locked, "data", "depsilo.db")+"'\n[storage]\npath = '"+filepath.Join(locked, "data", "cache")+"'\n")
+				return workingDirectory, nil, "Permission denied: mkdir " + filepath.Join(locked, "data") + ". " + ownershipHint
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			workingDirectory, env, want := test.prepare(t, root)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestCLIHelperProcess$", "--", "serve")
+			cmd.Dir = workingDirectory
+			for _, value := range os.Environ() {
+				if !strings.HasPrefix(value, "DEPSILO_") {
+					cmd.Env = append(cmd.Env, value)
+				}
+			}
+			cmd.Env = append(cmd.Env, cliHelperEnv+"=1", "HOME="+root, "USERPROFILE="+root,
+				"DEPSILO_SERVER_PORT="+strconv.Itoa(availablePort(t)))
+			cmd.Env = append(cmd.Env, env...)
+			output, runErr := cmd.CombinedOutput()
+			var exitErr *exec.ExitError
+			if !errors.As(runErr, &exitErr) || exitErr.ExitCode() != 1 {
+				t.Fatalf("serve: error=%v, want exit code 1; output=%s", runErr, output)
+			}
+			explained := 0
+			for _, line := range strings.Split(string(output), "\n") {
+				if line == want {
+					explained++
+				} else if strings.HasPrefix(line, "Permission denied") {
+					t.Fatalf("serve explained the failure as %q, want %q", line, want)
+				}
+			}
+			if explained != 1 || strings.Contains(string(output), "stacktrace") {
+				t.Fatalf("serve did not print the line %q exactly once without a stack trace; output=%s", want, output)
+			}
+		})
+	}
+}
+
+func writeStartupTestFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestStopAllowsServeShutdownDeadline(t *testing.T) {
 	binary := buildDepsiloCLI(t)
 	home := t.TempDir()
@@ -564,9 +942,21 @@ func TestStopAllowsServeShutdownDeadline(t *testing.T) {
 func TestBinaryDispatchesEveryCommandNamedInHelp(t *testing.T) {
 	binary := buildDepsiloCLI(t)
 	// Commands that talk to a server reach this stub instead of a real
-	// instance; it answers 404 to everything.
-	service := httptest.NewServer(http.NotFoundHandler())
+	// instance; it answers 404 to everything and records what it was asked.
+	var requestsMu sync.Mutex
+	var requests []string
+	service := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		requestsMu.Lock()
+		requests = append(requests, request.Method+" "+request.URL.Path)
+		requestsMu.Unlock()
+		http.NotFound(response, request)
+	}))
 	defer service.Close()
+	receivedRequests := func() []string {
+		requestsMu.Lock()
+		defer requestsMu.Unlock()
+		return append([]string(nil), requests...)
+	}
 	home := t.TempDir()
 	workDir := t.TempDir()
 	env := append(os.Environ(),
@@ -608,15 +998,67 @@ func TestBinaryDispatchesEveryCommandNamedInHelp(t *testing.T) {
 	if len(names) == 0 {
 		t.Fatalf("help output has no Commands block; output=%s", help)
 	}
+	// Asking for help must never do the command's work. Every command is
+	// asked alone; the others are asked again with a documented subcommand or
+	// with the arguments that would otherwise make the handler act.
+	invocations := make([][]string, 0, len(names)+24)
 	for _, name := range names {
-		t.Run(name, func(t *testing.T) {
-			// --help keeps every handler short; what matters is that the
-			// entry point hands the command to a handler at all.
-			stdout, stderr, _ := run(t, name, "--help")
-			if strings.Contains(stderr, "Unknown command:") {
-				t.Fatalf("help advertises %q but the binary rejects it; stdout=%s stderr=%s", name, stdout, stderr)
-			}
-		})
+		invocations = append(invocations, []string{name})
+	}
+	invocations = append(invocations,
+		[]string{"server"},
+		[]string{"setup", "token"},
+		[]string{"audit", "verify"},
+		[]string{"start", "--daemon"},
+		[]string{"flush", "--json"},
+		[]string{"warmup", "pypi", "requests"},
+		[]string{"backup", "--out", "backup.tar.gz"},
+		[]string{"restore", "backup.tar.gz"},
+		[]string{"diagnose", "--out", "report.json"},
+		[]string{"init-agent", "--format", "all"},
+		[]string{"reset-password", "admin"},
+		[]string{"activate", "--shell", "fish"},
+	)
+	for _, subcommand := range []string{"stage", "list", "prune", "usage", "inspect", "verify", "delete", "export", "import", "keygen"} {
+		invocations = append(invocations, []string{"distribution", subcommand})
+	}
+	invocations = append(invocations, []string{"distribution", "keygen", "--out", "transfer.key"})
+	for _, invocation := range invocations {
+		for _, flag := range []string{"--help", "-h"} {
+			args := append(append([]string(nil), invocation...), flag)
+			t.Run(strings.Join(args, " "), func(t *testing.T) {
+				stdout, stderr, exitCode := run(t, args...)
+				if strings.Contains(stderr, "Unknown command:") {
+					t.Fatalf("help advertises %q but the binary rejects it; stdout=%s stderr=%s", args[0], stdout, stderr)
+				}
+				if exitCode != 0 || stderr != "" {
+					t.Fatalf("depsilo %v: exit=%d stderr=%q, want 0 and nothing on standard error; stdout=%s", args, exitCode, stderr, stdout)
+				}
+				name := args[0]
+				if name == "server" {
+					name = "serve"
+				}
+				if name == "help" {
+					if stdout != help {
+						t.Fatalf("depsilo %v did not print the top-level help; stdout=%s", args, stdout)
+					}
+				} else if !strings.Contains(stdout, "Usage:") || !strings.Contains(stdout, "depsilo "+name) {
+					t.Fatalf("depsilo %v did not print the usage of %q on standard output; stdout=%s", args, name, stdout)
+				}
+				if got := receivedRequests(); len(got) != 0 {
+					t.Fatalf("depsilo %v sent requests while printing help: %v", args, got)
+				}
+				for _, directory := range []string{home, workDir} {
+					entries, err := os.ReadDir(directory)
+					if err != nil {
+						t.Fatalf("read %s: %v", directory, err)
+					}
+					if len(entries) != 0 {
+						t.Fatalf("depsilo %v created %s in %s while printing help", args, entries[0].Name(), directory)
+					}
+				}
+			})
+		}
 	}
 
 	t.Run("unknown command prints the help and exits 1", func(t *testing.T) {
@@ -647,7 +1089,7 @@ func TestBinaryDispatchesEveryCommandNamedInHelp(t *testing.T) {
 	t.Run("server is an alias of serve", func(t *testing.T) {
 		serveOut, serveErr, serveExit := run(t, "serve", "--help")
 		serverOut, serverErr, serverExit := run(t, "server", "--help")
-		if !strings.Contains(serveOut+serveErr, "depsilo serve [flags]") {
+		if !strings.Contains(serveOut, "depsilo serve [flags]") {
 			t.Fatalf("serve --help did not print the serve usage; stdout=%s stderr=%s", serveOut, serveErr)
 		}
 		if serverOut != serveOut || serverErr != serveErr || serverExit != serveExit {

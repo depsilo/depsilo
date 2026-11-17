@@ -222,9 +222,9 @@ func TestSetupTokenCLIAsksTheListenerSelectedByFlags(t *testing.T) {
 }
 
 func TestSetupHelpNamesListenerFlagsAndBothDockerForms(t *testing.T) {
-	_, stderr, err := runSetupCLI(t, t.TempDir(), nil, "setup", "--help")
-	if err != nil {
-		t.Fatalf("setup --help: %v", err)
+	help, stderr, err := runSetupCLI(t, t.TempDir(), nil, "setup", "--help")
+	if err != nil || stderr != "" {
+		t.Fatalf("setup --help: error=%v stderr=%q", err, stderr)
 	}
 	for _, want := range []string{
 		"depsilo setup token [--config PATH] [--port N] [--host H]",
@@ -233,8 +233,8 @@ func TestSetupHelpNamesListenerFlagsAndBothDockerForms(t *testing.T) {
 		"docker exec <container> depsilo setup token",
 		"docker compose exec depsilo depsilo setup token",
 	} {
-		if !strings.Contains(stderr, want) {
-			t.Errorf("setup help omits %q; help=%s", want, stderr)
+		if !strings.Contains(help, want) {
+			t.Errorf("setup help omits %q; help=%s", want, help)
 		}
 	}
 }
@@ -249,8 +249,6 @@ func TestSetupTokenCLIHelpAndInvalidArguments(t *testing.T) {
 		success    bool
 		wantStderr string
 	}{
-		{[]string{"setup", "--help"}, true, "Usage:"},
-		{[]string{"setup", "token", "--help"}, true, "Usage:"},
 		{[]string{"setup"}, false, "Usage:"},
 		{[]string{"setup", "unknown"}, false, "expected 'depsilo setup token'"},
 		{[]string{"setup", "token", "--config"}, false, "flag needs an argument"},
@@ -269,6 +267,23 @@ func TestSetupTokenCLIHelpAndInvalidArguments(t *testing.T) {
 				t.Fatalf("unexpected argument handling: error=%v, stdout=%q, stderr=%q, want stderr to contain %q", err, stdout, stderr, test.wantStderr)
 			}
 		})
+	}
+}
+
+// Asked for, the usage is the command's answer and goes to standard output;
+// printed because of a mistake, it stays on standard error with the message.
+func TestSetupTokenHelpGoesToStandardOutput(t *testing.T) {
+	env := []string{"DEPSILO_SERVER_PORT=" + strconv.Itoa(availablePort(t))}
+	for _, args := range [][]string{
+		{"setup", "--help"},
+		{"setup", "-h"},
+		{"setup", "token", "--help"},
+		{"setup", "token", "--port", "1", "-h"},
+	} {
+		stdout, stderr, err := runSetupCLI(t, t.TempDir(), env, args...)
+		if err != nil || stderr != "" || !strings.HasPrefix(stdout, "Usage:\n    depsilo setup token ") {
+			t.Fatalf("depsilo %v: error=%v stdout=%q stderr=%q", args, err, stdout, stderr)
+		}
 	}
 }
 

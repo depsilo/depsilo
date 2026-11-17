@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -47,6 +48,54 @@ func TestHelpCommandsMatchTheCommandList(t *testing.T) {
 		if !listed[c.name] {
 			t.Errorf("command %q is dispatchable but missing from the help Commands block", c.name)
 		}
+	}
+}
+
+func TestHelpRequestStopsAtTheArgumentTerminator(t *testing.T) {
+	for _, test := range []struct {
+		args []string
+		want bool
+	}{
+		{args: nil, want: false},
+		{args: []string{"--help"}, want: true},
+		{args: []string{"-h"}, want: true},
+		{args: []string{"--out", "file", "--json", "-h"}, want: true},
+		{args: []string{"token", "--help", "--", "x"}, want: true},
+		{args: []string{"--", "--help"}, want: false},
+		{args: []string{"pypi", "--", "-h"}, want: false},
+		{args: []string{"--helpful", "-help", "--host", "h"}, want: false},
+	} {
+		if got := helpRequested(test.args); got != test.want {
+			t.Errorf("helpRequested(%q) = %v, want %v", test.args, got, test.want)
+		}
+	}
+}
+
+// A command added to the table without a usage text still answers --help
+// from its entry in the top-level help, and its handler does not run.
+func TestDispatchAnswersHelpBeforeTheHandlerRuns(t *testing.T) {
+	ran := false
+	handler := func([]string) int { ran = true; return 7 }
+
+	output, exitCode := captureCLIStdout(t, func() int {
+		return dispatch(command{name: "prompt", run: handler}, []string{"--url", "x", "-h"})
+	})
+	want := "Usage:\n" +
+		"    depsilo prompt [--url ...]          Print the project-integration prompt for an\n" +
+		"                                    AI coding agent (Dockerfile/CI/build rewrite)\n"
+	if ran || exitCode != 0 || output != want {
+		t.Fatalf("help without a usage text: ran=%v exit=%d output=%q, want %q", ran, exitCode, output, want)
+	}
+
+	output, exitCode = captureCLIStdout(t, func() int {
+		return dispatch(command{name: "prompt", run: handler, usage: func() { fmt.Println("own usage") }}, []string{"--help"})
+	})
+	if ran || exitCode != 0 || output != "own usage\n" {
+		t.Fatalf("help with a usage text: ran=%v exit=%d output=%q", ran, exitCode, output)
+	}
+
+	if exitCode := dispatch(command{name: "prompt", run: handler}, []string{"--", "--help"}); !ran || exitCode != 7 {
+		t.Fatalf("arguments after the terminator: ran=%v exit=%d, want the handler's 7", ran, exitCode)
 	}
 }
 

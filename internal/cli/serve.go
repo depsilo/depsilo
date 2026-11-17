@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -17,6 +18,8 @@ import (
 
 	"go.uber.org/zap"
 
+	"depsilo/internal/api"
+	"depsilo/internal/config"
 	"depsilo/internal/logging"
 	"depsilo/internal/server"
 )
@@ -144,6 +147,17 @@ func RunServe(args []string) int {
 	}
 	opts.ApplyEnv()
 
+	// Load the configuration once before the logger exists. A file or an
+	// environment the loader rejects is the operator's to correct: it gets
+	// one plain line, not a structured entry with a stack trace that a
+	// restarting container repeats. The server loads the configuration again
+	// and logs what this silent load does not.
+	cfg, err := config.LoadForServer()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, configurationFailureLine(err))
+		return 1
+	}
+
 	logger, logLevel, err := logging.NewProduction()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to init logger: %v\n", err)
@@ -161,11 +175,12 @@ func RunServe(args []string) int {
 
 	srv, err := server.StartServer(ctx, logLevel)
 	if err != nil {
-		if line, ok := startupFailureLine(err); ok {
-			fmt.Fprintln(os.Stderr, line)
-			return 1
-		}
-		zap.L().Error("failed to start server", zap.Error(err))
+		// The server does not say which of its failures are mistakes in the
+		// configuration (a trusted proxy that is not an address, a port out
+		// of range, a storage type it does not know), so every failed start
+		// is reported the way a rejected configuration is: one plain line.
+		// A structured entry would add only this function's own stack.
+		fmt.Fprintln(os.Stderr, startFailureLine(err, cfg))
 		return 1
 	}
 
@@ -198,11 +213,86 @@ func statusProbesLocalPort(port int) bool {
 	return false
 }
 
+// configurationFailureLine is the one plain line for a configuration, file or
+// environment, that the loader rejected. The message is the loader's own; it
+// names the setting and never repeats a secret value.
+func configurationFailureLine(err error) string {
+	if line, ok := startupFailureLine(err, nil); ok {
+		return line
+	}
+	return "Error: " + onOneLine(err.Error())
+}
+
+// startFailureLine is the one plain line for a server that failed to start
+// with the configuration cfg: the line written for the failure when there is
+// one, and the error's own message otherwise.
+func startFailureLine(err error, cfg *config.Config) string {
+	if line, ok := startupFailureLine(err, cfg); ok {
+		return line
+	}
+	if line, ok := initialAdminFailureLine(err); ok {
+		return line
+	}
+	return "Error: " + onOneLine(err.Error())
+}
+
+// onOneLine joins the lines of an error message with "; ". Empty lines are
+// left out, and a line that ends in a colon introduces the next one, so it is
+// followed by a space instead.
+func onOneLine(message string) string {
+	var line strings.Builder
+	for _, part := range strings.Split(message, "\n") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if line.Len() > 0 {
+			if strings.HasSuffix(line.String(), ":") {
+				line.WriteString(" ")
+			} else {
+				line.WriteString("; ")
+			}
+		}
+		line.WriteString(part)
+	}
+	return line.String()
+}
+
+// initialAdminFailureLine recognises a start that failed because the
+// administrator described by DEPSILO_ADMIN_USERNAME and DEPSILO_ADMIN_PASSWORD
+// breaks the credential rules, which is a mistake in the environment like any
+// other. The server reports it as an untyped error after the database is
+// open, so the same validation is repeated here and its message looked for.
+func initialAdminFailureLine(err error) (line string, ok bool) {
+	username, password := os.Getenv("DEPSILO_ADMIN_USERNAME"), os.Getenv("DEPSILO_ADMIN_PASSWORD")
+	if username == "" && password == "" {
+		return "", false
+	}
+	// The server's own defaults for the half that is not set.
+	if username == "" {
+		username = "admin"
+	}
+	if password == "" {
+		generated, tokenErr := config.NewSecureToken()
+		if tokenErr != nil {
+			return "", false
+		}
+		password = generated
+	}
+	invalid := api.ValidateInitialAdminCredentials(username, password)
+	message := onOneLine(err.Error())
+	if invalid == nil || !strings.Contains(message, ": "+invalid.Error()) {
+		return "", false
+	}
+	return "Error: " + message + " (set by DEPSILO_ADMIN_USERNAME and DEPSILO_ADMIN_PASSWORD)", true
+}
+
 // startupFailureLine recognises the startup failures an operator fixes
 // without reading a Go error chain, and returns the one plain line that
-// replaces the logged error and its stack trace. ok is false for every other
-// error, which keeps its full structured log entry.
-func startupFailureLine(err error) (line string, ok bool) {
+// replaces the Go error chain. ok is false for every other error, which is
+// reported with its own message. cfg is the configuration the failed start
+// used, or nil when it could not be loaded.
+func startupFailureLine(err error, cfg *config.Config) (line string, ok bool) {
 	if errors.Is(err, syscall.EADDRINUSE) || errors.Is(err, windowsAddressInUse) {
 		subject, statusCommand := "The listen address", "depsilo status"
 		var opErr *net.OpError
@@ -230,6 +320,9 @@ func startupFailureLine(err error) (line string, ok bool) {
 		// operation may be a read of a file that is not state, such as the
 		// config.toml named by --config, so that line asks for access to the
 		// path instead of a writable state directory.
+		if line, relative := relativePathFailureLine(pathErr, cfg); relative {
+			return line, true
+		}
 		need := "Depsilo must be able to access this path as the user it runs as"
 		if pathErr.Op == "mkdir" {
 			need = "The state directory must be writable by the user Depsilo runs as"
@@ -239,4 +332,80 @@ func startupFailureLine(err error) (line string, ok bool) {
 			pathErr.Op, pathErr.Path, need), true
 	}
 	return "", false
+}
+
+// relativePathFailureLine recognises a permission failure that volume
+// ownership does not explain: a config.toml whose paths are relative, or left
+// at their relative defaults, puts the state into the working directory, which
+// in the official container image is /app and not writable. It applies when
+// the failed path lies inside the working directory, that directory is not
+// the one holding config.toml, and a local path of the configuration is
+// relative.
+func relativePathFailureLine(pathErr *fs.PathError, cfg *config.Config) (line string, ok bool) {
+	if cfg == nil || cfg.IsDefault || cfg.ConfigPath == "" {
+		return "", false
+	}
+	workingDirectory, err := os.Getwd()
+	if err != nil {
+		return "", false
+	}
+	configPath, err := filepath.Abs(cfg.ConfigPath)
+	if err != nil {
+		return "", false
+	}
+	// Startup reports canonical paths; compare like with like.
+	canonicalWorkingDirectory := canonicalPath(workingDirectory)
+	if canonicalWorkingDirectory == canonicalPath(filepath.Dir(configPath)) {
+		return "", false
+	}
+	inside, err := filepath.Rel(canonicalWorkingDirectory, canonicalPath(pathErr.Path))
+	if err != nil || inside == "." || inside == ".." || strings.HasPrefix(inside, ".."+string(filepath.Separator)) || filepath.IsAbs(inside) {
+		return "", false
+	}
+
+	var settings []string
+	if cfg.Database.Driver == "sqlite" {
+		file, _, _ := strings.Cut(strings.TrimPrefix(strings.TrimSpace(cfg.Database.DSN), "file:"), "?")
+		if file != "" && file != ":memory:" && !filepath.IsAbs(file) {
+			settings = append(settings, "database.dsn")
+		}
+	}
+	for _, storage := range []struct {
+		setting string
+		used    bool
+		config  config.StorageConfig
+	}{
+		{"storage.path", true, cfg.Storage},
+		{"compile_cache.storage.path", cfg.CompileCache.Enabled, cfg.CompileCache.Storage},
+		{"distribution.storage.path", cfg.Distribution.Enabled, cfg.Distribution.Storage},
+	} {
+		if storage.used && storage.config.Type == "local" && storage.config.Path != "" && !filepath.IsAbs(storage.config.Path) {
+			settings = append(settings, storage.setting)
+		}
+	}
+	if len(settings) == 0 {
+		return "", false
+	}
+	return fmt.Sprintf("Permission denied: %s %s. Relative paths in config.toml resolve against the working directory, %s; "+
+		"set absolute paths in %s for %s (a setting left out counts: its default is relative). See docs/deployment.md#default-paths",
+		pathErr.Op, pathErr.Path, workingDirectory, configPath, strings.Join(settings, ", ")), true
+}
+
+// canonicalPath resolves the symbolic links of the part of path that exists
+// and keeps the rest, so a path that could not be created still compares
+// equal to the place it would have been created in.
+func canonicalPath(path string) string {
+	path = filepath.Clean(path)
+	rest := ""
+	for current := path; ; {
+		if resolved, err := filepath.EvalSymlinks(current); err == nil {
+			return filepath.Join(resolved, rest)
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return path
+		}
+		rest = filepath.Join(filepath.Base(current), rest)
+		current = parent
+	}
 }
