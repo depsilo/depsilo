@@ -41,6 +41,37 @@ docker build \
 
 可通过 `DEPSILO_URL` 和 `DOCKER_HOST_ALIAS` 覆盖默认地址。
 
+## npm 夹具：npm、pnpm、Yarn 与 Bun
+
+`make test-docker-npm` 在同一个镜像内依次运行五个真实客户端：Node 镜像自带的
+npm，以及经 Depsilo 的 npm 路由安装的 pnpm 12、Yarn 1、Yarn 4 和 Bun。精确版本
+固定在 `docker-npm/Dockerfile` 中。安装这些客户端本身也覆盖了 scope 包和按平台
+选择的可选依赖。
+
+| 客户端 | 读取的设置 | 全新安装 | 按锁文件安装 |
+| --- | --- | --- | --- |
+| npm | `.npmrc` 的 `registry=` | `npm install` | `npm ci` |
+| pnpm 12 | `.npmrc` 的 `registry=` | `pnpm add` | `pnpm install --frozen-lockfile`，并在 `pnpm-workspace.yaml` 设置 `trustLockfile: true` |
+| Yarn 1 | `.yarnrc` 的 `registry` | `yarn add` | `yarn install --frozen-lockfile` |
+| Yarn 4 | `.yarnrc.yml` 的 `npmRegistryServer`，以及只写主机名、不带端口的 `unsafeHttpWhitelist` | `yarn add` | `yarn install --immutable` |
+| Bun | `bunfig.toml` 的 `[install] registry` | `bun add` | `bun install --frozen-lockfile` |
+
+每一步都从空的客户端缓存开始，按锁文件安装使用的是同一客户端全新安装时写出的
+锁文件。全新安装后会检查锁文件记录的是 Depsilo 签发的制品地址：设置没有生效的
+客户端会直接从公共源安装而不报错，只有锁文件能看出来。pnpm 11 及以上需要
+`trustLockfile`，因为 Depsilo 每次返回的元数据都带新的签名地址，否则安装以
+`ERR_PNPM_TARBALL_URL_MISMATCH` 失败。
+
+npm 还覆盖已有锁文件的项目：`docker-npm/existing-lockfile/` 的
+`package-lock.json` 记录的是 `https://registry.npmjs.org` 的地址。对它运行
+`npm ci` 必须失败，直接请求 npm 报错的那个制品路径必须得到 404 和错误码
+`NPM_UNSIGNED_TARBALL`；用
+`npm install --package-lock-only --omit-lockfile-registry-resolved` 重写锁文件
+之后，`npm ci` 必须成功。
+
+每一步成功时输出一行，写明客户端、版本和验证的内容；检查失败时输出以
+`FAILED:` 开头的一行。
+
 ## Docker Registry（单独启用）
 
 Docker Registry 验证需要在容器中执行真实 `docker pull`，因此使用

@@ -80,6 +80,42 @@ for contract in "${route_contracts[@]}"; do
         || fail "docker-${ecosystem} lost route contract: $route"
 done
 
+# The README names npm, pnpm, Yarn and Bun as supported clients, and the npm
+# fixture is the only place the last three run. Outside its comments it must
+# keep installing an exact major.minor.patch version of each (a shorter
+# version is a range to npm), and keep the fresh install, the install from a
+# lockfile and the existing-lockfile case, each on a cold client cache.
+npm_fixture=$(grep -Ev '^[[:space:]]*#' "$ROOT/testground/docker-npm/Dockerfile")
+npm_client_pins=(
+    'pnpm=pnpm@[0-9]+' 'yarn-classic=yarn@1'
+    'yarn-berry=@yarnpkg/cli-dist@[0-9]+' 'bun=bun@[0-9]+'
+)
+for pin in "${npm_client_pins[@]}"; do
+    grep -Eq "(^|[[:space:]])${pin}\.[0-9]+\.[0-9]+([[:space:];]|$)" <<<"$npm_fixture" \
+        || fail "docker-npm lost a pinned client: ${pin%%=*}"
+done
+npm_client_steps=(
+    'cold_start && npm install --no-audit --no-fund --no-progress lodash@'
+    'if npm ci '
+    'unsigned_tarball_refused '
+    'npm install --package-lock-only --omit-lockfile-registry-resolved '
+    'cold_start && pnpm add lodash@'
+    'cold_start && pnpm install --frozen-lockfile'
+    'cold_start && yarn-classic add lodash@'
+    'cold_start && yarn-classic install --frozen-lockfile'
+    'cold_start && yarn-berry add lodash@'
+    'cold_start && yarn-berry install --immutable'
+    'cold_start && bun add lodash@'
+    'cold_start && bun install --frozen-lockfile'
+)
+for step in "${npm_client_steps[@]}"; do
+    grep -Fq -e "$step" <<<"$npm_fixture" || fail "docker-npm lost a client step: $step"
+done
+# npm ci runs twice on a cold cache: from the lockfile of the fresh install,
+# and from the rewritten existing lockfile.
+[[ $(grep -Fc 'cold_start && npm ci ' <<<"$npm_fixture") -ge 2 ]] \
+    || fail "docker-npm lost a client step: cold_start && npm ci"
+
 EMBED_DIST="$TMP/web-dist"
 make -s -C "$ROOT" prepare-go WEB_DIST="$EMBED_DIST"
 [[ -s "$EMBED_DIST/index.html" ]] || fail "prepare-go did not create the embed placeholder"
