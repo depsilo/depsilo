@@ -6,7 +6,7 @@ import ConfigurePane from '@/portal/components/ConfigurePane'
 import EcosystemCatalog, { type CatalogEntry } from '@/portal/components/EcosystemCatalog'
 import StatusBand from '@/portal/components/StatusBand'
 import { LANGUAGES } from '@/lib/ecosystemData'
-import { resolveServiceOrigin } from '@/lib/packageManagerConfig'
+import { isLoopbackServiceOrigin, resolveServiceOrigin } from '@/lib/packageManagerConfig'
 import { readLocalStorage, writeLocalStorage } from '@/lib/storage'
 
 /** The catalog entry a visitor last opened; a first visit opens AI setup. */
@@ -63,6 +63,11 @@ export default function QuickStart({ pytorchIndexPath }: Props) {
         <p className="mt-2 max-w-[68ch] text-[14px] leading-[1.5] text-[var(--text-muted)]">
           {t('quickstart.flowIntro')}
         </p>
+        {isLoopbackServiceOrigin(endpoint) && (
+          <p data-loopback-endpoint className="mt-2 max-w-[68ch] break-words text-[13px] leading-[1.5] text-[var(--text-muted)]">
+            {t('common.loopbackEndpoint', { address: endpoint })}
+          </p>
+        )}
       </header>
 
       <section

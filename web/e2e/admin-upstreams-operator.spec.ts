@@ -394,7 +394,13 @@ test('a fake-IP egress denial is explained on the card and in check results', as
 
   const card = page.locator('[data-upstream-row][data-upstream-status="failed"]')
   await expect(card.locator('[data-upstream-failure="egress_fake_ip"]')).toContainText('DNS resolved this upstream to 198.18.0.65')
-  await expect(card.locator('[data-upstream-failure="egress_fake_ip"]')).toContainText('upstream_proxy under [egress]')
+  // A container operator sets the proxy in the environment, not in config.toml.
+  await expect(card.locator('[data-upstream-failure="egress_fake_ip"]')).toContainText(
+    'upstream_proxy under [egress] in config.toml (or the environment variable DEPSILO_EGRESS_UPSTREAM_PROXY)')
+  // The loopback example is wrong inside a container, so the remedy names the host's address too.
+  await expect(card.locator('[data-upstream-failure="egress_fake_ip"]')).toContainText(
+    'Inside a container, 127.0.0.1 is the container itself; use the host\'s address there, for example http://host.docker.internal:7890.',
+  )
   // A failed upstream's average is not a response latency.
   await expect(card).not.toContainText('5 ms')
   await page.getByText('Connection details').nth(1).click()
@@ -422,6 +428,11 @@ test('fake-IP DNS failing every upstream is explained once for the page', async 
   const cardReasons = page.locator('[data-upstream-row] [data-upstream-failure="egress_fake_ip"]')
   await expect(cardReasons).toHaveCount(3)
   await expect(cardReasons.first()).toHaveText('DNS returned the fake-IP address 198.18.0.1; not connected.')
+
+  await setUiPreferences(page, 'light', 'zh')
+  await page.reload()
+  await expect(notice).toContainText('把 upstream_proxy（或环境变量 DEPSILO_EGRESS_UPSTREAM_PROXY）设为代理软件的 HTTP 端口')
+  await expect(notice).toContainText('在容器里 127.0.0.1 指的是容器自己，要填宿主机的地址，例如 http://host.docker.internal:7890。')
 })
 
 test('bulk checking is capped at four requests and leaves a durable outcome summary', async ({ page }) => {

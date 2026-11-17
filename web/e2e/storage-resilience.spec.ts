@@ -41,3 +41,26 @@ test('Portal mounts and language switching works when Web Storage is blocked', a
   await expect(page.locator('#root')).not.toBeEmpty()
   expect(pageErrors).toEqual([])
 })
+
+test.describe('a browser that prefers English', () => {
+  test.use({ locale: 'en-US' })
+
+  test('opens in English until a language is chosen, then keeps the choice', async ({ page }) => {
+    await page.route('**/api/v1/setup/status', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ needs_setup: true, token_required: false }),
+    }))
+
+    await page.goto('/')
+    await expect(page.getByRole('heading', { name: 'Initialize Depsilo' })).toBeVisible()
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+    // Following the browser is not a choice, so nothing is stored for it.
+    expect(await page.evaluate(() => localStorage.getItem('lang'))).toBeNull()
+
+    await page.evaluate(() => localStorage.setItem('lang', 'zh'))
+    await page.reload()
+    await expect(page.getByRole('heading', { name: '初始化 Depsilo' })).toBeVisible()
+    await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN')
+  })
+})

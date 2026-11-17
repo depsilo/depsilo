@@ -1,8 +1,10 @@
 import i18n, { type BackendModule } from 'i18next'
 import { initReactI18next } from 'react-i18next'
+import { initialLanguage, uiLanguage } from '@/lib/initialLanguage'
 import { readLocalStorage, writeLocalStorage } from '@/lib/storage'
 
-const savedLang = readLocalStorage('lang') === 'en' ? 'en' : 'zh'
+// `navigator` is absent outside a browser.
+const savedLang = initialLanguage(readLocalStorage('lang'), globalThis.navigator?.language)
 const htmlLang = (language: string) => language.startsWith('zh') ? 'zh-CN' : 'en'
 
 const languageResources = {
@@ -14,8 +16,7 @@ const lazyLanguageBackend: BackendModule = {
   type: 'backend',
   init() {},
   read(language, _namespace, callback) {
-    const supportedLanguage = language.startsWith('en') ? 'en' : 'zh'
-    languageResources[supportedLanguage]()
+    languageResources[uiLanguage(language)]()
       .then(({ default: resource }) => callback(null, resource.translation))
       .catch((error: unknown) => {
         callback(error instanceof Error ? error : new Error('failed to load translations'), null)
@@ -35,7 +36,7 @@ await i18n.use(lazyLanguageBackend).use(initReactI18next).init({
 
 document.documentElement.lang = htmlLang(i18n.resolvedLanguage || savedLang)
 i18n.on('languageChanged', language => {
-  writeLocalStorage('lang', language.startsWith('zh') ? 'zh' : 'en')
+  writeLocalStorage('lang', uiLanguage(language))
   document.documentElement.lang = htmlLang(language)
 })
 

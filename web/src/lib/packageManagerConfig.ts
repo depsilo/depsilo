@@ -23,6 +23,16 @@ export function resolveServiceOrigin(origin = browserOrigin()): string {
   }
 }
 
+/**
+ * Whether the endpoint written into client configuration is a loopback
+ * address. Such configuration only works on the machine the browser runs on.
+ */
+export function isLoopbackServiceOrigin(origin = browserOrigin()): boolean {
+  const hostname = new URL(resolveServiceOrigin(origin)).hostname
+  return hostname === 'localhost' || hostname.endsWith('.localhost')
+    || hostname === '[::1]' || /^127(?:\.\d{1,3}){3}$/.test(hostname)
+}
+
 function removeHTTPSOnlyExceptions(source: string): string {
   const lines = source.split('\n')
   const safe: string[] = []

@@ -1,5 +1,5 @@
 import type { Page, Request } from '@playwright/test'
-import { expect, mockAdminApi, test } from './fixtures/admin-api'
+import { expect, mockAdminApi, setUiPreferences, test } from './fixtures/admin-api'
 
 const paidStatus = {
   is_pro: true,
@@ -80,3 +80,15 @@ test('failed paid license replacement preserves the editor and entered key', asy
   await expect(page.getByRole('button', { name: /^保存$|^Save$/ })).toBeEnabled()
   await expect(page.getByRole('button', { name: /^取消$|^Cancel$/ })).toBeEnabled()
 })
+
+// The server enforces binary units: 500 << 20 bytes per bundle, 5 << 30 a month.
+for (const [locale, allowance] of [
+  ['zh', '离线交付包导出：单包 ≤ 500 MiB，每月合计 ≤ 5 GiB；导入不限'],
+  ['en', 'Offline bundle export: up to 500 MiB per bundle and 5 GiB per month in total; imports unlimited'],
+] as const) {
+  test(`the free export allowance is stated in the units the server enforces in ${locale}`, async ({ page }) => {
+    await setUiPreferences(page, 'light', locale)
+    await page.goto('/admin/license')
+    await expect(page.getByRole('listitem').filter({ hasText: allowance })).toHaveText(allowance)
+  })
+}

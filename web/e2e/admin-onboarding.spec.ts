@@ -33,6 +33,17 @@ function upstream(id: number, ecosystem: string, name: string): AdminUpstream {
     last_checked_at: null, worker_running: true, created_at: startedAt, updated_at: startedAt }
 }
 
+// Load the real SPA at a non-loopback HTTP address without DNS; API calls
+// still reach the mocked routes.
+async function serveNetworkOrigin(page: Page, baseURL: string | undefined) {
+  await page.route('http://depsilo.example.test/**', async route => {
+    const url = new URL(route.request().url())
+    if (url.pathname === '/ready' || url.pathname.startsWith('/api/')) return route.fallback()
+    const response = await route.fetch({ url: new URL(url.pathname + url.search, baseURL).toString() })
+    await route.fulfill({ response })
+  })
+}
+
 for (const shell of ['macOS / Linux (sh)', 'PowerShell']) {
   test(`pip one-command source survives reload and switches back to persistent settings in ${shell}`, async ({ page, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
@@ -520,6 +531,43 @@ test('Chinese connection guidance and verified results remain readable on deskto
   }
 })
 
+test('the first page after setup says that package routes need no sign-in', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 })
+  await setUiPreferences(page, 'light', 'en')
+  await mockAdminApi(page, { 'GET /api/v1/admin/onboarding/status': response({ status: 'not_started' }) })
+  await page.goto('/admin')
+  await expect(page).toHaveURL(/\/admin\/connect\?new=1$/)
+  const exposure = page.locator('[data-open-package-routes]')
+  await expect(exposure).toHaveText(
+    'Package routes need no sign-in, so anyone who can reach this port can download through Depsilo. Keep it on a network you trust.',
+  )
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
+
+  await setUiPreferences(page, 'light', 'zh')
+  await page.reload()
+  await expect(exposure).toHaveText('包路由不需要登录，能访问这个端口的人都可以通过 Depsilo 下载。请只在你信任的网络中开放这个端口。')
+})
+
+test('client commands built from a loopback address say that they only work on this machine', async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 320, height: 844 })
+  await setUiPreferences(page, 'light', 'en')
+  await mockAdminApi(page, { 'GET /api/v1/admin/onboarding/status': response() })
+  await page.goto('/admin/connect')
+  const origin = new URL(page.url()).origin
+  const hint = page.locator('[data-loopback-endpoint]')
+  await expect(hint).toHaveText(
+    `These commands use ${origin} because that is the address in your browser, and it only works on this machine. `
+    + 'For other machines, open Depsilo at this server\'s network address and copy the commands from there.',
+  )
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
+
+  // Opened at the server's network address, the commands already work elsewhere.
+  await serveNetworkOrigin(page, baseURL)
+  await page.goto('http://depsilo.example.test/admin/connect')
+  await expect(page.locator('.connection-origin code')).toHaveText('http://depsilo.example.test')
+  await expect(hint).toHaveCount(0)
+})
+
 test('upstream warnings follow the selected ecosystem even when check timestamps are absent', async ({ page }) => {
   await setUiPreferences(page, 'light', 'en')
   await mockAdminApi(page, {
@@ -529,10 +577,47 @@ test('upstream warnings follow the selected ecosystem even when check timestamps
   await page.goto('/admin/connect')
   await expect(page.getByText('Related upstreams need attention: python-official.', { exact: false })).toBeVisible()
   await expect(page.getByText('Related upstreams need attention: node-official.', { exact: false })).toHaveCount(0)
+  await expect(page.locator('[data-connect-upstream-failure]')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Copy configuration', exact: true })).toBeEnabled()
   await selectClientOption(page, 'Ecosystem', 'Node.js')
   await expect(page.getByText('Related upstreams need attention: node-official.', { exact: false })).toBeVisible()
   await expect(page.getByText('Related upstreams need attention: python-official.', { exact: false })).toHaveCount(0)
+})
+
+test('upstreams refused for fake-IP DNS show the cause and the remedy before the link to Upstreams', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 })
+  await setUiPreferences(page, 'light', 'en')
+  const fakeIP = { code: 'egress_fake_ip' as const, address: '198.18.0.65', range: '198.18.0.0/15' }
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/onboarding/status': response(),
+    'GET /api/v1/admin/upstreams': { items: [
+      { ...upstream(1, 'pypi', 'tuna'), last_failure: fakeIP },
+      { ...upstream(2, 'pypi', 'official'), last_failure: fakeIP },
+      { ...upstream(3, 'pypi', 'lan-mirror'), last_failure: { code: 'timeout' as const } },
+      { ...upstream(4, 'npm', 'node-official'), last_failure: { code: 'timeout' as const } },
+    ], total: 4 },
+  })
+  await page.goto('/admin/connect')
+  const warning = page.locator('.connection-warning').filter({ hasText: 'Related upstreams need attention: tuna, official, lan-mirror.' })
+  await expect(warning.locator('[data-connect-upstream-failure="egress_fake_ip"]')).toHaveText(
+    'The DNS that Depsilo uses resolves the hosts of tuna, official into the benchmarking range 198.18.0.0/15. '
+    + 'Proxy software in fake-IP mode answers this way, and Depsilo does not connect to such addresses by default. '
+    + 'Set upstream_proxy under [egress] in config.toml (or the environment variable DEPSILO_EGRESS_UPSTREAM_PROXY) '
+    + 'to the proxy software\'s HTTP port (for example http://127.0.0.1:7890) and restart, '
+    + 'or give Depsilo a DNS server that returns real addresses. '
+    + 'Inside a container, 127.0.0.1 is the container itself; use the host\'s address there, for example http://host.docker.internal:7890.',
+  )
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations).toEqual([])
+
+  // An ecosystem whose upstreams fail for another reason keeps the plain warning.
+  await selectClientOption(page, 'Ecosystem', 'Node.js')
+  await expect(page.getByText('Related upstreams need attention: node-official.', { exact: false })).toBeVisible()
+  await expect(page.locator('[data-connect-upstream-failure]')).toHaveCount(0)
+
+  await selectClientOption(page, 'Ecosystem', 'Python')
+  await warning.getByRole('button', { name: 'View upstreams', exact: true }).click()
+  await expect(page).toHaveURL(/\/admin\/upstreams$/)
 })
 
 for (const upstreamUnavailable of [false, true]) {

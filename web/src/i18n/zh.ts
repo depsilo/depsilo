@@ -510,9 +510,11 @@ const zh = {
       proxyUnavailable: "代理所需的数据库或存储检查未通过，依赖下载可能受阻。",
       viewServiceStatus: "查看服务状态",
       upstreamAttention: "相关上游需关注：{{names}}。回源请求可能受影响；其他源或已有缓存仍可能可用。",
+      upstreamFakeIP: "Depsilo 使用的 DNS 把 {{names}} 的域名解析到了基准测试保留地址段 198.18.0.0/15。代理软件的 fake-IP 模式会这样返回，Depsilo 默认不连接这类地址。",
       viewUpstreams: "查看上游源",
       healthUnknown: "暂时无法确认服务检查结果。",
       instanceAddress: "当前实例",
+      openPackageRoutes: "包路由不需要登录，能访问这个端口的人都可以通过 Depsilo 下载。请只在你信任的网络中开放这个端口。",
       runOnClient: "在运行包管理器的设备上执行",
       terminal: "客户端终端 · sh",
       terminalPowerShell: "客户端终端 · PowerShell",
@@ -599,6 +601,7 @@ const zh = {
       close: '关闭',
       notifications: '通知',
       copied: '已复制',
+      loopbackEndpoint: '这些命令使用 {{address}}，因为这是你浏览器里的地址，它只在本机有效。其他机器请用这台服务器的网络地址打开 Depsilo，再从那里复制命令。',
     },
     routeError: {
       title: '页面无法加载',
@@ -1420,7 +1423,7 @@ const zh = {
           title: 'DNS 把这个上游解析成了 {{address}}，属于基准测试保留地址段 {{range}}。代理软件的 fake-IP 模式会返回这类地址，Depsilo 默认不连接。',
           short: 'DNS 返回了 fake-IP 地址 {{address}}，未连接。',
           shared: '这些上游的域名都被解析到基准测试保留地址段 198.18.0.0/15。代理软件的 fake-IP 模式会这样返回，Depsilo 默认不连接这类地址。',
-          action: '在 config.toml 的 [egress] 中把 upstream_proxy 设为代理软件的 HTTP 端口（例如 http://127.0.0.1:7890）后重启，或让 Depsilo 使用返回真实地址的 DNS。',
+          action: '在 config.toml 的 [egress] 中把 upstream_proxy（或环境变量 DEPSILO_EGRESS_UPSTREAM_PROXY）设为代理软件的 HTTP 端口（例如 http://127.0.0.1:7890）后重启，或让 Depsilo 使用返回真实地址的 DNS。在容器里 127.0.0.1 指的是容器自己，要填宿主机的地址，例如 http://host.docker.internal:7890。',
         },
         egress_shared_address: {
           title: '这个上游解析到 {{address}}，属于共享地址段 {{range}}（运营商 NAT 和 Tailscale 等组网使用），Depsilo 默认不连接。',
@@ -2865,7 +2868,7 @@ const zh = {
           f5: 'Depsilo 发布制品 SBOM（CycloneDX + SPDX）',
           f6: '本地 / S3 存储 · Webhook · Prometheus · 监控',
           f7: '1 个项目：独立地址、Token、依赖活动归集与 SBOM 导出（含 CRA 预设）',
-          f8: '离线交付包导出：单包 ≤ 500 MB，每月合计 ≤ 5 GB；导入不限',
+          f8: '离线交付包导出：单包 ≤ 500 MiB，每月合计 ≤ 5 GiB；导入不限',
         },
         pro: {
           f1: '多项目依赖活动归集',

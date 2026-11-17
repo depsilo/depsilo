@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { renderManagerTemplate, resolveServiceOrigin } from '../src/lib/packageManagerConfig'
+import { isLoopbackServiceOrigin, renderManagerTemplate, resolveServiceOrigin } from '../src/lib/packageManagerConfig'
 import { LANGUAGES } from '../src/lib/ecosystemData'
 
 describe('package manager endpoint generation', () => {
@@ -12,6 +12,23 @@ describe('package manager endpoint generation', () => {
   it('never publishes a wildcard bind address', () => {
     expect(resolveServiceOrigin('http://0.0.0.0:23333')).toBe('http://localhost:23333')
     expect(resolveServiceOrigin('http://[::]:23333')).toBe('http://localhost:23333')
+  })
+
+  it('recognizes endpoints that only work on the machine running the browser', () => {
+    for (const origin of [
+      'http://localhost:23333', 'http://127.0.0.1:23333', 'http://127.8.9.10', 'http://[::1]:23333',
+      'https://depsilo.localhost', 'http://LOCALHOST:23333',
+      // Wildcard bind addresses are rewritten to localhost before they are shown.
+      'http://0.0.0.0:23333', 'http://[::]:23333',
+    ]) {
+      expect(isLoopbackServiceOrigin(origin), origin).toBe(true)
+    }
+    for (const origin of [
+      'http://10.0.0.10:23333', 'http://192.168.1.20:23333', 'https://depsilo.example.com',
+      'http://localhost.example.com:23333', 'http://127.example.com', 'http://[fd00::1]:23333',
+    ]) {
+      expect(isLoopbackServiceOrigin(origin), origin).toBe(false)
+    }
   })
 
   it('removes every plain-HTTP exception from HTTPS configuration', () => {

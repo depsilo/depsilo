@@ -20,7 +20,7 @@ import {
   ONBOARDING_GATE_QUERY_KEY, ONBOARDING_SESSION_KEY, onboardingOutcomeKind,
   parseOnboardingSession, type OnboardingSession,
 } from '@/lib/onboarding'
-import { resolveServiceOrigin } from '@/lib/packageManagerConfig'
+import { isLoopbackServiceOrigin, resolveServiceOrigin } from '@/lib/packageManagerConfig'
 import { getReadiness } from '@/lib/readiness'
 import { readSessionStorage, removeSessionStorage } from '@/lib/storage'
 import CodeBlock from '@/portal/components/CodeBlock'
@@ -42,6 +42,8 @@ function ConnectionHealth({ ecosystem, onNavigate }: { ecosystem: string; onNavi
   const ready = useQuery({ queryKey: ['admin', 'readiness'], queryFn: async ({ signal }) => (await getReadiness({ signal })).data, refetchInterval: 30_000, retry: false })
   const upstreams = useQuery({ queryKey: ['admin', 'connect-upstreams'], queryFn: async ({ signal }) => (await adminApi.listUpstreams({ signal })).data, refetchInterval: 30_000, retry: false })
   const affected = upstreams.data?.items.filter(upstream => upstream.adapter_type === ecosystem && upstream.healthy === false)
+  // Fake-IP DNS fails every public upstream at once and has one fix, so name it here instead of only on the Upstreams page.
+  const fakeIP = affected?.filter(upstream => upstream.last_failure?.code === 'egress_fake_ip')
   return <>
     {ready.data?.status === 'not_ready' && <p role="alert" className="connection-notice connection-danger"><Icon name="warning" size="sm" /><span>
       {ready.isError && `${t('onboarding.lastKnownHealth')} `}
@@ -49,7 +51,11 @@ function ConnectionHealth({ ecosystem, onNavigate }: { ecosystem: string; onNavi
     </span></p>}
     {Boolean(affected?.length) && <p className="connection-notice connection-warning"><Icon name="warning" size="sm" /><span>
       {upstreams.isError && `${t('onboarding.lastKnownHealth')} `}
-      {t('onboarding.upstreamAttention', { names: affected!.map(upstream => upstream.name).join(', ') })} <Button variant="link" type="button" onClick={() => onNavigate('upstreams')}>{t('onboarding.viewUpstreams')}</Button>
+      {t('onboarding.upstreamAttention', { names: affected!.map(upstream => upstream.name).join(', ') })}{' '}
+      {Boolean(fakeIP?.length) && <span data-connect-upstream-failure="egress_fake_ip">
+        {t('onboarding.upstreamFakeIP', { names: fakeIP!.map(upstream => upstream.name).join(', ') })} {t('upstreams.failure.egress_fake_ip.action')}{' '}
+      </span>}
+      <Button variant="link" type="button" onClick={() => onNavigate('upstreams')}>{t('onboarding.viewUpstreams')}</Button>
     </span></p>}
     {(ready.isError || upstreams.isError) && <p className="connection-note">{t('onboarding.healthUnknown')} <Button variant="link" type="button" onClick={() => onNavigate('dashboard')}>{t('onboarding.viewServiceStatus')}</Button></p>}
   </>
@@ -118,6 +124,8 @@ export default function ConnectProject() {
             onValueChange={value => select({ ...selection, shell: value })} />}
         </div>
         <p className="connection-origin"><span>{t('onboarding.instanceAddress')}</span><code>{endpoint}</code></p>
+        <p data-open-package-routes className="connection-note max-w-[68ch]">{t('onboarding.openPackageRoutes')}</p>
+        {isLoopbackServiceOrigin(endpoint) && <p data-loopback-endpoint className="connection-note max-w-[68ch]">{t('common.loopbackEndpoint', { address: endpoint })}</p>}
       </section>} />
   </div>
 }

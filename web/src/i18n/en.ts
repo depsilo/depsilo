@@ -510,9 +510,11 @@ const en = {
       proxyUnavailable: "A required database or storage check failed. Dependency downloads may be affected.",
       viewServiceStatus: "View service status",
       upstreamAttention: "Related upstreams need attention: {{names}}. Origin requests may be affected; other sources or cached artifacts may still work.",
+      upstreamFakeIP: "The DNS that Depsilo uses resolves the hosts of {{names}} into the benchmarking range 198.18.0.0/15. Proxy software in fake-IP mode answers this way, and Depsilo does not connect to such addresses by default.",
       viewUpstreams: "View upstreams",
       healthUnknown: "Service check results are currently unavailable.",
       instanceAddress: "Current instance",
+      openPackageRoutes: "Package routes need no sign-in, so anyone who can reach this port can download through Depsilo. Keep it on a network you trust.",
       runOnClient: "Run on the device that uses this package manager",
       terminal: "Client terminal · sh",
       terminalPowerShell: "Client terminal · PowerShell",
@@ -599,6 +601,7 @@ const en = {
       close: 'Close',
       notifications: 'Notifications',
       copied: 'Copied',
+      loopbackEndpoint: 'These commands use {{address}} because that is the address in your browser, and it only works on this machine. For other machines, open Depsilo at this server\'s network address and copy the commands from there.',
     },
     routeError: {
       title: 'Could not load this page',
@@ -1413,7 +1416,7 @@ const en = {
           title: 'DNS resolved this upstream to {{address}}, in the benchmarking range {{range}}. Proxy software in fake-IP mode answers with such addresses, and Depsilo does not connect to them by default.',
           short: 'DNS returned the fake-IP address {{address}}; not connected.',
           shared: 'DNS resolves the hosts of these upstreams into the benchmarking range 198.18.0.0/15. Proxy software in fake-IP mode answers this way, and Depsilo does not connect to such addresses by default.',
-          action: 'Set upstream_proxy under [egress] in config.toml to the proxy software\'s HTTP port (for example http://127.0.0.1:7890) and restart, or give Depsilo a DNS server that returns real addresses.',
+          action: 'Set upstream_proxy under [egress] in config.toml (or the environment variable DEPSILO_EGRESS_UPSTREAM_PROXY) to the proxy software\'s HTTP port (for example http://127.0.0.1:7890) and restart, or give Depsilo a DNS server that returns real addresses. Inside a container, 127.0.0.1 is the container itself; use the host\'s address there, for example http://host.docker.internal:7890.',
         },
         egress_shared_address: {
           title: 'This upstream resolved to {{address}}, in the shared address space {{range}} used by carrier-grade NAT and overlay networks such as Tailscale. Depsilo does not connect to it by default.',
@@ -2858,7 +2861,7 @@ const en = {
           f5: 'Depsilo release SBOMs (CycloneDX + SPDX)',
           f6: 'Local / S3 storage · webhooks · Prometheus · monitoring',
           f7: '1 project: dedicated address, token, dependency activity, and SBOM export (including the CRA preset)',
-          f8: 'Offline bundle export: up to 500 MB per bundle and 5 GB per month in total; imports unlimited',
+          f8: 'Offline bundle export: up to 500 MiB per bundle and 5 GiB per month in total; imports unlimited',
         },
         pro: {
           f1: 'Dependency activity grouped across multiple projects',

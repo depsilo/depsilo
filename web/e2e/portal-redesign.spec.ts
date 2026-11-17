@@ -57,6 +57,17 @@ async function expectNoDocumentOverflow(page: Page) {
   })))
 }
 
+// Load the real SPA at a non-loopback HTTP address without DNS; API calls
+// still reach the mocked routes.
+async function serveNetworkOrigin(page: Page, baseURL: string | undefined) {
+  await page.route('http://depsilo.example.test/**', async route => {
+    const url = new URL(route.request().url())
+    if (url.pathname === '/ready' || url.pathname.startsWith('/api/')) return route.fallback()
+    const response = await route.fetch({ url: new URL(url.pathname + url.search, baseURL).toString() })
+    await route.fulfill({ response })
+  })
+}
+
 async function openManager(page: Page, ecosystem: RegExp, manager: string) {
   const primary = page.locator('[data-quickstart-primary]')
   await primary.getByRole('button', { name: ecosystem }).first().click()
@@ -341,6 +352,31 @@ test('manager rail switches the focused configuration without hiding choices', a
   await primary.getByRole('button', { name: /^Debian\b/ }).click()
   await primary.getByRole('button', { name: /^Python\b/ }).click()
   await expect(managerPicker.getByRole('button', { name: 'AI setup' })).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('Quick Start says when its commands only work on this machine', async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 320, height: 844 })
+  await setUiPreferences(page, 'dark', 'en')
+  await page.goto('/')
+  const origin = new URL(page.url()).origin
+  const hint = page.locator('[data-loopback-endpoint]')
+  await expect(hint).toHaveText(
+    `These commands use ${origin} because that is the address in your browser, and it only works on this machine. `
+    + 'For other machines, open Depsilo at this server\'s network address and copy the commands from there.',
+  )
+  await expectNoDocumentOverflow(page)
+
+  // Opened at the server's network address, the commands already work elsewhere.
+  await serveNetworkOrigin(page, baseURL)
+  await page.goto('http://depsilo.example.test/')
+  await expect(page.locator('[data-quickstart-primary] pre').first()).toContainText('http://depsilo.example.test/api/v1/integration-prompt')
+  await expect(hint).toHaveCount(0)
+
+  await setUiPreferences(page, 'dark', 'zh')
+  await page.goto('/')
+  await expect(hint).toHaveText(
+    `这些命令使用 ${origin}，因为这是你浏览器里的地址，它只在本机有效。其他机器请用这台服务器的网络地址打开 Depsilo，再从那里复制命令。`,
+  )
 })
 
 test('Quick Start passes axe at 1440px', async ({ page }) => {
