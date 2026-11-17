@@ -41,7 +41,7 @@ func runDistribution(args []string) int {
 			"Export writes a signed full transfer bundle; import accepts it only from a\n" +
 			"configured trusted transfer key and never activates or serves the set.\n" +
 			"Usage reports this UTC month's export allowance; the free edition exports\n" +
-			"bundles up to 500 MB and 5 GB per month, and Pro removes both limits.\n" +
+			"bundles up to 500 MiB and 5 GiB per month, and Pro removes both limits.\n" +
 			"This prepares a content-verified catalog only; it does not provide offline package serving.")
 		if len(args) == 0 {
 			return 1

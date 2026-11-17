@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 const (
@@ -10,51 +11,94 @@ const (
 	defaultHost = "http://localhost:" + defaultPort
 )
 
+// command is one top-level subcommand of the depsilo binary.
+type command struct {
+	name    string
+	aliases []string
+	run     func(args []string) int
+}
+
+// commands is the only list of top-level commands. Main and Run both dispatch
+// through it, so a command added here is reachable from the binary without a
+// second edit in cmd/depsilo. Every entry also belongs in the "Commands:"
+// block of helpText; a test keeps the two in step.
+var commands = []command{
+	{name: "serve", aliases: []string{"server"}, run: RunServe},
+	{name: "start", run: runStart},
+	{name: "stop", run: runStop},
+	{name: "setup", run: runSetup},
+	{name: "status", run: runStatus},
+	{name: "doctor", run: runDoctor},
+	{name: "diagnose", run: runDiagnose},
+	{name: "init-agent", run: runInitAgent},
+	{name: "prompt", run: runPrompt},
+	{name: "version", aliases: []string{"--version", "-v"}, run: runVersion},
+	{name: "activate", run: runActivate},
+	{name: "warmup", run: runWarmup},
+	{name: "flush", run: runFlush},
+	{name: "backup", run: runBackup},
+	{name: "restore", run: runRestore},
+	{name: "distribution", run: runDistribution},
+	{name: "audit", run: runAudit},
+	{name: "help", aliases: []string{"--help", "-h"}, run: runHelp},
+}
+
+// lookupCommand returns the handler for a command name or alias.
+func lookupCommand(name string) (func(args []string) int, bool) {
+	for _, c := range commands {
+		if c.name == name {
+			return c.run, true
+		}
+		for _, alias := range c.aliases {
+			if alias == name {
+				return c.run, true
+			}
+		}
+	}
+	return nil, false
+}
+
+// Main is the whole behavior of the depsilo binary. args is os.Args[1:].
+// Returns the process exit code.
+func Main(args []string) int {
+	if len(args) == 0 {
+		// No arguments — show help instead of silently starting a server.
+		// Safer for AI agents exploring the binary; use `depsilo serve`
+		// or `depsilo start --daemon` to actually run the service.
+		PrintHelp()
+		return 0
+	}
+	run, ok := lookupCommand(args[0])
+	if !ok {
+		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", args[0])
+		PrintHelp()
+		return 1
+	}
+	return run(args[1:])
+}
+
 // Run dispatches to the appropriate command handler.
 // args is os.Args[2:] — the subcommand's arguments.
 // Returns exit code (0 for success, 1 for error).
 func Run(cmd string, args []string) int {
-	switch cmd {
-	case "status":
-		return runStatus(args)
-	case "setup":
-		return runSetup(args)
-	case "activate":
-		return runActivate(args)
-	case "start":
-		return runStart(args)
-	case "stop":
-		return runStop(args)
-	case "warmup":
-		return runWarmup(args)
-	case "flush":
-		return runFlush(args)
-	case "backup":
-		return runBackup(args)
-	case "restore":
-		return runRestore(args)
-	case "distribution":
-		return runDistribution(args)
-	case "version":
-		return runVersion(args)
-	case "doctor":
-		return runDoctor(args)
-	case "diagnose":
-		return runDiagnose(args)
-	case "audit":
-		return runAudit(args)
-	case "init-agent":
-		return runInitAgent(args)
-	case "prompt":
-		return runPrompt(args)
-	default:
+	run, ok := lookupCommand(cmd)
+	if !ok {
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", cmd)
 		return 1
 	}
+	return run(args)
+}
+
+func runHelp(_ []string) int {
+	PrintHelp()
+	return 0
 }
 
 func PrintHelp() {
-	fmt.Println(`Depsilo — Lightweight dependency proxy cache gateway
+	fmt.Println(helpText)
+}
+
+const helpText = `Depsilo - self-hosted dependency cache and distribution service
 
 Usage:
     depsilo <command> [flags]
@@ -65,7 +109,7 @@ Commands:
     serve [flags]               Start HTTP server in foreground (see ` + "`depsilo serve --help`" + `)
     start [--daemon]            Start the server (daemon mode with --daemon)
     stop                        Stop the running daemon
-    setup token [--config path] Print the running instance's initial setup token
+    setup token [--config path] Print the running instance's bootstrap token
     status [--json]             Show server health, cache stats, upstreams
     doctor [--json]             Run end-to-end health diagnosis with hints
     diagnose [--out file]       Write a local, redacted diagnostic report
@@ -90,7 +134,9 @@ Common serve flags (use depsilo serve --help for full detail):
     --log-level L               debug | info | warn | error
 
 Other flags:
-    --json, -j                  Machine-readable JSON output (status / version / warmup)
+    --json, -j                  Machine-readable JSON output. Accepted by: status, doctor,
+                                diagnose, init-agent, version, warmup, flush, backup,
+                                restore, distribution, audit verify
 
 Environment variables:
     DEPSILO_URL                 Used by status / doctor to find a remote server
@@ -121,8 +167,7 @@ HTTP endpoints for AI agents and automation:
     GET  /api/v1/discover       Self-describing service + endpoint catalog (JSON)
     GET  /api/v1/agent-prompt   Copy-paste prompt for AI coding agents (text/plain)
     GET  /api/v1/stats          Public usage stats (JSON)
-    GET  /metrics               Prometheus metrics`)
-}
+    GET  /metrics               Prometheus metrics`
 
 // getServerURL returns the Depsilo server URL, respecting DEPSILO_URL and DEPSILO_PORT env vars.
 func getServerURL() string {
@@ -152,14 +197,16 @@ func stripJSONFlag(args []string) (bool, []string) {
 }
 
 // getToken returns the auth token from environment or config file.
+// Surrounding whitespace is dropped: a token file written by an editor or
+// `echo` ends in a newline, which is not valid in an Authorization header.
 func getToken() string {
-	if t := os.Getenv("DEPSILO_TOKEN"); t != "" {
+	if t := strings.TrimSpace(os.Getenv("DEPSILO_TOKEN")); t != "" {
 		return t
 	}
 	// Read from ~/.config/depsilo/token if exists
 	data, err := os.ReadFile(os.ExpandEnv("$HOME/.config/depsilo/token"))
 	if err == nil {
-		return string(data)
+		return strings.TrimSpace(string(data))
 	}
 	return ""
 }

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 )
 
@@ -34,6 +35,8 @@ func runWarmup(args []string) int {
 	var result struct {
 		Message  string `json:"message"`
 		Packages int    `json:"packages"`
+		JobID    string `json:"job_id"`
+		Status   string `json:"status"`
 	}
 
 	status, err := postJSON(getServerURL()+"/api/v1/admin/cache/warmup", body, &result)
@@ -45,7 +48,8 @@ func runWarmup(args []string) int {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 1
 	}
-	if status != 200 {
+	// The endpoint queues a background job and answers 202 Accepted.
+	if status != http.StatusOK && status != http.StatusAccepted {
 		if jsonMode {
 			printJSON(map[string]any{"ok": false, "http_status": status})
 			return 1
@@ -60,10 +64,15 @@ func runWarmup(args []string) int {
 			"ecosystem": eco,
 			"packages":  result.Packages,
 			"message":   result.Message,
+			"job_id":    result.JobID,
+			"status":    result.Status,
 		})
 		return 0
 	}
 	fmt.Printf("✓ Warmup started for %d package(s) in %s\n", result.Packages, eco)
+	if result.JobID != "" {
+		fmt.Printf("  Job %s: %s\n", result.JobID, result.Status)
+	}
 	fmt.Println("  Pre-fetching in background. Use 'depsilo status' to check cache progress.")
 	return 0
 }

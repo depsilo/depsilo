@@ -76,5 +76,5 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
 ENTRYPOINT ["/app/depsilo"]
 # Default arg = "serve" so `docker run image` starts the server. Override
 # with `docker run image doctor` / `version` / etc. for one-shot CLI use.
-# (Bare `./depsilo` with no args prints help by design — cmd/depsilo/main.go.)
+# (Bare `./depsilo` with no args prints help by design — cli.Main in internal/cli/root.go.)
 CMD ["serve"]

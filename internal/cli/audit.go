@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"depsilo/internal/audit"
+	"depsilo/internal/backup"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
 )
@@ -34,14 +35,23 @@ func runAudit(args []string) int {
 	if cfg.Database.Driver != "sqlite" {
 		return printAuditError(jsonMode, fmt.Errorf("audit verify supports sqlite databases, got %q", cfg.Database.Driver))
 	}
-	dsn := cfg.Database.DSN
+	// The file rule below ignores surrounding space, so the checks here and
+	// the open further down must do the same.
+	dsn := strings.TrimSpace(cfg.Database.DSN)
 	if dsn == "" || dsn == ":memory:" {
 		return printAuditError(jsonMode, errors.New("resolved database DSN is empty"))
 	}
 	if strings.HasPrefix(dsn, "file:") {
 		return printAuditError(jsonMode, errors.New("audit verify needs a filesystem database path"))
 	}
-	if _, err := os.Stat(dsn); err != nil {
+	// Like the server, treat what follows "?" as SQLite connection options:
+	// the file in front of them must exist, and the database is opened with
+	// the whole DSN. Opening a missing file would create an empty database.
+	databasePath, err := backup.DatabaseFilePath(dsn)
+	if err != nil {
+		return printAuditError(jsonMode, fmt.Errorf("open database: %w", err))
+	}
+	if _, err := os.Stat(databasePath); err != nil {
 		return printAuditError(jsonMode, fmt.Errorf("open database: %w", err))
 	}
 

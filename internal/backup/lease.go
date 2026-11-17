@@ -97,6 +97,14 @@ func (lease *databaseLease) validate() error {
 	return verifyLockedFile(lease.file, lease.lockPath)
 }
 
+// DatabaseFilePath returns the absolute path of the file a SQLite DSN names,
+// without the connection options that follow "?". It is the rule HoldDatabase,
+// Create and Restore use to find the database file, for callers that must
+// inspect that file before they open the database with the full DSN.
+func DatabaseFilePath(databaseDSN string) (string, error) {
+	return sqliteFilePath(databaseDSN)
+}
+
 func sqliteFilePath(dsn string) (string, error) {
 	dsn = strings.TrimSpace(dsn)
 	if dsn == "" || isMemoryDatabase(dsn) {

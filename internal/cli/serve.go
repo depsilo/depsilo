@@ -126,8 +126,8 @@ func (o *ServeOptions) ApplyEnv() {
 	}
 }
 
-// RunServe is the entry point cmd/depsilo/main.go calls for the
-// "serve" / "server" subcommand. Returns the process exit code.
+// RunServe is the handler Main dispatches the "serve" / "server"
+// subcommand to. Returns the process exit code.
 func RunServe(args []string) int {
 	opts, err := ParseServeFlags(args, os.Stderr)
 	if err != nil {

@@ -418,6 +418,104 @@ func TestStopAllowsServeShutdownDeadline(t *testing.T) {
 	}
 }
 
+// The binary's entry point must accept every command its own help advertises.
+// `depsilo audit verify` shipped unreachable for four releases because the
+// entry point kept a second command list that this test now guards against.
+func TestBinaryDispatchesEveryCommandNamedInHelp(t *testing.T) {
+	binary := buildDepsiloCLI(t)
+	// Commands that talk to a server reach this stub instead of a real
+	// instance; it answers 404 to everything.
+	service := httptest.NewServer(http.NotFoundHandler())
+	defer service.Close()
+	home := t.TempDir()
+	workDir := t.TempDir()
+	env := append(os.Environ(),
+		cliHelperEnv+"=",
+		"HOME="+home,
+		"USERPROFILE="+home,
+		"DEPSILO_CONFIG=",
+		"DEPSILO_URL="+service.URL,
+		"DEPSILO_SERVER_PORT="+strconv.Itoa(setupServerPort(t, service)),
+		"DEPSILO_TOKEN=",
+		"DEPSILO_BOOTSTRAP_TOKEN=",
+	)
+	run := func(t *testing.T, args ...string) (string, string, int) {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		command := exec.CommandContext(ctx, binary, args...)
+		command.Env = env
+		command.Dir = workDir
+		var stdout, stderr strings.Builder
+		command.Stdout = &stdout
+		command.Stderr = &stderr
+		err := command.Run()
+		if ctx.Err() != nil {
+			t.Fatalf("depsilo %v did not return: %v", args, ctx.Err())
+		}
+		var exitErr *exec.ExitError
+		if err != nil && !errors.As(err, &exitErr) {
+			t.Fatalf("run depsilo %v: %v", args, err)
+		}
+		return stdout.String(), stderr.String(), command.ProcessState.ExitCode()
+	}
+
+	help, _, exitCode := run(t, "help")
+	if exitCode != 0 {
+		t.Fatalf("help exit code = %d, want 0", exitCode)
+	}
+	names := helpCommandNames(help)
+	if len(names) == 0 {
+		t.Fatalf("help output has no Commands block; output=%s", help)
+	}
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			// --help keeps every handler short; what matters is that the
+			// entry point hands the command to a handler at all.
+			stdout, stderr, _ := run(t, name, "--help")
+			if strings.Contains(stderr, "Unknown command:") {
+				t.Fatalf("help advertises %q but the binary rejects it; stdout=%s stderr=%s", name, stdout, stderr)
+			}
+		})
+	}
+
+	t.Run("unknown command prints the help and exits 1", func(t *testing.T) {
+		stdout, stderr, exitCode := run(t, "no-such-command")
+		if exitCode != 1 || stderr != "Unknown command: no-such-command\n\n" || stdout != help {
+			t.Fatalf("unknown command: exit=%d stdout=%q stderr=%q", exitCode, stdout, stderr)
+		}
+	})
+	t.Run("no arguments and help aliases print the help", func(t *testing.T) {
+		for _, args := range [][]string{nil, {"--help"}, {"-h"}} {
+			stdout, stderr, exitCode := run(t, args...)
+			if exitCode != 0 || stdout != help || stderr != "" {
+				t.Fatalf("depsilo %v: exit=%d stdout=%q stderr=%q", args, exitCode, stdout, stderr)
+			}
+		}
+	})
+	t.Run("version aliases", func(t *testing.T) {
+		version, _, exitCode := run(t, "version")
+		if exitCode != 0 || !strings.HasPrefix(version, "Depsilo ") {
+			t.Fatalf("version: exit=%d stdout=%q", exitCode, version)
+		}
+		for _, alias := range []string{"--version", "-v"} {
+			if stdout, _, exitCode := run(t, alias); exitCode != 0 || stdout != version {
+				t.Fatalf("depsilo %s: exit=%d stdout=%q, want %q", alias, exitCode, stdout, version)
+			}
+		}
+	})
+	t.Run("server is an alias of serve", func(t *testing.T) {
+		serveOut, serveErr, serveExit := run(t, "serve", "--help")
+		serverOut, serverErr, serverExit := run(t, "server", "--help")
+		if !strings.Contains(serveOut+serveErr, "depsilo serve [flags]") {
+			t.Fatalf("serve --help did not print the serve usage; stdout=%s stderr=%s", serveOut, serveErr)
+		}
+		if serverOut != serveOut || serverErr != serveErr || serverExit != serveExit {
+			t.Fatalf("server --help differs from serve --help; stdout=%s stderr=%s exit=%d", serverOut, serverErr, serverExit)
+		}
+	})
+}
+
 func availablePort(t *testing.T) int {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
