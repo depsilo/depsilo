@@ -4,8 +4,9 @@
 `docker-<ecosystem>/Dockerfile` 都通过 `ARG DEPSILO_URL` 接收服务地址，
 再使用该生态的官方客户端向 Depsilo 发起安装或下载请求。
 
-这些测试会访问真实上游，需要 Docker 和可用网络；存在本地开发配置时会
-复用它，否则使用 Depsilo 默认配置。它们不属于离线 `make verify`。
+这些测试会访问真实上游，需要 Docker 和可用网络。服务按
+`config.example.toml` 启动，状态隔离在 `.test-e2e-state/` 下，不读取本地
+开发配置。它们不属于离线 `make verify`。
 
 ## 运行全部包管理器
 

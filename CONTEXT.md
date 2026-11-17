@@ -56,6 +56,24 @@ or its identity provider. Adding or removing a Login Identity does not transfer
 that authority.
 _Avoid_: Login method, group membership, project role
 
+**Bootstrap Token**:
+The credential that authorizes completing First-run Setup or Reopened Setup.
+It exists only while setup is pending, changes on every restart unless the
+Operator presets it, and grants no access to packages or Admin.
+_Avoid_: Setup token, initial setup token, verification token, signing key, API token
+
+**First-run Setup**:
+The flow in which an Operator holding the Bootstrap Token creates the first
+Operator Account and the initial configuration of an instance that has no
+configuration file. Product messages also call it "initial setup".
+_Avoid_: Installation, onboarding (the first-project guidance that follows), initialization
+
+**Reopened Setup**:
+Setup that opens again on an instance whose configuration file exists but
+where no local administrator can sign in. Finishing it replaces the
+configuration file and keeps the previous one as a backup.
+_Avoid_: Password reset, reinstall, factory reset
+
 ### Product surface
 
 **Ecosystem**:
@@ -132,6 +150,8 @@ _Avoid_: Slow network, temporarily unavailable Upstream, Cascade Peer
 - An **Operator Account** may have more than one **Login Identity** while retaining
   one **Permission Source**; using an external identity does not elevate a locally
   managed account's permissions.
+- A **Bootstrap Token** authorizes **First-run Setup** and **Reopened Setup**
+  only; it is never a **Login Identity**.
 - A **Transfer Bundle** carries content for a **Dependency Set**; an
   **Incremental Transfer** accounts for the target's **Baseline Inventory**.
 - A **Cascade Peer** requires a network path between nodes; transfer into an

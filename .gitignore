@@ -16,6 +16,7 @@ data/
 
 # Config (real config — only config.example.toml is committed)
 config.toml
+config.toml.pre-setup-*.bak
 .env
 .env.*
 !.env.example
@@ -29,6 +30,10 @@ web/test-results/
 .idea/
 .vscode/
 *.swp
+
+# Untracked local notes and per-user agent settings
+*.local.md
+.claude/settings.local.json
 
 # OS
 .DS_Store

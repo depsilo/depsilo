@@ -45,5 +45,10 @@ make test-integration
 make verify
 ```
 
+In a fresh checkout or worktree, run `make prepare-go` once before `go test` or
+`go build` on `internal/cli` or `internal/server`, and pass
+`./cmd/... ./internal/...` rather than `./...`; `docs/development/testing.md`
+explains why.
+
 Protocol changes also need the matching `make test-docker-<ecosystem>` when a
 networked real-client run is in scope. See `docs/development/testing.md`.

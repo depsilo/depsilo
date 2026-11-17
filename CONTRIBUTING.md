@@ -1,7 +1,8 @@
 # Contributing to Depsilo
 
 Thanks for helping improve Depsilo. This guide covers the contribution
-workflow; the short Codex and repository map lives in [AGENTS.md](AGENTS.md).
+workflow; the short repository map and the rules for coding agents live in
+[AGENTS.md](AGENTS.md).
 
 ## Set up
 
@@ -26,7 +27,12 @@ operation, hot reload, local state, and cleanup behavior.
 2. Preserve unrelated worktree changes.
 3. Add or update the smallest test that proves the behavior.
 4. Run focused checks while iterating.
-5. Run `make check` before opening a normal pull request.
+5. Run `make check`, the normal local gate, before committing or handing the
+   change off.
+6. Run `make verify`, the complete offline gate, before pushing or opening a
+   pull request. CI runs the same checks on the pull request. The
+   [change-to-check matrix](docs/development/testing.md#change-to-check-matrix)
+   names the further checks some changes need.
 
 Keep these project invariants in mind:
 
@@ -61,6 +67,9 @@ Keep each pull request focused and explain:
 - the chosen design and important trade-offs;
 - the exact checks run;
 - any migration, compatibility, or rollback concern.
+
+Commit subjects, changelog entries, and tagging follow the change rules in
+[AGENTS.md](AGENTS.md#change-rules).
 
 Update current documentation when behavior changes. Do not add implementation
 plans to the permanent documentation tree; use the issue or pull request for

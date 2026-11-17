@@ -69,8 +69,11 @@ convenient document.
 - `web/unit/`, `web/e2e/`: Vitest logic tests and Playwright user-flow tests.
 - `testground/`: network-dependent real package-manager clients.
 
-See [docs/development/architecture.md](docs/development/architecture.md) for
-the runtime flow and ownership seams.
+Before editing under `internal/`, read [internal/AGENTS.md](internal/AGENTS.md).
+Before editing under `web/`, read [web/AGENTS.md](web/AGENTS.md). When a change
+crosses modules, read
+[docs/development/architecture.md](docs/development/architecture.md) for the
+runtime flow and ownership seams.
 
 ## Commands
 
@@ -102,12 +105,20 @@ part of `make verify`.
 - Update both `web/src/i18n/zh.ts` and `web/src/i18n/en.ts`, then run
   `make lint-i18n`.
 - `config.toml`, `.dev-jwt-secret`, runtime data, logs, and generated build
-  output are local state. Never commit secrets or generated credentials.
+  output are local state. Never commit secrets or generated credentials. Read
+  `config.toml`, `.dev-jwt-secret`, and `data/secrets/` (under `~/.depsilo/`
+  when the checkout has no `config.toml`) only when the task requires it, and
+  keep their contents out of output.
 - Use focused tests while iterating and expand verification in proportion to
   the changed seam. Protocol changes require the relevant real-client E2E.
-- After verified code changes, or when operating the `mcs` debug service, follow
-  [the deployment guide](docs/development/mcs-debug.md) for its authorized
-  automatic upgrade and state-preservation procedure.
+- Write commit subjects as Conventional Commits, in the form the history uses
+  (`git log --oneline`), for example `fix(setup): ...`.
+- A user-visible change adds an entry under `[Unreleased]` in `CHANGELOG.md`.
+- Push and tag only when asked. A pushed `v*.*.*` tag starts the release
+  workflow (`.github/workflows/release.yml`).
+- Deploy the debug service only on the owner's instruction, given in the
+  session or in the owner's untracked local notes at
+  `docs/development/mcs-debug.local.md`. With neither, do not deploy.
 
 ## Agent skills
 

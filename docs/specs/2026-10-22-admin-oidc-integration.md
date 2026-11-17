@@ -235,11 +235,11 @@ OIDC 配置由 `config.toml`/环境变量拥有，保持现有优先级及重启
 | 发布验证 | `make verify`、新依赖 `make security`、`make test-ui-production`；schema 相关旧版升级契约 | 可构建、可升级、无既有认证回归 |
 
 真实测试使用独立 Compose project、loopback 端口及私有数据目录，不修改
-`mcs:/data/dev_server/depsilo` 的用户、密钥或数据。随机测试凭据只保存在
+调试服务的用户、密钥或数据。随机测试凭据只保存在
 仓库外的私有文件，镜像固定 tag/digest。默认离线门禁不自动拉 Casdoor；
 真实测试作为独立 opt-in 命令，完成时分别报告提供方探针与 Depsilo 端到端结果。
 
-P3 通过后按 [mcs 部署指南](../development/mcs-debug.md) 升级调试服务，
+P3 通过后按所有者本地保存的部署说明（不在仓库中）升级调试服务，
 保留冷备份、既有本地管理员和签名密钥。迁移后回滚需要成对恢复数据库和
 配置，不能仅切回旧镜像。未在真实 IdP 跑通前不宣称已完成第三方登录。
 

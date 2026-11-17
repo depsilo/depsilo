@@ -1,15 +1,7 @@
 # Depsilo agent compatibility note
 
-The current coding-agent entry point is [AGENTS.md](AGENTS.md). Read it
-before changing the repository, then follow its links only as needed.
+@AGENTS.md
 
-This file remains solely for clients that discover `CLAUDE.md`. It does not
-define a second set of project rules.
-
-- Product intent: [PRODUCT.md](PRODUCT.md)
-- Domain language: [CONTEXT.md](CONTEXT.md)
-- Development guides: [docs/development](docs/development)
-- Documentation index: [docs/README.md](docs/README.md)
-
-When documentation and executable behavior disagree, use the source-of-truth
-rules in `AGENTS.md` and report the conflict instead of guessing.
+[AGENTS.md](AGENTS.md) is the single set of project rules. The line above
+imports it for Claude Code, which loads only `CLAUDE.md` when both files
+exist. Add or change rules in `AGENTS.md`; this file stays an import.
