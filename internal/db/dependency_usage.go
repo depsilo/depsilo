@@ -146,7 +146,7 @@ const usageTransactionAttempts = 5
 func withDurableUsageTransaction(ctx context.Context, database *gorm.DB, update func(*gorm.DB) error) error {
 	var err error
 	for attempt := range usageTransactionAttempts {
-		if err = durableUsageTransaction(ctx, database, update); err == nil || !isSQLiteBusy(err) {
+		if err = durableUsageTransaction(ctx, database, update); err == nil || !IsSQLiteBusy(err) {
 			return err
 		}
 		timer := time.NewTimer(time.Duration(attempt+1) * 5 * time.Millisecond)
@@ -160,7 +160,11 @@ func withDurableUsageTransaction(ctx context.Context, database *gorm.DB, update 
 	return err
 }
 
-func isSQLiteBusy(err error) bool {
+// IsSQLiteBusy reports whether err is SQLITE_BUSY or one of its extended
+// codes. A deferred transaction that read before another connection committed
+// gets SQLITE_BUSY_SNAPSHOT on its first write; busy_timeout cannot wait that
+// out, and only rerunning the whole transaction against a fresh snapshot helps.
+func IsSQLiteBusy(err error) bool {
 	var sqliteError interface{ Code() int }
 	return errors.As(err, &sqliteError) && sqliteError.Code()&0xff == 5
 }

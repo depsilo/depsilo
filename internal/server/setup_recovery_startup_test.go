@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -77,7 +78,11 @@ token_ttl = "1h"
 	t.Setenv("DEPSILO_BOOTSTRAP_TOKEN", "startup-recovery-bootstrap-token-012345")
 
 	ctx, cancel := context.WithCancel(context.Background())
-	server, err := StartServer(ctx, zap.NewAtomicLevel())
+	var server *http.Server
+	var err error
+	summary := captureStartupSummary(t, func() {
+		server, err = StartServer(ctx, zap.NewAtomicLevel())
+	})
 	if err != nil {
 		cancel()
 		t.Fatalf("StartServer: %v", err)
@@ -90,6 +95,12 @@ token_ttl = "1h"
 			t.Errorf("shutdown server: %v", err)
 		}
 	})
+
+	// The operator's file is about to be replaced; the console must say so
+	// instead of presenting this as the first run of a blank instance.
+	if !strings.Contains(summary, "Setup reopened:") || strings.Contains(summary, "First-time setup") {
+		t.Fatalf("startup summary did not announce the reopened setup:\n%s", summary)
+	}
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/setup/status", nil)
@@ -127,4 +138,24 @@ token_ttl = "1h"
 	if administrators != 0 {
 		t.Fatalf("administrator count = %d, want zero while setup is reopened", administrators)
 	}
+}
+
+// captureStartupSummary returns what start writes to the process stderr, which
+// is where StartServer prints its human-readable startup summary.
+func captureStartupSummary(t *testing.T, start func()) string {
+	t.Helper()
+	file, err := os.CreateTemp(t.TempDir(), "startup-summary-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	original := os.Stderr
+	os.Stderr = file
+	defer func() { os.Stderr = original }()
+	start()
+	captured, err := os.ReadFile(file.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(captured)
 }

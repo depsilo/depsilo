@@ -237,10 +237,23 @@ func isLoopbackHost(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+// minBootstrapTokenDistinctCharacters rejects preset tokens that satisfy the
+// length rule with a repeated or trivially patterned value. A preset token is
+// not rotated and authorizes creating the first administrator, so a guessable
+// one must not start the server. Generated tokens are 256 random bits.
+const minBootstrapTokenDistinctCharacters = 8
+
 func resolveBootstrapToken() (token string, generated bool, err error) {
 	if configured := os.Getenv("DEPSILO_BOOTSTRAP_TOKEN"); configured != "" {
 		if configured != strings.TrimSpace(configured) || len(configured) < 24 {
 			return "", false, fmt.Errorf("DEPSILO_BOOTSTRAP_TOKEN must be at least 24 characters and have no leading or trailing whitespace")
+		}
+		distinct := make(map[rune]struct{})
+		for _, character := range configured {
+			distinct[character] = struct{}{}
+		}
+		if len(distinct) < minBootstrapTokenDistinctCharacters {
+			return "", false, fmt.Errorf("DEPSILO_BOOTSTRAP_TOKEN is too predictable: it has fewer than %d distinct characters; set it to a random value of 32 bytes or more, or unset it so Depsilo generates a token", minBootstrapTokenDistinctCharacters)
 		}
 		return configured, false, nil
 	}

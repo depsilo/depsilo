@@ -8,12 +8,16 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
 	"depsilo/internal/config"
 	"depsilo/internal/db"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -142,7 +146,7 @@ func newPersistentSetupTestHandler(t *testing.T) (*SetupHandler, *config.Config,
 		t.Fatalf("load persistent setup config: %v", err)
 	}
 	if err := config.WriteBootstrapToken(cfg.ConfigPath, cfg.BootstrapToken); err != nil {
-		t.Fatalf("publish persistent setup token: %v", err)
+		t.Fatalf("publish persistent bootstrap token: %v", err)
 	}
 	database, err := db.Open(cfg.Database.Driver, cfg.Database.DSN)
 	if err != nil {
@@ -244,6 +248,74 @@ func TestSetupCompleteRequiresBootstrapTokenFromRemotePeer(t *testing.T) {
 	}
 	if *restarts != 0 {
 		t.Fatalf("restart count = %d, want 0", *restarts)
+	}
+}
+
+// The 403 must tell a scripted or remote operator what to do next, and it must
+// not reveal whether a token was absent, from an earlier start, or simply wrong.
+func TestSetupCompleteExplainsBootstrapTokenWithoutDistinguishingRejections(t *testing.T) {
+	handler, cfg, root, restarts := newSetupTestHandler(t)
+	stale, err := config.NewSecureToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bodies []string
+	for _, candidate := range []string{"", stale, cfg.BootstrapToken + "x", "wrong"} {
+		recorder := setupRequest(handler, "203.0.113.10:4321", candidate, validSetupRequest(t, root))
+		if recorder.Code != http.StatusForbidden {
+			t.Fatalf("token %q: status = %d, body = %s", candidate, recorder.Code, recorder.Body.String())
+		}
+		bodies = append(bodies, recorder.Body.String())
+	}
+	for _, body := range bodies[1:] {
+		if body != bodies[0] {
+			t.Fatalf("rejections are distinguishable:\n%s\n%s", bodies[0], body)
+		}
+	}
+	var response struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal([]byte(bodies[0]), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != "BOOTSTRAP_TOKEN_REQUIRED" {
+		t.Fatalf("code = %q, want BOOTSTRAP_TOKEN_REQUIRED", response.Code)
+	}
+	for _, fragment := range []string{
+		"A valid bootstrap token is required to complete initial setup",
+		"X-Depsilo-Bootstrap-Token header",
+		"changes every time Depsilo restarts",
+		`"depsilo setup token"`,
+	} {
+		if !strings.Contains(response.Message, fragment) {
+			t.Errorf("message %q missing %q", response.Message, fragment)
+		}
+	}
+	if strings.Contains(bodies[0], cfg.BootstrapToken) {
+		t.Fatal("rejection disclosed the bootstrap token")
+	}
+	if *restarts != 0 {
+		t.Fatalf("restart count = %d, want 0", *restarts)
+	}
+
+	// On a non-default port the bare command would ask another instance.
+	cfg.Server.Port = 24646
+	recorder := setupRequest(handler, "203.0.113.10:4321", "", validSetupRequest(t, root))
+	if !strings.Contains(recorder.Body.String(), `depsilo setup token --port 24646\"`) {
+		t.Fatalf("rejection on a non-default port = %s", recorder.Body.String())
+	}
+}
+
+func TestSetupTokenCommandNamesOnlyNonDefaultPorts(t *testing.T) {
+	for port, want := range map[int]string{
+		23333: "depsilo setup token",
+		0:     "depsilo setup token",
+		24646: "depsilo setup token --port 24646",
+	} {
+		if got := SetupTokenCommand(port); got != want {
+			t.Errorf("SetupTokenCommand(%d) = %q, want %q", port, got, want)
+		}
 	}
 }
 
@@ -388,6 +460,247 @@ func TestSetupWriteFailureDoesNotExposeInternalError(t *testing.T) {
 	}
 }
 
+const reopenedSetupDocument = "# written by hand\n[cache]\nmax_size_gb = 7\n"
+
+// reopenSetupWithExistingConfig models a restart that found config.toml but no
+// loginable administrator: setup is pending while the operator's file exists.
+func reopenSetupWithExistingConfig(t *testing.T, cfg *config.Config) {
+	t.Helper()
+	if err := os.WriteFile(cfg.ConfigPath, []byte(reopenedSetupDocument), 0o644); err != nil {
+		t.Fatalf("write existing config: %v", err)
+	}
+}
+
+func setupConfigBackups(t *testing.T, configPath string) []string {
+	t.Helper()
+	backups, err := filepath.Glob(configPath + ".pre-setup-*.bak")
+	if err != nil {
+		t.Fatalf("list config backups: %v", err)
+	}
+	return backups
+}
+
+// observeConfigBackupLogs captures the info-level entries that tell the
+// operator where setup kept the previous config.toml.
+func observeConfigBackupLogs(t *testing.T) func() []observer.LoggedEntry {
+	t.Helper()
+	observed, logs := observer.New(zap.InfoLevel)
+	t.Cleanup(zap.ReplaceGlobals(zap.New(observed)))
+	return func() []observer.LoggedEntry {
+		return logs.FilterLevelExact(zap.InfoLevel).FilterFieldKey("backup_path").All()
+	}
+}
+
+func TestSetupReopenedKeepsPreviousConfigAsPrivateBackup(t *testing.T) {
+	handler, cfg, root, _ := newSetupTestHandler(t)
+	reopenSetupWithExistingConfig(t, cfg)
+	backupLogs := observeConfigBackupLogs(t)
+
+	recorder := setupRequest(handler, "203.0.113.10:4321", cfg.BootstrapToken, validSetupRequest(t, root))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	backups := setupConfigBackups(t, cfg.ConfigPath)
+	if len(backups) != 1 {
+		t.Fatalf("config backups = %v, want exactly one", backups)
+	}
+	if name := filepath.Base(backups[0]); !regexp.MustCompile(`^config\.toml\.pre-setup-\d{8}T\d{6}Z\.bak$`).MatchString(name) {
+		t.Fatalf("backup name = %q, want config.toml.pre-setup-<UTC timestamp>.bak", name)
+	}
+	kept, err := os.ReadFile(backups[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(kept) != reopenedSetupDocument {
+		t.Fatalf("backup content = %q, want the previous config", kept)
+	}
+	info, err := os.Stat(backups[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("backup mode = %o, want 600", info.Mode().Perm())
+	}
+	generated, err := os.ReadFile(cfg.ConfigPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(generated) == reopenedSetupDocument || !strings.Contains(string(generated), "[server]") {
+		t.Fatalf("setup did not publish the generated config: %s", generated)
+	}
+	if strings.Contains(recorder.Body.String(), filepath.Base(backups[0])) {
+		t.Fatalf("setup response disclosed the backup path: %s", recorder.Body.String())
+	}
+	// The log is the operator's only record of where the previous file went.
+	entries := backupLogs()
+	if len(entries) != 1 {
+		t.Fatalf("info entries naming the backup = %d, want exactly one", len(entries))
+	}
+	if logged := entries[0].ContextMap()["backup_path"]; logged != backups[0] {
+		t.Fatalf("logged backup_path = %v, want %q", logged, backups[0])
+	}
+}
+
+// A completed setup that cannot remove its credential still succeeds: the
+// HTTP gate is closed and the next start retries. The warning names the
+// credential the way every other message does.
+func TestSetupCompleteWarnsWhenTheBootstrapTokenCannotBeRemoved(t *testing.T) {
+	handler, cfg, root, _ := newSetupTestHandler(t)
+	observed, logs := observer.New(zap.WarnLevel)
+	t.Cleanup(zap.ReplaceGlobals(zap.New(observed)))
+	tokenPath, err := config.BootstrapTokenPath(cfg.ConfigPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A directory in the token's place cannot be removed as a token.
+	if err := os.Remove(tokenPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(tokenPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := setupRequest(handler, "203.0.113.10:4321", cfg.BootstrapToken, validSetupRequest(t, root))
+	if recorder.Code != http.StatusOK || cfg.IsDefault {
+		t.Fatalf("status = %d, IsDefault = %v, body = %s", recorder.Code, cfg.IsDefault, recorder.Body.String())
+	}
+	warnings := logs.FilterLevelExact(zap.WarnLevel).All()
+	if len(warnings) != 1 || warnings[0].Message != "failed to remove completed bootstrap token" {
+		t.Fatalf("warnings = %#v, want the one about the bootstrap token", warnings)
+	}
+}
+
+func TestSetupFirstRunKeepsNoConfigBackup(t *testing.T) {
+	handler, cfg, root, _ := newSetupTestHandler(t)
+	backupLogs := observeConfigBackupLogs(t)
+	recorder := setupRequest(handler, "203.0.113.10:4321", cfg.BootstrapToken, validSetupRequest(t, root))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if backups := setupConfigBackups(t, cfg.ConfigPath); len(backups) != 0 {
+		t.Fatalf("first run kept config backups %v, want none", backups)
+	}
+	if entries := backupLogs(); len(entries) != 0 {
+		t.Fatalf("first run logged %d config backups, want none", len(entries))
+	}
+}
+
+func TestSetupBackupFailureKeepsExistingConfigAndAllowsRetry(t *testing.T) {
+	handler, cfg, root, restarts := newSetupTestHandler(t)
+	reopenSetupWithExistingConfig(t, cfg)
+	const privateError = "secret-bearing backup failure"
+	keepConfig := handler.backupConfig
+	handler.backupConfig = func(string) (string, error) {
+		return "", errors.New(privateError)
+	}
+
+	recorder := setupRequest(handler, "203.0.113.10:4321", cfg.BootstrapToken, validSetupRequest(t, root))
+	if recorder.Code != http.StatusInternalServerError || !strings.Contains(recorder.Body.String(), "WRITE_FAILED") {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), privateError) {
+		t.Fatal("setup backup failure exposed an internal error")
+	}
+	existing, err := os.ReadFile(cfg.ConfigPath)
+	if err != nil || string(existing) != reopenedSetupDocument {
+		t.Fatalf("config after failed backup = %q, %v; want the previous config untouched", existing, err)
+	}
+	if !cfg.IsDefault || *restarts != 0 {
+		t.Fatalf("failed backup closed setup: pending=%t restarts=%d", cfg.IsDefault, *restarts)
+	}
+	if token, err := config.ReadBootstrapToken(cfg.ConfigPath); err != nil || token != cfg.BootstrapToken {
+		t.Fatalf("failed backup lost the retrieval token: %v", err)
+	}
+	// The administrator is already durable, so the operator retries with the
+	// same credentials once the directory accepts the copy.
+	if err := VerifyExistingAdminCredentials(handler.db, "operator", "Tr0ub4dor&Correct"); err != nil {
+		t.Fatalf("administrator after failed backup: %v", err)
+	}
+
+	handler.backupConfig = keepConfig
+	retry := setupRequest(handler, "203.0.113.10:4321", cfg.BootstrapToken, validSetupRequest(t, root))
+	if retry.Code != http.StatusOK {
+		t.Fatalf("retry status = %d, body = %s", retry.Code, retry.Body.String())
+	}
+	backups := setupConfigBackups(t, cfg.ConfigPath)
+	if len(backups) != 1 {
+		t.Fatalf("config backups after retry = %v, want exactly one", backups)
+	}
+	if kept, err := os.ReadFile(backups[0]); err != nil || string(kept) != reopenedSetupDocument {
+		t.Fatalf("backup after retry = %q, %v; want the previous config", kept, err)
+	}
+}
+
+// A reopened setup may stop at any publication boundary. The operator's file
+// must survive every one of them: untouched in place until the rename, and as
+// exactly one backup from the moment the copy is made.
+func TestSetupReopenedFaultBoundariesNeverLoseThePreviousConfig(t *testing.T) {
+	tests := []struct {
+		name            string
+		stage           setupStage
+		wantBackup      bool
+		configUntouched bool
+	}{
+		{name: "after database commit", stage: setupStageAfterDBCommit, configUntouched: true},
+		{name: "after config backup", stage: setupStageAfterConfigBackup, wantBackup: true, configUntouched: true},
+		{name: "after temporary config write", stage: setupStageAfterConfigTempWrite, wantBackup: true, configUntouched: true},
+		{name: "after temporary config fsync", stage: setupStageAfterConfigTempSync, wantBackup: true, configUntouched: true},
+		{name: "before config rename", stage: setupStageBeforeConfigRename, wantBackup: true, configUntouched: true},
+		{name: "after config rename", stage: setupStageAfterConfigRename, wantBackup: true},
+		{name: "after config directory fsync", stage: setupStageAfterConfigDirSync, wantBackup: true},
+		{name: "after durable config write", stage: setupStageAfterConfigWrite, wantBackup: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			handler, cfg, root, restarts := newSetupTestHandler(t)
+			reopenSetupWithExistingConfig(t, cfg)
+			stopped := false
+			handler.stageHook = func(stage setupStage) error {
+				if stage == test.stage && !stopped {
+					stopped = true
+					return errors.New("injected process stop at " + string(stage))
+				}
+				return nil
+			}
+
+			recorder := setupRequest(handler, "203.0.113.10:4321", cfg.BootstrapToken, validSetupRequest(t, root))
+			if recorder.Code != http.StatusInternalServerError || *restarts != 0 {
+				t.Fatalf("status = %d, restarts = %d, body = %s", recorder.Code, *restarts, recorder.Body.String())
+			}
+			backups := setupConfigBackups(t, cfg.ConfigPath)
+			if got := len(backups) == 1; got != test.wantBackup || len(backups) > 1 {
+				t.Fatalf("config backups = %v, want backup = %t", backups, test.wantBackup)
+			}
+			if test.wantBackup {
+				if kept, err := os.ReadFile(backups[0]); err != nil || string(kept) != reopenedSetupDocument {
+					t.Fatalf("backup = %q, %v; want the previous config", kept, err)
+				}
+			}
+			current, err := os.ReadFile(cfg.ConfigPath)
+			if err != nil {
+				t.Fatalf("config.toml disappeared at the boundary: %v", err)
+			}
+			if got := string(current) == reopenedSetupDocument; got != test.configUntouched {
+				t.Fatalf("config untouched = %t, want %t", got, test.configUntouched)
+			}
+
+			// Retrying in the same process finishes setup without collecting a
+			// second copy or replacing the first with the generated document.
+			retry := setupRequest(handler, "203.0.113.10:4321", cfg.BootstrapToken, validSetupRequest(t, root))
+			if retry.Code != http.StatusOK {
+				t.Fatalf("retry status = %d, body = %s", retry.Code, retry.Body.String())
+			}
+			backups = setupConfigBackups(t, cfg.ConfigPath)
+			if len(backups) != 1 {
+				t.Fatalf("config backups after retry = %v, want exactly one", backups)
+			}
+			if kept, err := os.ReadFile(backups[0]); err != nil || string(kept) != reopenedSetupDocument {
+				t.Fatalf("backup after retry = %q, %v; want the previous config", kept, err)
+			}
+		})
+	}
+}
+
 func TestSetupFaultBoundariesAlwaysRestartIntoRecoveryOrLogin(t *testing.T) {
 	type configExpectation uint8
 	const (
@@ -405,6 +718,7 @@ func TestSetupFaultBoundariesAlwaysRestartIntoRecoveryOrLogin(t *testing.T) {
 		{name: "after onboarding save", stage: setupStageAfterOnboardingSaved},
 		{name: "before database commit", stage: setupStageBeforeDBCommit},
 		{name: "after database commit", stage: setupStageAfterDBCommit, wantAdmin: true},
+		{name: "after config backup", stage: setupStageAfterConfigBackup, wantAdmin: true},
 		{name: "after temporary config write", stage: setupStageAfterConfigTempWrite, wantAdmin: true},
 		{name: "after temporary config fsync", stage: setupStageAfterConfigTempSync, wantAdmin: true},
 		{name: "before config rename", stage: setupStageBeforeConfigRename, wantAdmin: true},
@@ -501,6 +815,93 @@ func TestSetupFaultBoundariesAlwaysRestartIntoRecoveryOrLogin(t *testing.T) {
 				t.Fatalf("login after restart status = %d, body = %s", login.Code, login.Body.String())
 			}
 		})
+	}
+}
+
+// competeWithSetupWrites makes another connection commit right before each of
+// the setup transaction's first limit inserts. The setup transaction has
+// already read by then, so SQLite invalidates its WAL snapshot and fails the
+// insert at once with SQLITE_BUSY, which busy_timeout cannot wait out. This is
+// what a background writer such as the first blocklist sync does to a scripted
+// setup. The returned counter reports how many conflicts were injected.
+func competeWithSetupWrites(t *testing.T, handler *SetupHandler, cfg *config.Config, limit int) *int {
+	t.Helper()
+	writer, err := db.Open(cfg.Database.Driver, cfg.Database.DSN)
+	if err != nil {
+		t.Fatalf("open competing writer: %v", err)
+	}
+	t.Cleanup(func() {
+		if sqlDatabase, dbErr := writer.DB(); dbErr == nil {
+			_ = sqlDatabase.Close()
+		}
+	})
+	if err := handler.db.Exec("CREATE TABLE competing_writes (value INTEGER)").Error; err != nil {
+		t.Fatal(err)
+	}
+	conflicts := 0
+	if err := handler.db.Callback().Create().Before("gorm:create").Register("test:commit_competing_writer", func(tx *gorm.DB) {
+		if conflicts >= limit {
+			return
+		}
+		conflicts++
+		if err := writer.Exec("INSERT INTO competing_writes VALUES (1)").Error; err != nil {
+			tx.AddError(err)
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return &conflicts
+}
+
+func TestSetupCompleteRetriesWhenAnotherWriterMakesTheDatabaseBusy(t *testing.T) {
+	handler, cfg, root, restarts := newPersistentSetupTestHandler(t)
+	conflicts := competeWithSetupWrites(t, handler, cfg, 2)
+
+	recorder := setupRequest(handler, "203.0.113.10:4321", cfg.BootstrapToken, validSetupRequest(t, root))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if *conflicts != 2 {
+		t.Fatalf("injected conflicts = %d, want 2", *conflicts)
+	}
+	if *restarts != 1 {
+		t.Fatalf("restart count = %d, want 1", *restarts)
+	}
+	var administrators int64
+	if err := handler.db.Model(&db.User{}).Where("role = ?", "admin").Count(&administrators).Error; err != nil {
+		t.Fatal(err)
+	}
+	if administrators != 1 {
+		t.Fatalf("administrator count = %d, want exactly one after retried attempts", administrators)
+	}
+	if err := VerifyExistingAdminCredentials(handler.db, "operator", "Tr0ub4dor&Correct"); err != nil {
+		t.Fatalf("administrator after busy retries: %v", err)
+	}
+}
+
+func TestSetupCompleteGivesUpOnAPersistentlyBusyDatabase(t *testing.T) {
+	handler, cfg, root, restarts := newPersistentSetupTestHandler(t)
+	conflicts := competeWithSetupWrites(t, handler, cfg, setupBusyAttempts+10)
+
+	recorder := setupRequest(handler, "203.0.113.10:4321", cfg.BootstrapToken, validSetupRequest(t, root))
+	if recorder.Code != http.StatusInternalServerError || !strings.Contains(recorder.Body.String(), "ADMIN_CREATE_FAILED") {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if *conflicts != setupBusyAttempts {
+		t.Fatalf("setup attempts = %d, want the bound of %d", *conflicts, setupBusyAttempts)
+	}
+	if *restarts != 0 || !cfg.IsDefault || fileExists(t, cfg.ConfigPath) {
+		t.Fatalf("a failed setup closed the gate: restarts=%d pending=%t", *restarts, cfg.IsDefault)
+	}
+	var users int64
+	if err := handler.db.Model(&db.User{}).Count(&users).Error; err != nil {
+		t.Fatal(err)
+	}
+	if users != 0 {
+		t.Fatalf("user count = %d, want none after every attempt rolled back", users)
+	}
+	if token, err := config.ReadBootstrapToken(cfg.ConfigPath); err != nil || token != cfg.BootstrapToken {
+		t.Fatalf("failed setup lost its retrieval token: %v", err)
 	}
 }
 
@@ -858,6 +1259,96 @@ func TestSetupRecoveryDoesNotOverwriteExistingOnboardingState(t *testing.T) {
 	status, err := loadOnboardingStatus(t.Context(), handler.db)
 	if err != nil || status != onboardingStatusSkipped {
 		t.Fatalf("recovery onboarding status = %q, err=%v, want skipped", status, err)
+	}
+}
+
+func setupStatusFields(t *testing.T, handler *SetupHandler) map[string]any {
+	t.Helper()
+	router := gin.New()
+	router.GET("/setup/status", handler.Status)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/setup/status", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("setup status code = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &fields); err != nil {
+		t.Fatalf("decode setup status: %v", err)
+	}
+	return fields
+}
+
+func TestSetupStatusReportsListenPortAndExistingConfigWhilePending(t *testing.T) {
+	handler, cfg, _, _ := newSetupTestHandler(t)
+	cfg.Server.Port = 24646
+
+	want := map[string]any{
+		"needs_setup":    true,
+		"token_required": true,
+		"listen_port":    float64(24646),
+		"config_exists":  false,
+	}
+	if got := setupStatusFields(t, handler); !reflect.DeepEqual(got, want) {
+		t.Fatalf("first-run setup status = %#v, want exactly %#v", got, want)
+	}
+
+	reopenSetupWithExistingConfig(t, cfg)
+	want["config_exists"] = true
+	if got := setupStatusFields(t, handler); !reflect.DeepEqual(got, want) {
+		t.Fatalf("reopened setup status = %#v, want exactly %#v", got, want)
+	}
+}
+
+// A publication that fails after it has put the generated document in place
+// leaves a file at the config path. Only a file that was there before setup
+// began is the operator's, and only that one has a backup beside it.
+func TestSetupStatusTellsAnOperatorConfigFromAHalfPublishedOne(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		reopened bool
+	}{
+		{name: "first run", reopened: false},
+		{name: "reopened setup", reopened: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			handler, cfg, root, _ := newSetupTestHandler(t)
+			if test.reopened {
+				reopenSetupWithExistingConfig(t, cfg)
+			}
+			handler.writeConfig = func(path string, _ config.SetupRequest, _ config.WriteStageHook) error {
+				if err := os.WriteFile(path, []byte("config_version = 1\n"), 0o600); err != nil {
+					t.Fatalf("publish generated config: %v", err)
+				}
+				return errors.New("directory sync failed after the rename")
+			}
+			recorder := setupRequest(handler, "203.0.113.10:4321", cfg.BootstrapToken, validSetupRequest(t, root))
+			if recorder.Code != http.StatusInternalServerError || !strings.Contains(recorder.Body.String(), "WRITE_FAILED") {
+				t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+			}
+
+			fields := setupStatusFields(t, handler)
+			if fields["needs_setup"] != true {
+				t.Fatalf("a failed publication closed setup: %#v", fields)
+			}
+			if fields["config_exists"] != test.reopened {
+				t.Fatalf("config_exists = %v after a failed publication, want %v", fields["config_exists"], test.reopened)
+			}
+			if backups := setupConfigBackups(t, cfg.ConfigPath); (len(backups) == 1) != test.reopened {
+				t.Fatalf("backups = %v, want one only for a reopened setup", backups)
+			}
+		})
+	}
+}
+
+func TestSetupStatusDisclosesNothingAboutAConfiguredServer(t *testing.T) {
+	handler, cfg, _, _ := newSetupTestHandler(t)
+	cfg.Server.Port = 24646
+	reopenSetupWithExistingConfig(t, cfg)
+	cfg.IsDefault = false
+
+	want := map[string]any{"needs_setup": false, "token_required": false}
+	if got := setupStatusFields(t, handler); !reflect.DeepEqual(got, want) {
+		t.Fatalf("configured setup status = %#v, want exactly %#v", got, want)
 	}
 }
 

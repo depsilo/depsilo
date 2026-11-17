@@ -47,6 +47,11 @@ import (
 	"depsilo/internal/version"
 )
 
+// newInitialAdminPassword draws the random password of an administrator
+// created from DEPSILO_ADMIN_USERNAME alone. It is a variable so a test can
+// supply the draws.
+var newInitialAdminPassword = config.NewSecureToken
+
 // StartServer initializes all components and starts the HTTP server.
 // Returns the *http.Server for lifecycle control by the caller.
 // Cancelling the provided context requests an orderly server shutdown. The
@@ -196,7 +201,8 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	// Interactive first-run setup creates the administrator from wizard input.
 	// Configured/headless deployments with explicit environment credentials
 	// retain their bootstrap behavior.
-	if err := api.EnsureInitialAdmin(database, cfg.IsDefault); err != nil {
+	initialAdmin, err := api.EnsureInitialAdmin(database, cfg.IsDefault, newInitialAdminPassword)
+	if err != nil {
 		return nil, fmt.Errorf("ensure initial administrator: %w", err)
 	}
 
@@ -915,10 +921,10 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	// through the CLI while a different credential authorizes the server.
 	if cfg.IsDefault {
 		if err := config.WriteBootstrapToken(cfg.ConfigPath, cfg.BootstrapToken); err != nil {
-			return nil, fmt.Errorf("publish initial setup token: %w", err)
+			return nil, fmt.Errorf("publish bootstrap token: %w", err)
 		}
 	} else if err := config.ClearBootstrapToken(cfg.ConfigPath); err != nil {
-		zap.L().Warn("failed to remove completed setup token", zap.Error(err))
+		zap.L().Warn("failed to remove completed bootstrap token", zap.Error(err))
 	}
 	registry.Start(serverCtx)
 
@@ -936,6 +942,8 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		cfg.BootstrapToken,
 		cfg.BootstrapTokenGenerated,
 	)
+	summary.SetupReopened = config.SetupReplacesConfig(cfg)
+	summary.reportInitialAdmin(initialAdmin)
 	zap.L().Info("server ready",
 		zap.String("addr", listener.Addr().String()),
 		zap.String("portal_url", summary.PortalURL),

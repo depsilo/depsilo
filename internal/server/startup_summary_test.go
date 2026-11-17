@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"depsilo/internal/api"
 )
 
 func TestStartupPortalURL(t *testing.T) {
@@ -44,12 +46,103 @@ func TestWriteStartupSummaryForFirstRun(t *testing.T) {
 		"Portal:\n  http://127.0.0.1:23333",
 		"First-time setup:",
 		"Bootstrap token: bootstrap-token",
-		"Retrieve the current bootstrap token: depsilo setup token",
+		"Retrieve the current bootstrap token: depsilo setup token\n",
 		"Open the Portal to finish setup.",
 	} {
 		if !strings.Contains(got, fragment) {
 			t.Errorf("startup summary missing %q:\n%s", fragment, got)
 		}
+	}
+	if strings.Contains(got, "Setup reopened") || strings.Contains(got, ".bak") {
+		t.Errorf("first-run startup summary announced a replaced config:\n%s", got)
+	}
+	if strings.Contains(got, "DEPSILO_ADMIN") {
+		t.Errorf("first-run startup summary mentioned administrator variables that were not set:\n%s", got)
+	}
+}
+
+// "depsilo setup token" asks port 23333 unless told otherwise. On another port
+// the summary must print the command that reaches this instance.
+func TestWriteStartupSummaryNamesNonDefaultPortInTokenCommand(t *testing.T) {
+	var output bytes.Buffer
+	summary := newStartupSummary("0.9.0", "127.0.0.1", 24646, true, "bootstrap-token", true)
+	if err := writeStartupSummary(&output, summary); err != nil {
+		t.Fatal(err)
+	}
+	got := output.String()
+	if !strings.Contains(got, "  Retrieve the current bootstrap token: depsilo setup token --port 24646\n") {
+		t.Errorf("startup summary omitted the port from the token command:\n%s", got)
+	}
+	// The release workflow reads the token from this exact line.
+	if !strings.Contains(got, "  Bootstrap token: bootstrap-token\n") {
+		t.Errorf("startup summary changed the bootstrap token line:\n%s", got)
+	}
+}
+
+func TestWriteStartupSummaryExplainsIgnoredAdministratorEnvironment(t *testing.T) {
+	var output bytes.Buffer
+	summary := newStartupSummary("0.9.0", "127.0.0.1", 23333, true, "bootstrap-token", true)
+	summary.reportInitialAdmin(api.InitialAdminOutcome{EnvironmentIgnored: true})
+	if err := writeStartupSummary(&output, summary); err != nil {
+		t.Fatal(err)
+	}
+	got := output.String()
+	for _, fragment := range []string{
+		"First-time setup:",
+		"DEPSILO_ADMIN_USERNAME and DEPSILO_ADMIN_PASSWORD are ignored: they apply only\n  when a configuration file exists, so they created no administrator.",
+		"docs/deployment.md#scripted-setup",
+		"Open the Portal to finish setup.",
+	} {
+		if !strings.Contains(got, fragment) {
+			t.Errorf("startup summary missing %q:\n%s", fragment, got)
+		}
+	}
+}
+
+func TestWriteStartupSummaryShowsGeneratedAdministratorPassword(t *testing.T) {
+	var output bytes.Buffer
+	summary := newStartupSummary("0.9.0", "127.0.0.1", 23333, false, "", false)
+	summary.reportInitialAdmin(api.InitialAdminOutcome{GeneratedUsername: "ops", GeneratedPassword: "generated-password-value"})
+	if err := writeStartupSummary(&output, summary); err != nil {
+		t.Fatal(err)
+	}
+	got := output.String()
+	for _, fragment := range []string{
+		"Initial administrator:",
+		"  Username: ops\n",
+		"  Generated password: generated-password-value\n",
+		"shown only this once and stays valid until you change it",
+	} {
+		if !strings.Contains(got, fragment) {
+			t.Errorf("startup summary missing %q:\n%s", fragment, got)
+		}
+	}
+	if strings.Contains(got, "one-time") {
+		t.Errorf("startup summary calls a lasting password one-time:\n%s", got)
+	}
+}
+
+func TestWriteStartupSummaryForReopenedSetupWarnsThatConfigIsReplaced(t *testing.T) {
+	var output bytes.Buffer
+	summary := newStartupSummary("0.9.0", "127.0.0.1", 23333, true, "bootstrap-token", true)
+	summary.SetupReopened = true
+	if err := writeStartupSummary(&output, summary); err != nil {
+		t.Fatal(err)
+	}
+	got := output.String()
+	for _, fragment := range []string{
+		"Setup reopened:",
+		"A configuration file exists, but no administrator can sign in.",
+		"Finishing setup replaces config.toml and keeps the previous file beside it as a .bak copy.",
+		"Bootstrap token: bootstrap-token",
+		"Open the Portal to finish setup.",
+	} {
+		if !strings.Contains(got, fragment) {
+			t.Errorf("reopened startup summary missing %q:\n%s", fragment, got)
+		}
+	}
+	if strings.Contains(got, "First-time setup") {
+		t.Errorf("reopened setup was announced as a first run:\n%s", got)
 	}
 }
 
@@ -63,7 +156,7 @@ func TestWriteStartupSummaryForConfiguredServerOmitsBootstrapInstructions(t *tes
 	if !strings.Contains(got, "Depsilo dev") || !strings.Contains(got, "Portal:\n  http://127.0.0.1:23333") {
 		t.Fatalf("configured startup summary missing server details:\n%s", got)
 	}
-	for _, forbidden := range []string{"First-time setup", "Bootstrap token", "must-not-appear", "finish setup", "depsilo setup token"} {
+	for _, forbidden := range []string{"First-time setup", "Setup reopened", "Bootstrap token", "must-not-appear", "finish setup", "depsilo setup token", "Initial administrator", "Generated password"} {
 		if strings.Contains(got, forbidden) {
 			t.Errorf("configured startup summary contains %q:\n%s", forbidden, got)
 		}

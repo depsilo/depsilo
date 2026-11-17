@@ -98,6 +98,62 @@ func TestMarkSetupPendingUsesBootstrapTokenPolicy(t *testing.T) {
 	}
 }
 
+// A preset bootstrap token is not rotated and authorizes creating the first
+// administrator. Length alone does not make it hard to guess.
+func TestLoadForServerRejectsPredictablePresetBootstrapToken(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		token   string
+		wantErr bool
+	}{
+		{name: "one repeated character", token: strings.Repeat("a", 24), wantErr: true},
+		{name: "seven distinct characters", token: strings.Repeat("abcdefg", 5), wantErr: true},
+		{name: "eight distinct characters", token: strings.Repeat("abcdefgh", 3)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			t.Setenv("HOME", t.TempDir())
+			t.Setenv("DEPSILO_CONFIG", "")
+			t.Setenv("DEPSILO_SERVER_HOST", "")
+			t.Setenv("DEPSILO_DATABASE_DSN", "")
+			t.Setenv("DEPSILO_STORAGE_PATH", "")
+			t.Setenv("DEPSILO_COMPILE_CACHE_STORAGE_PATH", "")
+			t.Setenv("DEPSILO_BOOTSTRAP_TOKEN", test.token)
+			setTestJWTSecret(t)
+
+			cfg, err := LoadForServer()
+			if !test.wantErr {
+				if err != nil || cfg.BootstrapToken != test.token || cfg.BootstrapTokenGenerated {
+					t.Fatalf("LoadForServer = (%#v, %v), want the preset token accepted", cfg, err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("LoadForServer accepted a predictable preset bootstrap token")
+			}
+			for _, fragment := range []string{"DEPSILO_BOOTSTRAP_TOKEN", "fewer than 8 distinct characters", "random value of 32 bytes or more"} {
+				if !strings.Contains(err.Error(), fragment) {
+					t.Errorf("error %q missing %q", err, fragment)
+				}
+			}
+			if strings.Contains(err.Error(), test.token) {
+				t.Fatalf("error disclosed the rejected token: %v", err)
+			}
+		})
+	}
+}
+
+func TestMarkSetupPendingRejectsPredictablePresetBootstrapToken(t *testing.T) {
+	t.Setenv("DEPSILO_BOOTSTRAP_TOKEN", strings.Repeat("a", 24))
+	cfg := &Config{}
+	if err := MarkSetupPending(cfg); err == nil || !strings.Contains(err.Error(), "distinct characters") {
+		t.Fatalf("MarkSetupPending error = %v, want the predictable-token rejection", err)
+	}
+	if cfg.IsDefault || cfg.BootstrapToken != "" {
+		t.Fatalf("a rejected token still reopened setup: %#v", cfg)
+	}
+}
+
 func TestLoadMissingExplicitSetupPathUsesFirstRunDefaults(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state", "config")
 	t.Setenv("DEPSILO_CONFIG", path)

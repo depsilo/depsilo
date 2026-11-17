@@ -15,6 +15,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/golang-jwt/jwt/v5"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -121,7 +123,11 @@ func TestEnsureInitialAdminDoesNotCreateAdminAdmin(t *testing.T) {
 	database := newAPIAuthTestDB(t)
 	t.Setenv("DEPSILO_ADMIN_USERNAME", "")
 	t.Setenv("DEPSILO_ADMIN_PASSWORD", "")
-	if err := EnsureInitialAdmin(database, false); err != nil {
+	observed, logs := observer.New(zap.InfoLevel)
+	restore := zap.ReplaceGlobals(zap.New(observed))
+	t.Cleanup(restore)
+	outcome, err := EnsureInitialAdmin(database, false, config.NewSecureToken)
+	if err != nil {
 		t.Fatalf("EnsureInitialAdmin: %v", err)
 	}
 	var user db.User
@@ -134,12 +140,136 @@ func TestEnsureInitialAdminDoesNotCreateAdminAdmin(t *testing.T) {
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte("admin")); err == nil {
 		t.Fatal("initial administrator still accepts the predictable admin password")
 	}
+	// The generated password is handed to startup for the console summary; it
+	// is the administrator's real, lasting credential.
+	if outcome.GeneratedUsername != "admin" || outcome.EnvironmentIgnored {
+		t.Fatalf("generated administrator outcome = %#v", outcome)
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(outcome.GeneratedPassword)); err != nil {
+		t.Fatalf("reported generated password does not sign in: %v", err)
+	}
+	entries := logs.FilterField(zap.String("initial_admin_password", outcome.GeneratedPassword)).All()
+	if len(entries) != 1 {
+		t.Fatalf("generated password log entries = %d, want one", len(entries))
+	}
+	message := entries[0].Message
+	if strings.Contains(message, "one-time") || !strings.Contains(message, "shown only this once") || !strings.Contains(message, "stays valid until changed") {
+		t.Fatalf("generated password log message = %q", message)
+	}
+
+	// A later start finds the administrator and has nothing to disclose again.
+	again, err := EnsureInitialAdmin(database, false, config.NewSecureToken)
+	if err != nil || again != (InitialAdminOutcome{}) {
+		t.Fatalf("second EnsureInitialAdmin = (%#v, %v), want nothing to report", again, err)
+	}
+}
+
+// tokenSequence hands out the given tokens in order and counts the draws.
+func tokenSequence(t *testing.T, tokens ...string) (func() (string, error), *int) {
+	t.Helper()
+	draws := 0
+	return func() (string, error) {
+		if draws >= len(tokens) {
+			t.Fatalf("drew token %d of %d", draws+1, len(tokens))
+		}
+		draws++
+		return tokens[draws-1], nil
+	}, &draws
+}
+
+// The password policy rejects a password that contains the user name in any
+// case. A random token sometimes does, so a rejected draw is replaced instead
+// of failing the start.
+func TestEnsureInitialAdminDrawsAgainWhenTheGeneratedPasswordContainsTheUsername(t *testing.T) {
+	database := newAPIAuthTestDB(t)
+	t.Setenv("DEPSILO_ADMIN_USERNAME", "ops")
+	t.Setenv("DEPSILO_ADMIN_PASSWORD", "")
+	const rejected = "k3Zq-OpS-rejected-draw-0123456789-ABCDEFG"
+	const accepted = "k3Zq-accepted-draw-0123456789-ABCDEFGHIJK"
+	tokens, draws := tokenSequence(t, rejected, accepted)
+
+	outcome, err := EnsureInitialAdmin(database, false, tokens)
+	if err != nil {
+		t.Fatalf("EnsureInitialAdmin: %v", err)
+	}
+	if *draws != 2 || outcome.GeneratedUsername != "ops" || outcome.GeneratedPassword != accepted {
+		t.Fatalf("draws = %d, outcome = %#v, want the second token as the password", *draws, outcome)
+	}
+	if err := VerifyExistingAdminCredentials(database, "ops", accepted); err != nil {
+		t.Fatalf("the reported password does not sign in: %v", err)
+	}
+	if err := VerifyExistingAdminCredentials(database, "ops", rejected); err == nil {
+		t.Fatal("the rejected draw signs in")
+	}
+}
+
+func TestEnsureInitialAdminStopsDrawingAfterSixteenRejectedPasswords(t *testing.T) {
+	database := newAPIAuthTestDB(t)
+	t.Setenv("DEPSILO_ADMIN_USERNAME", "ops")
+	t.Setenv("DEPSILO_ADMIN_PASSWORD", "")
+	rejected := make([]string, 16)
+	for index := range rejected {
+		rejected[index] = "k3Zq-oPs-rejected-draw-0123456789-ABCDEFG"
+	}
+	tokens, draws := tokenSequence(t, rejected...)
+
+	outcome, err := EnsureInitialAdmin(database, false, tokens)
+	if err == nil || err.Error() != "password must not contain the username" {
+		t.Fatalf("EnsureInitialAdmin = (%#v, %v), want the password policy's error", outcome, err)
+	}
+	if *draws != 16 || outcome != (InitialAdminOutcome{}) {
+		t.Fatalf("draws = %d, outcome = %#v, want 16 draws and nothing to report", *draws, outcome)
+	}
+	var count int64
+	if err := database.Model(&db.User{}).Count(&count).Error; err != nil || count != 0 {
+		t.Fatalf("users = %d, err = %v, want no administrator", count, err)
+	}
+}
+
+func TestEnsureInitialAdminNeverReportsSuppliedPassword(t *testing.T) {
+	database := newAPIAuthTestDB(t)
+	const supplied = "Headless&Secure123"
+	t.Setenv("DEPSILO_ADMIN_USERNAME", "ops")
+	t.Setenv("DEPSILO_ADMIN_PASSWORD", supplied)
+	observed, logs := observer.New(zap.DebugLevel)
+	restore := zap.ReplaceGlobals(zap.New(observed))
+	t.Cleanup(restore)
+
+	outcome, err := EnsureInitialAdmin(database, false, config.NewSecureToken)
+	if err != nil {
+		t.Fatalf("EnsureInitialAdmin: %v", err)
+	}
+	if outcome != (InitialAdminOutcome{}) {
+		t.Fatalf("supplied credentials were reported for display: %#v", outcome)
+	}
+	if err := VerifyExistingAdminCredentials(database, "ops", supplied); err != nil {
+		t.Fatalf("headless administrator credentials: %v", err)
+	}
+	for _, entry := range logs.All() {
+		if strings.Contains(entry.Message, supplied) {
+			t.Fatalf("log message contains the supplied password: %q", entry.Message)
+		}
+		for _, field := range entry.Context {
+			if strings.Contains(field.String, supplied) {
+				t.Fatalf("log field %q contains the supplied password", field.Key)
+			}
+		}
+	}
 }
 
 func TestEnsureInitialAdminSkipsInteractiveSetup(t *testing.T) {
 	database := newAPIAuthTestDB(t)
-	if err := EnsureInitialAdmin(database, true); err != nil {
+	t.Setenv("DEPSILO_ADMIN_USERNAME", "")
+	t.Setenv("DEPSILO_ADMIN_PASSWORD", "")
+	observed, logs := observer.New(zap.WarnLevel)
+	restore := zap.ReplaceGlobals(zap.New(observed))
+	t.Cleanup(restore)
+	outcome, err := EnsureInitialAdmin(database, true, config.NewSecureToken)
+	if err != nil {
 		t.Fatalf("EnsureInitialAdmin: %v", err)
+	}
+	if outcome != (InitialAdminOutcome{}) || logs.Len() != 0 {
+		t.Fatalf("plain pending setup reported %#v with %d warnings, want silence", outcome, logs.Len())
 	}
 	var count int64
 	if err := database.Model(&db.User{}).Count(&count).Error; err != nil {
@@ -147,6 +277,63 @@ func TestEnsureInitialAdminSkipsInteractiveSetup(t *testing.T) {
 	}
 	if count != 0 {
 		t.Fatalf("user count = %d, want 0 while setup is pending", count)
+	}
+}
+
+// On a blank instance the administrator variables do nothing. That must be
+// said out loud: otherwise the operator believes an administrator exists while
+// the instance still waits for setup.
+func TestEnsureInitialAdminWarnsWhenEnvironmentIsIgnoredDuringSetup(t *testing.T) {
+	const supplied = "Headless&Secure123"
+	for _, test := range []struct {
+		name     string
+		username string
+		password string
+	}{
+		{name: "both variables", username: "ops", password: supplied},
+		{name: "username only", username: "ops"},
+		{name: "password only", password: supplied},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			database := newAPIAuthTestDB(t)
+			t.Setenv("DEPSILO_ADMIN_USERNAME", test.username)
+			t.Setenv("DEPSILO_ADMIN_PASSWORD", test.password)
+			observed, logs := observer.New(zap.WarnLevel)
+			restore := zap.ReplaceGlobals(zap.New(observed))
+			t.Cleanup(restore)
+
+			outcome, err := EnsureInitialAdmin(database, true, config.NewSecureToken)
+			if err != nil {
+				t.Fatalf("EnsureInitialAdmin: %v", err)
+			}
+			if outcome != (InitialAdminOutcome{EnvironmentIgnored: true}) {
+				t.Fatalf("outcome = %#v, want only the ignored-environment notice", outcome)
+			}
+			entries := logs.All()
+			if len(entries) != 1 {
+				t.Fatalf("warnings = %d, want exactly one", len(entries))
+			}
+			message := entries[0].Message
+			for _, fragment := range []string{
+				"DEPSILO_ADMIN_USERNAME and DEPSILO_ADMIN_PASSWORD are ignored",
+				"apply only when a configuration file exists",
+				"docs/deployment.md#scripted-setup",
+			} {
+				if !strings.Contains(message, fragment) {
+					t.Errorf("warning %q missing %q", message, fragment)
+				}
+			}
+			if strings.Contains(message, supplied) || len(entries[0].Context) != 0 {
+				t.Fatalf("warning disclosed the supplied credentials: %q %v", message, entries[0].Context)
+			}
+			var count int64
+			if err := database.Model(&db.User{}).Count(&count).Error; err != nil {
+				t.Fatal(err)
+			}
+			if count != 0 {
+				t.Fatalf("user count = %d; the variables must not take effect on a blank instance", count)
+			}
+		})
 	}
 }
 
@@ -163,7 +350,7 @@ func TestReconcileSetupStateReopensConfiguredDatabaseWithoutLoginableAdmin(t *te
 	if !cfg.IsDefault || cfg.BootstrapToken != "recovery-bootstrap-token-0123456789" || cfg.BootstrapTokenGenerated {
 		t.Fatalf("reconciled setup state = %#v", cfg)
 	}
-	if err := EnsureInitialAdmin(database, cfg.IsDefault); err != nil {
+	if _, err := EnsureInitialAdmin(database, cfg.IsDefault, config.NewSecureToken); err != nil {
 		t.Fatalf("EnsureInitialAdmin after reconciliation: %v", err)
 	}
 	var count int64
@@ -187,7 +374,7 @@ func TestReconcileSetupStateKeepsExplicitHeadlessBootstrap(t *testing.T) {
 	if cfg.IsDefault {
 		t.Fatal("explicit headless credentials unexpectedly reopened setup")
 	}
-	if err := EnsureInitialAdmin(database, false); err != nil {
+	if _, err := EnsureInitialAdmin(database, false, config.NewSecureToken); err != nil {
 		t.Fatalf("EnsureInitialAdmin: %v", err)
 	}
 	if err := VerifyExistingAdminCredentials(database, "ops", "Headless&Secure123"); err != nil {

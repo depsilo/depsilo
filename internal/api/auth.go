@@ -361,23 +361,76 @@ func ReconcileSetupState(database *gorm.DB, cfg *config.Config) error {
 	return nil
 }
 
+// generatedPasswordAttempts bounds how many random tokens are drawn for one
+// generated administrator password.
+const generatedPasswordAttempts = 16
+
+// generateInitialAdminPassword draws random tokens until the password policy
+// accepts one for username. The policy rejects a password that contains the
+// user name in any case, and a random token contains a three-letter name
+// about once in 800 draws, which used to fail the whole start. After
+// generatedPasswordAttempts rejected draws the last token is returned, so the
+// caller fails with the policy's own error.
+func generateInitialAdminPassword(username string, newToken func() (string, error)) (string, error) {
+	var password string
+	for attempt := 0; attempt < generatedPasswordAttempts; attempt++ {
+		var err error
+		password, err = newToken()
+		if err != nil {
+			return "", fmt.Errorf("generate initial administrator password: %w", err)
+		}
+		if credential.CredentialPolicy.ValidatePassword(username, password) == nil {
+			break
+		}
+	}
+	return password, nil
+}
+
+// InitialAdminOutcome is what startup must tell the operator about the
+// headless administrator bootstrap. The zero value means nothing to report.
+type InitialAdminOutcome struct {
+	// EnvironmentIgnored is set when DEPSILO_ADMIN_USERNAME or
+	// DEPSILO_ADMIN_PASSWORD is present while setup is pending. The variables
+	// apply only when a configuration file exists, so no administrator was
+	// created from them.
+	EnvironmentIgnored bool
+	// GeneratedUsername and GeneratedPassword are set only when this startup
+	// created the administrator with a random password. A password supplied
+	// by the operator is never returned.
+	GeneratedUsername string
+	GeneratedPassword string
+}
+
 // EnsureInitialAdmin bootstraps configured/headless deployments while keeping
 // the interactive setup database empty until the wizard supplies credentials.
 // Headless installs can provide DEPSILO_ADMIN_USERNAME and
 // DEPSILO_ADMIN_PASSWORD; otherwise ReconcileSetupState reopens interactive
 // setup when a configured database has no loginable administrator.
-func EnsureInitialAdmin(database *gorm.DB, setupPending bool) error {
+//
+// newToken supplies the random password of an administrator created without
+// DEPSILO_ADMIN_PASSWORD; production passes config.NewSecureToken.
+func EnsureInitialAdmin(database *gorm.DB, setupPending bool, newToken func() (string, error)) (InitialAdminOutcome, error) {
 	if setupPending {
-		return nil
+		if os.Getenv("DEPSILO_ADMIN_USERNAME") == "" && os.Getenv("DEPSILO_ADMIN_PASSWORD") == "" {
+			return InitialAdminOutcome{}, nil
+		}
+		// A blank instance deliberately stays in setup: the wizard also chooses
+		// ecosystems and Upstreams. Say so, or the operator believes an
+		// administrator exists while the instance still waits for anyone who
+		// holds the bootstrap token.
+		zap.L().Warn("DEPSILO_ADMIN_USERNAME and DEPSILO_ADMIN_PASSWORD are ignored while initial setup is pending; " +
+			"they apply only when a configuration file exists. " +
+			"Finish setup in the Portal or see docs/deployment.md#scripted-setup")
+		return InitialAdminOutcome{EnvironmentIgnored: true}, nil
 	}
 	var count int64
 	if err := database.Model(&db.User{}).
 		Where("role = ? AND enabled = ? AND permission_source = ? AND password_hash <> ''", "admin", true, "local").
 		Count(&count).Error; err != nil {
-		return fmt.Errorf("count administrators: %w", err)
+		return InitialAdminOutcome{}, fmt.Errorf("count administrators: %w", err)
 	}
 	if count > 0 {
-		return nil
+		return InitialAdminOutcome{}, nil
 	}
 
 	username := os.Getenv("DEPSILO_ADMIN_USERNAME")
@@ -388,21 +441,23 @@ func EnsureInitialAdmin(database *gorm.DB, setupPending bool) error {
 	generated := password == ""
 	if generated {
 		var err error
-		password, err = config.NewSecureToken()
+		password, err = generateInitialAdminPassword(username, newToken)
 		if err != nil {
-			return fmt.Errorf("generate initial administrator password: %w", err)
+			return InitialAdminOutcome{}, err
 		}
 	}
 	if err := CreateInitialAdmin(database, username, password); err != nil {
-		return err
+		return InitialAdminOutcome{}, err
 	}
 	if generated {
-		zap.L().Warn("created initial administrator with a one-time random password; change it after login",
+		// The password is not one-time: it keeps working across restarts until
+		// someone changes it. Only its disclosure happens once.
+		zap.L().Warn("created initial administrator with a generated password; it is shown only this once and stays valid until changed",
 			zap.String("username", username),
 			zap.String("initial_admin_password", password))
-	} else {
-		zap.L().Info("created initial administrator from environment",
-			zap.String("username", username))
+		return InitialAdminOutcome{GeneratedUsername: username, GeneratedPassword: password}, nil
 	}
-	return nil
+	zap.L().Info("created initial administrator from environment",
+		zap.String("username", username))
+	return InitialAdminOutcome{}, nil
 }

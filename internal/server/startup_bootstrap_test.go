@@ -93,7 +93,7 @@ token_ttl = "1h"
 			}
 			server, err := StartServer(context.Background(), zap.NewAtomicLevel())
 			if test.blocked && !test.configured {
-				if server != nil || err == nil || !strings.Contains(err.Error(), "publish initial setup token") {
+				if server != nil || err == nil || !strings.Contains(err.Error(), "publish bootstrap token") {
 					t.Fatalf("StartServer = (%v, %v), want token-publication failure", server, err)
 				}
 				return

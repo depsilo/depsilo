@@ -199,11 +199,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	setupHandler := NewSetupHandler(deps.Config, deps.DB)
 	// Discovery reports whether first-run setup is pending. It gets that one
 	// fact, read under the lock setup completion holds while it changes it.
-	discoverHandler.SetSetupRequired(func() bool {
-		setupHandler.mu.Lock()
-		defer setupHandler.mu.Unlock()
-		return setupHandler.cfg.IsDefault
-	})
+	discoverHandler.SetSetupRequired(setupHandler.NeedsSetup)
 	apiV1.GET("/setup/status", setupHandler.Status)
 	apiV1.POST("/setup/complete", setupHandler.Complete)
 
