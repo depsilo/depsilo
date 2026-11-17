@@ -18,6 +18,7 @@ import (
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
+	"depsilo/internal/egress"
 )
 
 func TestTagListPreservesQueryAndIsolatesCachedPages(t *testing.T) {
@@ -63,7 +64,7 @@ func TestTagListPreservesQueryAndIsolatesCachedPages(t *testing.T) {
 			Name: "test",
 			URL:  registry.URL,
 		}},
-	})
+	}, egress.Policy{})
 	router := gin.New()
 	handler.Register(router.Group("/v2"))
 
@@ -129,7 +130,7 @@ func TestManifestBoundsUpstreamErrorBody(t *testing.T) {
 	handler := New(manager, config.CacheConfig{TTLIndex: time.Hour}, database, config.DockerConfig{
 		DefaultRegistry: "test",
 		Registries:      []config.RegistryConfig{{Name: "test", URL: registry.URL}},
-	})
+	}, egress.Policy{})
 	router := gin.New()
 	handler.Register(router.Group("/v2"))
 
@@ -191,7 +192,7 @@ func TestManifestHeadAnswersFromCacheWhileTheRegistryIsUnreachable(t *testing.T)
 	handler := New(manager, config.CacheConfig{TTLIndex: time.Millisecond, TTLBlob: time.Hour}, database, config.DockerConfig{
 		DefaultRegistry: "test",
 		Registries:      []config.RegistryConfig{{Name: "test", URL: registry.URL}},
-	})
+	}, egress.Policy{})
 	router := gin.New()
 	handler.Register(router.Group("/v2"))
 	request := func(method, target string) *httptest.ResponseRecorder {

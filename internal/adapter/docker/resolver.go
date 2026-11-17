@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"net/url"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"depsilo/internal/config"
+	"depsilo/internal/egress"
 	"go.uber.org/zap"
 )
 
@@ -27,7 +29,20 @@ type Resolver struct {
 	defaultReg string               // default registry name
 }
 
-func NewResolver(cfg config.DockerConfig) *Resolver {
+// NewResolver builds one HTTP client per configured registry. A registry
+// without its own proxy follows policy's default proxy, as a package Upstream
+// does.
+func NewResolver(cfg config.DockerConfig, policy egress.Policy) *Resolver {
+	dialer := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
+	return newResolver(cfg, policy, net.DefaultResolver, dialer.DialContext)
+}
+
+func newResolver(
+	cfg config.DockerConfig,
+	policy egress.Policy,
+	lookup ipResolver,
+	dialContext func(context.Context, string, string) (net.Conn, error),
+) *Resolver {
 	r := &Resolver{
 		registries: make(map[string]*Registry),
 		domainMap:  make(map[string]string),
@@ -35,11 +50,13 @@ func NewResolver(cfg config.DockerConfig) *Resolver {
 	}
 
 	for _, rc := range cfg.Registries {
-		dialer := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
-		client, clientErr := newRegistryClient(rc.URL, rc.Proxy, net.DefaultResolver, dialer.DialContext)
+		proxy, route := registryProxy(rc, policy)
+		client, clientErr := newRegistryClient(rc.URL, proxy, lookup, dialContext)
 		if clientErr != nil {
 			zap.L().Error("docker: invalid registry HTTP configuration", zap.String("registry", rc.Name), zap.Error(clientErr))
 			client = &http.Client{Transport: errorRoundTripper{err: clientErr}}
+		} else {
+			logRegistryEgress(rc.Name, route, proxy)
 		}
 
 		reg := &Registry{

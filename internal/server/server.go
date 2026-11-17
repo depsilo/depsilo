@@ -792,7 +792,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	}
 
 	if len(cfg.Docker.Registries) > 0 {
-		dockerHandler := dockeradapter.New(cacheMgr, cfg.Cache, database, cfg.Docker)
+		dockerHandler := dockeradapter.New(cacheMgr, cfg.Cache, database, cfg.Docker, egressPolicy)
 		if quarantinePolicy.Threshold("docker") > 0 {
 			dockerHandler.SetProvenanceRequired(true)
 			zap.L().Info("docker observation-age gate enabled")

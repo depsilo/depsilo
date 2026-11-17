@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"depsilo/internal/config"
+	"depsilo/internal/egress"
 )
 
 func TestResolverClientDoesNotApplyWholeResponseTimeout(t *testing.T) {
@@ -20,7 +21,7 @@ func TestResolverClientDoesNotApplyWholeResponseTimeout(t *testing.T) {
 			Name: "test",
 			URL:  "https://registry.example",
 		}},
-	})
+	}, egress.Policy{})
 	registry := resolver.Default()
 	if registry == nil {
 		t.Fatal("default registry is nil")

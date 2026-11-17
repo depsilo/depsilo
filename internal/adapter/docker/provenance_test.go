@@ -18,6 +18,7 @@ import (
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
+	"depsilo/internal/egress"
 	"depsilo/internal/quarantine"
 )
 
@@ -93,7 +94,7 @@ func newDockerTestHandler(t *testing.T, upstreamURL string, threshold string) (h
 	handler := New(manager, config.CacheConfig{TTLIndex: time.Hour, TTLBlob: time.Hour}, database, config.DockerConfig{
 		DefaultRegistry: "mock",
 		Registries:      []config.RegistryConfig{{Name: "mock", URL: upstreamURL}},
-	})
+	}, egress.Policy{})
 	handler.SetProvenanceRequired(true)
 	router := gin.New()
 	handler.Register(router.Group("/v2"))

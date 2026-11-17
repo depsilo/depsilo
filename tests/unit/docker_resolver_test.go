@@ -5,6 +5,7 @@ import (
 
 	"depsilo/internal/adapter/docker"
 	"depsilo/internal/config"
+	"depsilo/internal/egress"
 )
 
 func newTestResolver() *docker.Resolver {
@@ -15,7 +16,7 @@ func newTestResolver() *docker.Resolver {
 			{Name: "ghcr", URL: "https://ghcr.io"},
 		},
 	}
-	return docker.NewResolver(cfg)
+	return docker.NewResolver(cfg, egress.Policy{})
 }
 
 func TestResolver_DefaultRegistry(t *testing.T) {

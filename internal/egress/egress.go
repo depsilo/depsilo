@@ -1,7 +1,8 @@
 // Package egress holds the operator's outbound network declarations for
 // package upstreams and cascade peers: the special-purpose ranges that are
 // never dialed, the shared-address ranges an operator declares as private
-// networks, and an optional default HTTP proxy.
+// networks, and an optional default HTTP proxy, which Docker registries
+// without their own proxy use too.
 //
 // It never relaxes the guard for public origins. A declared range is treated
 // as a private network, so a public upstream still cannot redirect into it.
@@ -126,10 +127,11 @@ func (p Policy) IsDeclaredPrivate(address netip.Addr) bool {
 	return false
 }
 
-// UpstreamProxyFor returns the default proxy for an upstream whose configured
-// origin is origin, or "" when that upstream keeps direct egress. The choice
-// is made once per upstream: like an upstream's own proxy, it then carries
-// every request of that upstream, including redirects.
+// UpstreamProxyFor returns the default proxy for an upstream or Docker
+// registry whose configured origin is origin, or "" when it keeps direct
+// egress. The choice is made once per upstream or registry: like its own
+// proxy, it then carries every request of that upstream or registry,
+// including redirects.
 func (p Policy) UpstreamProxyFor(origin string) string {
 	if p.upstreamProxy == "" {
 		return ""

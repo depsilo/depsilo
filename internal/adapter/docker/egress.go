@@ -7,14 +7,60 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
+
+	"go.uber.org/zap"
+
+	"depsilo/internal/config"
+	"depsilo/internal/egress"
 )
 
 type ipResolver interface {
 	LookupIPAddr(context.Context, string) ([]net.IPAddr, error)
+}
+
+// Egress routes of a registry, named in its startup log line.
+const (
+	egressRouteOwnProxy     = "own proxy"
+	egressRouteDefaultProxy = "default proxy"
+	egressRouteDirect       = "direct"
+)
+
+// registryProxy chooses, once per registry, the proxy that carries every
+// request of its client, including the Bearer realm and redirects. The
+// registry's own proxy wins. Otherwise the [egress] default applies exactly as
+// it does to a package Upstream, so loopback and no_proxy hosts stay direct.
+func registryProxy(registry config.RegistryConfig, policy egress.Policy) (proxy, route string) {
+	if registry.Proxy != "" {
+		return registry.Proxy, egressRouteOwnProxy
+	}
+	if proxy = policy.UpstreamProxyFor(registry.URL); proxy != "" {
+		return proxy, egressRouteDefaultProxy
+	}
+	return "", egressRouteDirect
+}
+
+// logRegistryEgress names a registry's route in the manner of the Upstream
+// pool's "using proxy" line. The proxy appears as scheme and host only, so
+// userinfo never reaches the log.
+func logRegistryEgress(name, route, proxy string) {
+	fields := []zap.Field{zap.String("registry", name), zap.String("route", route)}
+	if proxy != "" {
+		fields = append(fields, zap.String("proxy", proxyOrigin(proxy)))
+	}
+	zap.L().Info("docker registry egress", fields...)
+}
+
+func proxyOrigin(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "***"
+	}
+	return (&url.URL{Scheme: parsed.Scheme, Host: parsed.Host}).String()
 }
 
 type guardedDialer struct {
@@ -92,11 +138,12 @@ func (transport *scopePreflightRoundTripper) validateTarget(request *http.Reques
 		(request.URL.Scheme != "http" && request.URL.Scheme != "https") {
 		return errors.New("invalid Docker proxy target")
 	}
-	addresses, err := transport.resolver.LookupIPAddr(request.Context(), request.URL.Hostname())
+	host := request.URL.Hostname()
+	addresses, err := transport.resolver.LookupIPAddr(request.Context(), host)
 	if err != nil || len(addresses) == 0 {
 		return errors.New("resolve Docker proxy target")
 	}
-	targetScope := resolvedScope(addresses)
+	targetScope := proxiedScope(host, addresses)
 	if targetScope == networkUnsafe {
 		return errors.New("unsafe Docker proxy target")
 	}
@@ -123,15 +170,84 @@ func (transport *scopePreflightRoundTripper) scopeForOrigin(ctx context.Context)
 	}
 	transport.mu.Unlock()
 
-	addresses, err := transport.resolver.LookupIPAddr(ctx, transport.origin.Hostname())
+	host := transport.origin.Hostname()
+	addresses, err := transport.resolver.LookupIPAddr(ctx, host)
 	if err != nil || len(addresses) == 0 {
 		return networkUnsafe, errors.New("resolve Docker registry")
 	}
-	scope := resolvedScope(addresses)
+	scope := proxiedScope(host, addresses)
 	if scope == networkUnsafe || !transport.pinOriginScope(scope) {
 		return networkUnsafe, errors.New("unsafe Docker registry network scope")
 	}
 	return scope, nil
+}
+
+// proxiedScope classifies a host that a proxy will carry. It keeps every rule
+// of resolvedScope with one exception: a host name whose every DNS answer lies
+// in egress.BenchmarkingRange counts as public. Proxy software in TUN/fake-IP
+// mode answers that way for public hosts; the placeholder says nothing about
+// the real address, and the proxy resolves the name itself. An address
+// literal is not a DNS answer, and an answer that mixes placeholders with
+// other addresses stays unsafe.
+func proxiedScope(host string, addresses []net.IPAddr) networkScope {
+	if dnsHostName(host) && allFakeIP(addresses) {
+		return networkPublic
+	}
+	return resolvedScope(addresses)
+}
+
+// dnsHostName reports whether only DNS can resolve host: it is neither
+// localhost nor an address in a form that URL parsers and resolvers read as
+// one. IPv6 literals contain a colon, and a host whose last label is a number,
+// such as 198.18.0.5, 3323068421, 0xc6120005 or 198.18.5, is an IPv4 address
+// to them.
+func dnsHostName(host string) bool {
+	host = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
+	if host == "" || host == "localhost" || strings.HasSuffix(host, ".localhost") ||
+		strings.ContainsAny(host, ":%[]") {
+		return false
+	}
+	labels := strings.Split(host, ".")
+	last := labels[len(labels)-1]
+	if hex, ok := strings.CutPrefix(last, "0x"); ok {
+		return strings.Trim(hex, "0123456789abcdef") != ""
+	}
+	return strings.Trim(last, "0123456789") != ""
+}
+
+// allFakeIP reports whether a DNS answer consists of fake-IP placeholders
+// only.
+func allFakeIP(addresses []net.IPAddr) bool {
+	for _, address := range addresses {
+		ip, ok := netip.AddrFromSlice(address.IP)
+		if !ok || !egress.BenchmarkingRange.Contains(ip.Unmap()) {
+			return false
+		}
+	}
+	return len(addresses) > 0
+}
+
+// fakeIPAnswer returns the first refused address of a DNS answer when it is a
+// fake-IP placeholder, the case the Upstream guard reports as egress_fake_ip.
+func fakeIPAnswer(addresses []net.IPAddr) (netip.Addr, bool) {
+	for _, address := range addresses {
+		if scope, _ := literalNetworkScope(address.IP.String()); scope != networkUnsafe {
+			continue
+		}
+		ip, ok := netip.AddrFromSlice(address.IP)
+		ip = ip.Unmap()
+		return ip, ok && egress.BenchmarkingRange.Contains(ip)
+	}
+	return netip.Addr{}, false
+}
+
+// fakeIPDialError explains a direct dial refused for a fake-IP answer and
+// names the remedy. A Docker client reads it in the 502 body, so it carries
+// only the dialed host and the refused address.
+func fakeIPDialError(host string, address netip.Addr) error {
+	return fmt.Errorf("%s resolved to %s, a fake-IP address from proxy software in TUN/fake-IP mode; "+
+		"set [egress] upstream_proxy or DEPSILO_EGRESS_UPSTREAM_PROXY to the proxy software's HTTP port and restart, "+
+		"see docs/deployment.md#upstream-network-egress", host, address)
 }
 
 func (transport *scopePreflightRoundTripper) pinOriginScope(scope networkScope) bool {
@@ -174,6 +290,9 @@ func (dialer *guardedDialer) DialContext(ctx context.Context, network, address s
 	}
 	targetScope := resolvedScope(addresses)
 	if targetScope == networkUnsafe {
+		if address, fake := fakeIPAnswer(addresses); fake {
+			return nil, fakeIPDialError(host, address)
+		}
 		return nil, errors.New("unsafe Docker dial target")
 	}
 	if !sameDialAddress(address, dialer.origin) {

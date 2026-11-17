@@ -18,6 +18,7 @@ import (
 	"depsilo/internal/adapter"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
+	"depsilo/internal/egress"
 )
 
 const manifestAccept = "application/vnd.docker.distribution.manifest.v2+json, " +
@@ -50,12 +51,14 @@ type Handler struct {
 	observations        *observationStore
 }
 
-func New(cacheMgr *cache.Manager, cacheCfg config.CacheConfig, database *gorm.DB, dockerCfg config.DockerConfig) *Handler {
+// New builds the Docker Registry handler. egressPolicy supplies the default
+// proxy for registries without their own.
+func New(cacheMgr *cache.Manager, cacheCfg config.CacheConfig, database *gorm.DB, dockerCfg config.DockerConfig, egressPolicy egress.Policy) *Handler {
 	return &Handler{
 		cacheMgr:     cacheMgr,
 		cacheCfg:     cacheCfg,
 		db:           database,
-		resolver:     NewResolver(dockerCfg),
+		resolver:     NewResolver(dockerCfg, egressPolicy),
 		auth:         NewAuthManager(),
 		observations: newObservationStore(database),
 	}
