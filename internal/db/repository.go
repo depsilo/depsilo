@@ -293,6 +293,28 @@ func AutoMigrate(database *gorm.DB) error {
 	return nil
 }
 
+// RecordedSchemaVersion reports the newest migration recorded in the
+// database's ledger without creating or changing anything. A database that has
+// no ledger yet reports zero, the version AutoMigrate assigns to it. Offline
+// commands use it to refuse a database this binary would first have to
+// migrate, or one written by a newer binary.
+func RecordedSchemaVersion(database *gorm.DB) (int, error) {
+	var ledgers int64
+	if err := database.Raw("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?", schemaMigrationRecord{}.TableName()).Scan(&ledgers).Error; err != nil {
+		return 0, fmt.Errorf("inspect schema migration ledger: %w", err)
+	}
+	if ledgers == 0 {
+		return 0, nil
+	}
+	var current int
+	if err := database.Model(&schemaMigrationRecord{}).
+		Select("COALESCE(MAX(version), 0)").
+		Scan(&current).Error; err != nil {
+		return 0, fmt.Errorf("read database schema version: %w", err)
+	}
+	return current, nil
+}
+
 func applySchemaMigration(database *gorm.DB, migration schemaMigration, appliedAt time.Time) error {
 	return database.Transaction(func(tx *gorm.DB) error {
 		if err := migration.apply(tx); err != nil {

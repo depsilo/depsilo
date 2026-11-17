@@ -38,6 +38,7 @@ var commands = []command{
 	{name: "flush", run: runFlush},
 	{name: "backup", run: runBackup},
 	{name: "restore", run: runRestore},
+	{name: "reset-password", run: runResetPassword},
 	{name: "distribution", run: runDistribution},
 	{name: "audit", run: runAudit},
 	{name: "help", aliases: []string{"--help", "-h"}, run: runHelp},
@@ -123,6 +124,7 @@ Commands:
     flush                       Clear expired cache entries
     backup [--out file.tar.gz]  Online backup of config + SQLite state
     restore <backup.tar.gz>     Validated restore; target server must be stopped
+    reset-password [<username>] Set a local account's password; server must be stopped
     distribution <command>     Prepare and verify durable dependency-set drafts
     audit verify [--json]       Recompute the tamper-evident audit hash chain
     help                        Show this message

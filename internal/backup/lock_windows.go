@@ -9,10 +9,12 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func openLockFile(path string) (*os.File, error) {
+// openLockFile never reports a created file: lease entries have no owner to
+// change on Windows.
+func openLockFile(path string) (file *os.File, created bool, err error) {
 	pointer, err := windows.UTF16PtrFromString(path)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	handle, err := windows.CreateFile(
 		pointer,
@@ -24,10 +26,21 @@ func openLockFile(path string) (*os.File, error) {
 		0,
 	)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return os.NewFile(uintptr(handle), path), nil
+	return os.NewFile(uintptr(handle), path), false, nil
 }
+
+// processNewLeaseEntryOwner keeps every lease entry as it was created.
+func processNewLeaseEntryOwner(os.FileInfo) (uid, gid int, change bool) { return 0, 0, false }
+
+// openLockDirectory is never reached: no entry changes owner on Windows.
+func openLockDirectory(string) (*os.File, error) {
+	return nil, errors.New("lease entries have no owner to change on Windows")
+}
+
+// verifyNewLockDirectory is never reached either.
+func verifyNewLockDirectory(*os.File) error { return nil }
 
 func validateLeaseParent(string) error { return nil }
 

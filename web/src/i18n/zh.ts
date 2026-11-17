@@ -1870,6 +1870,7 @@ const zh = {
         exporter_delete: "删除审计投递",
         rule_create: "创建包规则",
         rule_delete: "删除包规则",
+        user_cli_reset: "本机命令行重置密码",
       },
       title: '审计日志',
       subtitle: '追溯包访问与管理面变更，并按时间、生态和目标筛选或导出。',

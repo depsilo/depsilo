@@ -100,8 +100,23 @@ test('Audit Logs renders successful management actions with their actor', async 
           bytes_sent: 0,
           status_code: 200,
           created_at: new Date().toISOString(),
+        }, {
+          // What `depsilo reset-password` records; no signed-in account acts.
+          id: 2,
+          ecosystem: 'admin',
+          package_name: 'user:3',
+          version: 'password reset from the local CLI by OS user depsilo (uid 10001)',
+          action: 'user.cli_reset',
+          cache_result: 'success',
+          client_ip: '',
+          user_agent: 'operator:0',
+          upstream_url: '',
+          latency_ms: 0,
+          bytes_sent: 0,
+          status_code: 200,
+          created_at: new Date().toISOString(),
         }],
-        total: 1,
+        total: 2,
         page: 1,
       }
     },
@@ -110,8 +125,10 @@ test('Audit Logs renders successful management actions with their actor', async 
   await page.goto('/admin/audit?ecosystem=admin&result=success')
   await expect.poll(() => requests.at(-1)).toMatchObject({ ecosystem: 'admin', result: 'success' })
   await expect(page.getByText('license.set')).toBeVisible()
+  await expect(page.getByText(/^(本机命令行重置密码|Password reset from the local CLI)$/)).toBeVisible()
+  await expect(page.getByText('user.cli_reset', { exact: true })).toBeVisible()
   await expect(page.getByText('operator:7')).toBeVisible()
-  await expect(page.getByLabel(/审计日志表格|Audit logs table/).getByText(/成功|Success/)).toBeVisible()
+  await expect(page.getByLabel(/审计日志表格|Audit logs table/).getByText(/成功|Success/)).toHaveCount(2)
 })
 
 for (const malformedCase of [

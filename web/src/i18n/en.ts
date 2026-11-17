@@ -1863,6 +1863,7 @@ const en = {
         exporter_delete: "Delete audit exporter",
         rule_create: "Create package rule",
         rule_delete: "Delete package rule",
+        user_cli_reset: "Password reset from the local CLI",
       },
       title: 'Audit Logs',
       subtitle: 'Trace package access and control-plane changes, then filter or export them by time, ecosystem, and target.',

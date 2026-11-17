@@ -90,6 +90,35 @@ func TestAutoMigrateRejectsDatabaseFromNewerBinary(t *testing.T) {
 	}
 }
 
+func TestRecordedSchemaVersionReadsTheLedgerWithoutCreatingIt(t *testing.T) {
+	database := openCompileCacheMigrationTestDB(t)
+
+	version, err := RecordedSchemaVersion(database)
+	if err != nil || version != 0 {
+		t.Fatalf("RecordedSchemaVersion on an empty database = %d, %v; want 0, nil", version, err)
+	}
+	if database.Migrator().HasTable(&schemaMigrationRecord{}) {
+		t.Fatal("reading the schema version created the migration ledger")
+	}
+
+	if err := AutoMigrate(database); err != nil {
+		t.Fatalf("AutoMigrate: %v", err)
+	}
+	version, err = RecordedSchemaVersion(database)
+	if err != nil || version != CurrentSchemaVersion {
+		t.Fatalf("RecordedSchemaVersion after AutoMigrate = %d, %v; want %d, nil", version, err, CurrentSchemaVersion)
+	}
+
+	newer := schemaMigrationRecord{Version: CurrentSchemaVersion + 1, Name: "future", AppliedAt: time.Now().UTC()}
+	if err := database.Create(&newer).Error; err != nil {
+		t.Fatalf("seed future schema version: %v", err)
+	}
+	version, err = RecordedSchemaVersion(database)
+	if err != nil || version != CurrentSchemaVersion+1 {
+		t.Fatalf("RecordedSchemaVersion with a newer ledger = %d, %v; want %d, nil", version, err, CurrentSchemaVersion+1)
+	}
+}
+
 func TestAutoMigrateAddsLedgerToLegacyDatabase(t *testing.T) {
 	database := openCompileCacheMigrationTestDB(t)
 	if err := database.AutoMigrate(&legacyCompileCacheEntry{}); err != nil {
