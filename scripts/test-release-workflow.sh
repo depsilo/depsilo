@@ -33,6 +33,13 @@ if grep -Eq 'chown .*10001:10001 /root([[:space:]\\]|$)' "$DOCKERFILE" ||
     echo "Docker runtime must expose only the state directories through the root home" >&2
     exit 1
 fi
+# The image description is the README's one-line description.
+readme_tagline=$(sed -n 's/^\*\*\(.*\)\*\*$/\1/p' "$ROOT/README.md" | head -n 1)
+if [ -z "$readme_tagline" ] ||
+    ! grep -Fqx "            org.opencontainers.image.description=$readme_tagline" "$WORKFLOW"; then
+    echo "release image description must be the README's one-line description: $readme_tagline" >&2
+    exit 1
+fi
 if grep -R -q "node-version: '22.22.0'" "$ROOT/.github/workflows"; then
     echo "release workflows still use the vulnerable Node 22.22.0 runtime" >&2
     exit 1

@@ -332,7 +332,7 @@ jobs:
             type=semver,pattern={{version}}
           labels: |
             org.opencontainers.image.title=Depsilo
-            org.opencontainers.image.description=Supply-chain enforcement proxy for 14 ecosystems and Docker OCI
+            org.opencontainers.image.description=A self-hosted dependency cache for homelabs and small teams.
             org.opencontainers.image.url=https://depsilo.com
             org.opencontainers.image.source=https://github.com/depsilo/depsilo
             org.opencontainers.image.licenses=MIT

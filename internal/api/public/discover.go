@@ -108,7 +108,7 @@ func (h *DiscoverHandler) catalog(base string) gin.H {
 		"service":        "depsilo",
 		"version":        version.Version,
 		"commit":         version.Commit,
-		"description":    "Supply-chain enforcement proxy for 14 package ecosystems plus Docker OCI",
+		"description":    "A self-hosted dependency cache for homelabs and small teams.",
 		"homepage":       "https://depsilo.com",
 		"repository":     "https://github.com/depsilo/depsilo",
 		"setup_required": setupRequired,

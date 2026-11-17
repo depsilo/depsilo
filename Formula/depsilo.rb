@@ -7,7 +7,7 @@
 # this main-repository placeholder is not updated automatically. Do not install it.
 
 class Depsilo < Formula
-  desc "Supply-chain enforcement proxy for 14 ecosystems and Docker OCI"
+  desc "A self-hosted dependency cache for homelabs and small teams"
   homepage "https://depsilo.com"
   version "0.5.0"
   license "MIT"
