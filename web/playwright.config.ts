@@ -29,5 +29,13 @@ export default defineConfig({
     // Reusing any HTTP server on the port can silently run the suite against
     // another application. Keep reuse an explicit local-development opt-in.
     reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === '1',
+    // The dev server proxies every machine route it does not serve itself to
+    // DEPSILO_DEV_BACKEND_URL, which defaults to http://localhost:23333. The
+    // suite mocks the API it needs, so keep unmocked requests away from
+    // whatever instance happens to listen there: point the proxy at a closed
+    // port unless a backend is named explicitly, as on a CI runner.
+    env: {
+      DEPSILO_DEV_BACKEND_URL: process.env.DEPSILO_DEV_BACKEND_URL ?? 'http://127.0.0.1:9',
+    },
   },
 })
