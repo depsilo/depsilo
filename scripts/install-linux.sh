@@ -8,14 +8,20 @@
 #   ~/.local/share/icons/hicolor/256x256/apps/depsilo-tray.png   (best effort)
 #   ~/.config/autostart/depsilo-tray.desktop                     (autostart-enable only)
 #
-# Usage:
-#   scripts/install-linux.sh install
-#   scripts/install-linux.sh uninstall
-#   scripts/install-linux.sh autostart-enable
-#   scripts/install-linux.sh autostart-disable
+# Usage, from an extracted release archive (any working directory):
+#   bash install-linux.sh install
+#   bash install-linux.sh uninstall
+#   bash install-linux.sh autostart-enable
+#   bash install-linux.sh autostart-disable
+#
+# Usage, from the repository: make install-linux, uninstall-linux,
+# autostart-linux and unautostart-linux run the same four commands.
 set -euo pipefail
 
-if [[ "$(uname)" != "Linux" ]]; then
+# DEPSILO_INSTALL_LINUX_TEST_OS stands in for the uname result so that
+# scripts/test-install-linux.sh can exercise this script, and this refusal, on
+# any developer machine. Nothing else sets it.
+if [[ "${DEPSILO_INSTALL_LINUX_TEST_OS:-$(uname)}" != "Linux" ]]; then
   echo "ERROR: this script targets Linux." >&2
   exit 1
 fi
@@ -27,13 +33,102 @@ ICONS_DIR="${PREFIX}/share/icons/hicolor/256x256/apps"
 AUTOSTART_DIR="${HOME}/.config/autostart"
 DESKTOP_FILE="depsilo-tray.desktop"
 
-# Repo paths (relative to repo root, which is where make calls us from)
-DESKTOP_SRC="assets/linux/depsilo-tray.desktop"
-ICON_SRC="assets/macos/icon.svg"        # reused — same brand asset
-BIN_SRC="bin/depsilo-tray"
+# Sources are resolved from this script's own location, never from the working
+# directory, in one of two layouts:
+#
+#   archive  the release tar.gz: depsilo-tray, depsilo-tray.desktop and
+#            depsilo-tray.svg beside this script. The "Package tar.gz" step of
+#            .github/workflows/release.yml builds it, and
+#            scripts/test-install-linux.sh keeps the two in step.
+#   repo     a checkout: this script in scripts/, the binary from `make tray`
+#            in bin/, the launcher and the icon under assets/.
+#
+# A script that bash reads from standard input (bash -s <command>) has no
+# location, so it has no layout either: install is refused, and the commands
+# that need no sources work as usual.
+SCRIPT_SOURCE="${BASH_SOURCE[0]:-}"
+if [[ -n "${SCRIPT_SOURCE}" ]]; then
+  SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${SCRIPT_SOURCE}")" && pwd)"
+  SCRIPT_PATH="${SCRIPT_DIR}/$(basename -- "${SCRIPT_SOURCE}")"
+  REPO_ROOT="$(dirname -- "${SCRIPT_DIR}")"
+else
+  SCRIPT_DIR=""
+  SCRIPT_PATH="install-linux.sh"
+  REPO_ROOT=""
+fi
+
+if [[ -z "${SCRIPT_DIR}" ]]; then
+  LAYOUT="stdin"
+elif [[ -f "${SCRIPT_DIR}/depsilo-tray" || -f "${SCRIPT_DIR}/${DESKTOP_FILE}" ]]; then
+  LAYOUT="archive"
+  BIN_SRC="${SCRIPT_DIR}/depsilo-tray"
+  DESKTOP_SRC="${SCRIPT_DIR}/${DESKTOP_FILE}"
+  ICON_SRC="${SCRIPT_DIR}/depsilo-tray.svg"
+elif [[ -f "${REPO_ROOT}/assets/linux/${DESKTOP_FILE}" ]]; then
+  LAYOUT="repo"
+  BIN_SRC="${REPO_ROOT}/bin/depsilo-tray"
+  DESKTOP_SRC="${REPO_ROOT}/assets/linux/${DESKTOP_FILE}"
+  ICON_SRC="${REPO_ROOT}/assets/macos/icon.svg"   # reused — same brand asset
+else
+  LAYOUT="none"
+fi
+
+# The command a user of this layout can run for one of this script's actions.
+# Only a checkout has the make targets; everywhere else it is this script.
+layout_command() {
+  if [[ "${LAYOUT}" == "repo" ]]; then
+    case "$1" in
+      install)            echo "make install-linux" ;;
+      uninstall)          echo "make uninstall-linux" ;;
+      autostart-enable)   echo "make autostart-linux" ;;
+      autostart-disable)  echo "make unautostart-linux" ;;
+    esac
+  else
+    printf 'bash %q %s\n' "${SCRIPT_PATH}" "$1"
+  fi
+}
+
+# Stop before anything is written when the layout cannot be installed, naming
+# every missing file.
+require_sources() {
+  local missing=()
+  case "${LAYOUT}" in
+    archive)
+      [[ -f "${BIN_SRC}" ]] || missing+=("depsilo-tray")
+      [[ -f "${DESKTOP_SRC}" ]] || missing+=("${DESKTOP_FILE}")
+      if [[ ${#missing[@]} -gt 0 ]]; then
+        echo "ERROR: not found in ${SCRIPT_DIR}: ${missing[*]}" >&2
+        echo "  The release archive holds depsilo-tray, ${DESKTOP_FILE}, depsilo-tray.svg" >&2
+        echo "  and install-linux.sh side by side — extract it again and keep them together." >&2
+        exit 1
+      fi
+      ;;
+    repo)
+      if [[ ! -f "${BIN_SRC}" ]]; then
+        echo "ERROR: ${BIN_SRC} not found — run 'make tray' first." >&2
+        exit 1
+      fi
+      ;;
+    stdin)
+      echo "ERROR: install needs the files beside this script, but bash is reading it from standard input." >&2
+      echo "  Run the script as a file instead: bash install-linux.sh install" >&2
+      exit 1
+      ;;
+    *)
+      echo "ERROR: nothing to install next to ${SCRIPT_PATH}. It needs one of:" >&2
+      echo "  release archive: depsilo-tray and ${DESKTOP_FILE} in ${SCRIPT_DIR}" >&2
+      echo "  repository:      bin/depsilo-tray and assets/linux/${DESKTOP_FILE} in ${REPO_ROOT}" >&2
+      exit 1
+      ;;
+  esac
+}
 
 render_icon() {
   local out="${ICONS_DIR}/depsilo-tray.png"
+  if [[ ! -f "${ICON_SRC}" ]]; then
+    echo "  ⚠ ${ICON_SRC} not found — skipping icon" >&2
+    return 1
+  fi
   if command -v rsvg-convert >/dev/null 2>&1; then
     rsvg-convert -w 256 -h 256 "${ICON_SRC}" -o "${out}"
     echo "  ✓ ${out}"
@@ -51,10 +146,7 @@ render_icon() {
 }
 
 cmd_install() {
-  if [[ ! -f "${BIN_SRC}" ]]; then
-    echo "ERROR: ${BIN_SRC} not found — run 'make tray' first." >&2
-    exit 1
-  fi
+  require_sources
 
   mkdir -p "${BIN_DIR}" "${APPS_DIR}" "${ICONS_DIR}"
 
@@ -95,7 +187,7 @@ cmd_install() {
 Launch:
   • From your application menu: search "Depsilo"
   • From terminal:               depsilo-tray
-  • Autostart on login:          make autostart-linux
+  • Autostart on login:          $(layout_command autostart-enable)
 
 GNOME on Wayland users (Ubuntu 22.04+, Fedora):
   The system tray requires the "AppIndicator and KStatusNotifierItem"
@@ -132,7 +224,7 @@ cmd_uninstall() {
 
 cmd_autostart_enable() {
   if [[ ! -f "${APPS_DIR}/${DESKTOP_FILE}" ]]; then
-    echo "ERROR: Depsilo is not installed. Run 'make install-linux' first." >&2
+    echo "ERROR: Depsilo is not installed. Run '$(layout_command install)' first." >&2
     exit 1
   fi
   mkdir -p "${AUTOSTART_DIR}"

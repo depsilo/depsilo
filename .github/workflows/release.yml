@@ -160,8 +160,9 @@ jobs:
 
   # Job 2: macOS menu-bar app (.app bundle, unsigned)
   # Built on macOS via `make app-macos` which wraps `cmd/depsilo-tray` in
-  # a proper bundle with Info.plist + .icns. Unsigned — users must
-  # right-click → Open on first launch (Gatekeeper).
+  # a proper bundle with Info.plist + .icns. Unsigned: Gatekeeper refuses the
+  # first launch, and docs/deployment.md#tray-application gives the override
+  # for each macOS version.
   tray-macos:
     needs: verify
     permissions:
@@ -219,7 +220,8 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # Job 3: Linux menu-bar app (tar.gz with tray binary + .desktop launcher)
+  # Job 3: Linux menu-bar app (tar.gz with tray binary, .desktop launcher,
+  # icon and install-linux.sh)
   # Built on Ubuntu LTS. Users untar + `bash install-linux.sh install`
   # to drop the binary into ~/.local/bin and register the .desktop file.
   # Needs GTK + AppIndicator headers at build time for fyne/systray.
@@ -258,14 +260,21 @@ jobs:
       - name: Build tray binary
         run: make tray
 
+      # scripts/install-linux.sh installs from exactly these files beside it.
+      # scripts/test-install-linux.sh runs this step against stand-in files
+      # and installs from the result, so keep the step plain shell. The files
+      # are archived by name: a "./" member would make GNU tar apply the stage
+      # directory's mode and timestamp to the directory a user extracts into.
       - name: Package tar.gz
         run: |
           mkdir -p stage
           cp bin/depsilo-tray stage/
           cp assets/linux/depsilo-tray.desktop stage/
+          cp assets/macos/icon.svg stage/depsilo-tray.svg
           cp scripts/install-linux.sh stage/
           chmod +x stage/install-linux.sh
-          tar czf depsilo-tray-linux-amd64.tar.gz -C stage .
+          tar czf depsilo-tray-linux-amd64.tar.gz -C stage \
+            depsilo-tray depsilo-tray.desktop depsilo-tray.svg install-linux.sh
 
       - name: Stage tray artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
