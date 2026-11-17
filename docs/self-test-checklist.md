@@ -28,12 +28,15 @@ docker run -d --name depsilo \
 ```
 
 - [ ] `curl -sf http://localhost:23333/health | jq .` 返回 healthy
-- [ ] 从 `docker logs depsilo` 取得一次性 bootstrap token，首次打开
+- [ ] 运行 `docker exec depsilo depsilo setup token` 取得初始化令牌（启动输出里
+      也有，可用 `docker logs depsilo` 查看；初始化完成前每次重启都会更换），首次打开
       `http://localhost:23333/` 后完成 Setup Wizard。向导配置服务并创建首个管理员
-- [ ] `/api/v1/discover` 的 `ecosystems` 长度为 14；Docker OCI 单独走 `/v2/`
+- [ ] `/api/v1/discover` 的 `ecosystems` 只列出已配置上游的生态：向导默认配置为
+      13 个，手工加入 Hugging Face 后为 14 个；Docker OCI 单独走 `/v2/`
 - [ ] 使用向导中创建的管理员登录 `/admin`；系统不存在默认 `admin/admin` 密码
 - [ ] 容器重启后配置、数据库和缓存目录仍存在
-- [ ] doctor 没有 fail：
+- [ ] 完成初始化后 doctor 没有 fail。初始化完成前，doctor 的 `Initial setup`
+      检查为 fail，退出码为 1：
 
 ```bash
 docker exec depsilo depsilo doctor --json \
@@ -68,16 +71,27 @@ npm install --no-save lodash
 
 - [ ] Cache 页面有 tarball
 - [ ] 客户端没有 integrity mismatch
+- [ ] 已有 lockfile 的项目在空的客户端缓存下安装后，Access Logs 中有这次安装的
+      tarball 请求。安装没有报错不代表经过了 Depsilo：如果 Access Logs 中没有
+      这些请求（安装绕过了 Depsilo），或者安装返回 404 `NPM_UNSIGNED_TARBALL`
+      （Access Logs 会记录这次 404），按
+      [Node lockfiles](package-rules.md#node-lockfiles) 调整 lockfile 后重试
 
 ### Go modules
 
 ```bash
 GOPROXY=http://localhost:23333/go,direct \
-  go install github.com/spf13/cobra@latest
+  go mod download github.com/spf13/cobra@latest
 ```
 
 - [ ] Cache 页面有 `@v/*.zip`
-- [ ] 保持 GOSUMDB 开启
+- [ ] 保持 GOSUMDB 为默认值，不要设为 `off`。Depsilo 会把校验和数据库请求
+      （`/go/sumdb/`）转发给 Go 上游，由 go 命令自行验证；Access Logs 中有
+      `go/sumdb/` 请求
+- [ ] `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:23333/go/sumdb/sum.golang.org/supported`
+      在向导默认上游下返回 200。返回 404 表示没有 Go 上游镜像该数据库，或者
+      Go 上游当前都连不上（先确认 Go 上游可达）；此时 go 命令会改为直连
+      `sum.golang.org`
 - [ ] `,direct` 只在代理返回 404/410 时继续，不是 Depsilo 宕机 fallback；
       不要改成会绕过 451 的 `|direct`
 
@@ -127,23 +141,24 @@ curl -sf -X POST http://localhost:23333/mcp \
 
 ## 5. Prometheus 和 Webhook
 
-代码注册了五组 collector，但当前埋点并不完整：两个 cache gauge 尚未接入
-实时统计，通常只显示 `0`；三个带 label 的 counter/histogram 目前只有 Docker
-handler 会更新，普通 PyPI/npm 等请求不会生成对应 series。
+每个生态的请求都会计入下面前两组指标，`adapter_type` 是生态名，例如 `npm`、
+`go`、`docker`；回源的请求还会计入第三组。两个 cache gauge 取自缓存清单，
+启动时刷新一次，之后每分钟刷新一次。
 
-- `depsilo_requests_total{adapter_type="docker",hit="true|false"}`
-- `depsilo_request_duration_seconds_bucket{adapter_type="docker",...}`
+- `depsilo_requests_total{adapter_type="...",hit="true|false"}`
+- `depsilo_request_duration_seconds_bucket{adapter_type="...",...}`
 - `depsilo_upstream_requests_total{upstream="...",success="true|false"}`
 - `depsilo_cache_size_bytes`
 - `depsilo_cache_files_total`
 
 建议基于这些真实指标告警，不要引用不存在的 `cache_hits_total`、
-`upstream_latency_seconds` 或 `storage_size_bytes`。在补齐全生态和 gauge 埋点前，
-也不要把当前 `/metrics` 当作缓存容量或全生态请求量的可靠告警源。
+`upstream_latency_seconds` 或 `storage_size_bytes`。
 
 - [ ] Prometheus 能抓取 `/metrics`
-- [ ] 完成 Docker MISS/HIT 后能看到 `adapter_type="docker"` series；不要求
-      PyPI/npm 等 handler 产生同名 series
+- [ ] 完成第 2 节某个生态的 MISS/HIT 后，能看到该生态的 series，例如
+      `adapter_type="npm"`
+- [ ] 有制品进入缓存后，约一分钟内 `depsilo_cache_files_total` 和
+      `depsilo_cache_size_bytes` 不再是 0
 - [ ] 在 Admin 配置 Webhook，并在测试环境触发一次 quarantine/malware block；
       block 才会推送，approve/revoke/override 只写审计事件
 
@@ -170,7 +185,7 @@ tar -tzf backups/depsilo-backup.tar.gz
 - [ ] 归档只有 manifest、config 和 database；不声称包含 cache
 - [ ] `manifest.json` 为 `depsilo-backup` v2，两个状态文件都有 SHA-256
 - [ ] server 正常运行时也能完成备份，并能在隔离 SQLite 中读到备份前已提交的数据
-- [ ] 在隔离目录执行恢复演练，不删除生产 `depsilo-state`
+- [ ] 在隔离目录执行恢复演练，不删除生产 volume `depsilo-data`
 
 下面的 disposable container 不启动服务器，因此满足“restore 时服务必须停止”：
 
@@ -214,13 +229,13 @@ printf 'restore drill retained for inspection: %s\n' "$restore_dir"
 - [ ] 内存没有单调增长
 - [ ] 磁盘在 LRU 水位附近稳定
 - [ ] 命中率符合团队依赖重复度；不要把统一百分比当成发布门槛
-- [ ] 定期复核 default admin 已改密、JWT secret、HTTPS 和 Admin 网络边界
+- [ ] 定期复核管理员账号和密码、JWT secret、HTTPS 和 Admin 网络边界
 
 ## 报问题
 
 提交 issue 前附上：
 
-1. `docker exec depsilo /app/depsilo doctor --json`
+1. `docker exec depsilo depsilo doctor --json`
 2. `docker logs depsilo --tail 200`
 3. Depsilo image tag 和部署方式
 4. 可复现步骤及所用生态

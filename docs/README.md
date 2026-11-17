@@ -1,28 +1,36 @@
 # Documentation
 
 Start with the [project overview](../README.md) or [中文介绍](README_zh.md).
-Use the guides below for the task at hand.
+Use the guides below for the task at hand. Guides are in English unless a row
+says otherwise.
 
 ## Deploy and use
 
 | Task | Guide |
 | --- | --- |
-| Install, initialize, or upgrade | [Deployment](deployment.md) |
-| Find configuration fields and defaults | [Configuration reference](../config.example.toml) |
+| Install, initialize, or upgrade | [Deployment](deployment.md) · [Upgrade](deployment.md#upgrade) |
+| Script the first run without the browser | [Scripted setup](deployment.md#scripted-setup) |
+| Fix a first run that does not work | [If the first run goes wrong](deployment.md#if-the-first-run-goes-wrong) |
+| Serve clients through a reverse proxy | [Reverse proxy and TLS](deployment.md#reverse-proxy-and-tls) |
+| Remove Depsilo | [Uninstall](deployment.md#uninstall) |
+| Find configuration fields and defaults | [Configuration reference](../config.example.toml) (comments partly in Chinese) |
+| Install a Node project whose lockfile was created against another registry | [Node lockfiles](package-rules.md#node-lockfiles) |
 | Choose supply-chain controls | [Policy overview](supply-chain.md) · [Package rules and ecosystem coverage](package-rules.md) |
 | Connect a login provider or directory | [OIDC](oidc.md) · [LDAP / LDAPS](ldap.md) |
-| Connect ccache or sccache | [Compiler cache](compile-cache.md) |
+| Connect ccache or sccache | [Compiler cache](compile-cache.md) (in Chinese) |
 | Connect coding agents or MCP clients | [AI coding agents](deployment.md#ai-coding-agents) |
 | Share cached downloads between instances | [Cascade](cascade.md) |
 | Retain and verify a dependency-set draft | [Preparation catalog](distribution.md) (no offline serving yet) |
-| Verify cache reuse and cascade traffic | [Controlled benchmark](../testground/README.md#controlled-cache-and-cascade-evidence) |
-| Evaluate an isolated installation | [Trial guide](trial-guide.md) |
+| Verify cache reuse and cascade traffic | [Controlled benchmark](../testground/README.md#controlled-cache-and-cascade-evidence) (the rest of that file is in Chinese) |
+| Evaluate an isolated installation | [Trial guide](trial-guide.md) (in Chinese) |
 
 ## Operate and secure
 
 | Task | Guide |
 | --- | --- |
-| Check service health and diagnose failures | [Diagnostics](deployment.md#health-checks) · [Self-test checklist](self-test-checklist.md) |
+| Check service health and diagnose failures | [Diagnostics](deployment.md#health-checks) · [Self-test checklist](self-test-checklist.md) (in Chinese) |
+| Back up and restore an instance | [Back up and restore](deployment.md#back-up-and-restore) |
+| Recover a lost administrator password | [Administrator access](deployment.md#administrator-access) |
 | Understand Admin APIs and configuration ownership | [Admin control plane](admin-control-plane.md) |
 | Forward audit events and verify the audit chain | [SIEM audit routing](siem-audit-routing.md) |
 | Verify signed releases, images, and SBOMs | [Release verification](release-verification.md) |

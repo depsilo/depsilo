@@ -1,6 +1,10 @@
 config_version = 1
 
 [server]
+# The built-in default is "127.0.0.1": only this machine can connect. This
+# example listens on every interface, as a container must for its published
+# port to work. Package routes need no sign-in, so keep a host that listens on
+# every interface on a network you trust.
 host = "0.0.0.0"
 port = 23333
 log_level = "info"
@@ -8,6 +12,10 @@ log_level = "info"
 # reverse proxies you operate, for example ["127.0.0.1/32", "10.0.0.0/8"].
 trusted_proxies = []
 
+# Relative paths in `dsn` and in the storage `path` settings below resolve
+# against the working directory of the Depsilo process, not against this file.
+# A deployment should use absolute paths, so that starting Depsilo from another
+# directory or from a service manager finds the same database and cache.
 [database]
 driver = "sqlite"           # currently the only supported database driver
 dsn    = "./data/depsilo.db"
@@ -53,6 +61,10 @@ lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
 # 它是所有未单独配置代理、也未走级联的包上游的默认代理；no_proxy 中的
 # 上游主机保持直连。Tailscale / Headscale / NetBird 节点地址在 100.64.0.0/10，
 # 需要在 private_ranges 中声明后才能作为上游或级联父节点。
+# 这三项也可以用环境变量设置，环境变量优先于本文件：DEPSILO_EGRESS_UPSTREAM_PROXY、
+# DEPSILO_EGRESS_NO_PROXY、DEPSILO_EGRESS_PRIVATE_RANGES（后两项用逗号分隔）。
+# 在容器里 127.0.0.1 指的是容器自己，代理在宿主机上时要填宿主机的地址，
+# 例如 http://host.docker.internal:7890（Linux 上的写法见上面的文档链接）。
 # [egress]
 # upstream_proxy = "http://127.0.0.1:7890"
 # no_proxy = ["mirror.lan", "192.168.0.0/16"]

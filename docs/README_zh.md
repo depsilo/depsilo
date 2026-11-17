@@ -75,6 +75,9 @@ docker run -d --name depsilo \
   ghcr.io/depsilo/depsilo:latest
 ```
 
+`-p 23333:23333` 会把端口发布到宿主机的所有网卡，而下载依赖包不需要登录，所以请在可信网络中运行。
+只想在本机试用时，改用 `-p 127.0.0.1:23333:23333`。
+
 ### 2. 创建管理员
 
 获取初始化令牌：
@@ -93,11 +96,20 @@ docker exec depsilo depsilo setup token
 2. 在实际下载依赖的设备上应用生成的配置。
 3. 运行建议的下载命令，在同一页面确认请求与缓存结果。
 
+接入指引里的命令是按浏览器地址栏里的地址生成的。客户端在其他机器上时，请用服务器的网络地址打开 Depsilo
+（例如 `http://<服务器地址>:23333`），再从那里复制命令。这要求端口没有只发布在 `127.0.0.1` 上，
+第 1 步的 `-p 23333:23333` 即可。
+
 之后可以在总览查看统计。接入指引可以随时重新打开；也可以在首页选择 **AI 接入**，
 把客户端配置交给编码 Agent 完成。
 
-`depsilo-data` 这个 Volume 会保留配置、凭据、数据库和缓存。长期部署时，请用明确的发行版本替换 `latest`，
-并将服务放在可信网络中；远程访问应通过提供 TLS 的反向代理。
+多数生态的默认上游以中国大陆镜像（清华 TUNA、npmmirror、goproxy.cn 等）为首选、官方源为备用，
+在国内网络下不必先找镜像、改配置。需要调整时，在初始化页面的 **高级设置** → **配置上游源** 中修改，
+之后也可以在 Admin 的 **上游源** 页面修改。
+
+`depsilo-data` 这个 Volume 会保留配置、凭据、数据库和缓存。首次启动后不久，Depsilo 会在后台下载已知恶意包名单
+（数十万条），此时即使还没有缓存任何包，这个 Volume 也会占用约 150 MB。长期部署时，请用明确的发行版本替换 `latest`，
+并将服务放在可信网络中；远程访问应通过[提供 TLS 的反向代理](deployment.md#reverse-proxy-and-tls)。
 
 <details>
 <summary>使用可执行文件安装（Linux / macOS）</summary>
@@ -109,7 +121,10 @@ depsilo serve
 
 打开 <http://127.0.0.1:23333>，按上面的步骤完成初始化。启动输出会显示初始化令牌；
 也可以在另一终端运行 `depsilo setup token` 再次获取。
-还可以从 [GitHub Releases](https://github.com/depsilo/depsilo/releases) 下载对应平台的安装包。
+可执行文件默认只监听 `127.0.0.1`；要让其他机器访问，见[可执行文件安装](deployment.md#binary-installation)。
+
+如果安装脚本下载失败（`curl` 报错，例如 403），不会安装任何内容。
+请改从 [GitHub Releases](https://github.com/depsilo/depsilo/releases) 下载对应平台的压缩包，解压后把 `depsilo` 放到 `PATH` 中。
 
 </details>
 
@@ -130,6 +145,7 @@ Compose、自定义端口、持久化目录和升级方式见[部署指南](depl
 | 编译缓存 | ccache、sccache，需[单独配置](compile-cache.md) |
 
 Docker 与 Hugging Face 需要[额外配置](deployment.md#optional-ecosystems)。
+lockfile 是对着其他源生成的 Node 项目，需要先对 lockfile 做[一次性调整](package-rules.md#node-lockfiles)，安装才会经过 Depsilo。
 
 ## 它不做什么
 
@@ -147,7 +163,8 @@ Docker 与 Hugging Face 需要[额外配置](deployment.md#optional-ecosystems)�
 
 | 目标 | 指南 |
 | --- | --- |
-| 部署、升级或排查问题 | [部署指南](deployment.md) · [配置参考](../config.example.toml) |
+| 部署、备份、升级或排查问题 | [部署指南](deployment.md) · [备份与恢复](deployment.md#back-up-and-restore) · [升级](deployment.md#upgrade) · [配置参考](../config.example.toml) |
+| 用脚本完成首次初始化，或重置管理员密码 | [脚本化初始化](deployment.md#scripted-setup) · [找回管理员权限](deployment.md#administrator-access) |
 | 配置依赖策略 | [供应链控制](supply-chain.md) · [包规则](package-rules.md) |
 | 接入身份提供方或用户目录 | [OIDC](oidc.md) · [LDAP / LDAPS](ldap.md) |
 | 接入构建机器或编码 Agent | [编译缓存](compile-cache.md) · [AI Agent / MCP](deployment.md#ai-coding-agents) |

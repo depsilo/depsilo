@@ -13,6 +13,10 @@ curl -fsSL https://depsilo.com/install.sh | bash
 depsilo serve
 ```
 
+如果安装脚本下载失败（`curl` 报错，例如 403），不会安装任何内容；请改从
+[GitHub Releases](https://github.com/depsilo/depsilo/releases) 下载对应平台的
+压缩包，解压后把 `depsilo` 放到 `PATH` 中。
+
 或使用容器：
 
 ```bash
@@ -24,7 +28,9 @@ docker run -d --name depsilo -p 23333:23333 \
 打开 `http://127.0.0.1:23333` 完成首次管理员设置。在一个 Python 或
 Node 项目中，把包管理器的 registry/index 指向 Portal 提供的连接地址，
 安装一个锁定版本的依赖，然后重复安装一次，确认第二次请求显示缓存复用。
-不要在试用中使用私有包、生产凭据或未锁定的大型依赖树。
+不要在试用中使用私有包、生产凭据或未锁定的大型依赖树。Node 项目的 lockfile
+如果是对着其他源生成的，先按 [Node lockfiles](package-rules.md#node-lockfiles)
+调整 lockfile，否则安装会返回 404，或者绕过 Depsilo。
 
 ## 安全故障与恢复演练
 

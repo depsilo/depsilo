@@ -66,7 +66,7 @@ npm config set registry https://depsilo.example.com/npm/
   with local accounts still available.
 - **Extend it later.** Chain instances so one fills its cache through another
   ([cascade](docs/cascade.md)), or share compiler output between build machines
-  ([ccache and sccache](docs/compile-cache.md)).
+  ([ccache and sccache](docs/compile-cache.md), in Chinese).
 
 Runs as a single binary or Docker container, backed by SQLite. MIT-licensed,
 with no telemetry.
@@ -85,9 +85,13 @@ docker run -d --name depsilo \
   ghcr.io/depsilo/depsilo:latest
 ```
 
+`-p 23333:23333` publishes the port on every network interface of the host,
+and package downloads need no sign-in, so run this on a network you trust. To
+try Depsilo on one machine only, use `-p 127.0.0.1:23333:23333`.
+
 ### 2. Create your administrator
 
-Print the setup token:
+Print the bootstrap token:
 
 ```bash
 docker exec depsilo depsilo setup token
@@ -106,14 +110,26 @@ Setup continues to **Connect a client**:
 3. Run the suggested download command, and confirm the request and cache
    results on the same page.
 
+The guide writes its commands for the address in your browser. If the clients
+are other machines, open Depsilo at the server's network address, for example
+`http://<server-address>:23333`, and copy the commands from there. This needs
+the port published beyond `127.0.0.1`, as `-p 23333:23333` in step 1 does.
+
 The dashboard then shows the statistics. You can reopen the guide anytime, or
 pick **AI setup** on the home page to hand the client configuration to a coding
 agent.
 
+For most ecosystems the default upstreams put a mainland-China mirror first and
+the official registry second. To change them, open **Advanced settings** →
+**Configure upstreams** on the setup page, or **Upstreams** in Admin later.
+
 The `depsilo-data` volume preserves configuration, credentials, database, and
-cache. For an ongoing deployment, pin a release tag instead of `latest` and
-keep the service on a trusted network. Use a TLS reverse proxy for remote
-access.
+cache. Shortly after the first start Depsilo downloads the list of
+known-malicious packages (a few hundred thousand entries) in the background;
+the volume then holds roughly 150 MB before any package is cached. For an
+ongoing deployment, pin a release tag instead of `latest` and keep the service
+on a trusted network. Use a
+[TLS reverse proxy](docs/deployment.md#reverse-proxy-and-tls) for remote access.
 
 <details>
 <summary>Prefer a binary? Linux / macOS</summary>
@@ -124,9 +140,14 @@ depsilo serve
 ```
 
 Open <http://127.0.0.1:23333> and follow the same setup steps. The startup output
-shows the setup token; retrieve it again with `depsilo setup token` in another
-terminal. You can also download a binary from
-[GitHub Releases](https://github.com/depsilo/depsilo/releases).
+shows the bootstrap token; retrieve it again with `depsilo setup token` in
+another terminal. The binary listens on `127.0.0.1` only; to serve other
+machines, see [binary installation](docs/deployment.md#binary-installation).
+
+If the installer download fails (`curl` reports an error such as 403), nothing
+is installed. Download the archive for your platform from
+[GitHub Releases](https://github.com/depsilo/depsilo/releases) instead, extract
+it, and put `depsilo` on your `PATH`.
 
 </details>
 
@@ -145,9 +166,12 @@ For Compose, custom ports, persistent directories, or upgrades, follow the
 | Linux and Kubernetes | APT, Alpine apk, Helm |
 | Data and models | Conda, R / CRAN, Hugging Face |
 | Container images | Docker / OCI pulls, including containerd and Podman |
-| Compiler caches | ccache and sccache; [separate setup](docs/compile-cache.md) |
+| Compiler caches | ccache and sccache; [separate setup](docs/compile-cache.md) (in Chinese) |
 
 Docker and Hugging Face need [additional setup](docs/deployment.md#optional-ecosystems).
+A Node project whose lockfile was created against another registry needs a
+[one-time lockfile change](docs/package-rules.md#node-lockfiles) before its
+installs go through Depsilo.
 
 ## What it does not do
 
@@ -170,10 +194,11 @@ See [product scope](PRODUCT.md) for the full capability boundaries.
 
 | I want to… | Guide |
 | --- | --- |
-| Deploy, upgrade, or troubleshoot | [Deployment](docs/deployment.md) · [Configuration reference](config.example.toml) |
+| Deploy, back up, upgrade, or troubleshoot | [Deployment](docs/deployment.md) · [Back up and restore](docs/deployment.md#back-up-and-restore) · [Upgrade](docs/deployment.md#upgrade) · [Configuration reference](config.example.toml) |
+| Script the first run or recover administrator access | [Scripted setup](docs/deployment.md#scripted-setup) · [Administrator access](docs/deployment.md#administrator-access) |
 | Configure package policies | [Supply-chain controls](docs/supply-chain.md) · [Package rules](docs/package-rules.md) |
 | Connect an identity provider or directory | [OIDC](docs/oidc.md) · [LDAP / LDAPS](docs/ldap.md) |
-| Connect build machines or coding agents | [Compiler cache](docs/compile-cache.md) · [AI agents / MCP](docs/deployment.md#ai-coding-agents) |
+| Connect build machines or coding agents | [Compiler cache](docs/compile-cache.md) (in Chinese) · [AI agents / MCP](docs/deployment.md#ai-coding-agents) |
 | Share caches between independent instances | [Cascade](docs/cascade.md) |
 | Secure an instance or verify a release | [Security](SECURITY.md) · [Release verification](docs/release-verification.md) |
 

@@ -135,8 +135,11 @@ from different sources or targets do not share an object. Binding
 `integrity`/`shasum` authenticates what the packument declared and separates
 the cache namespace; it is not a claim that Depsilo independently re-hashes
 the downloaded payload. Unsigned/direct tarball URLs, including legacy npm
-routes, return `404` without contacting an Upstream or evaluating a guessed
-version.
+routes, return `404` with the error code `NPM_UNSIGNED_TARBALL`, without
+contacting an Upstream or evaluating a guessed version. An npm lockfile
+recorded against `registry.npmjs.org`, and a pnpm, Yarn 2+ or Bun lockfile
+recorded against another registry, ask for exactly these URLs; an npm
+lockfile recorded against another registry bypasses Depsilo instead. See [Node lockfiles](#node-lockfiles).
 
 Each token uses a fresh random nonce with authenticated encryption and an
 independently derived outer MAC; normal request logs redact the bearer-token
@@ -212,6 +215,108 @@ package-wide, strict SemVer exact, and one-comparator (`<`, `<=`, `>`, or `>=`)
 rules against the signed `versions` map key. A more-specific version rule can
 therefore override a package-wide rule. Node-style compound ranges are outside
 this grammar, and legacy hand-constructed tarball URLs are rejected.
+
+### Node lockfiles
+
+A lockfile pins each package to a version and a hash. At install time the
+client either asks the configured registry for the package's conventional
+tarball path, or follows a complete URL that the lockfile recorded. Depsilo
+serves an npm tarball only through the signed URL it wrote into package
+metadata. A lockfile that was recorded against another registry therefore does
+not install through Depsilo as it is: the install fails with `404`, or it
+succeeds without using Depsilo.
+
+Either result appears only when the client's own cache is empty, which is the
+usual state of a CI job, a container build, or a new machine. A developer
+machine that already holds the tarballs installs without asking any registry
+and shows no error.
+
+What happens on an empty cache, and what to do, depends on the package manager
+and on the registry the lockfile was recorded against:
+
+| Client and lockfile | Install as it is | What to do |
+| --- | --- | --- |
+| npm, URLs of `registry.npmjs.org` | Fails with `404` | Rewrite the lockfile without URLs; see the steps below |
+| npm, URLs of another registry, such as `registry.npmmirror.com` | Succeeds, but downloads from the URLs in `package-lock.json` and bypasses Depsilo | The same steps |
+| pnpm, Yarn 2+ | Fails with `404` | Regenerate the lockfile through Depsilo; pnpm 11 and later also need `trustLockfile` |
+| Bun, URLs of `registry.npmjs.org` | Fails with `404` | Regenerate the lockfile through Depsilo |
+| Bun, URLs of another registry | Succeeds, but downloads from the URLs in `bun.lock` and bypasses Depsilo | Regenerate the lockfile through Depsilo |
+| Yarn 1 | Succeeds, but downloads from the URLs in `yarn.lock` and bypasses Depsilo | Regenerate the lockfile through Depsilo |
+
+npm treats the two kinds of URL differently because of its
+`replace-registry-host` setting. With the default value `npmjs`, npm replaces
+the host of a `registry.npmjs.org` URL with the configured registry and
+follows a URL of any other host as recorded. Bun treats the URLs in
+`bun.lock` the same way.
+
+A failing client asks for the registry's conventional path, such as
+`/npm/left-pad/-/left-pad-1.3.0.tgz`. Depsilo answers `404` with the error
+code `NPM_UNSIGNED_TARBALL`, and npm prints the message that comes with it:
+
+```text
+npm error 404 Not Found - GET http://127.0.0.1:23333/npm/left-pad/-/left-pad-1.3.0.tgz - The lockfile or client asked for a tarball URL that was not issued by this Depsilo. ...
+```
+
+The refused request is listed under Access Logs in Admin with status `404`.
+
+An install that bypasses Depsilo prints no error and sends Depsilo no request,
+so Depsilo neither caches the packages nor applies package rules to them. An
+install without a `404` is therefore no proof that it went through Depsilo.
+After an install with an empty client cache, confirm that Access Logs list its
+tarball requests.
+
+For npm, point the registry at Depsilo, then run both commands in the project:
+
+```bash
+npm install --package-lock-only --omit-lockfile-registry-resolved
+npm ci
+```
+
+The first command rewrites `package-lock.json` without `resolved` URLs and
+keeps every `integrity` hash; it downloads no tarballs. The second installs
+from the rewritten lockfile. Both steps are needed: passing the flag to
+`npm ci` alone does not change an existing lockfile, and the install still
+fails or still bypasses Depsilo. Then add this line to the project `.npmrc`,
+so that later installs do not record URLs again:
+
+```ini
+omit-lockfile-registry-resolved=true
+```
+
+A lockfile without `resolved` URLs installs through Depsilo and also directly
+from the public registry, so the project can still be built without Depsilo.
+
+pnpm, Yarn 2+, and Bun have no equivalent option. With the registry pointed at
+Depsilo, remove the lockfile and install again, so that the client reads
+package metadata through Depsilo. This resolves the dependency ranges again,
+so review the lockfile changes before committing them.
+
+For pnpm 11 and later, also set `trustLockfile: true` in
+`pnpm-workspace.yaml`. These versions compare the tarball URL in the lockfile
+with the one in current package metadata, and Depsilo issues a new signed URL
+in every metadata response. Without the setting, an install from a lockfile
+generated through Depsilo stops with `ERR_PNPM_TARBALL_URL_MISMATCH`.
+
+A lockfile generated through Depsilo records signed URLs of this instance. It
+stops working when any of the following changes:
+
+- the address of the instance, because the lockfile holds complete URLs;
+- the npm Upstream that supplied the package metadata: a new URL, name, or
+  proxy, or deleting the Upstream (Admin warns when you edit its URL); or
+- the deployment's signing secret; the description of signed URLs under
+  [Automatic OSV scan identities](#automatic-osv-scan-identities) covers
+  rotation and restarts.
+
+After a change to the Upstream or the secret, the signed URLs return `404`
+with an empty body. In each case the lockfile has to be regenerated. Such a
+lockfile also does not install directly from the public registry, and
+`npm update` rewrites every URL in it even when no version changes, because
+each metadata response carries a new signed URL. For npm,
+prefer the lockfile without `resolved` URLs: it depends on none of the three
+and stays unchanged.
+
+The real-client fixture in `testground/docker-npm` runs the npm steps and the
+pnpm install above; its Dockerfile names the client versions.
 
 ### Composer
 

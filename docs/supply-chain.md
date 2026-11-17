@@ -152,6 +152,13 @@ the existing cached copy, rejects its replacement and emits an alert. A cache
 miss after eviction can alert but cannot restore evicted bytes. Detection is
 alert-only, and a first-seen hash is not independent authenticity proof.
 
+Go modules have a client-side check as well. Depsilo relays the go command's
+checksum-database requests (`/go/sumdb/`) to its Go Upstreams and does not
+validate the answers; the go command verifies them with the database's public
+key. Keep `GOSUMDB` at its default. When no Go Upstream mirrors the database,
+or none can be reached, Depsilo answers `404` to the go command's `supported`
+probe and the go command contacts the database directly.
+
 ## Configuration and operations
 
 Use [`config.example.toml`](../config.example.toml) for the full schema:
