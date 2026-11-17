@@ -1503,30 +1503,76 @@ Depsilo shows it in four places:
 | `http_status` | The Upstream answered with an HTTP status that marks it unhealthy |
 | `network` | Any other network failure |
 
-A Docker registry has no check and no failure code. When no proxy carries a
-registry (it has no `proxy` of its own, and `upstream_proxy` is unset or
-`no_proxy` or a loopback URL keeps it direct) and the registry, its Bearer
-realm or a redirect target has a host name that resolves only to fake-IP
-addresses, the Docker client receives `502` with a message that names the host
-and the address, for example:
+A Docker registry has no check, so Admin and doctor show no failure code for
+it. A Docker request that Depsilo cannot complete against the registry gets a
+`502` whose message names what failed, where, and why, and ends with the
+request ID:
 
 ```text
-auth discovery failed: Get "https://registry-1.docker.io/v2/": registry-1.docker.io resolved to 198.18.0.10, a fake-IP address from proxy software in TUN/fake-IP mode; set [egress] upstream_proxy or DEPSILO_EGRESS_UPSTREAM_PROXY to the proxy software's HTTP port and restart, see docs/deployment.md#upstream-network-egress
+<stage> failed at <origin>: <reason> (request <id>; details in the Depsilo server log)
+```
+
+The stage is `auth discovery`, `token fetch`, `tag resolution`, `manifest`,
+`manifest HEAD`, `blob` or `tag list`. The origin is the scheme, host and port
+of the host that failed: the registry, its Bearer realm, or a host that a
+redirect named, such as a CDN or object storage. The reason is one of:
+
+- `returned <status>`, followed by at most three error codes of the OCI
+  distribution specification that the answer carried, for example
+  `returned 429 (TOOMANYREQUESTS)` or `returned 403 (DENIED)`;
+- a failure code from the table above: `timeout`, `tls`,
+  `connection_refused` or `network`;
+- `connection to the egress proxy failed` when the proxy that carries the
+  registry cannot be reached, also when its host name does not resolve, or
+  `egress proxy refused CONNECT (403)`, with the status the proxy answered,
+  when it refuses to connect to an `https` origin;
+- one of Depsilo's own refusals, such as `unsafe Docker redirect target` or
+  `unsupported authentication challenge`, or the fake-IP refusal described
+  below. Depsilo resolves the registry, realm and redirect hosts itself
+  before it connects, so such a host name that does not resolve reads
+  `resolve Docker dial target`, or `resolve Docker proxy target` when a
+  proxy carries the registry, rather than the `dns` failure code.
+
+Any other failure reads `Docker registry request failed`. The message never
+repeats text that a registry, proxy or other server sent: no answer body,
+error message, status phrase or malformed answer, no path or query of a URL
+(signed CDN and object-storage addresses carry their credentials there), and
+no proxy address.
+
+When no proxy carries a registry (it has no `proxy` of its own, and
+`upstream_proxy` is unset or `no_proxy` or a loopback URL keeps it direct)
+and the registry, its Bearer realm or a redirect target has a host name that
+resolves only to fake-IP addresses, the reason names the host and the
+address, for example:
+
+```text
+auth discovery failed at https://registry-1.docker.io: registry-1.docker.io resolved to 198.18.0.10, a fake-IP address from proxy software in TUN/fake-IP mode; set [egress] upstream_proxy or DEPSILO_EGRESS_UPSTREAM_PROXY to the proxy software's HTTP port and restart, see docs/deployment.md#upstream-network-egress (request 4f0c9a52-8d1e-4b7a-9c3f-2e6d5b1a0f87; details in the Depsilo server log)
 ```
 
 When `no_proxy` or a loopback URL keeps the registry off a configured
-`upstream_proxy`, setting the proxy cannot help, so the message ends instead
-with `[egress] no_proxy or a loopback registry URL keeps this registry off the
-proxy, so give its host names real DNS answers, for example with
-fake-ip-filter in the proxy software, or remove the registry from no_proxy`.
+`upstream_proxy`, setting the proxy cannot help, so the remedy after
+`TUN/fake-IP mode;` reads instead `[egress] no_proxy or a loopback registry
+URL keeps this registry off the proxy, so give its host names real DNS
+answers, for example with fake-ip-filter in the proxy software, or remove the
+registry from no_proxy, see docs/deployment.md#upstream-network-egress`.
 
-The server log repeats the message. Read it there when a client resolves tags
-with `HEAD`, as containerd does: the answer to a `HEAD` request has no body.
-When the proxy that carries a registry cannot be reached, the `502` message
-says `connection to the egress proxy failed (details in the Depsilo server log)`
-instead of naming the proxy's address, which the server log keeps. At startup
-the server log names each registry's route in a `docker registry egress` line:
-`own proxy`, `default proxy` or `direct`.
+The request ID leads to the details. Every answer carries it in the
+`X-Request-ID` header. Admin → Access Logs shows it in a request's details,
+and the MCP tool `depsilo_recent` explains one request given its
+`request_id`. The server log line of the failure carries it in the
+`request_id` field, next to the full error: the URL that failed and up to
+64 KiB of the registry's answer. In that URL, and in every absolute `http` or
+`https` URL and every double-quoted URL reference in the error text or the
+answer, userinfo is dropped and each query value reads `REDACTED`. Look there
+when the client shows no message, for example when containerd resolves a tag
+with `HEAD`: the answer to a `HEAD` request has no body. A manifest `HEAD`
+appears among the access logs whatever the registry answers, and one that
+fails with a `5xx`, whether Depsilo answers `502` or passes on the registry's
+own `5xx`, also has its server log line. One exception: with the
+observation-age gate armed, a registry `4xx` to tag resolution is passed on
+and recorded only in the audit log. At
+startup the server log names each registry's route in a
+`docker registry egress` line: `own proxy`, `default proxy` or `direct`.
 
 ## Docker Registry forward-proxy boundary
 

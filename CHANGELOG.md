@@ -269,8 +269,35 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - The setup page warns when opened over plain HTTP from another machine.
 - A Docker `502` no longer names the host and port of a registry's proxy, or
   of the `[egress]` proxy, that cannot be reached; its message says
-  `connection to the egress proxy failed (details in the Depsilo server log)`
-  instead, and the server log keeps the address.
+  `connection to the egress proxy failed` instead, and the server log keeps
+  the address.
+- A Docker `502` message no longer repeats text from the registry, the proxy
+  or the network. It used to quote the URL that failed, including the signed
+  query of a redirect to a CDN or object storage, up to 64 KiB of the
+  registry's answer, and Go's transport error, which can quote a server's
+  malformed answer. It now reads
+  `<stage> failed at <origin>: <reason> (request <id>; details in the Depsilo server log)`:
+  the origin is the scheme, host and port of the registry, Bearer realm or
+  redirect target that failed, and the reason is the answer's status with at
+  most three OCI distribution error codes (`returned 429 (TOOMANYREQUESTS)`),
+  a failure code such as `timeout` or `connection_refused`,
+  `egress proxy refused CONNECT (403)`, or one of Depsilo's own refusals, the
+  fake-IP remedy included; anything else reads
+  `Docker registry request failed`. The server log keeps the full error, and
+  its Docker error lines carry the `request_id`. In the URL that failed, and
+  in every absolute `http` or `https` URL and every double-quoted URL
+  reference in Go's error text or the registry's answer, userinfo is dropped
+  and each query value reads `REDACTED`. A manifest `HEAD` now appears in the
+  access log whatever the registry answers, except that with the
+  observation-age gate armed a registry `4xx` to tag resolution is still
+  passed on with only an audit entry, and one that fails with a `5xx`,
+  whether Depsilo answers `502` or passes on the registry's own `5xx`, also
+  gets an error line in the server log.
+- A Docker manifest `HEAD` whose path cannot form the registry URL still
+  answers `500` with code `REQUEST_ERROR`, but its message now reads
+  `invalid Docker request path` instead of Go's parse error, which quoted
+  the configured registry URL with any userinfo. The server log keeps the
+  error without userinfo.
 
 ### Upgrade notes
 - No schema migration; the database stays at schema v17.

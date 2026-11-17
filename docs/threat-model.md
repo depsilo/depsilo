@@ -190,6 +190,25 @@ directory root created; otherwise the command refuses. When an owner cannot
 be changed, the command removes the entry it created and fails, and a
 restore stops before it replaces anything.
 
+A Docker Registry `502`, which any client that reaches the proxy routes can
+read, contains only the stage that failed, the origin (scheme, host and port)
+of the registry, Bearer realm or redirect target that failed, a failure code
+or the answer's status with at most three error codes from the OCI
+distribution specification's closed list, a fixed reason for an egress proxy
+failure, Depsilo's own refusal or remedy text, and the request ID. Depsilo
+builds it from typed facts at each registry call and never from an error's
+text, so no upstream free text reaches it: no answer body, status phrase,
+registry error message or detail, Go transport error (which can quote a
+server's malformed answer), certificate name, proxy address, or URL userinfo,
+path or query, where signed CDN and object-storage URLs carry their
+credentials. An unrecognized error reads `Docker registry request failed`.
+The `500` for a client path that cannot form the registry URL carries a fixed
+message too, because Go's parse error would quote that URL with any
+userinfo. The server log keeps the full error under the same request ID; in
+the URL that failed, and in every absolute `http` or `https` URL and every
+double-quoted URL reference of the error text or the registry's answer,
+userinfo is removed and each query value reads `REDACTED`.
+
 **Residual:** Docker registry credentials live in the config file, and
 `SECURITY.md` already calls out the bootstrap token appearing in logs during
 first-run setup. It also covers the one case in which Depsilo generates the
@@ -207,6 +226,18 @@ directory leaves a root-owned `.depsilo-backup-work-*` directory. Inside the
 state directory, an archive goes to whoever owns the directory that
 receives it, so an archive written into a subdirectory that belongs to a
 third account gives that account the signing key it holds.
+
+A Docker `502` still names the host of the hop that failed. That host can
+reveal a bucket (`<bucket>.s3.<region>.amazonaws.com`) or an internal
+storage host behind a private registry, and a registry chooses the host
+names of its redirects, so it can place up to 253 characters of host-name
+text in the message. The server log keeps up to 64 KiB of an error answer,
+which can echo request details that the log redaction does not recognize:
+text outside URL syntax, for example the signature an object store quotes in
+a signature-mismatch error; a URL whose scheme is not `http` or `https`, such
+as `s3://`; or a relative URL that is not the whole of a double-quoted
+string, such as a link in an HTML or XML page or a path inside a quoted
+sentence.
 
 ### 5.7 Privilege escalation
 
@@ -445,6 +476,7 @@ These are deliberate, documented, and not vulnerabilities:
 | Tamper detection | `internal/tamper/recorder_test.go`, `internal/cache` tamper paths |
 | Snapshot-only mode | `internal/snapshot`, `internal/quarantine/snapshot_gate_test.go`, `docs/specs/2026-10-06-freeze-snapshot.md` |
 | SSRF and redirect guards | `internal/upstream/request` tests, `internal/api/mcp_ssrf_test.go`, Docker resolver and egress tests (`internal/adapter/docker/egress_test.go`) |
+| Docker `502` text and its log redaction | `internal/adapter/docker/bad_gateway_test.go`, `internal/adapter/docker/failure_test.go` |
 | Capability groups and Pro gates | `internal/api/router_permissions_test.go`, `web/e2e` permission cases |
 | Preset bootstrap token rule | `internal/config/loader_test.go` |
 | Local password reset (`depsilo reset-password`) | `internal/cli/resetpassword_test.go` |

@@ -159,6 +159,15 @@ consequence.
   `NPM_UNSIGNED_TARBALL`. The npm route's `404` and `502` error bodies also
   repeat the message in an `error` field, which is the field the npm client
   prints.
+- A Docker Registry `502` keeps its codes `UPSTREAM_UNAVAILABLE` and, for a
+  manifest `HEAD` whose authentication failed, `AUTH_FAILED`. Its message
+  reads
+  `<stage> failed at <origin>: <reason> (request <id>; details in the Depsilo server log)`,
+  with the stage, the failed host's origin and a reason from a fixed
+  vocabulary (listed under
+  [Upstream network egress](deployment.md#upstream-network-egress)); it never
+  repeats an answer body, error message, status phrase, or URL path or query.
+  The request ID is the one in the `X-Request-ID` header and the access log.
 
 ## Configuration
 
@@ -195,10 +204,10 @@ consequence.
   a URL written with an address), and a registry's own `proxy` always wins.
   When a proxy carries a registry request, a host name whose every DNS answer
   lies in `198.18.0.0/15` counts as public; without a proxy such an answer is
-  refused, and the `502` message names the host, the address, and
-  `[egress] upstream_proxy`, or, when `no_proxy` or a loopback URL keeps the
-  registry off a configured `upstream_proxy`, asks for real DNS answers for
-  its host names.
+  refused, and the reason in the `502` message names the host, the address,
+  and `[egress] upstream_proxy`, or, when `no_proxy` or a loopback URL keeps
+  the registry off a configured `upstream_proxy`, asks for real DNS answers
+  for its host names.
 - `[server] host` and `DEPSILO_SERVER_HOST` accept an IPv6 address with or
   without brackets (`::1` or `[::1]`).
 - Optional `[auth.sources.<id>]` configuration declares stable source IDs and
