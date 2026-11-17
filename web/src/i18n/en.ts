@@ -512,7 +512,7 @@ const en = {
       proxyUnavailable: "A required database or storage check failed. Dependency downloads may be affected.",
       viewServiceStatus: "View service status",
       upstreamAttention: "Related upstreams need attention: {{names}}. Origin requests may be affected; other sources or cached artifacts may still work.",
-      upstreamFakeIP: "The DNS that Depsilo uses resolves the hosts of {{names}} into the benchmarking range 198.18.0.0/15. Proxy software in fake-IP mode answers this way, and Depsilo does not connect to such addresses by default.",
+      upstreamFakeIP: "The DNS that Depsilo uses resolves the hosts of {{names}} into fake-IP ranges such as 198.18.0.0/15 and 2001:2::/48. Proxy software in fake-IP mode answers this way, and Depsilo does not connect to such addresses by default.",
       viewUpstreams: "View upstreams",
       healthUnknown: "Service check results are currently unavailable.",
       instanceAddress: "Current instance",
@@ -1416,9 +1416,9 @@ const en = {
       sharedFailureTitle: '{{count}} upstreams cannot connect for the same reason',
       failure: {
         egress_fake_ip: {
-          title: 'DNS resolved this upstream to {{address}}, in the benchmarking range {{range}}. Proxy software in fake-IP mode answers with such addresses, and Depsilo does not connect to them by default.',
+          title: 'DNS resolved this upstream to {{address}}, in the fake-IP range {{range}}. Proxy software in fake-IP mode answers with such addresses, and Depsilo does not connect to them by default.',
           short: 'DNS returned the fake-IP address {{address}}; not connected.',
-          shared: 'DNS resolves the hosts of these upstreams into the benchmarking range 198.18.0.0/15. Proxy software in fake-IP mode answers this way, and Depsilo does not connect to such addresses by default.',
+          shared: 'DNS resolves the hosts of these upstreams into fake-IP ranges such as 198.18.0.0/15 and 2001:2::/48. Proxy software in fake-IP mode answers this way, and Depsilo does not connect to such addresses by default.',
           action: 'Set upstream_proxy under [egress] in config.toml (or the environment variable DEPSILO_EGRESS_UPSTREAM_PROXY) to the proxy software\'s HTTP port (for example http://127.0.0.1:7890) and restart, or give Depsilo a DNS server that returns real addresses. Inside a container, 127.0.0.1 is the container itself: remove the container and run it again with DEPSILO_EGRESS_UPSTREAM_PROXY=http://host.docker.internal:7890 (docker restart keeps the old environment), adding --add-host=host.docker.internal:host-gateway on Docker Engine for Linux. Details: "Upstream network egress" in the deployment guide.',
         },
         egress_shared_address: {

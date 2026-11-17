@@ -357,6 +357,83 @@ func TestBadGatewayMessageNamesOnlyTheStageOriginAndReason(t *testing.T) {
 	}
 }
 
+// A 502 for unique-local IPv6 fake-IP names the host, the documented range of
+// proxy software or only "a unique-local address", and the remedy, through a
+// proxy and without one. Every address, which may be an internal network's,
+// stays in the server log.
+func TestBadGatewayExplainsUniqueLocalFakeIPWithoutItsAddresses(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		answers staticIPResolver
+		want    string
+		hidden  []string
+		logged  string
+	}{
+		{
+			name:    "registry answered from Surge's IPv6 prefix",
+			answers: staticIPResolver{"registry.example": dnsAnswer("fd00:6152::46")},
+			want: "auth discovery failed at http://registry.example: registry.example resolved into fd00:6152::/32, " +
+				"an IPv6 fake-IP range that Depsilo cannot tell from a private network; " +
+				"set the proxy software's IPv6 fake-IP range (fake-ip-range6 or inet6_range) to 2001:2::/48 " +
+				"or turn IPv6 fake-IP off, see docs/deployment.md#upstream-network-egress",
+			hidden: []string{"fd00:6152::46"},
+			logged: "(DNS answer: fd00:6152::46)",
+		},
+		{
+			name: "redirect target answered with a placeholder and another unique-local address",
+			answers: staticIPResolver{
+				"registry.example": dnsAnswer("93.184.216.34"),
+				"cdn.example":      dnsAnswer("198.18.0.12", "fd12:3456:789a::5"),
+			},
+			want: "blob failed at http://cdn.example: cdn.example resolved to fake-IP addresses and a unique-local address, " +
+				"which Depsilo cannot tell from a private network; " +
+				"set the proxy software's IPv6 fake-IP range (fake-ip-range6 or inet6_range) to 2001:2::/48 " +
+				"or turn IPv6 fake-IP off, see docs/deployment.md#upstream-network-egress",
+			hidden: []string{"fd12", "198.18.0.12", "SECRET-SIGNATURE"},
+			logged: "(DNS answer: 198.18.0.12, fd12:3456:789a::5)",
+		},
+	} {
+		for _, route := range []string{egressRouteDefaultProxy, egressRouteDirect} {
+			t.Run(route+"/"+tt.name, func(t *testing.T) {
+				handle := redirectTo("http://cdn.example/registry-v2/data?Signature=SECRET-SIGNATURE")
+				policy := egress.Policy{}
+				var dialContext func(context.Context, string, string) (net.Conn, error)
+				if route == egressRouteDefaultProxy {
+					proxy := newRecordingProxy(t, handle)
+					var err error
+					if policy, err = egress.NewPolicy(proxy.URL, nil, nil); err != nil {
+						t.Fatal(err)
+					}
+					dialContext = (&routedDialer{proxies: map[string]bool{proxy.address(): true}}).DialContext
+				} else {
+					registry := httptest.NewServer(handle)
+					t.Cleanup(registry.Close)
+					dialContext = mappedDialer{"93.184.216.34:80": registry.Listener.Addr().String()}.DialContext
+				}
+				core, logs := observer.New(zap.ErrorLevel)
+				t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
+				router, _ := newRoutedDockerRouter(t, config.RegistryConfig{Name: "hub", URL: "http://registry.example"},
+					policy, tt.answers, dialContext, false)
+
+				response := serveWithRequestID(router, http.MethodGet, "/v2/library/widget/blobs/sha256:4f1e", testRequestID)
+				code, message := badGatewayBody(t, response)
+				if want := tt.want + testRequestSuffix; code != "UPSTREAM_UNAVAILABLE" || message != want {
+					t.Fatalf("answer = %s %q, want UPSTREAM_UNAVAILABLE %q", code, message, want)
+				}
+				for _, hidden := range tt.hidden {
+					if strings.Contains(message, hidden) {
+						t.Errorf("502 message %q contains %q", message, hidden)
+					}
+				}
+				logged := loggedErrorsOf(logs, testRequestID)
+				if len(logged) != 1 || !strings.Contains(logged[0], tt.logged) {
+					t.Fatalf("errors logged under request %s = %q, want one containing %q", testRequestID, logged, tt.logged)
+				}
+			})
+		}
+	}
+}
+
 // waitingContext is a request context that reports when its request first
 // waits on it. A request that joins another's inflight cache fill or token
 // discovery first waits on its context while it waits for the shared result,

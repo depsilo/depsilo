@@ -223,7 +223,8 @@ func (r *refusal) clientReason() string {
 
 // fakeIPRefusal refuses a direct dial to a host name answered only with
 // fake-IP addresses, the one answer a proxy would carry, and names the remedy.
-// It holds the dialed host, its first address, and a fixed remedy.
+// It holds the dialed host, one placeholder of its answer (an IPv4 one when
+// the answer has one; see fakeIPDialError), and a fixed remedy.
 type fakeIPRefusal struct {
 	host    string
 	address netip.Addr
@@ -240,6 +241,47 @@ func (e *fakeIPRefusal) clientReason() string { return e.explain(displayHost(e.h
 func (e *fakeIPRefusal) explain(host string) string {
 	return host + " resolved to " + e.address.String() +
 		", a fake-IP address from proxy software in TUN/fake-IP mode; " + e.remedy
+}
+
+// uniqueLocalFakeIPRemedy is the advice of a uniqueLocalFakeIPRefusal. Only a
+// placeholder range lets a proxy carry the answer, and without IPv6 fake-IP
+// the answer keeps its IPv4 placeholders.
+const uniqueLocalFakeIPRemedy = "set the proxy software's IPv6 fake-IP range (fake-ip-range6 or inet6_range) to 2001:2::/48 " +
+	"or turn IPv6 fake-IP off, see docs/deployment.md#upstream-network-egress"
+
+// uniqueLocalFakeIPRefusal refuses a host name whose DNS answer is IPv6
+// fake-IP from a unique-local range (see uniqueLocalFakeIPError), with or
+// without a proxy, and names the remedy. A 502 body names a documented range
+// of proxy software that the answer lies in, or none: a real unique-local
+// prefix would show anonymous clients how an internal network is numbered.
+// The server log names the whole answer.
+type uniqueLocalFakeIPRefusal struct {
+	host   string
+	answer []netip.Addr
+	// proxyRange is the documented range of the first unique-local address
+	// that lies in one; it is invalid when none does.
+	proxyRange netip.Prefix
+}
+
+func (e *uniqueLocalFakeIPRefusal) Error() string {
+	answer := make([]string, len(e.answer))
+	for index, address := range e.answer {
+		answer[index] = address.String()
+	}
+	return e.explain(e.host) + " (DNS answer: " + strings.Join(answer, ", ") + ")"
+}
+
+// clientReason names the host only when it is a plain host name, as
+// fakeIPRefusal does, and never an address.
+func (e *uniqueLocalFakeIPRefusal) clientReason() string { return e.explain(displayHost(e.host)) }
+
+func (e *uniqueLocalFakeIPRefusal) explain(host string) string {
+	if e.proxyRange.IsValid() {
+		return host + " resolved into " + e.proxyRange.String() +
+			", an IPv6 fake-IP range that Depsilo cannot tell from a private network; " + uniqueLocalFakeIPRemedy
+	}
+	return host + " resolved to fake-IP addresses and a unique-local address, " +
+		"which Depsilo cannot tell from a private network; " + uniqueLocalFakeIPRemedy
 }
 
 // proxyConnectRefusal reports a proxy that answered CONNECT with a status

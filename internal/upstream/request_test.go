@@ -512,10 +512,15 @@ func TestIPNetworkScopeRejectsSpecialPurposeAddresses(t *testing.T) {
 		"100::1",
 		"100:0:0:1::1",
 		"2001::1",
+		"2001:2::1",
 		"2001:db8::1",
 		"2002:7f00:1::",
 		"3fff::1",
 		"5f00::1",
+		// Documented unique-local ranges of proxy software are never private.
+		"fdfe:dcba:9876::1",
+		"fd00:6152::2",
+		"fc00::1",
 	} {
 		if got := ipNetworkScope(egress.Policy{}, net.ParseIP(raw)); got != networkUnsafe {
 			t.Errorf("scope(%s) = %d, want unsafe", raw, got)
@@ -529,6 +534,15 @@ func TestIPNetworkScopeRejectsSpecialPurposeAddresses(t *testing.T) {
 	} {
 		if got := ipNetworkScope(egress.Policy{}, net.ParseIP(raw)); got != networkPublic {
 			t.Errorf("scope(%s) = %d, want public", raw, got)
+		}
+	}
+	for _, raw := range []string{
+		"10.0.0.1",
+		"fd12:3456:789a::1",
+		"fc00:f853:ccd:e793::1", // kind's default network, outside fc00::/18
+	} {
+		if got := ipNetworkScope(egress.Policy{}, net.ParseIP(raw)); got != networkPrivate {
+			t.Errorf("scope(%s) = %d, want private", raw, got)
 		}
 	}
 }

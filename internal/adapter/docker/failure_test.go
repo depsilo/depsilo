@@ -216,6 +216,13 @@ func TestOriginKeepsOnlySchemeHostAndPort(t *testing.T) {
 	if got := refusal.Error(); !strings.HasPrefix(got, `evil"<b>.example resolved to`) {
 		t.Fatalf("logged refusal = %q, want the host the log can name", got)
 	}
+	uniqueLocal := &uniqueLocalFakeIPRefusal{
+		host:   `evil"<b>.example`,
+		answer: []netip.Addr{netip.MustParseAddr("198.18.0.12"), netip.MustParseAddr("fd12:3456:789a::5")},
+	}
+	if got := uniqueLocal.clientReason(); !strings.HasPrefix(got, "*** resolved to fake-IP addresses and a unique-local address, ") {
+		t.Fatalf("client reason = %q, want the unusual host left out", got)
+	}
 }
 
 func TestRedactLogURLKeepsQueryKeysAndDropsCredentials(t *testing.T) {

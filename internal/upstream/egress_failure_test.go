@@ -51,6 +51,14 @@ func TestGuardExplainsFakeIPAndSharedAddressDenials(t *testing.T) {
 	}{
 		{"fake-IP answer for a public origin", "https://pypi.org", "198.18.0.65", egress.Policy{},
 			Failure{Code: FailureFakeIP, Address: "198.18.0.65", Range: "198.18.0.0/15"}},
+		{"IPv6 fake-IP answer for a public origin", "https://pypi.org", "2001:2::46", egress.Policy{},
+			Failure{Code: FailureFakeIP, Address: "2001:2::46", Range: "2001:2::/48"}},
+		// A unique-local range of proxy software is no private network: it
+		// used to pin the origin as private and was dialed.
+		{"unique-local fake-IP answer for a public origin", "https://pypi.org", "fd00:6152::46", egress.Policy{},
+			Failure{Code: FailureFakeIP, Address: "fd00:6152::46", Range: "fd00:6152::/32"}},
+		{"another IETF protocol assignment", "https://docs.example", "2001:3::1", egress.Policy{},
+			Failure{Code: FailureReserved, Address: "2001:3::1", Range: "2001::/23"}},
 		{"undeclared overlay peer", "http://parent.tailnet.ts.net:23333", "100.101.102.103", egress.Policy{},
 			Failure{Code: FailureSharedAddress, Address: "100.101.102.103", Range: "100.64.0.0/10"}},
 		{"cloud metadata stays reserved after a declaration", "http://metadata.example", "100.100.100.200", declaredSharedAddressSpace(t),
@@ -77,6 +85,39 @@ func TestGuardExplainsFakeIPAndSharedAddressDenials(t *testing.T) {
 				t.Fatalf("ClassifyFailure = %+v, want %+v", got, test.want)
 			}
 		})
+	}
+}
+
+// Go's resolver merges A and AAAA answers and sorts them by RFC 6724, so either
+// family's placeholder can come first; the refusal reads as fake-IP either way.
+func TestGuardExplainsDualStackFakeIPAnswersInEitherOrder(t *testing.T) {
+	for _, test := range []struct {
+		answer []string
+		want   Failure
+	}{
+		{[]string{"2001:2::46", "198.18.0.70"}, Failure{Code: FailureFakeIP, Address: "2001:2::46", Range: "2001:2::/48"}},
+		{[]string{"198.18.0.70", "2001:2::46"}, Failure{Code: FailureFakeIP, Address: "198.18.0.70", Range: "198.18.0.0/15"}},
+	} {
+		origin := mustURL(t, "https://pypi.org")
+		var dialed []string
+		dialer := &guardedDialer{
+			origin: origin,
+			resolver: resolverFunc(func(context.Context, string) ([]net.IPAddr, error) {
+				answer := make([]net.IPAddr, 0, len(test.answer))
+				for _, address := range test.answer {
+					answer = append(answer, net.IPAddr{IP: net.ParseIP(address)})
+				}
+				return answer, nil
+			}),
+			dialContext: recordingDial(&dialed),
+		}
+		_, err := dialer.DialContext(context.Background(), "tcp", "pypi.org:443")
+		if err == nil || len(dialed) != 0 {
+			t.Fatalf("answer %v: DialContext = %v after dialing %v, want an unsafe denial without a dial", test.answer, err, dialed)
+		}
+		if got := ClassifyFailure(&url.Error{Op: "Head", URL: "https://pypi.org", Err: err}); got == nil || *got != test.want {
+			t.Fatalf("answer %v: ClassifyFailure = %+v, want %+v", test.answer, got, test.want)
+		}
 	}
 }
 

@@ -17,6 +17,55 @@ func (fn roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error)
 	return fn(request)
 }
 
+// Docker address literals follow the rules of package Upstreams, without
+// declared private ranges: every special-purpose range and every documented
+// unique-local range of proxy software is unsafe, and other unique-local
+// addresses are private.
+func TestLiteralNetworkScopeClassifiesLikePackageUpstreams(t *testing.T) {
+	for host, want := range map[string]networkScope{
+		"0.1.2.3":               networkUnsafe,
+		"100.64.0.1":            networkUnsafe,
+		"100.100.100.200":       networkUnsafe,
+		"192.0.0.170":           networkUnsafe,
+		"192.0.2.1":             networkUnsafe,
+		"198.18.0.1":            networkUnsafe,
+		"198.51.100.1":          networkUnsafe,
+		"203.0.113.1":           networkUnsafe,
+		"240.0.0.1":             networkUnsafe,
+		"169.254.169.254":       networkUnsafe,
+		"64:ff9b::a9fe:a9fe":    networkUnsafe,
+		"64:ff9b:1::1":          networkUnsafe,
+		"100::1":                networkUnsafe,
+		"100:0:0:1::1":          networkUnsafe,
+		"2001::1":               networkUnsafe,
+		"2001:2::1":             networkUnsafe,
+		"2001:db8::1":           networkUnsafe,
+		"2002:7f00:1::":         networkUnsafe,
+		"3fff::1":               networkUnsafe,
+		"5f00::1":               networkUnsafe,
+		"fe80::1":               networkUnsafe,
+		"fdfe:dcba:9876::1":     networkUnsafe,
+		"fd00:6152::2":          networkUnsafe,
+		"fc00::1":               networkUnsafe,
+		"10.0.0.1":              networkPrivate,
+		"::ffff:192.168.1.10":   networkPrivate,
+		"fd12:3456:789a::1":     networkPrivate,
+		"fc00:f853:ccd:e793::1": networkPrivate, // kind's default network, outside fc00::/18
+		"127.0.0.1":             networkLoopback,
+		"::1":                   networkLoopback,
+		"localhost":             networkLoopback,
+		"93.184.216.34":         networkPublic,
+		"2001:4860:4860::8888":  networkPublic,
+	} {
+		if got, known := literalNetworkScope(host); !known || got != want {
+			t.Errorf("literalNetworkScope(%s) = %d, %v; want %d", host, got, known, want)
+		}
+	}
+	if _, known := literalNetworkScope("registry.example"); known {
+		t.Fatal("a host name was classified without DNS")
+	}
+}
+
 func TestGetTokenCancellationStopsAuthDiscovery(t *testing.T) {
 	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		<-request.Context().Done()

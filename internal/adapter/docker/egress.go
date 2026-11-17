@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -197,6 +198,9 @@ func (transport *scopePreflightRoundTripper) validateTarget(request *http.Reques
 	}
 	targetScope := proxiedScope(host, addresses)
 	if targetScope == networkUnsafe {
+		if refusal := uniqueLocalFakeIPError(host, addresses); refusal != nil {
+			return refusal
+		}
 		return errUnsafeProxyTarget
 	}
 
@@ -207,7 +211,10 @@ func (transport *scopePreflightRoundTripper) validateTarget(request *http.Reques
 		return nil
 	}
 	originScope, err := transport.scopeForOrigin(request.Context())
-	if err != nil || !scopeAllows(originScope, targetScope) {
+	if err != nil {
+		return originRefusal(err, errProxyTargetCrossedScope)
+	}
+	if !scopeAllows(originScope, targetScope) {
 		return errProxyTargetCrossedScope
 	}
 	return nil
@@ -228,19 +235,37 @@ func (transport *scopePreflightRoundTripper) scopeForOrigin(ctx context.Context)
 		return networkUnsafe, errUnresolvedRegistry
 	}
 	scope := proxiedScope(host, addresses)
-	if scope == networkUnsafe || !transport.pinOriginScope(scope) {
+	if scope == networkUnsafe {
+		if refusal := uniqueLocalFakeIPError(host, addresses); refusal != nil {
+			return networkUnsafe, refusal
+		}
+		return networkUnsafe, errUnsafeRegistryScope
+	}
+	if !transport.pinOriginScope(scope) {
 		return networkUnsafe, errUnsafeRegistryScope
 	}
 	return scope, nil
 }
 
+// originRefusal is the refusal of a target whose registry has no usable
+// network scope: the registry's own unique-local fake-IP refusal, which says
+// why, or fallback.
+func originRefusal(originErr, fallback error) error {
+	var uniqueLocal *uniqueLocalFakeIPRefusal
+	if errors.As(originErr, &uniqueLocal) {
+		return uniqueLocal
+	}
+	return fallback
+}
+
 // proxiedScope classifies a host that a proxy will carry. It keeps every rule
-// of resolvedScope with one exception: a host name whose every DNS answer lies
-// in egress.BenchmarkingRange counts as public. Proxy software in TUN/fake-IP
-// mode answers that way for public hosts; the placeholder says nothing about
-// the real address, and the proxy resolves the name itself. An address
-// literal is not a DNS answer, and an answer that mixes placeholders with
-// other addresses stays unsafe.
+// of resolvedScope with one exception: a host name whose every DNS answer is a
+// fake-IP placeholder (see allFakeIP), from 198.18.0.0/15, 2001:2::/48 or
+// both and in any order, counts as public. Proxy software in TUN/fake-IP mode
+// answers that way for public hosts; the placeholder says nothing about the
+// real address, and the proxy resolves the name itself. An address literal is
+// not a DNS answer, and an answer that mixes placeholders with any other
+// address stays unsafe.
 func proxiedScope(host string, addresses []net.IPAddr) networkScope {
 	if dnsHostName(host) && allFakeIP(addresses) {
 		return networkPublic
@@ -268,11 +293,16 @@ func dnsHostName(host string) bool {
 }
 
 // allFakeIP reports whether a DNS answer consists of fake-IP placeholders
-// only.
+// only: addresses in a benchmarking range (egress.FakeIPRange), IPv4, IPv6 or
+// both. Unique-local fake-IP addresses are no placeholders, since they cannot
+// be told from a private network; see uniqueLocalFakeIPError.
 func allFakeIP(addresses []net.IPAddr) bool {
 	for _, address := range addresses {
 		ip, ok := netip.AddrFromSlice(address.IP)
-		if !ok || !egress.BenchmarkingRange.Contains(ip.Unmap()) {
+		if !ok {
+			return false
+		}
+		if _, placeholder := egress.FakeIPRange(ip); !placeholder {
 			return false
 		}
 	}
@@ -280,13 +310,71 @@ func allFakeIP(addresses []net.IPAddr) bool {
 }
 
 // fakeIPDialError refuses a direct dial to a host name answered only with
-// fake-IP addresses and names the remedy; see fakeIPRefusal.
+// fake-IP placeholders and names the remedy; see fakeIPRefusal. It names an
+// IPv4 placeholder when the answer has one, and otherwise the first IPv6
+// placeholder.
 func fakeIPDialError(host string, addresses []net.IPAddr, remedy string) error {
 	if remedy == "" {
 		remedy = fakeIPRemedySetProxy
 	}
-	address, _ := netip.AddrFromSlice(addresses[0].IP)
-	return &fakeIPRefusal{host: host, address: address.Unmap(), remedy: remedy}
+	var named netip.Addr
+	for _, address := range addresses {
+		ip, _ := netip.AddrFromSlice(address.IP)
+		if ip = ip.Unmap(); ip.Is4() {
+			named = ip
+			break
+		}
+		if !named.IsValid() {
+			named = ip
+		}
+	}
+	return &fakeIPRefusal{host: host, address: named, remedy: remedy}
+}
+
+// uniqueLocalRange is RFC 4193's unique-local IPv6 range.
+var uniqueLocalRange = netip.MustParsePrefix("fc00::/7")
+
+// uniqueLocalFakeIPError refuses an answer that is IPv6 fake-IP from a
+// unique-local range, and returns nil for any other answer. Such an answer
+// belongs to a DNS host name and consists of fake-IP placeholders and
+// unique-local addresses only, with at least one unique-local address, and
+// with a placeholder or an address in a documented unique-local range of
+// proxy software (egress.UniqueLocalProxyRange). No proxy may carry it,
+// because Depsilo cannot tell a unique-local address from a private network;
+// moving the proxy software's IPv6 fake-IP range into 2001:2::/48 makes it a
+// placeholder answer. Its callers ask only about answers that classify as
+// unsafe, which keep their plain refusal when it returns nil, but the rule
+// does not rely on that: a unique-local answer outside the documented ranges
+// and without placeholders is a private network and gets nil.
+func uniqueLocalFakeIPError(host string, addresses []net.IPAddr) error {
+	if !dnsHostName(host) {
+		return nil
+	}
+	refusal := &uniqueLocalFakeIPRefusal{host: host}
+	placeholder, uniqueLocal := false, false
+	for _, address := range addresses {
+		ip, ok := netip.AddrFromSlice(address.IP)
+		if !ok {
+			return nil
+		}
+		ip = ip.Unmap()
+		refusal.answer = append(refusal.answer, ip)
+		if _, fake := egress.FakeIPRange(ip); fake {
+			placeholder = true
+			continue
+		}
+		if !uniqueLocalRange.Contains(ip) {
+			return nil
+		}
+		uniqueLocal = true
+		if proxyRange, documented := egress.UniqueLocalProxyRange(ip); documented && !refusal.proxyRange.IsValid() {
+			refusal.proxyRange = proxyRange
+		}
+	}
+	if !uniqueLocal || !placeholder && !refusal.proxyRange.IsValid() {
+		return nil
+	}
+	return refusal
 }
 
 func (transport *scopePreflightRoundTripper) pinOriginScope(scope networkScope) bool {
@@ -331,15 +419,22 @@ func (dialer *guardedDialer) DialContext(ctx context.Context, network, address s
 	if targetScope == networkUnsafe {
 		// Only the answer that proxiedScope accepts is worth the proxy
 		// remedy. Mixed answers and address literals stay refused through
-		// a proxy too, so they keep the plain refusal.
+		// a proxy too, so they keep the plain refusal, except unique-local
+		// fake-IP, whose refusal names the proxy software's setting.
 		if dnsHostName(host) && allFakeIP(addresses) {
 			return nil, fakeIPDialError(host, addresses, dialer.fakeIPRemedy)
+		}
+		if refusal := uniqueLocalFakeIPError(host, addresses); refusal != nil {
+			return nil, refusal
 		}
 		return nil, errUnsafeDialTarget
 	}
 	if !sameDialAddress(address, dialer.origin) {
 		originScope, scopeErr := dialer.scopeForOrigin(ctx)
-		if scopeErr != nil || !scopeAllows(originScope, targetScope) {
+		if scopeErr != nil {
+			return nil, originRefusal(scopeErr, errDialTargetCrossedScope)
+		}
+		if !scopeAllows(originScope, targetScope) {
 			return nil, errDialTargetCrossedScope
 		}
 	} else if !dialer.pinOriginScope(targetScope) {
@@ -366,12 +461,19 @@ func (dialer *guardedDialer) scopeForOrigin(ctx context.Context) (networkScope, 
 	}
 	dialer.mu.Unlock()
 
-	addresses, err := dialer.resolver.LookupIPAddr(ctx, dialer.origin.Hostname())
+	host := dialer.origin.Hostname()
+	addresses, err := dialer.resolver.LookupIPAddr(ctx, host)
 	if err != nil || len(addresses) == 0 {
 		return networkUnsafe, errUnresolvedRegistry
 	}
 	scope := resolvedScope(addresses)
-	if scope == networkUnsafe || !dialer.pinOriginScope(scope) {
+	if scope == networkUnsafe {
+		if refusal := uniqueLocalFakeIPError(host, addresses); refusal != nil {
+			return networkUnsafe, refusal
+		}
+		return networkUnsafe, errUnsafeRegistryScope
+	}
+	if !dialer.pinOriginScope(scope) {
 		return networkUnsafe, errUnsafeRegistryScope
 	}
 	return scope, nil

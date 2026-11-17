@@ -702,13 +702,19 @@ func ipNetworkScope(policy egress.Policy, ip net.IP) networkScope {
 
 // addrNetworkScope classifies one address. A range the operator declared
 // private (see egress.Policy) is a private network: reachable from a private
-// configured origin, never from a public one.
+// configured origin, never from a public one. A documented unique-local range
+// of proxy software is unsafe although it lies in fc00::/7: it holds fake-IP
+// answers and the proxy's own addresses (see egress.UniqueLocalProxyRange).
+// Declared ranges lie in 100.64.0.0/10, so they cannot overlap it.
 func addrNetworkScope(policy egress.Policy, address netip.Addr) networkScope {
+	_, proxySoftware := egress.UniqueLocalProxyRange(address)
 	switch {
 	case !address.IsValid():
 		return networkUnsafe
 	case address.IsLoopback():
 		return networkLoopback
+	case proxySoftware:
+		return networkUnsafe
 	case address.IsPrivate(), policy.IsDeclaredPrivate(address):
 		return networkPrivate
 	case address.IsUnspecified(), address.IsLinkLocalUnicast(), address.IsLinkLocalMulticast(), address.IsMulticast():

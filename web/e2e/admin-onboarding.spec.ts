@@ -693,7 +693,7 @@ test('upstreams refused for fake-IP DNS show the cause and the remedy before the
   await page.goto('/admin/connect')
   const warning = page.locator('.connection-warning').filter({ hasText: 'Related upstreams need attention: tuna, official, lan-mirror.' })
   await expect(warning.locator('[data-connect-upstream-failure="egress_fake_ip"]')).toHaveText(
-    'The DNS that Depsilo uses resolves the hosts of tuna, official into the benchmarking range 198.18.0.0/15. '
+    'The DNS that Depsilo uses resolves the hosts of tuna, official into fake-IP ranges such as 198.18.0.0/15 and 2001:2::/48. '
     + 'Proxy software in fake-IP mode answers this way, and Depsilo does not connect to such addresses by default. '
     + 'Set upstream_proxy under [egress] in config.toml (or the environment variable DEPSILO_EGRESS_UPSTREAM_PROXY) '
     + 'to the proxy software\'s HTTP port (for example http://127.0.0.1:7890) and restart, '

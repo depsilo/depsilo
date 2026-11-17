@@ -512,7 +512,7 @@ const zh = {
       proxyUnavailable: "代理所需的数据库或存储检查未通过，依赖下载可能受阻。",
       viewServiceStatus: "查看服务状态",
       upstreamAttention: "相关上游需关注：{{names}}。回源请求可能受影响；其他源或已有缓存仍可能可用。",
-      upstreamFakeIP: "Depsilo 使用的 DNS 把 {{names}} 的域名解析到了基准测试保留地址段 198.18.0.0/15。代理软件的 fake-IP 模式会这样返回，Depsilo 默认不连接这类地址。",
+      upstreamFakeIP: "Depsilo 使用的 DNS 把 {{names}} 的域名解析到了 198.18.0.0/15、2001:2::/48 等 fake-IP 地址段。代理软件的 fake-IP 模式会这样返回，Depsilo 默认不连接这类地址。",
       viewUpstreams: "查看上游源",
       healthUnknown: "暂时无法确认服务检查结果。",
       instanceAddress: "当前实例",
@@ -1423,9 +1423,9 @@ const zh = {
       sharedFailureTitle: '{{count}} 个上游因同一原因无法连接',
       failure: {
         egress_fake_ip: {
-          title: 'DNS 把这个上游解析成了 {{address}}，属于基准测试保留地址段 {{range}}。代理软件的 fake-IP 模式会返回这类地址，Depsilo 默认不连接。',
+          title: 'DNS 把这个上游解析成了 {{address}}，属于 fake-IP 地址段 {{range}}。代理软件的 fake-IP 模式会返回这类地址，Depsilo 默认不连接。',
           short: 'DNS 返回了 fake-IP 地址 {{address}}，未连接。',
-          shared: '这些上游的域名都被解析到基准测试保留地址段 198.18.0.0/15。代理软件的 fake-IP 模式会这样返回，Depsilo 默认不连接这类地址。',
+          shared: '这些上游的域名都被解析到 198.18.0.0/15、2001:2::/48 等 fake-IP 地址段。代理软件的 fake-IP 模式会这样返回，Depsilo 默认不连接这类地址。',
           action: '在 config.toml 的 [egress] 中把 upstream_proxy（或环境变量 DEPSILO_EGRESS_UPSTREAM_PROXY）设为代理软件的 HTTP 端口（例如 http://127.0.0.1:7890）后重启，或让 Depsilo 使用返回真实地址的 DNS。在容器里 127.0.0.1 指的是容器自己：要删除容器，再带上 DEPSILO_EGRESS_UPSTREAM_PROXY=http://host.docker.internal:7890 重新运行（docker restart 沿用旧的环境变量），Linux 上的 Docker Engine 还要加 --add-host=host.docker.internal:host-gateway。详见部署指南的“Upstream network egress”一节。',
         },
         egress_shared_address: {

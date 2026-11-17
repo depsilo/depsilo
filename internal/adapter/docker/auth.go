@@ -14,6 +14,8 @@ import (
 
 	"go.uber.org/zap"
 	"golang.org/x/sync/singleflight"
+
+	"depsilo/internal/egress"
 )
 
 type tokenEntry struct {
@@ -152,6 +154,13 @@ const (
 	networkUnsafe
 )
 
+// literalNetworkScope classifies localhost and an address literal; any other
+// host is unknown. It applies the rules of upstream.addrNetworkScope, the
+// classifier of package Upstreams: a documented unique-local range of proxy
+// software is unsafe although it lies in fc00::/7 (see
+// egress.UniqueLocalProxyRange), and so is every range of
+// egress.SpecialPurposePrefix. Unlike package Upstreams, Docker registries use
+// no declared private ranges.
 func literalNetworkScope(host string) (networkScope, bool) {
 	host = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
 	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
@@ -161,63 +170,24 @@ func literalNetworkScope(host string) (networkScope, bool) {
 	if ip == nil {
 		return networkPublic, false
 	}
+	address, ok := netip.AddrFromSlice(ip)
+	if !ok {
+		return networkUnsafe, true
+	}
+	_, proxySoftware := egress.UniqueLocalProxyRange(address)
+	_, specialPurpose := egress.SpecialPurposePrefix(address)
 	switch {
 	case ip.IsLoopback():
 		return networkLoopback, true
+	case proxySoftware:
+		return networkUnsafe, true
 	case ip.IsPrivate():
 		return networkPrivate, true
-	case ip.IsUnspecified(), ip.IsLinkLocalUnicast(), ip.IsLinkLocalMulticast(), ip.IsMulticast(),
-		isSpecialPurposeDockerAddress(ip):
+	case ip.IsUnspecified(), ip.IsLinkLocalUnicast(), ip.IsLinkLocalMulticast(), ip.IsMulticast(), specialPurpose:
 		return networkUnsafe, true
 	default:
 		return networkPublic, true
 	}
-}
-
-var specialPurposeDockerIPv4Prefixes = []netip.Prefix{
-	netip.MustParsePrefix("0.0.0.0/8"),
-	netip.MustParsePrefix("100.64.0.0/10"),
-	netip.MustParsePrefix("192.0.0.0/24"),
-	netip.MustParsePrefix("192.0.2.0/24"),
-	netip.MustParsePrefix("192.31.196.0/24"),
-	netip.MustParsePrefix("192.52.193.0/24"),
-	netip.MustParsePrefix("192.88.99.0/24"),
-	netip.MustParsePrefix("192.175.48.0/24"),
-	netip.MustParsePrefix("198.18.0.0/15"),
-	netip.MustParsePrefix("198.51.100.0/24"),
-	netip.MustParsePrefix("203.0.113.0/24"),
-	netip.MustParsePrefix("240.0.0.0/4"),
-}
-
-var specialPurposeDockerIPv6Prefixes = []netip.Prefix{
-	netip.MustParsePrefix("64:ff9b::/96"),
-	netip.MustParsePrefix("64:ff9b:1::/48"),
-	netip.MustParsePrefix("100::/64"),
-	netip.MustParsePrefix("100:0:0:1::/64"),
-	netip.MustParsePrefix("2001::/23"),
-	netip.MustParsePrefix("2001:db8::/32"),
-	netip.MustParsePrefix("2002::/16"),
-	netip.MustParsePrefix("2620:4f:8000::/48"),
-	netip.MustParsePrefix("3fff::/20"),
-	netip.MustParsePrefix("5f00::/16"),
-}
-
-func isSpecialPurposeDockerAddress(ip net.IP) bool {
-	address, ok := netip.AddrFromSlice(ip)
-	if !ok {
-		return true
-	}
-	address = address.Unmap()
-	prefixes := specialPurposeDockerIPv6Prefixes
-	if address.Is4() {
-		prefixes = specialPurposeDockerIPv4Prefixes
-	}
-	for _, prefix := range prefixes {
-		if prefix.Contains(address) {
-			return true
-		}
-	}
-	return false
 }
 
 // discoverAuth sends GET /v2/ and parses the WWW-Authenticate header. Its

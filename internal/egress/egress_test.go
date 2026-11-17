@@ -13,6 +13,8 @@ func TestSpecialPurposePrefixNamesTheReservedRange(t *testing.T) {
 		"192.0.2.1":         "192.0.2.0/24",
 		"::ffff:198.19.1.1": "198.18.0.0/15",
 		"2001:db8::1":       "2001:db8::/32",
+		"2001:2::1":         "2001:2::/48", // RFC 5180 benchmarking, inside 2001::/23
+		"2001::1":           "2001::/23",
 	} {
 		prefix, ok := SpecialPurposePrefix(netip.MustParseAddr(address))
 		if !ok || prefix.String() != want {
@@ -22,6 +24,53 @@ func TestSpecialPurposePrefixNamesTheReservedRange(t *testing.T) {
 	for _, address := range []string{"8.8.8.8", "100.63.255.255", "100.128.0.0", "192.168.1.10", "2001:4860:4860::8888"} {
 		if prefix, ok := SpecialPurposePrefix(netip.MustParseAddr(address)); ok {
 			t.Errorf("SpecialPurposePrefix(%s) = %v, want no reserved range", address, prefix)
+		}
+	}
+}
+
+func TestFakeIPRangeNamesOnlyTheBenchmarkingRanges(t *testing.T) {
+	for address, want := range map[string]string{
+		"198.18.0.1":        "198.18.0.0/15",
+		"198.19.255.254":    "198.18.0.0/15",
+		"::ffff:198.18.0.1": "198.18.0.0/15",
+		"2001:2::1":         "2001:2::/48",
+		"2001:2:0:ffff::1":  "2001:2::/48",
+	} {
+		prefix, ok := FakeIPRange(netip.MustParseAddr(address))
+		if !ok || prefix.String() != want {
+			t.Errorf("FakeIPRange(%s) = %v, %v; want %s", address, prefix, ok, want)
+		}
+	}
+	// Unique-local fake-IP ranges are no placeholders: a proxy may not carry
+	// them, because they cannot be told from a private network.
+	for _, address := range []string{"198.17.255.255", "198.20.0.1", "2001::1", "2001:3::1", "fc00::1", "fdfe:dcba:9876::1"} {
+		if prefix, ok := FakeIPRange(netip.MustParseAddr(address)); ok {
+			t.Errorf("FakeIPRange(%s) = %v, want no fake-IP range", address, prefix)
+		}
+	}
+}
+
+func TestUniqueLocalProxyRangeNamesOnlyTheDocumentedRanges(t *testing.T) {
+	for address, want := range map[string]string{
+		"fdfe:dcba:9876::46": "fdfe:dcba:9876::/48", // mihomo's fake-ip-range6 example and TUN default
+		"fd00:6152::46":      "fd00:6152::/32",      // Surge
+		"fc00::46":           "fc00::/18",           // sing-box examples before 2026-10, v2rayN, Hiddify
+		"fc00:3fff::1":       "fc00::/18",
+	} {
+		prefix, ok := UniqueLocalProxyRange(netip.MustParseAddr(address))
+		if !ok || prefix.String() != want {
+			t.Errorf("UniqueLocalProxyRange(%s) = %v, %v; want %s", address, prefix, ok, want)
+		}
+	}
+	for _, address := range []string{
+		"fc00:4000::1",
+		"fc00:f853:ccd:e793::1", // kind's default network
+		"fd12:3456:789a::1",
+		"fd00::1",
+		"2001:db8::1",
+	} {
+		if prefix, ok := UniqueLocalProxyRange(netip.MustParseAddr(address)); ok {
+			t.Errorf("UniqueLocalProxyRange(%s) = %v, want no range of proxy software", address, prefix)
 		}
 	}
 }

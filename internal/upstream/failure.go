@@ -16,8 +16,11 @@ import (
 // Failure codes explain why an upstream check failed. They are stable API
 // values that Admin maps to operator guidance.
 const (
-	// FailureFakeIP: DNS answered with an RFC 2544 benchmarking address,
-	// which is how local proxies in fake-IP mode answer for public hosts.
+	// FailureFakeIP: DNS answered from a range that local proxies in fake-IP
+	// mode answer public hosts from: a benchmarking range, 198.18.0.0/15
+	// (RFC 2544) or 2001:2::/48 (RFC 5180 as corrected by RFC Errata 1752),
+	// or a documented unique-local range of proxy software (see
+	// egress.UniqueLocalProxyRange).
 	FailureFakeIP = "egress_fake_ip"
 	// FailureSharedAddress: the host resolved into 100.64.0.0/10, used by
 	// carrier-grade NAT and overlay networks, and no range was declared.
@@ -64,17 +67,40 @@ type StatusError struct{ Code int }
 
 func (e *StatusError) Error() string { return "upstream returned status " + strconv.Itoa(e.Code) }
 
-// unsafeDenial names the first refused address among a resolver answer.
+// unsafeDenial names the first refused address among a resolver answer, and
+// the range that makes it unsafe when one does.
 func unsafeDenial(policy egress.Policy, addresses []netip.Addr, message string) *EgressDeniedError {
 	denial := &EgressDeniedError{unsafe: true, message: message}
 	for _, address := range addresses {
 		if addrNetworkScope(policy, address) == networkUnsafe {
 			denial.Address = address
-			denial.Range, _ = egress.SpecialPurposePrefix(address)
+			denial.Range = refusedRange(address)
 			break
 		}
 	}
 	return denial
+}
+
+// refusedRange is the range that makes address unsafe on its own: a
+// documented unique-local range of proxy software or a special-purpose range.
+// It is invalid for an address that only its kind makes unsafe, such as a
+// link-local or multicast address.
+func refusedRange(address netip.Addr) netip.Prefix {
+	if prefix, ok := egress.UniqueLocalProxyRange(address); ok {
+		return prefix
+	}
+	prefix, _ := egress.SpecialPurposePrefix(address)
+	return prefix
+}
+
+// isFakeIPRange reports whether a refused range is one that local proxies in
+// fake-IP mode answer from; see FailureFakeIP.
+func isFakeIPRange(prefix netip.Prefix) bool {
+	if fake, ok := egress.FakeIPRange(prefix.Addr()); ok && fake == prefix {
+		return true
+	}
+	proxySoftware, ok := egress.UniqueLocalProxyRange(prefix.Addr())
+	return ok && proxySoftware == prefix
 }
 
 func scopeDenial(addresses []netip.Addr, message string) *EgressDeniedError {
@@ -110,10 +136,10 @@ func ClassifyFailure(err error) *Failure {
 			failure.Code = FailureReserved
 			if denied.Range.IsValid() {
 				failure.Range = denied.Range.String()
-				switch denied.Range {
-				case egress.BenchmarkingRange:
+				switch {
+				case isFakeIPRange(denied.Range):
 					failure.Code = FailureFakeIP
-				case egress.SharedAddressSpace:
+				case denied.Range == egress.SharedAddressSpace:
 					failure.Code = FailureSharedAddress
 				}
 			}

@@ -4,6 +4,13 @@
 // networks, and an optional default HTTP proxy, which Docker registries
 // without their own proxy use too.
 //
+// It also names the ranges that proxy software in TUN/fake-IP mode answers DNS
+// queries from. The benchmarking ranges 198.18.0.0/15 and 2001:2::/48
+// (FakeIPRange) hold placeholders that only a proxy can resolve; they stay
+// special-purpose and are never dialed. The documented unique-local ranges of
+// proxy software (UniqueLocalProxyRange) are refused everywhere and never
+// count as private networks.
+//
 // It never relaxes the guard for public origins. A declared range is treated
 // as a private network, so a public upstream still cannot redirect into it.
 package egress
@@ -27,6 +34,34 @@ var SharedAddressSpace = netip.MustParsePrefix("100.64.0.0/10")
 // fake-IP mode (Clash, mihomo, Surge, sing-box) answer DNS queries for public
 // hosts with addresses from it.
 var BenchmarkingRange = netip.MustParsePrefix("198.18.0.0/15")
+
+// BenchmarkingRange6 is RFC 5180's IPv6 benchmarking range. The RFC's text
+// gives 2001:0200::/48; verified RFC Errata 1752 corrects it to 2001:2::/48,
+// the range IANA registers. Proxy software uses it for IPv6 fake-IP answers:
+// Clash Verge Rev fills in 2001:2::/64 in TUN fake-IP mode since 2.5.5,
+// sing-box's examples use 2001:2::/48 since 2026-10, and OpenClash suggests
+// it.
+var BenchmarkingRange6 = netip.MustParsePrefix("2001:2::/48")
+
+// uniqueLocalProxyPrefixes are the unique-local ranges that proxy software
+// documents for its IPv6 fake-IP answers and its own TUN, VIF and DNS
+// addresses:
+//
+//   - fdfe:dcba:9876::/48: mihomo's documented fake-ip-range6 example and
+//     Clash Verge Rev's DNS-settings template, and the default TUN address of
+//     mihomo, sing-box and GUI.for.SingBox.
+//   - fd00:6152::/32: Surge's IPv6 fake, VIF and DNS prefix, which cannot be
+//     changed.
+//   - fc00::/18: the fake range of sing-box's examples before 2026-10, of
+//     v2rayN, Hiddify and GUI.for.SingBox.
+//
+// None is a random RFC 4193 Global ID, and fc00::/8 is not even assigned for
+// local use, so a compliant network is not numbered in them.
+var uniqueLocalProxyPrefixes = []netip.Prefix{
+	netip.MustParsePrefix("fdfe:dcba:9876::/48"),
+	netip.MustParsePrefix("fd00:6152::/32"),
+	netip.MustParsePrefix("fc00::/18"),
+}
 
 // alibabaCloudMetadata is the ECS instance-metadata endpoint inside the
 // shared address space. It stays blocked even when its range is declared, so
@@ -53,6 +88,7 @@ var specialPurposeIPv6Prefixes = []netip.Prefix{
 	netip.MustParsePrefix("64:ff9b:1::/48"),
 	netip.MustParsePrefix("100::/64"),
 	netip.MustParsePrefix("100:0:0:1::/64"),
+	BenchmarkingRange6, // inside 2001::/23, so it comes first
 	netip.MustParsePrefix("2001::/23"),
 	netip.MustParsePrefix("2001:db8::/32"),
 	netip.MustParsePrefix("2002::/16"),
@@ -69,6 +105,34 @@ func SpecialPurposePrefix(address netip.Addr) (netip.Prefix, bool) {
 	if address.Is4() {
 		prefixes = specialPurposeIPv4Prefixes
 	}
+	return containingPrefix(prefixes, address)
+}
+
+// fakeIPPrefixes are the benchmarking ranges, whose addresses FakeIPRange
+// calls placeholders.
+var fakeIPPrefixes = []netip.Prefix{BenchmarkingRange, BenchmarkingRange6}
+
+// FakeIPRange returns the benchmarking range, BenchmarkingRange or
+// BenchmarkingRange6, that contains address. These are the placeholders that
+// proxy software in TUN/fake-IP mode answers public host names with and that
+// only a proxy, which resolves the name itself, may carry. They remain
+// special-purpose ranges: nothing dials them directly.
+func FakeIPRange(address netip.Addr) (netip.Prefix, bool) {
+	return containingPrefix(fakeIPPrefixes, address.Unmap())
+}
+
+// UniqueLocalProxyRange returns the documented unique-local range of proxy
+// software that contains address. These ranges hold IPv6 fake-IP answers and
+// the proxy's own TUN, VIF and DNS addresses. Unlike a benchmarking
+// placeholder, no proxy may carry such an address, and unlike the rest of
+// fc00::/7 it is no private network: a fake answer from these ranges would
+// otherwise pin a public origin as private. Address classification refuses it
+// before it checks for a private network.
+func UniqueLocalProxyRange(address netip.Addr) (netip.Prefix, bool) {
+	return containingPrefix(uniqueLocalProxyPrefixes, address.Unmap())
+}
+
+func containingPrefix(prefixes []netip.Prefix, address netip.Addr) (netip.Prefix, bool) {
 	for _, prefix := range prefixes {
 		if prefix.Contains(address) {
 			return prefix, true
