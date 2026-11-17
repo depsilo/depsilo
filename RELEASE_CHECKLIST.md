@@ -33,11 +33,20 @@
       source-bound signed provenance after reconnect, and proves Admin Settings
       can atomically rewrite the prepared candidate config. Linux only: the
       contract needs `findmnt` and GNU-style `sha256sum`
-- [ ] `make test-v091-upgrade` upgrades the fixed direct-predecessor source and
-      immutable published v0.9.1 image. It reopens the shipped named-volume
-      state with the candidate, preserves config, password/JWT/API credentials,
-      trial and paid entitlement, and migrates a safe ecosystem-wide Package
-      Rule to schema v3 with dialect revision 1
+- [ ] `make test-v091-upgrade` upgrades the fixed v0.9.1 source and immutable
+      published v0.9.1 image. It reopens the shipped named-volume state with
+      the candidate, preserves config, password/JWT/API credentials, trial and
+      paid entitlement, and migrates a safe ecosystem-wide Package Rule to
+      schema v3 with dialect revision 1
+- [ ] `make test-previous-release-upgrade` upgrades the previous published
+      release. It runs that release's image by digest on its shipped Compose
+      named-volume layout, completes first-run setup through the API, and
+      starts the candidate on the same volume. The candidate leaves
+      `config.toml` byte-identical, does not reopen first-run setup, honors
+      the session issued before the upgrade, both passwords, and the API
+      token, keeps the Package Rule, and reaches its own schema version. The
+      contract fails when its pinned baseline is older than the newest
+      release in the candidate's history
 
 ### Rollback rehearsal
 - [ ] `bin/depsilo backup --out <file>.tar.gz --json` reports `ok`, and the
@@ -100,6 +109,12 @@ git push origin vX.Y.Z
       of the latest release, so installer fixes ship with the next release
 - [ ] `docker run ghcr.io/depsilo/depsilo:latest` starts successfully
 - [ ] Release notes published on GitHub Releases
+- [ ] `scripts/test-previous-release-upgrade.sh` is re-pinned to the release
+      just published (tag commit, Compose checksum, image index and
+      per-architecture digests; see "Re-pinning the previous-release
+      contract" in `docs/release-verification.md`), and
+      `make test-previous-release-upgrade` passes with the new baseline. Until
+      then the next release qualification fails on the stale baseline
 
 ## Known release gaps
 

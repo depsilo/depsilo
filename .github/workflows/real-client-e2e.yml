@@ -166,7 +166,7 @@ jobs:
         run: make test-v090-compose-upgrade
 
   v091-upgrade:
-    name: v0.9.1 direct-predecessor upgrade contracts
+    name: v0.9.1 fixed-baseline upgrade contracts
     if: inputs.release_qualification == true
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -183,3 +183,18 @@ jobs:
 
       - name: Exercise fixed v0.9.1 source and published image state
         run: make test-v091-upgrade
+
+  previous-release-upgrade:
+    name: Previous-release upgrade contract
+    if: inputs.release_qualification == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # Full history and tags: the contract checks that it is pinned to the
+      # newest release in the candidate's history.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Upgrade the previous published image and its state to the release candidate
+        run: make test-previous-release-upgrade

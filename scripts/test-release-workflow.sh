@@ -96,7 +96,7 @@ if [ "$macos_embed_line" -ge "$macos_daemon_line" ]; then
     echo "macOS release qualification must prepare Go embed assets before compiling CLI tests" >&2
     exit 1
 fi
-for command in 'make test-e2e' 'make test-docker-docker' 'make test-compiler-cache-qualified' 'make test-s3' 'make test-v090-upgrade' 'make test-v090-compose-upgrade' 'make test-v091-upgrade'; do
+for command in 'make test-e2e' 'make test-docker-docker' 'make test-compiler-cache-qualified' 'make test-s3' 'make test-v090-upgrade' 'make test-v090-compose-upgrade' 'make test-v091-upgrade' 'make test-previous-release-upgrade'; do
     if ! grep -q "$command" "$REAL_CLIENT_WORKFLOW"; then
         echo "release qualification is missing: $command" >&2
         exit 1
@@ -122,6 +122,67 @@ if ! grep -Fq 'DEPSILO_UPGRADE_BASELINE_TAG=v0.9.1' "$v091_upgrade_script" ||
     ! grep -Fqx 'baseline_image_amd64=ghcr.io/depsilo/depsilo@sha256:c242b5dba39aa891cb49ba815d3232f06a59344682a97c0a6f2841bdeb0dd571' "$v091_image_script" ||
     ! grep -Fqx 'baseline_image_arm64=ghcr.io/depsilo/depsilo@sha256:2bef80088d03255a02b512763196006132e7827688b6400c9cd98286e2ee889a' "$v091_image_script"; then
     echo 'v0.9.1 qualification inputs must remain pinned to the reviewed tag commit, Compose bytes, and published image digest' >&2
+    exit 1
+fi
+
+# The previous-release contract is re-pinned after every release, so its
+# values are checked for shape here; the script itself checks them against
+# the tag, the shipped Compose file and the registry, and refuses a baseline
+# older than the newest release in the candidate's history.
+previous_release_script="$ROOT/scripts/test-previous-release-upgrade.sh"
+if [ ! -x "$previous_release_script" ]; then
+    echo "missing executable previous-release upgrade contract: $previous_release_script" >&2
+    exit 1
+fi
+if ! grep -Eqx 'baseline_tag=v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)' "$previous_release_script" ||
+    ! grep -Eqx 'baseline_commit=[0-9a-f]{40}' "$previous_release_script" ||
+    ! grep -Eqx 'baseline_compose_sha256=[0-9a-f]{64}' "$previous_release_script" ||
+    ! grep -Eqx 'baseline_image_index=ghcr\.io/depsilo/depsilo@sha256:[0-9a-f]{64}' "$previous_release_script" ||
+    ! grep -Eqx 'baseline_image_amd64=ghcr\.io/depsilo/depsilo@sha256:[0-9a-f]{64}' "$previous_release_script" ||
+    ! grep -Eqx 'baseline_image_arm64=ghcr\.io/depsilo/depsilo@sha256:[0-9a-f]{64}' "$previous_release_script"; then
+    echo 'previous-release qualification inputs must be pinned to a final release tag, its commit, its Compose bytes, and its published image digests' >&2
+    exit 1
+fi
+if ! grep -Fq 'released since: re-pin scripts/test-previous-release-upgrade.sh' "$previous_release_script" ||
+    ! grep -Fq 'rev-parse --is-shallow-repository' "$previous_release_script"; then
+    echo 'previous-release qualification must refuse a baseline older than the newest release in the candidate history, and a shallow history that hides it' >&2
+    exit 1
+fi
+# A shallow clone usually lacks the baseline tag as well, so the shallow refusal
+# comes before the tag lookup and names the cause the operator must fix.
+previous_release_shallow_line=$(grep -n -m1 -F 'rev-parse --is-shallow-repository' "$previous_release_script" | cut -d: -f1 || true)
+previous_release_tag_line=$(grep -n -m1 -F 'resolved_baseline_commit=$(git' "$previous_release_script" | cut -d: -f1 || true)
+if [ -z "$previous_release_shallow_line" ] || [ -z "$previous_release_tag_line" ] ||
+    [ "$previous_release_shallow_line" -ge "$previous_release_tag_line" ]; then
+    echo 'previous-release qualification must refuse a shallow clone before it looks up the baseline tag' >&2
+    exit 1
+fi
+if ! grep -Fq '"(^|[[:space:]])v?${baseline_version//./\\.}([[:space:]]|$)"' "$previous_release_script"; then
+    echo 'previous-release qualification must match the baseline image version exactly, not as a substring' >&2
+    exit 1
+fi
+for property in '/api/v1/admin/license/trial/activate' '/api/v1/admin/audit/integrity' \
+    '"$origin/api/v1/admin/upstreams/$npm_upstream_id"' 'assert_private_state_files candidate' \
+    '"level":"(error|dpanic|panic|fatal)"' "'Bootstrap token:'"; do
+    if ! grep -Fq -- "$property" "$previous_release_script"; then
+        echo "previous-release qualification must carry trial, audit chain, edited upstream, state file modes and a clean candidate log across the upgrade: missing $property" >&2
+        exit 1
+    fi
+done
+# Its checks fail routinely (the freshness rule after every release), so the
+# work directory must not exist before the trap that removes it.
+previous_release_trap_line=$(grep -n -m1 -x 'trap cleanup EXIT INT TERM' "$previous_release_script" | cut -d: -f1 || true)
+previous_release_mktemp_line=$(grep -n -m1 'mktemp' "$previous_release_script" | cut -d: -f1 || true)
+if [ -z "$previous_release_trap_line" ] || [ -z "$previous_release_mktemp_line" ] ||
+    [ "$previous_release_mktemp_line" -le "$previous_release_trap_line" ]; then
+    echo 'previous-release qualification must create its work directory only after installing its cleanup trap' >&2
+    exit 1
+fi
+previous_release_job=$(sed -n '/^  previous-release-upgrade:/,$p' "$REAL_CLIENT_WORKFLOW")
+if ! grep -Fq 'if: inputs.release_qualification == true' <<<"$previous_release_job" ||
+    ! grep -Fq 'fetch-depth: 0' <<<"$previous_release_job" ||
+    ! grep -Fq 'run: make test-previous-release-upgrade' <<<"$previous_release_job"; then
+    echo 'previous-release qualification must run in release qualification with full history and tags' >&2
     exit 1
 fi
 

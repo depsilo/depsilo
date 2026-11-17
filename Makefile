@@ -171,7 +171,7 @@ sbom:                           # 维护者：生成 SBOM (CycloneDX + SPDX)
 		echo "wrote dist/sbom/depsilo-$$VERSION-source.spdx.json"
 
 # ─── 测试 ─────────────────────────────────────
-.PHONY: test test-full test-race test-integration test-ui test-ui-production test-compiler-cache test-compiler-cache-qualified test-s3 test-v090-upgrade test-v090-compose-upgrade test-v091-upgrade
+.PHONY: test test-full test-race test-integration test-ui test-ui-production test-compiler-cache test-compiler-cache-qualified test-s3 test-v090-upgrade test-v090-compose-upgrade test-v091-upgrade test-previous-release-upgrade
 
 test: prepare-go                ## 快速 Go 测试（使用缓存，跳过慢速压力边界）
 	go test -short $(GO_TEST_PKGS)
@@ -208,6 +208,9 @@ test-v090-compose-upgrade:          # 发布：验证官方 v0.9.0 Compose bind 
 
 test-v091-upgrade: build-dev-server # 发布：验证固定 v0.9.1 source 与已发布镜像状态升级
 	@bash scripts/test-v091-upgrade.sh
+
+test-previous-release-upgrade:      # 发布：验证上一个已发布版本的镜像与状态原地升级到候选版本
+	@bash scripts/test-previous-release-upgrade.sh
 
 # ─── Docker E2E ──────────────────────────────
 # Every fixture accepts one DEPSILO_URL build arg and derives its own route.

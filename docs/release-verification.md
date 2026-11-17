@@ -3,8 +3,9 @@
 Tagged releases do not start publishing assets until the offline verification
 workflow and release qualification are green. Qualification exercises all 14
 package-manager clients, Docker OCI, pinned ccache and sccache clients, real
-S3 storage behavior, the long-range v0.9.0 source/Compose upgrade contracts, and
-the direct-predecessor v0.9.1 source plus immutable image/state contract.
+S3 storage behavior, the long-range v0.9.0 source/Compose upgrade contracts, the
+fixed v0.9.1 source plus immutable image/state contract, and the upgrade from
+the previous published release.
 Releases then stay in draft state until all archives and tray bundles are
 available, the Linux archive executes, its checksum set verifies, the candidate
 container starts, its database and storage pass `/ready`, and signing and
@@ -23,6 +24,7 @@ make test-s3
 make test-v090-upgrade
 make test-v090-compose-upgrade
 make test-v091-upgrade
+make test-previous-release-upgrade
 make release-check
 make release-dry-run
 ```
@@ -38,7 +40,8 @@ rotation from a weak legacy JWT secret. Together they cover source-level
 compatibility and the immutable artifact users actually ran across the old
 bind-layout seam.
 
-The direct-predecessor contract separately pins the peeled v0.9.1 tag to commit
+The v0.9.1 contract (the direct predecessor of v0.10.0, kept as a fixed
+baseline) separately pins the peeled v0.9.1 tag to commit
 `773b9ad673615d5df6a8281f7cb658e3df84527d`, pins its shipped `compose.yaml`
 bytes to SHA-256
 `5abaad918604e045a32eacb81a4db14019e6a3c3d33d2f82be61e3bbe1a2a3ae`, and
@@ -56,6 +59,62 @@ Rule state through that immutable published image and its named-volume layout,
 before proving the candidate preserves the state and migrates the rule to
 schema v3 dialect revision 1. Mutable tags are never used as qualification
 inputs.
+
+The previous-release contract (`make test-previous-release-upgrade`) covers the
+step operators actually take: from the release published directly before the
+candidate. It pins that release's peeled tag commit, its shipped `compose.yaml`
+bytes, and its image index and per-architecture digests in
+`scripts/test-previous-release-upgrade.sh`, runs the published image on the
+shipped named-volume layout, completes first-run setup through the API, and
+restarts it once so the setup's upstreams take effect. It creates an
+administrator session, an API token, a second user, and a Package Rule,
+activates the trial, and edits the npm upstream through the Admin API. It then
+starts the candidate on the same volume and requires that `config.toml` is
+byte-identical, first-run setup is not reopened, the session issued before the
+upgrade, both passwords, and the API token still work, the rule, the trial
+status and the edited upstream are unchanged, the audit chain still verifies
+through `/api/v1/admin/audit/integrity` with no fewer rows, and the database is
+at the candidate's schema version. On both sides of the upgrade `config.toml`,
+the database, and `data/secrets/jwt.key` must be owned by `10001:10001`, with
+no group or other access to `config.toml`, the signing key, or the directories
+that hold all three (the database file itself is `0644` inside them and must
+not become writable by its group or others). The candidate's log must contain
+no error-level line and no bootstrap token. The contract refuses to run
+against a stale baseline: when the candidate's history holds a final release
+tag newer than the pinned one (other than a tag on the candidate commit
+itself), it fails and asks for a re-pin. It also refuses a shallow clone,
+whose history can hide such a tag.
+
+### Re-pinning the previous-release contract
+
+After a release is published, point the contract at it, so the next
+qualification rehearses the upgrade from that release:
+
+```bash
+tag=vX.Y.Z
+git rev-parse "${tag}^{commit}"
+git show "${tag}:compose.yaml" | sha256sum
+docker buildx imagetools inspect "ghcr.io/depsilo/depsilo:${tag#v}" --raw > index.json
+sha256sum index.json
+jq -r '.manifests[] | select(.platform.os == "linux") | "\(.platform.architecture) \(.digest)"' index.json
+```
+
+The commands print, in order, the commit, the Compose hash, the index hash, and
+one `<architecture> sha256:<hex>` line per platform. Write them into the six
+`baseline_` assignments at the top of the script in this form:
+
+| Assignment | Value |
+|---|---|
+| `baseline_tag` | the tag, for example `v0.14.0` |
+| `baseline_commit` | the 40-character commit `git rev-parse` prints |
+| `baseline_compose_sha256` | the hex `sha256sum` prints for `compose.yaml`, without the trailing `-` |
+| `baseline_image_index` | `ghcr.io/depsilo/depsilo@sha256:` followed by the hex `sha256sum` prints for `index.json` |
+| `baseline_image_amd64` | `ghcr.io/depsilo/depsilo@` followed by the digest `jq` prints after `amd64` |
+| `baseline_image_arm64` | `ghcr.io/depsilo/depsilo@` followed by the digest `jq` prints after `arm64` |
+
+Then run `make test-previous-release-upgrade` once from a full clone. The
+first-run and Admin API calls the script makes belong to the pinned release:
+when a release changes one of them, adjust the script in the same change.
 
 Container publication is a two-job transaction:
 
