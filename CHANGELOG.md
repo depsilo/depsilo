@@ -5,6 +5,277 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+- `depsilo reset-password [--config PATH] [<username>]` sets a local
+  account's password in the SQLite database. Stop Depsilo first: it refuses
+  while a server uses the database. It reads a no-echo prompt (twice) or one
+  line of non-terminal stdin, never a flag, argument, or variable; without a
+  known username it lists the accounts and exits 1. It refuses disabled or
+  externally managed accounts and another schema version, never migrates,
+  and ends the account's sessions; API tokens keep working, so revoke them
+  if needed. The audit log records `user.cli_reset` on `user:<id>` with the
+  operating-system user (Admin: "Password reset from the local CLI").
+- Go: checksum database requests (`/go/sumdb/<name>/...`) are relayed to the
+  Go Upstreams, skipping one that answers 404 or 410. When one mirrors the
+  database, as goproxy.cn does, the default `GOSUMDB` verifies through
+  Depsilo; otherwise `supported` answers 404 and the go command asks the
+  database itself. Tiles and lookups are cached for `cache.ttl_blob`,
+  `supported` and `latest` for `cache.ttl_index`. They count as metadata:
+  audited as `metadata` with no package name, never raise `tamper_detected`,
+  and are left out of download feeds, usage, and "Cache indexes" (a refresh
+  answers `422 NOT_REFRESHABLE`), but stay among cache objects. Quick Start,
+  "Connect a client", and the integration guide keep `GOSUMDB` at its
+  default, or set `GOSUMDB=sum.golang.google.cn` when no Go Upstream mirrors
+  the database and sum.golang.org is unreachable.
+- Admin lists (access logs, audit log, refresh records, cache objects, index
+  cache, quarantine events) filter by several ecosystem chips with counts
+  and show when rows were fetched; the first three share a time control (1
+  hour, 24 hours, 7 days, 30 days, all time, custom). The API takes repeated
+  or comma-separated `?adapter_type=` or `?ecosystem=` values and returns
+  per-ecosystem counts in `ecosystems`; `GET /api/v1/admin/logs` and
+  `GET /api/v1/admin/upstream-updates` accept RFC 3339 `start` and `end`.
+- Setup status: `GET /api/v1/discover` reports `setup_required` and lists
+  `setup_status`; while setup is pending it and `/api/v1/agent-prompt` say a
+  human must finish setup in the Portal. `GET /api/v1/setup/status` returns
+  `listen_port`, `config_exists` and `token_command` while setup is pending,
+  then `"restart_pending": true` until the process restarts (by the operator
+  when `restart_strategy` is `supervisor_required`). Package routes are
+  served once a `200` answer has `needs_setup` false and no
+  `restart_pending`.
+- `depsilo setup token --port`/`-p` and `--host` reach another listener; it
+  names the URL asked when setup is complete. The startup summary, the setup
+  page and `BOOTSTRAP_TOKEN_REQUIRED` print `--port N` on a non-default port
+  and `--host <host>` when 127.0.0.1 does not reach the listener.
+- The Portal page links `/api/v1/discover` in `noscript` and
+  `link rel="alternate"` for clients that do not run JavaScript.
+- `make test-docker-npm` tests fresh and lockfile installs with npm, pnpm,
+  Yarn 1, Yarn 4, and Bun; the Go fixture verifies checksums.
+
+### Changed
+- `POST /mcp` answers JSON-RPC notifications (no `id`), and batches of only
+  notifications, with `202 Accepted` and no body instead of `200`; a
+  `notifications/*` method with an `id` gets error `-32601`. `GET /mcp` and
+  `DELETE /mcp` answer `405` with `Allow: POST`, or `401` without
+  credentials, instead of `404`.
+- Unknown `/api` routes answer `404` with a JSON body, code `NOT_FOUND`, and
+  a pointer to `GET /api/v1/discover` instead of plain `404 not found`.
+- `GET /api/v1/admin/audit-logs` and `/audit-logs/export` answer
+  `400 BAD_REQUEST` for a `start` or `end` that is not RFC 3339, or an `end`
+  before `start`, instead of returning all time.
+- `POST /api/v1/admin/snapshots/import` answers an invalid manifest (for
+  example over 200000 items) with `400 SNAPSHOT_FAILED` instead of `500`; a
+  failure storing a valid one still answers `500`.
+- `depsilo doctor` fails an `Initial setup` check while first-run setup is
+  pending, points to the Portal, and exits non-zero; probe `/health` for
+  liveness only. `depsilo status` prints a `Setup:` line; `--json` of both
+  has `setup_required`. With a token, doctor lists Upstream failure codes
+  with counts and, for `egress_fake_ip`, the remedy (`upstream_proxy` under
+  `[egress]`, `DEPSILO_EGRESS_UPSTREAM_PROXY`, or real-address DNS); without
+  one, its hint mentions fake IPs. It no longer asks for a valid token that
+  was accepted, and calls an Upstream slow at 1000 ms (was 150), as the
+  Portal does.
+- `depsilo init-agent` exits 1 with `"ok": false` and no success sentence
+  when a target file cannot be updated (a `depsilo:start` marker without its
+  end marker is now left untouched), and exits 1 writing nothing while setup
+  is pending. `--json` reports `source` (`server` or `embedded`); when the
+  server does not answer within one request timeout, it warns on stderr and
+  writes the built-in text.
+- `depsilo warmup` treats HTTP 202 as success instead of exiting 1, so
+  scripts no longer retry into duplicate jobs, and prints the job id and
+  status; `--json` has `job_id` and `status`.
+- `depsilo serve` reports a failed start as one line on stderr and exit 1
+  (`Port N is already in use. ...` or `Error: <message>`) instead of JSON
+  with a stack trace, and explains a refused state directory (UID and GID
+  10001 in the official image), config file, or relative `database.dsn` or
+  storage path. `depsilo start --daemon` explains a refused path the same
+  way, prints the daemon's last message before
+  `Error: daemon exited before readiness: ...`, and prints `Error: <message>`
+  instead of `Error loading daemon configuration: ...`.
+- `--help` and `-h` print usage on stdout and exit 0 for every command
+  without running it (`depsilo flush --help` sent the cleanup,
+  `depsilo stop --help` stopped the daemon); `depsilo setup` alone still
+  exits 1 on stderr. `depsilo help` gains a tagline and the `--json`
+  commands, `depsilo setup --help` its flags and the `docker exec` form.
+- Egress: `DEPSILO_EGRESS_UPSTREAM_PROXY`, `DEPSILO_EGRESS_NO_PROXY`, and
+  `DEPSILO_EGRESS_PRIVATE_RANGES` override `[egress]` even when the key is
+  not in `config.toml`; lists are comma-separated and replace the file list,
+  and an invalid value fails startup. When all Upstreams of an ecosystem were
+  refused for one egress reason, the `502` message
+  `all upstreams are unhealthy` appends the code and points at `[egress]`
+  and `docs/deployment.md#upstream-network-egress` (plus the proxy variable
+  for `egress_fake_ip`) until the Upstream succeeds again.
+- npm: unsigned tarball paths (`/npm/<package>/-/<file>.tgz` and the scoped
+  form) still answer `404`, now with a JSON body, code
+  `NPM_UNSIGNED_TARBALL`, and a recovery message; npm `404` and `502` bodies
+  repeat the message in `error`. Refused tarball requests appear in the
+  access log as 404, without the token.
+- `POST /api/v1/setup/complete` returns the request's own origin as
+  `reconnect_url` when the request did not name the listening port or
+  carried `X-Forwarded-Proto`; otherwise it still uses the chosen port.
+- Startup: a reopened setup shows `Setup reopened:` (finishing it replaces
+  `config.toml`); a generated administrator password is printed in the
+  summary and no longer called one-time (sign in and change it; log fields
+  unchanged); `DEPSILO_ADMIN_USERNAME` or `DEPSILO_ADMIN_PASSWORD` set while
+  setup is pending draws a warning, as they need a configuration file.
+- Bootstrap token: `BOOTSTRAP_TOKEN_REQUIRED` (still `403`) explains the
+  `X-Depsilo-Bootstrap-Token` header, `DEPSILO_BOOTSTRAP_TOKEN`, and
+  `depsilo setup token`. Messages read `publish bootstrap token: ...` and
+  `failed to remove completed bootstrap token`.
+- Setup page: names the "bootstrap token" consistently and shows it
+  unmasked, gives the `docker exec` form of `depsilo setup token`, warns
+  before replacing an existing configuration, starts from the listening
+  port, matches the server's password rules, explains errors in the page
+  language, and on Windows asks for a manual restart instead of failing.
+- Agent texts (`/api/v1/agent-prompt`, `depsilo init-agent`,
+  `/api/v1/integration-prompt`, `depsilo prompt`) prefer project-level
+  settings and wait for approval before writing user- or system-level
+  configuration. The integration guide also has the agent wait for approval
+  of its plan before editing any file, so an unattended run stops after the
+  plan; it reports stale pnpm, Yarn, Bun, and Python lockfiles instead of
+  regenerating them and leaves a published `pyproject.toml` alone. All cover
+  npm lockfiles (`omit-lockfile-registry-resolved=true` in `.npmrc`,
+  `npm install --package-lock-only --omit-lockfile-registry-resolved` after
+  asking, for `registry.npmjs.org` URLs and other registries alike), scoped
+  Bundler commands, and pip, NuGet (`--allow-insecure-connections`, .NET
+  SDK 9+) and Composer (`secure-http false`) on plain HTTP, and give the
+  Maven mirror `<id>depsilo</id>`. The bootstrap prompt points pnpm, Yarn,
+  Bun, uv and Poetry projects to their rows in the integration guide. MCP
+  `depsilo_configure` adds `setup.note` to its `npm` and `rubygems` results
+  (and `nuget` on plain HTTP), and the `rubygems` `setup.shell` is now
+  `bundle config set --local ...`. Rerun `depsilo init-agent` to replace
+  older written text.
+- Quick Start and "Connect a client" flag loopback-only commands and explain
+  lockfiles: an npm `package-lock.json` with `registry.npmjs.org` URLs fails
+  with `404 NPM_UNSIGNED_TARBALL` and one from another registry silently
+  bypasses Depsilo (rewrite either without resolved URLs); Bun lockfiles do
+  the same, pnpm and Yarn 2+ ones from another registry fail with 404, and
+  Yarn 1 ones bypass Depsilo (regenerate them). Lockfiles made through Depsilo record its
+  address; pnpm 11+ needs `trustLockfile: true` in `pnpm-workspace.yaml`.
+  Bundler gets `bundle config set --local`/`--global` (2.1+; 1.x silently
+  leaves the mirror unset, so its form is given). Yarn 1 has its own entry
+  setting `registry`: reconfigure Yarn 1 clients set up with
+  `npmRegistryServer`, which bypassed Depsilo. Yarn 2+ lists only the host
+  in `unsafeHttpWhitelist` (no YN0081), and Gradle and NuGet accept plain
+  HTTP (`--allow-insecure-connections` needs .NET SDK 9+; SDK 8 gets a form
+  without it). Quick Start gives `PNPM_CONFIG_REGISTRY` (pnpm 11+) and
+  `NPM_CONFIG_REGISTRY` (up to 10), and renames "One-off setup" to "Other
+  ways to connect", as some of its commands (`bundle config set`,
+  `poetry source add`, `helm repo add`) persist. "Connect a client" explains
+  `egress_fake_ip`; it and Admin give the container form of the proxy
+  (`http://host.docker.internal:7890`, recreating the container, and
+  `--add-host=host.docker.internal:host-gateway` on Linux). Admin warns that
+  editing an npm Upstream's name, URL or proxy breaks lockfiles made through
+  Depsilo. Generated pip and venv commands for POSIX shells run `python3`,
+  and Quick Start's inline pip commands carry `--trusted-host` (or
+  `PIP_TRUSTED_HOST`) on a plain-HTTP address, which pip otherwise ignores
+  on any host but localhost.
+- Every Admin list shows twenty rows a page (the access log showed fifty).
+- On a first visit the web interface is Chinese only for a `zh` browser
+  language, English otherwise (it was Chinese); the toggle's choice wins.
+- Blocklist sync logs one warning per sync with skipped advisories counted
+  by ecosystem; set `server.log_level` to `debug` to list them.
+
+### Fixed
+- `depsilo audit verify` runs instead of `Unknown command: audit`, accepts
+  a DSN with `?` options, and without a configuration file or database says
+  that no instance was found and where it looked.
+- The CLI trims whitespace around the token in `~/.config/depsilo/token`
+  and `DEPSILO_TOKEN`.
+- Run as root (`sudo`, or UID 0 in a container), `depsilo restore` gives
+  what it creates or replaces (`config.toml`, the database,
+  `.pre-restore-<id>.bak`, new directories) the receiving directory's owner
+  and group, so the next start no longer fails with `Permission denied`.
+  `depsilo reset-password` (printing a note) and a server start do the same
+  for a new `.depsilo-locks`, lock file, or database directory. Existing
+  entries keep their owner; if an owner cannot be changed, the command
+  removes what it staged and fails. `depsilo backup --out` does the same
+  inside the state directory; an archive elsewhere stays owned by root.
+- `depsilo backup` creates a missing `--out` directory (mode 0700) and names
+  an unwritable output directory, asking for `--out`.
+- Completing a reopened setup keeps the old `config.toml` as
+  `config.toml.pre-setup-<UTC timestamp>.bak` (mode 0600, secrets included,
+  never deleted), or answers `WRITE_FAILED` and leaves it untouched.
+- Initial setup retries for up to 45 seconds while the database is busy
+  instead of failing with `ADMIN_CREATE_FAILED`, and a start with only
+  `DEPSILO_ADMIN_USERNAME` set no longer fails now and then with
+  `password must not contain the username`. In a container the startup
+  summary and `BOOTSTRAP_TOKEN_REQUIRED` give
+  `docker exec <container> depsilo setup token`.
+- Creating an audit exporter with `"enabled": false` creates it disabled;
+  it was stored enabled and received the audit stream at once.
+- Addresses built from a request (package metadata, `proxy_url`,
+  `/api/v1/discover`, the prompts) use only `http` or `https`: `https` on
+  TLS, else a valid first `X-Forwarded-Proto` value in any case, else `http`.
+- `GET /api/v1/events/stream` works behind nginx defaults: immediate
+  headers, `X-Accel-Buffering: no`, and a keep-alive comment every 25 s.
+- `--host ::1` and `DEPSILO_SERVER_HOST=::1` listen on IPv6.
+- SQLite DSNs with paths in options no longer create stray directories, and
+  a `file:` DSN creates its missing directory.
+- Healthy starts log no "record not found" or lookup SQL traces and no ANSI
+  colours; failed statements and those over 200 ms are still logged.
+- MCP `tools/list` no longer returns `"properties": null`, which validating
+  clients rejected.
+- `/api/v1/stats` (Portal, `depsilo status`, `depsilo doctor`, MCP
+  `depsilo://stats`) counts the current UTC day in "today" and "week" on
+  non-UTC hosts, and MCP `depsilo_status` `last_24h` no longer adds the
+  previous UTC day.
+- `agent_setup.readme_anchor` in `/api/v1/discover` points at an existing
+  section of `docs/deployment.md`.
+- An invalid `permissions` for an API token or compiler-cache credential
+  answers `permissions must be "readonly" or "readwrite"` (still `400`).
+- The License page and `depsilo distribution --help` state the free export
+  allowance as 500 MiB per bundle and 5 GiB per month, as enforced.
+- Linux tray: `install-linux.sh` installs from the extracted release archive
+  in any directory, names missing files before writing anything, prints the
+  matching autostart command, and runs its other subcommands when read from
+  stdin. The archive has no `./` entry and includes the icon
+  `depsilo-tray.svg` (a 256x256 PNG with `rsvg-convert`, ImageMagick
+  `convert`, or Inkscape).
+
+### Security
+- Failed and slow SQL statements are logged with placeholders instead of
+  their values, so password hashes and token digests stay out of the server
+  log, for example during setup's retries on a busy database.
+- `GET /api/v1/integration-prompt?url=` accepts only a bare `http` or `https`
+  origin (host, optional port, at most a trailing slash), so a crafted link
+  cannot inject text into the prompt; credentials, a path, query, fragment,
+  whitespace, or control characters answer `400 INVALID_URL`, and
+  `depsilo prompt --url` exits 1.
+- While setup is pending, startup rejects a preset `DEPSILO_BOOTSTRAP_TOKEN`
+  with fewer than 8 distinct characters; use 32 or more random bytes. A
+  set-up instance does not read the variable.
+- Refused npm tarball requests are audited without a guessed version.
+- The setup page warns when opened over plain HTTP from another machine.
+
+### Upgrade notes
+- No schema migration; the database stays at schema v17.
+- MCP clients must accept `202 Accepted` with no body for notifications;
+  `GET`/`DELETE /mcp` answer `405` (`401` without credentials), not `404`.
+- `depsilo doctor` exits non-zero and `depsilo init-agent` exits 1 while
+  setup is pending, init-agent also when a target file cannot be updated
+  (repair the named file and rerun). `depsilo warmup` exits 0 for an
+  accepted job; a script that retried on its exit 1 no longer needs to.
+- With setup pending, a `DEPSILO_BOOTSTRAP_TOKEN` of fewer than 8 distinct
+  characters stops startup; use `openssl rand -base64 32` or unset it.
+- The `DEPSILO_EGRESS_*` variables now take effect: before upgrading, check
+  the service environment for leftovers, which override `[egress]`, replace
+  file lists whole, and stop startup when invalid.
+- `GET /api/v1/integration-prompt` and `depsilo prompt --url` reject a `url`
+  that is not a bare origin (`400 INVALID_URL`, exit 1); pass
+  `?url=http://depsilo.example.com:23333`.
+- Unknown `/api` routes return a JSON body (read the status or `code`); the
+  audit log endpoints reject a malformed `start` or `end` with `400`;
+  snapshot import answers an invalid manifest with `400` instead of `500`.
+- Output: `serve`, `start`, and `setup` `--help` go to stdout; failed
+  `depsilo serve` and `depsilo start --daemon` print `Error: <message>`, not
+  JSON or `Error loading daemon configuration:`; log rules matching
+  `initial setup token` or `completed setup token` must use `bootstrap token`,
+  and those matching `all upstreams are unhealthy` only its beginning.
+- Scripted setup: a client that reaches port 80 directly and chooses
+  another port gets its old address as `reconnect_url` and must build the
+  new one. Poll `GET /api/v1/setup/status` until `200` with `needs_setup`
+  false and no `restart_pending`.
+
 ## [0.14.0] - 2026-11-15
 
 ### Added

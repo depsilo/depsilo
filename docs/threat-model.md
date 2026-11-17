@@ -36,11 +36,11 @@ Assumptions, all operator-controlled:
 | --- | --- | --- | --- |
 | Cached artifact bytes | storage dir or S3 bucket | Builds install these bytes | Tamper detection (first-seen SHA-256, mismatch alert, first-seen copy kept), upstream provenance bindings, ecosystem checksums/signatures preserved end to end |
 | Policy data (package rules, blocklist, snapshots, approvals, allow-lists) | SQLite | Decides what may be served | Authenticated admin writes, audited mutations, fail-closed gates |
-| Admin credentials and API tokens | SQLite (bcrypt password hashes, hashed tokens) | Full control plane | Read/write capability groups, Pro entitlement gates, bootstrap-token flow |
+| Admin credentials and API tokens | SQLite (bcrypt password hashes, hashed tokens) | Full control plane | Read/write capability groups, Pro entitlement gates, bootstrap-token flow; local `depsilo reset-password` recovery needs state-directory access and is audited (§5.7) |
 | External Operator identities and sessions | SQLite | Account binding, admission, revocation | Stable source ownership plus exact issuer/subject identity; explicit password-proven binding; absolute session lifetime and local account checks |
 | Per-source OIDC client secrets | Operator configuration/environment | Confidential provider client authentication | Write-only Admin input restricted to local credential authority; never returned; issuer-origin constrained requests; private configuration |
 | Instance signing key | managed `data/secrets/jwt.key` relative to the config directory, or explicit environment/config secret | Mints admin sessions and signs npm / extra PyPI artifact URLs | Automatic 256-bit generation for new instances; mode-0700 directory and mode-0600 file; restart reuse; explicit-secret startup guard |
-| Setup bootstrap token | current process and private `data/secrets/bootstrap.token` during initialization | Authorizes initial administrator creation | Mode-0600 file, refreshed before serving, removed after setup; local `depsilo setup token` requires the service to be awaiting setup; no public token-read endpoint |
+| Setup bootstrap token | current process and private `data/secrets/bootstrap.token` during initialization | Authorizes initial administrator creation | Mode-0600 file, refreshed before serving, removed after setup; local `depsilo setup token` requires the service to be awaiting setup; no public token-read endpoint; strength rule for generated and preset tokens (§5.7) |
 | Ordinary Upstream and proxy URL credentials | SQLite | Upstream/proxy accounts | Full URLs are available to write-capable Principals; masked for other Principals |
 | Docker registry credentials and extra-index keys | config file | Config-owned package sources | Private configuration; not exposed through Admin responses |
 | Webhook and SIEM collector URLs | SQLite | Outbound data path | Full URLs are available to write-capable Principals; masked for other Principals |
@@ -68,10 +68,12 @@ Assumptions, all operator-controlled:
 | Boundary | Enforcement |
 | --- | --- |
 | Package client → proxy routes | **Open by design.** Package managers cannot present Depsilo credentials on every fetch, so proxy routes are not access-controlled. A `Bearer depsilo_proj_*` token is optional and only attributes usage; a missing or unknown token still serves, untracked. `SECURITY.md` therefore requires restricting *network reachability* of the proxy. |
+| Any peer → addresses Depsilo writes | **Not authenticated.** The scheme and host of the addresses Depsilo writes into a response (rewritten npm, PyPI, Cargo, Composer, and NuGet metadata, a project's `proxy_url`, `/api/v1/discover`, the agent and integration prompts, and `reconnect_url` after setup) come from that request's `X-Forwarded-Proto` and `Host` headers. Depsilo accepts both from any peer by design; `[server] trusted_proxies` governs only the client address taken from `X-Forwarded-For` and `X-Real-IP`. The scheme is `https` on a direct TLS connection and otherwise only `http` or `https`, never another value. Cached metadata holds placeholders, so forged headers change only the response to the request that carried them. The operator keeps the listener reachable only through the reverse proxy and has the proxy set `Host` and `X-Forwarded-Proto` itself instead of passing a client's values on. |
 | Admin browser/API → control plane | JWT bearer sessions; read/write and local credential-management capability groups; free-edition project and export allowances enforced in their handlers. OIDC sessions retain their independent expiry/revocation checks. |
 | Depsilo → configured identity provider | Authorization Code + PKCE, state/nonce, signed ID-token verification and matching UserInfo subject; HTTPS and same-issuer-origin endpoints. Explicit isolated loopback HTTP is development-only. |
-| MCP client → `/mcp` | JWT + read capability, read-only tools, and resource reads never fetch caller-supplied hosts (SSRF contract test). |
-| Portal → anonymous status | Public by design; exposes service health and guidance only. |
+| MCP client → `/mcp` | Session JWT or API token with read capability, read-only tools, and resource reads never fetch caller-supplied hosts (SSRF contract test). |
+| Portal → anonymous status | Public by design; exposes service health and guidance only. The integration prompt (`GET /api/v1/integration-prompt`) writes a service address into instructions an AI agent follows, so its `url` parameter accepts only a bare `http` or `https` origin; any other value is refused with `400 INVALID_URL` instead of reaching the prompt. |
+| Monitoring and status clients → `/metrics`, `/api/v1/stats` | **Open by design.** Both answer without sign-in. `/metrics` exposes Prometheus series: requests per adapter, upstream requests per Upstream name, upstream exchanges per route (direct or peer), cache and compiler-cache size, policy-snapshot state, and process runtime. `/api/v1/stats` exposes the version, uptime, request and cache totals, a 5-minute request series, each Upstream's name, origin without credentials, and health, and the name, kind, and path of each configured extra index. Neither returns package names, client addresses, or credentials. The network restriction that `SECURITY.md` requires for the proxy covers both. |
 | Depsilo → upstream | HTTPS; per-ecosystem provenance binding to the serving upstream; HTTPS→HTTP downgrade rejected; guarded dialer re-checks the resolved IP at connect time (loopback, link-local, multicast, unspecified rejected). |
 | Depsilo → collector (webhook / SIEM) | Operator-configured destinations; audit forwarding is at-least-once with a per-exporter cursor. |
 | Process ↔ local disk/DB | The state directory is the trust root; file-level access equals full compromise. |
@@ -166,9 +168,45 @@ including managed-file and environment-provided keys, so backup access also
 grants signing authority. Restore retains that key rather than generating a
 replacement.
 
+Operators often run the offline commands `depsilo reset-password`,
+`depsilo restore`, and `depsilo backup` as root, with `sudo` or as UID 0 in a
+container, against a state directory that belongs to the service account.
+On Linux and macOS, an entry that root creates in a directory owned by
+another account gets that directory's owner and group; root in a root-owned
+directory and every other user keep what they create, and Windows changes
+no owner. The rule covers the lock directory `.depsilo-locks`, its lock
+file, and a missing database directory, which `depsilo reset-password`,
+`depsilo restore`, and a server start create; everything `depsilo restore` creates or replaces (the
+restored `config.toml` and database, their `.pre-restore-<id>.bak` copies,
+the restore journal, and missing directories); and an archive that
+`depsilo backup --out` writes inside the state directory (the directory of
+`config.toml` or of the database, or beneath one), with the directories
+created for it. An archive written anywhere else stays owned by root, with
+mode 0600. The owner always comes from the directory that receives the
+entry, never from an archive. It is changed on the open entry before the
+entry is renamed into place, so a link put at that name is not followed,
+and a new directory is handed over only while it is still the empty
+directory root created; otherwise the command refuses. When an owner cannot
+be changed, the command removes the entry it created and fails, and a
+restore stops before it replaces anything.
+
 **Residual:** Docker registry credentials live in the config file, and
 `SECURITY.md` already calls out the bootstrap token appearing in logs during
-first-run setup.
+first-run setup. It also covers the one case in which Depsilo generates the
+initial administrator password, prints it once in the startup output and the
+log, and keeps it valid until it is changed.
+
+Root-run offline commands deliberately leave existing entries with their
+owner. A `.depsilo-locks` directory or lock file that an earlier binary run
+as root created, or that a root command left when it was killed before
+changing the owner, stays owned by root, and the service then fails to start
+until the operator runs `chown -R` on it for the service account. An
+interrupted restore left by an earlier binary run as root is completed
+without changing its owners, and a killed root backup inside the state
+directory leaves a root-owned `.depsilo-backup-work-*` directory. Inside the
+state directory, an archive goes to whoever owns the directory that
+receives it, so an archive written into a subdirectory that belongs to a
+third account gives that account the signing key it holds.
 
 ### 5.7 Privilege escalation
 
@@ -176,6 +214,38 @@ Every admin route is registered in an explicit read or write capability
 group; Pro surfaces sit behind the entitlement checker; setup requires the
 bootstrap token; a router AST contract test fails if a route is registered
 outside those groups.
+
+The bootstrap token authorizes creating the first administrator. A generated
+token is 256 random bits and is replaced on every restart. A token preset
+through `DEPSILO_BOOTSTRAP_TOKEN` is not rotated, so a start with setup
+pending refuses one that is shorter than 24 characters, has surrounding
+whitespace, or has fewer than 8 distinct characters. The variable is not read
+once setup is complete. `POST /api/v1/setup/complete` has no attempt limit;
+the token's entropy is the control.
+
+An instance that has a `config.toml` and no administrator, and starts with
+`DEPSILO_ADMIN_USERNAME` set and `DEPSILO_ADMIN_PASSWORD` unset, generates
+the administrator password from 256 random bits. A drawn password that the
+password policy rejects for that user name is replaced by a new draw, with
+at most 16 draws in all, so the generated password passes the same policy as a chosen one; if every
+draw is rejected, startup fails with the policy's error. A
+password set through `DEPSILO_ADMIN_PASSWORD` that the policy rejects stops
+startup.
+
+`depsilo reset-password` sets a local account's password directly in the
+SQLite database, for an administrator who can no longer sign in. It asks for
+no Depsilo credential: whoever can run the binary with write access to the
+state directory can use it, which is the access that already equals full
+compromise (§4). The command runs only while the server is stopped, because
+it holds the database lease a running server holds. It refuses disabled
+accounts, accounts managed by an external identity provider, and a database
+whose schema version differs from the binary's, and it never migrates. The
+new password comes from a no-echo prompt or one line of standard input, never
+from a flag, an argument, or an environment variable, and must pass the
+server's password policy. One transaction stores the hash, increments the
+account's credential version so that every signed-in session of the account
+becomes invalid, and writes a `user.cli_reset` audit row that names the
+operating-system user. The account's API tokens are not revoked.
 
 Optional OIDC and LDAP integrations separate account permissions from login
 identities ([ADR-0007](adr/0007-operator-oidc-identities.md)). Each binding belongs
@@ -257,6 +327,10 @@ and local disable rejects the next request. SCIM, back-channel logout,
 provider-wide browser logout, custom roles, and project authorization are not
 implemented. The provider and its group issuance remain trusted authorities.
 The last enabled local password administrator remains necessary for recovery.
+A `depsilo reset-password` run leaves the account's API tokens valid; revoke
+them in Admin when the account may be compromised. Its audit row records the
+operating-system user the host reports, and the same state-directory access
+allows editing the database directly.
 
 ### 5.8 Audit tampering or loss
 
@@ -302,8 +376,9 @@ quota with LRU cleanup, and background loops are bounded (SIEM batches,
 6-hour blocklist sync, 1 req/s OSV).
 
 **Residual:** there is no in-product HTTP rate limiting. Exposed
-deployments must rate-limit at the reverse proxy; the deployment guide is
-the place to make that concrete.
+deployments must rate-limit at the reverse proxy. The deployment guide's
+reverse-proxy section covers forwarded headers, timeouts, and body limits; it
+has no rate-limit recipe yet.
 
 ### 5.11 Multi-project data isolation
 
@@ -360,6 +435,11 @@ These are deliberate, documented, and not vulnerabilities:
 | Snapshot-only mode | `internal/snapshot`, `internal/quarantine/snapshot_gate_test.go`, `docs/specs/2026-10-06-freeze-snapshot.md` |
 | SSRF and redirect guards | `internal/upstream/request` tests, `internal/api/mcp_ssrf_test.go`, Docker resolver tests |
 | Capability groups and Pro gates | `internal/api/router_permissions_test.go`, `web/e2e` permission cases |
+| Preset bootstrap token rule | `internal/config/loader_test.go` |
+| Local password reset (`depsilo reset-password`) | `internal/cli/resetpassword_test.go` |
+| Owner of entries root-run offline commands create | `internal/backup/lease_security_test.go`, `internal/backup/restore_ownership_test.go`, `internal/backup/backup_ownership_test.go` (the `*AsRoot` tests run only as root and are not part of an automated gate) |
+| Scheme taken from `X-Forwarded-Proto` | `internal/requestorigin` tests |
+| Integration prompt `url` validation | `internal/prompts/baseurl_test.go`, `internal/api/public/integration_prompt_test.go` |
 | External login, explicit binding, and bounded sessions | `internal/identity`, `internal/api/oidc.go`, `internal/api/ldap.go`, `internal/middleware/identity_auth_test.go`; isolated fixtures under `testground/oidc-casdoor` and `testground/ldap` |
 | Audit forwarding integrity of delivery | `internal/audit/forwarder_test.go`, `internal/api/admin/audit_exporters_test.go` |
 | Dependencies and known CVEs | `make security` (govulncheck + npm audit) |

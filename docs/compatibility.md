@@ -4,6 +4,11 @@
 > exit criterion 6. This file is the authority for what Depsilo promises to
 > keep working, for how long, and how a removal is announced.
 
+**Status: not in force yet.** Depsilo has no production users, and the
+surfaces below are not stable: any release may change them without the
+deprecation window. Each change is still listed in the changelog with what to
+do. The release that puts this policy in force says so in its release notes.
+
 ## What this covers
 
 | Surface | Versioning unit | Authority |
@@ -25,7 +30,9 @@ protocols; Depsilo does not add its own version suffix there.
 ## Release lines
 
 - **Patch releases (`v0.x.y` → `v0.x.z`)** are compatible: no removal or
-  behavior change for any surface in the table above.
+  behavior change for any surface in the table above. The one exception is a
+  security change that ships immediately under the rule in the
+  [deprecation window](#deprecation-window).
 - **Minor releases (`v0.x` → `v0.y`)** may contain breaking changes until
   `v1.0.0`. Every breaking change is listed under `Changed` or `Removed` in
   the changelog with a migration note, and — for the HTTP API and the
@@ -33,6 +40,9 @@ protocols; Depsilo does not add its own version suffix there.
   window below).
 - **From `v1.0.0` on**, the same rules apply with the longer window below and
   semantic versioning: breaking changes require a major release.
+- **Security fixes** are released for the latest minor release line only, as
+  [SECURITY.md](../SECURITY.md#supported-versions) states. Older lines receive
+  no backports.
 
 ## Deprecation window
 
@@ -77,6 +87,78 @@ consequence.
 - Response ordering is not part of the contract unless an endpoint documents
   an order. Lists may return new items between calls; pagination is
   endpoint-specific.
+- An unknown route under `/api` answers `404` with the JSON error body and
+  code `NOT_FOUND`; its message names `GET /api/v1/discover`. Unknown routes
+  under `/mcp`, the health and metrics paths, the compiler-cache paths, and
+  the package routes answer plain text `404 not found`.
+- `POST /mcp` answers a JSON-RPC message that carries an `id` with `200` and a
+  JSON-RPC response. An unknown method is JSON-RPC error `-32601`; that
+  includes a `notifications/*` method sent with an `id`. A notification (a
+  message without an `id`) and a batch made only of notifications are
+  answered with `202 Accepted` and no body. `GET /mcp` and `DELETE /mcp`
+  answer `405` with `Allow: POST`. All three methods answer `401` without
+  credentials. A client must treat `202` as success.
+- The MCP tool `depsilo_configure` returns an ecosystem's snippets in the
+  `setup` object, whose string fields `shell`, `env`, `config`, `verify`,
+  and `note` appear only where the ecosystem has one. The `apt`, `npm`, and
+  `rubygems` results carry `setup.note`, as does `nuget` for a plain-HTTP
+  instance, and the `rubygems` `setup.shell` is the project-scope command
+  `bundle config set --local ...`.
+- `GET /api/v1/integration-prompt` accepts in `url` only a bare `http` or
+  `https` origin: a host, an optional port, and at most a trailing slash. A
+  value with credentials, a path, a query, a fragment, whitespace, or control
+  characters is refused with `400` and code `INVALID_URL`.
+- `GET /api/v1/discover` carries `setup_required` and lists
+  `endpoints.setup_status`. `GET /api/v1/setup/status` always returns
+  `needs_setup` and `token_required`. While setup is pending it also returns
+  `listen_port`, `config_exists`, and `token_command`, the command that
+  prints the bootstrap token on the server itself (with `--port` and
+  `--host` where 127.0.0.1 on port 23333 does not reach the listener); all
+  three are absent once setup is complete.
+  From a completed setup until the process restarts it also returns
+  `"restart_pending": true`; the field is never `false` and is absent in
+  every other state. Package routes are served once a `200` answer has
+  `needs_setup` false and no `restart_pending`.
+- `reconnect_url` in the `POST /api/v1/setup/complete` response is the
+  request's own scheme and `Host` with path `/` when the request carried
+  `X-Forwarded-Proto` or its `Host` did not name the port Depsilo listens on,
+  including a `Host` without a port. Otherwise it is the requested host name
+  with the port chosen in the setup form.
+- Absolute URLs that Depsilo builds from a request (rewritten npm, PyPI,
+  Cargo, Composer, and NuGet metadata, a project's `proxy_url`,
+  `GET /api/v1/discover`, and the agent and integration prompts) take their
+  scheme from one rule: `https` on a direct TLS connection; otherwise the
+  first comma-separated element of `X-Forwarded-Proto`, trimmed and in any
+  case, when it is `http` or `https`; otherwise `http`. The header is read
+  from any peer: `[server] trusted_proxies` governs only the client address.
+  The host is the request's `Host` header; `X-Forwarded-Host` is not read.
+- `GET /api/v1/events/stream` sends its status line and headers when the
+  stream opens, including `Content-Type: text/event-stream` and
+  `X-Accel-Buffering: no`. Events are `data: <json>` lines. While the stream
+  is open, a `: keep-alive` comment line follows every 25 seconds; clients
+  must ignore comment lines.
+- `POST /api/v1/admin/snapshots/import` answers `400` with code
+  `SNAPSHOT_FAILED` when the upload is not a manifest the store accepts: a
+  body that is not JSON or exceeds the upload limit, an unsupported format,
+  no name, more items than the import limit, or an item with a missing
+  identity field, an invalid SHA-256, or a negative size. A manifest without
+  items answers `400 EMPTY_SNAPSHOT`, a taken name `409 NAME_TAKEN`, and a
+  failure while storing a valid manifest `500 SNAPSHOT_FAILED`.
+- `GET /api/v1/admin/cache/indexes` lists no Go checksum database entry
+  (keys under `go/sumdb/`), and
+  `POST /api/v1/admin/cache/indexes/:id/refresh` answers such an entry, like
+  any entry that is not index metadata, with `422` and code
+  `NOT_REFRESHABLE`. `GET /api/v1/admin/cache` lists these entries with
+  `cache_kind` `metadata`.
+- `GET /api/v1/admin/audit-logs` and `GET /api/v1/admin/audit-logs/export`
+  answer `400` with code `BAD_REQUEST` when `start` or `end` is not an RFC
+  3339 time or `end` is before `start`.
+- Package-proxy routes keep the status codes their client protocol expects.
+  The npm route refuses a tarball path it did not issue with `404`, as
+  before, and that response carries the JSON error body with code
+  `NPM_UNSIGNED_TARBALL`. The npm route's `404` and `502` error bodies also
+  repeat the message in an `error` field, which is the field the npm client
+  prints.
 
 ## Configuration
 
@@ -96,6 +178,18 @@ consequence.
 - Safety rejections are not deprecations. Values that cannot be enforced
   safely (for example a positive minimum-release-age threshold without bound
   provenance) keep failing at startup, with the fix named in the error.
+- While first-run setup is pending, a preset `DEPSILO_BOOTSTRAP_TOKEN` must
+  have at least 24 characters, no surrounding whitespace, and at least 8
+  distinct characters; startup refuses any other value. The variable is not
+  read once setup is complete.
+- `[egress]` follows the same file/environment precedence as other settings:
+  `DEPSILO_EGRESS_UPSTREAM_PROXY`, `DEPSILO_EGRESS_NO_PROXY`, and
+  `DEPSILO_EGRESS_PRIVATE_RANGES` override `upstream_proxy`, `no_proxy`, and
+  `private_ranges`. The two lists take comma-separated values, and an
+  environment list replaces the file list as a whole. Environment values pass
+  the same validation as file values, so an invalid one fails startup.
+- `[server] host` and `DEPSILO_SERVER_HOST` accept an IPv6 address with or
+  without brackets (`::1` or `[::1]`).
 - Optional `[auth.sources.<id>]` configuration declares stable source IDs and
   a protocol (`oidc` or `ldap`). No external source is created by defaults.
   Sources use the existing file/environment precedence, are restart-managed,
@@ -215,6 +309,49 @@ consequence.
 - Prometheus metric names and existing label sets are stable. New metrics and
   new label *values* are additive; adding or renaming a label follows the
   deprecation window because it creates new series.
+- CLI `--json` output gains fields additively; consumers must tolerate unknown
+  fields. Scripts can rely on these exit statuses and fields:
+  - `depsilo doctor` exits non-zero when a check fails. Pending first-run
+    setup is a failed check named `Initial setup`. `depsilo doctor --json`
+    and `depsilo status --json` report that state in `setup_required`.
+  - `depsilo init-agent` exits `1` and reports `"ok": false` when a target
+    file cannot be updated. It also exits `1`, and writes nothing, while the
+    instance has not finished first-run setup. Its `--json` output names
+    where the written text came from in `source` (`server` or `embedded`).
+  - `depsilo prompt --url` applies the origin rule of the integration prompt
+    and exits `1` for any other value.
+  - `depsilo warmup` exits `0` when the server accepts the job, which it
+    answers with `202`; it exited `1` before. `depsilo warmup --json`
+    reports `job_id` and `status`.
+  - An argument that is exactly `--help` or `-h`, anywhere before a `--`
+    argument, makes every command and subcommand print its usage on
+    standard output and exit `0` without doing its work. `depsilo setup`
+    without arguments prints its usage on standard error and exits `1`;
+    `depsilo distribution` without arguments prints its usage on standard
+    output and exits `1`.
+  - `depsilo serve` reports a failure to start in one line on standard error
+    and exits `1`, without a JSON error entry. An occupied port and a
+    refused path have their own sentences (`Port N is already in use. ...`,
+    `Permission denied: ...`); every other failure, including a
+    configuration the loader or the server rejects, is `Error: <message>`.
+  - When the daemon of `depsilo start --daemon` exits before it is ready, the
+    command prints the daemon's last message, then
+    `Error: daemon exited before readiness: <status> (see <log>)`, and exits
+    `1`. A configuration error found before the daemon starts is
+    `Error: <message>`.
+  - `depsilo backup` that cannot create or write the output directory exits
+    `1` with `Error: cannot write the backup into <directory>: ...`, or with
+    that text in `error` of `{"ok": false, "error": ...}` under `--json`.
+  - The startup summary prints `Bootstrap token: <token>` while setup is
+    pending (`Bootstrap token: configured via DEPSILO_BOOTSTRAP_TOKEN` for a
+    preset token), followed by
+    `Retrieve the current bootstrap token: depsilo setup token`, with
+    `--port N` for a port other than 23333 and `--host <host>` for a listen
+    host other than a wildcard address, `127.0.0.1`, or `localhost`. In a
+    container (where `/.dockerenv` or `/run/.containerenv` exists) the
+    command reads `docker exec <container> depsilo setup token` with the
+    same flags; the `BOOTSTRAP_TOKEN_REQUIRED` message gives the same
+    form.
 
 ## How to deprecate something
 
@@ -231,8 +368,7 @@ consequence.
 
 No removal has an announced `Sunset` date. The legacy Admin query aliases
 `q` (vulnerabilities) and `search` (audit logs) still work when `package` is
-absent; they must not be removed until a deprecation is announced with the
-window above. The next formally announced deprecation is added here with its
+absent. The next formally announced deprecation is added here with its
 announcement release and `Sunset` date.
 
 ## Enforcement

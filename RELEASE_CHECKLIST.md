@@ -66,6 +66,13 @@
 ### Release Artifacts
 - [ ] `install.sh` is executable and bash-syntax valid
 - [ ] `config.example.toml` has no real secrets
+- [ ] `SECURITY.md` still holds. This release is on the latest minor release
+      line, the only line its supported-versions rule covers; if it is a
+      patch for an older line, update that rule in `SECURITY.md` and
+      `docs/compatibility.md` first. GitHub private vulnerability reporting
+      is enabled:
+      `gh api repos/depsilo/depsilo/private-vulnerability-reporting` returns
+      `{"enabled":true}`
 - [ ] `CHANGELOG.md` updated with new version entry
 - [ ] `goreleaser check` passes: `make release-check`
 
@@ -102,11 +109,18 @@ git push origin vX.Y.Z
 
 ### Post-release
 - [ ] `curl -fsSL https://depsilo.com/install.sh | bash` works on a clean
-      machine. The one-liner must resolve the newest tag without the
-      rate-limited REST API, and the pinned form
+      machine on a network other than the maintainer's own, for example a
+      cloud VM or a CI runner. The installer URL can answer one network with
+      the script and another with a bot challenge, so a pass from the
+      maintainer's network does not show what a new user gets. A good answer
+      is the script itself:
+      `curl -fsSL https://depsilo.com/install.sh | head -1` prints
+      `#!/usr/bin/env bash`. The one-liner must resolve the newest tag
+      without the rate-limited REST API, and the pinned form
       (`DEPSILO_VERSION=vX.Y.Z`) must install the release being verified.
-      `https://depsilo.com/install.sh` is a redirect to the `install.sh` asset
-      of the latest release, so installer fixes ship with the next release
+      `https://depsilo.com/install.sh` is a redirect to the `install.sh`
+      asset of the latest release, so installer fixes ship with the next
+      release
 - [ ] `docker run ghcr.io/depsilo/depsilo:latest` starts successfully
 - [ ] Release notes published on GitHub Releases
 - [ ] `scripts/test-previous-release-upgrade.sh` is re-pinned to the release

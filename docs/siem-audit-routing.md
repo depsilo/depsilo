@@ -61,6 +61,11 @@ and returns, and the forwarder owns delivery.
 - `hit`, `miss`, `error`, `blocked` — outcomes
 - governance actions such as `snapshot_create`, `snapshot_delete`,
   `snapshot_import`, `snapshot_use`, `exporter_test`
+- `user.cli_reset` — a local account's password was set with
+  `depsilo reset-password` on the host. The row has `ecosystem` `admin`,
+  `package_name` `user:<id>`, and `user_agent` `operator:0`, because no
+  signed-in account performed it; `version` names the operating-system user
+  who ran the command
 
 Example: a security feed that only wants refusals uses `blocked`; a full
 compliance feed uses `*`.
