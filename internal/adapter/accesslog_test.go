@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"depsilo/internal/accesslog"
+	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/db"
 	"depsilo/internal/requestid"
 )
@@ -163,6 +164,37 @@ func TestLogAccessUsesCanonicalCacheKindForAuditAction(t *testing.T) {
 		}
 		if audit.entries[index].CreatedAt.IsZero() {
 			t.Errorf("%s %q has zero event timestamp", test.ecosystem, test.cacheKey)
+		}
+	}
+}
+
+// Three classifiers decide what a Go cache key is: the cache kind, the
+// dependency kind of an access event, and the package-file test behind SBOM
+// and project records. The checksum database prefix must mean the same to all
+// of them, including for a lookup whose version ends in ".zip".
+func TestGoChecksumDatabaseKeysAreMetadataToEveryClassifier(t *testing.T) {
+	for _, test := range []struct {
+		key      string
+		artifact bool
+	}{
+		{key: db.GoSumDBKeyPrefix + "sum.golang.org/lookup/example.com/mod@v1.0.0-a.zip"},
+		{key: db.GoSumDBKeyPrefix + "sum.golang.org/lookup/example.com/mod@v1.0.0"},
+		{key: db.GoSumDBKeyPrefix + "sum.golang.org/tile/8/0/x001/234"},
+		{key: "go/example.com/mod/@v/v1.0.0.zip", artifact: true},
+		{key: "go/Sumdb/mod/@v/v1.0.0.zip", artifact: true},
+	} {
+		wantKind := db.CacheKindMetadata
+		if test.artifact {
+			wantKind = db.CacheKindArtifact
+		}
+		if got := db.ClassifyCacheKind("go", test.key); got != wantKind {
+			t.Errorf("db.ClassifyCacheKind(go, %q) = %q, want %q", test.key, got, wantKind)
+		}
+		if got := accesslog.DependencyRequestKind("go", test.key); got != wantKind {
+			t.Errorf("accesslog.DependencyRequestKind(go, %q) = %q, want %q", test.key, got, wantKind)
+		}
+		if got := packagekey.IsPackageFile("go", test.key); got != test.artifact {
+			t.Errorf("packagekey.IsPackageFile(go, %q) = %v, want %v", test.key, got, test.artifact)
 		}
 	}
 }

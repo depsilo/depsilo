@@ -100,6 +100,19 @@ func TestLegacyCacheKindEcosystems(t *testing.T) {
 	tests := []struct{ ecosystem, key, want string }{
 		{"go", "go/example.com/mod/@v/list", CacheKindMetadata},
 		{"go", "go/example.com/mod/@v/v1.0.0.zip", CacheKindArtifact},
+		// The relayed checksum database is verification data, whatever a key
+		// ends in: a pre-release may be spelled "a.zip".
+		{"go", "go/sumdb/sum.golang.org/supported", CacheKindMetadata},
+		{"go", "go/sumdb/sum.golang.org/latest", CacheKindMetadata},
+		{"go", "go/sumdb/sum.golang.org/lookup/example.com/mod@v1.0.0", CacheKindMetadata},
+		{"go", "go/sumdb/sum.golang.org/lookup/example.com/!mod@v1.0.0-a.zip", CacheKindMetadata},
+		{"go", "go/sumdb/sum.golang.org/tile/8/0/x001/234", CacheKindMetadata},
+		{"go", "go/sumdb/sum.golang.org/tile/8/data/x071/x475/204.p/56", CacheKindMetadata},
+		// Only the first path element "sumdb" names the checksum database.
+		{"go", "go/example.com/sumdb/@v/v1.0.0.zip", CacheKindArtifact},
+		// The handler matches it exactly, so another spelling is a module.
+		{"go", "go/Sumdb/x/@v/v1.0.0.zip", CacheKindArtifact},
+		{"go", "go/SUMDB/x/@v/v1.0.0.zip", CacheKindArtifact},
 		{"cargo", "cargo/index/av/av", CacheKindMetadata},
 		{"composer", "composer/p2/vendor/pkg.json", CacheKindMetadata},
 		{"maven", "maven/org/x/maven-metadata.xml", CacheKindMetadata},

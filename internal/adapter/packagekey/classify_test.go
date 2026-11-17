@@ -18,3 +18,24 @@ func TestMavenPackageFileClassificationUsesRepositoryLayout(t *testing.T) {
 		}
 	}
 }
+
+func TestGoPackageFileClassificationExcludesTheChecksumDatabase(t *testing.T) {
+	for _, test := range []struct {
+		key  string
+		want bool
+	}{
+		{key: "go/example.com/mod/@v/v1.0.0.zip", want: true},
+		{key: "go/example.com/mod/@v/v1.0.0.mod", want: false},
+		// A lookup names a version, and a pre-release may be spelled like the
+		// name of a module archive.
+		{key: "go/sumdb/sum.golang.org/lookup/example.com/mod@v1.0.0-a.zip", want: false},
+		{key: "go/sumdb/sum.golang.org/lookup/example.com/mod@v1.0.0", want: false},
+		// Only the exact prefix is the checksum database.
+		{key: "go/Sumdb/mod/@v/v1.0.0.zip", want: true},
+		{key: "go/sumdb.example.org/mod/@v/v1.0.0.zip", want: true},
+	} {
+		if got := IsPackageFile("go", test.key); got != test.want {
+			t.Errorf("IsPackageFile(go, %q) = %v, want %v", test.key, got, test.want)
+		}
+	}
+}

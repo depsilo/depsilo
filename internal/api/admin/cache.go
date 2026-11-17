@@ -72,6 +72,9 @@ type cacheIndexSummary struct {
 // ListIndexes returns mutable package-manager indexes separately from cached
 // artifacts. cache_kind is persisted by cache.Manager and legacy rows are
 // classified during migration, so this query does not depend on key guessing.
+// Two kinds of metadata are no index and stay out: opaque Hugging Face query
+// answers and the relayed Go checksum database. The checksum prefix is
+// compared exactly, as the Go handler does; LIKE would fold its case.
 func (h *CacheHandler) ListIndexes(c *gin.Context) {
 	page := parseIntParam(c, "page", 1, 1, 100000)
 	pageSize := parseIntParam(c, "page_size", 50, 1, 200)
@@ -92,7 +95,8 @@ func (h *CacheHandler) ListIndexes(c *gin.Context) {
 	filtered := func(withEcosystems bool) *gorm.DB {
 		query := h.db.WithContext(c.Request.Context()).Model(&db.CacheEntry{}).
 			Where("cache_kind = ?", db.CacheKindMetadata).
-			Where("NOT (adapter_type = ? AND key LIKE ?)", "huggingface", "huggingface/__query__/%")
+			Where("NOT (adapter_type = ? AND key LIKE ?)", "huggingface", "huggingface/__query__/%").
+			Where("NOT (adapter_type = ? AND substr(key, 1, ?) = ?)", "go", len(db.GoSumDBKeyPrefix), db.GoSumDBKeyPrefix)
 		if search != "" {
 			like := "%" + search + "%"
 			query = query.Where("package_name LIKE ? OR key LIKE ?", like, like)
@@ -144,6 +148,7 @@ func (h *CacheHandler) ListIndexes(c *gin.Context) {
 			MAX(updated_at) AS last_updated`, now, now).
 		Where("cache_kind = ?", db.CacheKindMetadata).
 		Where("NOT (adapter_type = ? AND key LIKE ?)", "huggingface", "huggingface/__query__/%").
+		Where("NOT (adapter_type = ? AND substr(key, 1, ?) = ?)", "go", len(db.GoSumDBKeyPrefix), db.GoSumDBKeyPrefix).
 		Group("adapter_type").Order("adapter_type ASC").Scan(&summary).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
 		return
@@ -188,7 +193,7 @@ func (h *CacheHandler) RefreshIndex(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
 		return
 	}
-	if entry.CacheKind != db.CacheKindMetadata {
+	if entry.CacheKind != db.CacheKindMetadata || goChecksumDatabaseEntry(entry) {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{
 			"code": "NOT_REFRESHABLE", "message": "only index metadata can be refreshed",
 		})
@@ -257,7 +262,7 @@ func CacheIndexPublicPath(entry db.CacheEntry) (string, error) {
 
 	case "go":
 		rest, ok := trimCachePrefix(entry.Key, "go/")
-		if !ok {
+		if !ok || goChecksumDatabaseEntry(entry) {
 			return "", unsupportedIndexKey(entry)
 		}
 		if !strings.HasSuffix(rest, "/@v/list") && !strings.HasSuffix(rest, "/@latest") {
@@ -327,6 +332,13 @@ func CacheIndexPublicPath(entry db.CacheEntry) (string, error) {
 		return "", fmt.Errorf("unsafe cache index path for %q: %w", entry.Key, err)
 	}
 	return publicPath, nil
+}
+
+// goChecksumDatabaseEntry reports whether entry holds an answer of the Go
+// checksum database relay. Such an entry is cached as metadata, but it is
+// verification data the go command asks for by itself, not an index.
+func goChecksumDatabaseEntry(entry db.CacheEntry) bool {
+	return entry.AdapterType == "go" && strings.HasPrefix(entry.Key, db.GoSumDBKeyPrefix)
 }
 
 func trimCachePrefix(key, prefix string) (string, bool) {

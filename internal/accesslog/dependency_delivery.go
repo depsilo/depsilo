@@ -27,6 +27,10 @@ func potentialArtifactDelivery(e Event) bool {
 // Immutable metadata can be cached as an artifact; mutable SNAPSHOT binaries
 // can be cached as metadata. Neither distinction changes what a user downloaded.
 func DependencyRequestKind(ecosystem, key string) string {
+	// Checksum database answers are verification data, whatever the version in
+	// a lookup ends in. Like db.ClassifyCacheKind, test the prefix on the key
+	// as given: a module request spelled "Sumdb" is a module request.
+	goSumDB := strings.HasPrefix(key, db.GoSumDBKeyPrefix)
 	key = strings.ToLower(key)
 	suffix := func(endings ...string) bool {
 		for _, ending := range endings {
@@ -40,7 +44,7 @@ func DependencyRequestKind(ecosystem, key string) string {
 	case "", "health", "system":
 		return db.CacheKindMetadata
 	case "go":
-		if suffix(".zip") {
+		if suffix(".zip") && !goSumDB {
 			return db.CacheKindArtifact
 		}
 		return db.CacheKindMetadata

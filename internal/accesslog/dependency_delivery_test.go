@@ -17,6 +17,13 @@ func TestDependencyRequestKindUsesPayloadMeaningNotCacheTTL(t *testing.T) {
 		{"go", "go/example.org/pkg/@v/v1.0.0.info", db.CacheKindMetadata},
 		{"go", "go/example.org/pkg/@v/v1.0.0.mod", db.CacheKindMetadata},
 		{"go", "go/example.org/pkg/@v/v1.0.0.zip", db.CacheKindArtifact},
+		// A checksum database lookup names a version, and a pre-release may be
+		// spelled like the name of a module archive.
+		{"go", "go/sumdb/sum.golang.org/lookup/example.com/mod@v1.0.0-a.zip", db.CacheKindMetadata},
+		{"go", "go/sumdb/sum.golang.org/tile/8/0/x001/234", db.CacheKindMetadata},
+		// Only the exact prefix is the checksum database.
+		{"go", "go/Sumdb/mod/@v/v1.0.0.zip", db.CacheKindArtifact},
+		{"go", "go/sumdb.example.org/mod/@v/v1.0.0.zip", db.CacheKindArtifact},
 		{"rubygems", "rubygems/quick/Marshal.4.8/pkg-1.gemspec.rz", db.CacheKindMetadata},
 		{"rubygems", "rubygems/gems/pkg-1.gem", db.CacheKindArtifact},
 		{"apt", "apt/dists/stable/main/binary-amd64/by-hash/SHA256/abcdef", db.CacheKindMetadata},

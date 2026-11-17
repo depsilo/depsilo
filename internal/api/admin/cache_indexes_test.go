@@ -75,6 +75,76 @@ func TestCacheIndexesListsMetadataAndSummarizesByEcosystem(t *testing.T) {
 	}
 }
 
+// The relayed Go checksum database is cached as metadata, but it is
+// verification data and no package index: it is neither listed nor counted.
+func TestCacheIndexesLeaveOutTheGoChecksumDatabase(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database, err := db.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(database); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	rows := []db.CacheEntry{
+		{Key: "go/example.com/sumdb/@v/list", AdapterType: "go", CacheKind: db.CacheKindMetadata, PackageName: "example.com/sumdb", ExpiresAt: now.Add(time.Hour)},
+		// The Go handler matches "sumdb" exactly: this spelling is a module.
+		{Key: "go/Sumdb/x/@v/list", AdapterType: "go", CacheKind: db.CacheKindMetadata, PackageName: "Sumdb/x", ExpiresAt: now.Add(time.Hour)},
+		{Key: "go/sumdb/sum.golang.org/supported", AdapterType: "go", CacheKind: db.CacheKindMetadata, ExpiresAt: now.Add(time.Hour)},
+		{Key: "go/sumdb/sum.golang.org/latest", AdapterType: "go", CacheKind: db.CacheKindMetadata, ExpiresAt: now.Add(-time.Hour)},
+		{Key: "go/sumdb/sum.golang.org/lookup/example.com/mod@v1.0.0", AdapterType: "go", CacheKind: db.CacheKindMetadata, ExpiresAt: now.Add(time.Hour)},
+		{Key: "go/sumdb/sum.golang.org/tile/8/0/x001/234", AdapterType: "go", CacheKind: db.CacheKindMetadata, ExpiresAt: now.Add(time.Hour)},
+	}
+	if err := database.Create(&rows).Error; err != nil {
+		t.Fatal(err)
+	}
+	h := NewCacheHandler(database, nil, 1)
+	router := gin.New()
+	router.GET("/cache/indexes", h.ListIndexes)
+
+	for path, want := range map[string]int{
+		"/cache/indexes":                   2,
+		"/cache/indexes?adapter_type=go":   2,
+		"/cache/indexes?status=stale":      0,
+		"/cache/indexes?search=sum.golang": 0,
+	} {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s status = %d, body = %s", path, rec.Code, rec.Body.String())
+		}
+		var response struct {
+			cacheIndexesTestResponse
+			Ecosystems []ecosystemCount `json:"ecosystems"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		if response.Total != int64(want) || len(response.Items) != want {
+			t.Errorf("%s lists %d of %d entries, want %d: %s", path, len(response.Items), response.Total, want, rec.Body.String())
+		}
+		for _, item := range response.Items {
+			if item.Key != rows[0].Key && item.Key != rows[1].Key {
+				t.Errorf("%s lists %q, want only the module version lists", path, item.Key)
+			}
+		}
+		// The summary ignores the filters; the ecosystem counts keep all but
+		// the ecosystem one.
+		if len(response.Summary) != 1 || response.Summary[0].AdapterType != "go" ||
+			response.Summary[0].Total != 2 || response.Summary[0].Fresh != 2 || response.Summary[0].Stale != 0 {
+			t.Errorf("%s summary = %+v, want two fresh go indexes", path, response.Summary)
+		}
+		if want == 0 {
+			if len(response.Ecosystems) != 0 {
+				t.Errorf("%s ecosystem counts = %+v, want none", path, response.Ecosystems)
+			}
+		} else if len(response.Ecosystems) != 1 || response.Ecosystems[0].ID != "go" || response.Ecosystems[0].Count != 2 {
+			t.Errorf("%s ecosystem counts = %+v, want go: 2", path, response.Ecosystems)
+		}
+	}
+}
+
 func TestCacheIndexesFiltersAndRejectsBadStatus(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	database, err := db.Open("sqlite", ":memory:")
@@ -159,6 +229,12 @@ func TestCacheIndexPublicPath(t *testing.T) {
 		{name: "artifact", entry: db.CacheEntry{AdapterType: "pypi", CacheKind: db.CacheKindArtifact, Key: "pypi/files/pkg.whl"}, wantErr: true},
 		{name: "wrong prefix", entry: metadata("pypi", "extra:private/simple/pkg/index.html"), wantErr: true},
 		{name: "invalid go metadata shape", entry: metadata("go", "go/example.com/mod/@v/v1.0.0.zip"), wantErr: true},
+		{name: "go checksum database support", entry: metadata("go", "go/sumdb/sum.golang.org/supported"), wantErr: true},
+		{name: "go checksum database tree head", entry: metadata("go", "go/sumdb/sum.golang.org/latest"), wantErr: true},
+		{name: "go checksum database record", entry: metadata("go", "go/sumdb/sum.golang.org/lookup/example.com/mod@v1.0.0"), wantErr: true},
+		{name: "go checksum database tile", entry: metadata("go", "go/sumdb/sum.golang.org/tile/8/0/x001/234"), wantErr: true},
+		{name: "go checksum database key shaped like an index", entry: metadata("go", "go/sumdb/sum.golang.org/@latest"), wantErr: true},
+		{name: "go module named sumdb below a host", entry: metadata("go", "go/example.com/sumdb/@v/list"), want: "/go/example.com/sumdb/@v/list"},
 		{name: "invalid npm scope", entry: metadata("npm", "npm/@/pkg/metadata.json"), wantErr: true},
 		{name: "apt artifact route", entry: metadata("apt", "apt/ubuntu/ubuntu/by-hash/file"), wantErr: true},
 		{name: "plain traversal", entry: metadata("go", "go/../escape/@latest"), wantErr: true},
@@ -197,6 +273,7 @@ func TestRefreshIndexValidationAndResult(t *testing.T) {
 	entries := []db.CacheEntry{
 		{Key: "pypi/simple/av/index.html", AdapterType: "pypi", CacheKind: db.CacheKindMetadata, PackageName: "av"},
 		{Key: "pypi/files/av.whl", AdapterType: "pypi", CacheKind: db.CacheKindArtifact, PackageName: "av"},
+		{Key: "go/sumdb/sum.golang.org/latest", AdapterType: "go", CacheKind: db.CacheKindMetadata},
 	}
 	if err := database.Create(&entries).Error; err != nil {
 		t.Fatal(err)
@@ -290,5 +367,16 @@ func TestRefreshIndexValidationAndResult(t *testing.T) {
 	}
 	if success.ID != entries[0].ID || success.Message != "index refreshed" {
 		t.Fatalf("successful refresh response = %+v", success)
+	}
+
+	// Checksum database data is cached as metadata but is no index: it is
+	// refused like an artifact, without reaching the refresher.
+	refreshed = db.CacheEntry{}
+	recorder = request(strconv.FormatUint(uint64(entries[2].ID), 10))
+	if recorder.Code != http.StatusUnprocessableEntity || !strings.Contains(recorder.Body.String(), `"NOT_REFRESHABLE"`) {
+		t.Fatalf("checksum database refresh = %d %s, want 422 NOT_REFRESHABLE", recorder.Code, recorder.Body.String())
+	}
+	if refreshed.ID != 0 {
+		t.Fatalf("checksum database entry %q reached the refresher", refreshed.Key)
 	}
 }

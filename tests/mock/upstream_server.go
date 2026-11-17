@@ -3,14 +3,21 @@ package mock
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"golang.org/x/mod/sumdb"
+	"golang.org/x/mod/sumdb/note"
 )
 
 // RecordedRequest stores details of an HTTP request received by the mock.
@@ -28,6 +35,7 @@ type MockUpstream struct {
 	mu         sync.Mutex
 	requests   []RecordedRequest
 	tamperBody atomic.Value // string; the current bytes served at /tamperpkg/-/tamperpkg-1.0.0.tgz
+	goSumDBKey string
 }
 
 // NewMockUpstream creates and starts a new mock upstream server.
@@ -212,6 +220,49 @@ func (m *MockUpstream) RegisterGoModules() {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"Version":"v1.1.0","Time":"2024-06-01T00:00:00Z"}`)
 	})
+	// A module one test downloads once, so that its audit row is told apart
+	// from the downloads of every other test sharing the server.
+	m.mux.HandleFunc("/github.com/test/audited/@v/v1.0.0.zip", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("FAKE_AUDITED_GO_ZIP"))
+	})
+}
+
+// GoSumDBName names the checksum database RegisterGoSumDB mirrors.
+const GoSumDBName = "sum.depsilo.test"
+
+// RegisterGoSumDB makes the Go module proxy mirror a checksum database under
+// /sumdb/<GoSumDBName>/, the way goproxy.cn mirrors sum.golang.org. It is a
+// real transparency log: a client holding GoSumDBKey verifies every answer.
+func (m *MockUpstream) RegisterGoSumDB() {
+	signer, verifier, err := note.GenerateKey(rand.Reader, GoSumDBName)
+	if err != nil {
+		panic(err)
+	}
+	m.goSumDBKey = verifier
+	database := sumdb.NewServer(sumdb.NewTestServer(signer, func(path, version string) ([]byte, error) {
+		if !strings.HasPrefix(path, "github.com/test/") {
+			return nil, os.ErrNotExist
+		}
+		return []byte(GoSumLines(path, version)), nil
+	}))
+	prefix := "/sumdb/" + GoSumDBName
+	m.mux.HandleFunc(prefix+"/supported", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	m.mux.Handle(prefix+"/", http.StripPrefix(prefix, database))
+}
+
+// GoSumDBKey returns the verifier key of the mirrored checksum database.
+func (m *MockUpstream) GoSumDBKey() string { return m.goSumDBKey }
+
+// GoSumLines returns the go.sum lines the mirrored checksum database records
+// for a module version.
+func GoSumLines(path, version string) string {
+	digest := func(what string) string {
+		sum := sha256.Sum256([]byte(path + "@" + version + what))
+		return "h1:" + base64.StdEncoding.EncodeToString(sum[:])
+	}
+	return fmt.Sprintf("%s %s %s\n%s %s/go.mod %s\n", path, version, digest(""), path, version, digest("/go.mod"))
 }
 
 // RegisterCargo adds Cargo registry endpoints.
@@ -468,6 +519,7 @@ func (m *MockUpstream) RegisterAll() {
 	m.RegisterAPT()
 	m.RegisterNpm()
 	m.RegisterGoModules()
+	m.RegisterGoSumDB()
 	m.RegisterCargo()
 	m.RegisterMaven()
 	m.RegisterRubyGems()

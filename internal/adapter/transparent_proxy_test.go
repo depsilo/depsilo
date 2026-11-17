@@ -15,6 +15,9 @@ import (
 	"depsilo/internal/db"
 	"depsilo/internal/upstream"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func TestTransparentProxyOwnsFetchCacheStreamAndAccessLogPipeline(t *testing.T) {
@@ -173,6 +176,8 @@ func TestTransparentProxyMovesOnOnlyWhereAnotherMirrorMayAnswer(t *testing.T) {
 		switch r.URL.Path {
 		case "/pool/main/h/hello/hello_2.10-3_amd64.deb", "/pool/main/m/missing/missing_1.0_amd64.deb", "/dists/jammy/InRelease":
 			http.NotFound(w, r)
+		case "/pool/main/g/gone/gone_1.0_amd64.deb":
+			w.WriteHeader(http.StatusGone)
 		case "/dists/jammy/main/binary-amd64/Packages.gz":
 			w.WriteHeader(http.StatusServiceUnavailable)
 		default:
@@ -229,6 +234,8 @@ func TestTransparentProxyMovesOnOnlyWhereAnotherMirrorMayAnswer(t *testing.T) {
 		{"metadata missing on the mirror", "/dists/jammy/InRelease", http.StatusNotFound, "", false},
 		{"metadata unavailable on the mirror", "/dists/jammy/main/binary-amd64/Packages.gz", http.StatusOK, "official:/dists/jammy/main/binary-amd64/Packages.gz", true},
 		{"package missing everywhere", "/pool/main/m/missing/missing_1.0_amd64.deb", http.StatusNotFound, "", true},
+		// Only a 404 says the mirror lacks the file: a 410 is its answer.
+		{"package gone on the mirror", "/pool/main/g/gone/gone_1.0_amd64.deb", http.StatusBadGateway, "", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			before := officialHits.Load()
@@ -239,6 +246,227 @@ func TestTransparentProxyMovesOnOnlyWhereAnotherMirrorMayAnswer(t *testing.T) {
 			}
 			if asked := officialHits.Load() > before; asked != tc.officialRequest {
 				t.Fatalf("official member asked = %v, want %v", asked, tc.officialRequest)
+			}
+		})
+	}
+}
+
+// Optional content, such as a relayed Go checksum database, is offered by
+// some pool members only: its absence is an answer the client acts on.
+func TestTransparentProxyTreatsTheAbsenceOfOptionalContentAsTheAnswer(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var firstStatus, secondStatus atomic.Int64
+	member := func(status *atomic.Int64, name string) *httptest.Server {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			if code := int(status.Load()); code != http.StatusOK {
+				w.WriteHeader(code)
+				return
+			}
+			_, _ = w.Write([]byte(name))
+		}))
+		t.Cleanup(server.Close)
+		return server
+	}
+	first, second := member(&firstStatus, "first"), member(&secondStatus, "second")
+
+	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "transparent.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.AutoMigrate(&db.CacheEntry{}, &db.AccessLog{}); err != nil {
+		t.Fatal(err)
+	}
+	storage, err := cache.NewLocalStorage(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := cache.NewManager(storage, database, cache.NewEventBus(), time.Hour)
+	t.Cleanup(func() { closeTransparentTestManager(t, manager) })
+	pool, err := upstream.NewPool([]config.UpstreamConfig{
+		{Name: "first", URL: first.URL, Priority: 1, ProbeMode: "passive"},
+		{Name: "second", URL: second.URL, Priority: 2, ProbeMode: "passive"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxy := NewTransparentProxy("apt", manager, upstream.NewPassiveRecoverySelector(pool), database)
+	const ttl = 20 * time.Millisecond
+	engine := gin.New()
+	// InRelease is metadata: unless it is optional a 404 stays on the member
+	// that gave it and a 410 is a gateway error.
+	engine.GET("/:mode/*path", func(c *gin.Context) {
+		mode := c.Param("mode")
+		proxy.Serve(c, TransparentPlan{
+			Path:             c.Param("path"),
+			CacheKey:         "apt/" + mode + c.Param("path") + "/InRelease",
+			TTL:              ttl,
+			Optional:         mode != "plain",
+			PresenceIsAnswer: mode == "revoking" || mode == "revoking-gone",
+		})
+	})
+	get := func(path string) (int, string) {
+		response := httptest.NewRecorder()
+		engine.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		return response.Code, response.Body.String()
+	}
+	answer := func(firstCode, secondCode int) {
+		firstStatus.Store(int64(firstCode))
+		secondStatus.Store(int64(secondCode))
+	}
+	cached := func(mode string) int64 {
+		var entries int64
+		if err := database.Model(&db.CacheEntry{}).Where("key = ?", "apt/"+mode+"/expires/InRelease").Count(&entries).Error; err != nil {
+			t.Fatal(err)
+		}
+		return entries
+	}
+
+	answer(http.StatusNotFound, http.StatusOK)
+	if code, body := get("/optional/moves-on"); code != http.StatusOK || body != "second" {
+		t.Errorf("optional content missing on the first member = %d %q, want 200 from the second", code, body)
+	}
+	if code, _ := get("/plain/moves-on"); code != http.StatusNotFound {
+		t.Errorf("metadata missing on the first member = %d, want its 404", code)
+	}
+
+	// For optional content 410 means what 404 means: not offered here.
+	answer(http.StatusGone, http.StatusOK)
+	if code, body := get("/optional/gone"); code != http.StatusOK || body != "second" {
+		t.Errorf("optional content gone on the first member = %d %q, want 200 from the second", code, body)
+	}
+	if code, _ := get("/plain/gone"); code != http.StatusBadGateway {
+		t.Errorf("metadata gone = %d, want 502", code)
+	}
+	answer(http.StatusGone, http.StatusGone)
+	if code, _ := get("/optional/gone-everywhere"); code != http.StatusGone {
+		t.Errorf("optional content gone on every member = %d, want 410", code)
+	}
+
+	// A copy outlives the pool's offer unless the absence revokes it.
+	for _, mode := range []string{"optional", "revoking", "revoking-gone", "plain"} {
+		answer(http.StatusOK, http.StatusOK)
+		if code, body := get("/" + mode + "/expires"); code != http.StatusOK || body != "first" {
+			t.Fatalf("%s content = %d %q, want 200 from the first member", mode, code, body)
+		}
+	}
+	time.Sleep(2 * ttl)
+	answer(http.StatusServiceUnavailable, http.StatusServiceUnavailable)
+	if code, body := get("/revoking/expires"); code != http.StatusOK || body != "first" {
+		t.Errorf("expired revocable content while the pool is unavailable = %d %q, want the stale copy", code, body)
+	}
+	answer(http.StatusNotFound, http.StatusNotFound)
+	if code, _ := get("/revoking/expires"); code != http.StatusNotFound || cached("revoking") != 0 {
+		t.Errorf("expired content revoked by the pool = %d with %d cached copies, want 404 and none", code, cached("revoking"))
+	}
+	for _, mode := range []string{"optional", "plain"} {
+		if code, body := get("/" + mode + "/expires"); code != http.StatusOK || body != "first" || cached(mode) != 1 {
+			t.Errorf("expired %s content missing upstream = %d %q with %d cached copies, want the stale copy kept", mode, code, body, cached(mode))
+		}
+	}
+	answer(http.StatusGone, http.StatusGone)
+	if code, _ := get("/revoking-gone/expires"); code != http.StatusGone || cached("revoking-gone") != 0 {
+		t.Errorf("expired content the pool calls gone = %d with %d cached copies, want 410 and none", code, cached("revoking-gone"))
+	}
+
+	// Without a copy, a pool that cannot say whether it offers the content is
+	// a gateway error, except where the offer itself is the question.
+	answer(http.StatusServiceUnavailable, http.StatusServiceUnavailable)
+	if code, _ := get("/optional/unanswered"); code != http.StatusBadGateway {
+		t.Errorf("optional content nobody answers for = %d, want 502", code)
+	}
+	if code, _ := get("/revoking/unanswered"); code != http.StatusNotFound {
+		t.Errorf("an offer nobody answers for = %d, want 404", code)
+	}
+	first.Close()
+	second.Close()
+	if code, _ := get("/revoking/unreachable"); code != http.StatusNotFound {
+		t.Errorf("an offer no member can be asked about = %d, want 404", code)
+	}
+}
+
+// A pool that does not offer optional content, such as proxy.golang.org for
+// the checksum database, gives an expected answer: it is not logged as an
+// error. Every other failure still is.
+func TestTransparentProxyLogsTheAbsenceOfOptionalContentAtDebugLevel(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var firstStatus, secondStatus atomic.Int64
+	member := func(status *atomic.Int64) *httptest.Server {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(int(status.Load()))
+		}))
+		t.Cleanup(server.Close)
+		return server
+	}
+	first, second := member(&firstStatus), member(&secondStatus)
+
+	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "transparent.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.AutoMigrate(&db.CacheEntry{}, &db.AccessLog{}); err != nil {
+		t.Fatal(err)
+	}
+	storage, err := cache.NewLocalStorage(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := cache.NewManager(storage, database, cache.NewEventBus(), time.Hour)
+	t.Cleanup(func() { closeTransparentTestManager(t, manager) })
+	pool, err := upstream.NewPool([]config.UpstreamConfig{
+		{Name: "first", URL: first.URL, Priority: 1, ProbeMode: "passive"},
+		{Name: "second", URL: second.URL, Priority: 2, ProbeMode: "passive"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxy := NewTransparentProxy("go", manager, upstream.NewPassiveRecoverySelector(pool), database)
+	engine := gin.New()
+	engine.GET("/:mode/*path", func(c *gin.Context) {
+		mode := c.Param("mode")
+		proxy.Serve(c, TransparentPlan{
+			Path:     c.Param("path"),
+			CacheKey: "go/" + mode + c.Param("path"),
+			TTL:      time.Hour,
+			Optional: mode == "optional",
+		})
+	})
+
+	core, observed := observer.New(zap.DebugLevel)
+	restore := zap.ReplaceGlobals(zap.New(core, zap.AddStacktrace(zap.ErrorLevel)))
+	t.Cleanup(restore)
+
+	for _, tc := range []struct {
+		name, path            string
+		firstCode, secondCode int
+		status                int
+		level                 zapcore.Level
+	}{
+		{"optional content missing everywhere", "/optional/sumdb/sum.golang.org/supported", http.StatusNotFound, http.StatusNotFound, http.StatusNotFound, zap.DebugLevel},
+		{"optional content gone everywhere", "/optional/sumdb/sum.golang.org/lookup/gone", http.StatusGone, http.StatusNotFound, http.StatusNotFound, zap.DebugLevel},
+		{"optional content after an unavailable member", "/optional/sumdb/sum.golang.org/latest", http.StatusServiceUnavailable, http.StatusNotFound, http.StatusNotFound, zap.ErrorLevel},
+		{"optional content nobody answers for", "/optional/sumdb/sum.golang.org/tile", http.StatusServiceUnavailable, http.StatusServiceUnavailable, http.StatusBadGateway, zap.ErrorLevel},
+		{"required content missing", "/plain/example.com/m/@v/list", http.StatusNotFound, http.StatusNotFound, http.StatusNotFound, zap.ErrorLevel},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			firstStatus.Store(int64(tc.firstCode))
+			secondStatus.Store(int64(tc.secondCode))
+			observed.TakeAll()
+			response := httptest.NewRecorder()
+			engine.ServeHTTP(response, httptest.NewRequest(http.MethodGet, tc.path, nil))
+			if response.Code != tc.status {
+				t.Fatalf("status = %d, want %d", response.Code, tc.status)
+			}
+			var failures []observer.LoggedEntry
+			for _, entry := range observed.TakeAll() {
+				if entry.Level >= zap.WarnLevel || entry.Message == "transparent upstream does not offer optional content" {
+					failures = append(failures, entry)
+				}
+			}
+			if len(failures) != 1 || failures[0].Level != tc.level {
+				t.Fatalf("failure log entries = %+v, want one at %s", failures, tc.level)
+			}
+			if tc.level == zap.DebugLevel && failures[0].Stack != "" {
+				t.Fatalf("absence logged with a stack trace: %s", failures[0].Stack)
 			}
 		})
 	}

@@ -113,6 +113,42 @@ func TestCacheIndexProxyPathSupportsDockerMetadata(t *testing.T) {
 	}
 }
 
+// The relayed Go checksum database is cached as metadata, yet nothing in it is
+// an index: a refresh must be refused before any route is asked.
+func TestCacheIndexRefresherRefusesTheGoChecksumDatabase(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var requests atomic.Int64
+	router := gin.New()
+	router.NoRoute(func(c *gin.Context) {
+		requests.Add(1)
+		c.Status(http.StatusOK)
+	})
+	refresher := NewCacheIndexRefresher(router, nil, config.DockerConfig{})
+
+	for _, key := range []string{
+		"go/sumdb/sum.golang.org/supported",
+		"go/sumdb/sum.golang.org/latest",
+		"go/sumdb/sum.golang.org/lookup/example.com/mod@v1.0.0",
+		"go/sumdb/sum.golang.org/tile/8/0/x001/234",
+		// No request produces this key; the prefix alone must decide.
+		"go/sumdb/sum.golang.org/@latest",
+	} {
+		entry := db.CacheEntry{ID: 7, AdapterType: "go", CacheKind: db.CacheKindMetadata, Key: key}
+		if _, err := refresher(context.Background(), entry); err == nil {
+			t.Errorf("refresh of %s succeeded, want it refused", key)
+		}
+	}
+	if requests.Load() != 0 {
+		t.Fatalf("a checksum database refresh reached the router %d times", requests.Load())
+	}
+
+	// A module version list is still refreshable through the same seam.
+	list := db.CacheEntry{ID: 8, AdapterType: "go", CacheKind: db.CacheKindMetadata, Key: "go/example.com/mod/@v/list"}
+	if path, err := cacheIndexProxyPath(list, nil, config.DockerConfig{}); err != nil || path != "/go/example.com/mod/@v/list" {
+		t.Fatalf("module version list proxy path = %q, %v", path, err)
+	}
+}
+
 func TestCacheIndexRefresherForcesFreshPyPIEntryThroughProxy(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	var upstreamCalls atomic.Int64

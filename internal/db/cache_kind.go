@@ -76,6 +76,12 @@ func backfillSchemaV1HuggingFacePackageNames(database *gorm.DB) error {
 		}).Error
 }
 
+// GoSumDBKeyPrefix starts every cache key of the Go adapter's checksum
+// database relay. The answers are verification data that the go command
+// checks against the database's public key itself: metadata, never a
+// dependency artifact, and no index an operator can list or refresh.
+const GoSumDBKeyPrefix = "go/sumdb/"
+
 // ClassifyCacheKind derives whether a generated adapter cache key is mutable
 // metadata or an immutable artifact. It is used both for legacy backfills and
 // new writes so classification remains correct even when operators configure
@@ -89,6 +95,10 @@ func ClassifyCacheKind(adapterType, key string) string {
 		return CacheKindArtifact
 	}
 
+	// The relay writes its prefix in lower case and the Go handler matches the
+	// "sumdb" path element exactly; a module request spelled "Sumdb" is a
+	// module request, so the prefix is tested before the key is folded.
+	goSumDB := adapterType == "go" && strings.HasPrefix(key, GoSumDBKeyPrefix)
 	key = strings.ToLower(key)
 	metadata := false
 	switch {
@@ -104,7 +114,10 @@ func ClassifyCacheKind(adapterType, key string) string {
 	case adapterType == "apt":
 		metadata = hasAnySuffix(key, "inrelease", "release", "release.gpg", "packages", "packages.gz", "packages.xz", "packages.bz2", "sources", "sources.gz", "sources.xz")
 	case adapterType == "go":
-		metadata = strings.HasSuffix(key, "/@v/list") || strings.HasSuffix(key, "/@latest")
+		// "latest" and lookup answers end in the tree head of the moment, so
+		// their bytes legitimately differ from one fetch to the next.
+		metadata = goSumDB ||
+			strings.HasSuffix(key, "/@v/list") || strings.HasSuffix(key, "/@latest")
 	case adapterType == "cargo":
 		metadata = key == "cargo/config.json" || strings.HasPrefix(key, "cargo/index/")
 	case adapterType == "maven":

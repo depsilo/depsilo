@@ -33,13 +33,28 @@ func FetchFromPool(
 	retryMissing bool,
 	fetch func(*upstream.Upstream) (*upstream.FetchResult, error),
 ) (*upstream.FetchResult, *upstream.Upstream, error) {
+	return fetchFromPool(ctx, selector, first, retryMissing, false, fetch)
+}
+
+// fetchFromPool is FetchFromPool with one more reason to move on: with
+// retryGone a 410 is read as a 404 is with retryMissing. Set it only for
+// optional content whose protocol gives both the meaning "not offered here",
+// as GOPROXY does for a relayed checksum database. For an artifact a 410 is
+// the member's answer and ends the walk.
+func fetchFromPool(
+	ctx context.Context,
+	selector upstream.Selector,
+	first *upstream.Upstream,
+	retryMissing, retryGone bool,
+	fetch func(*upstream.Upstream) (*upstream.FetchResult, error),
+) (*upstream.FetchResult, *upstream.Upstream, error) {
 	result, err := fetch(first)
 	alternates, ok := selector.(alternateSelector)
 	if !ok {
 		return result, first, err
 	}
 	tried := []*upstream.Upstream{first}
-	for err != nil && ctx.Err() == nil && memberCannotProvide(err, retryMissing) {
+	for err != nil && ctx.Err() == nil && memberCannotProvide(err, retryMissing, retryGone) {
 		next, selectErr := alternates.SelectExcludingAll(ctx, tried...)
 		if selectErr != nil || next == nil || slices.Contains(tried, next) {
 			break
@@ -55,7 +70,7 @@ func FetchFromPool(
 	return result, tried[len(tried)-1], err
 }
 
-func memberCannotProvide(err error, retryMissing bool) bool {
+func memberCannotProvide(err error, retryMissing, retryGone bool) bool {
 	var response *upstream.ResponseError
 	if !errors.As(err, &response) {
 		// No response: connection, TLS or response-header failure.
@@ -64,6 +79,8 @@ func memberCannotProvide(err error, retryMissing bool) bool {
 	switch {
 	case response.Code == http.StatusNotFound:
 		return retryMissing
+	case response.Code == http.StatusGone:
+		return retryGone
 	case response.Code == http.StatusTooManyRequests, response.Code >= http.StatusInternalServerError:
 		return true
 	default:

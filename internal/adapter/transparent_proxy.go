@@ -25,6 +25,21 @@ type TransparentPlan struct {
 	CacheKey           string
 	TTL                time.Duration
 	DefaultContentType string
+	// Optional marks content a pool member may not offer at all, such as a
+	// relayed Go checksum database. A member that answers 404 or 410 is
+	// passed over for the next one whatever kind the cache gives the key,
+	// and a 404 or 410 from the last member asked reaches the client as that
+	// status instead of 502.
+	Optional bool
+	// PresenceIsAnswer marks optional content whose presence is itself what
+	// the client asks about, as for the checksum database's "supported";
+	// leave it unset for content that stays valid once fetched. A 404 or 410
+	// from the pool then withdraws the cached copy instead of letting it
+	// answer past its TTL. A pool that gives no such answer is covered by the
+	// cached copy while there is one and is reported as 404 otherwise: a
+	// client that reads 404 as "not offered here" must not be handed a
+	// gateway error where no member could be asked.
+	PresenceIsAnswer bool
 }
 
 // TransparentProxy hides the common select/cache/fetch/stream/log pipeline
@@ -46,10 +61,36 @@ type TransparentProxy struct {
 type transparentUpstreamError struct {
 	name  string
 	cause error
+	// revoked is set when the pool's answer withdraws the cached copy.
+	revoked bool
+	// absent is set for optional content when every member that answered
+	// said it does not exist (404 or 410): an expected answer, not a fault.
+	absent bool
 }
 
 func (failure *transparentUpstreamError) Error() string { return failure.cause.Error() }
 func (failure *transparentUpstreamError) Unwrap() error { return failure.cause }
+
+// AllowStaleFallback keeps a withdrawn copy from answering in place of the
+// pool: the cache manager drops the entry when a fetch refuses the fallback.
+// Every other failure may still be served from a stale copy.
+func (failure *transparentUpstreamError) AllowStaleFallback() bool { return !failure.revoked }
+
+// upstreamStatus returns the HTTP status an upstream answered with, or 0 when
+// err is not an upstream error response.
+func upstreamStatus(err error) int {
+	var response *upstream.ResponseError
+	if errors.As(err, &response) {
+		return response.Code
+	}
+	return 0
+}
+
+// isAbsenceStatus reports whether an upstream status says the content does
+// not exist there.
+func isAbsenceStatus(status int) bool {
+	return status == http.StatusNotFound || status == http.StatusGone
+}
 
 func NewTransparentProxy(adapterType string, manager *cache.Manager, selector upstream.Selector, database *gorm.DB) *TransparentProxy {
 	return &TransparentProxy{
@@ -69,17 +110,25 @@ func (proxy *TransparentProxy) Serve(c *gin.Context, plan TransparentPlan) {
 		if err != nil {
 			return nil, "", 0, "", err
 		}
-		retryMissing := proxy.RetryMissingArtifacts && db.ClassifyCacheKind(proxy.adapterType, plan.CacheKey) == db.CacheKindArtifact
-		fetched, served, err := FetchFromPool(ctx, proxy.selector, selected, retryMissing, func(member *upstream.Upstream) (*upstream.FetchResult, error) {
+		retryMissing := plan.Optional || (proxy.RetryMissingArtifacts && db.ClassifyCacheKind(proxy.adapterType, plan.CacheKey) == db.CacheKindArtifact)
+		otherAnswer := false
+		fetched, served, err := fetchFromPool(ctx, proxy.selector, selected, retryMissing, plan.Optional, func(member *upstream.Upstream) (*upstream.FetchResult, error) {
 			zap.L().Info("fetching from upstream",
 				zap.String("adapter_type", proxy.adapterType),
 				zap.String("path", plan.Path),
 				zap.String("upstream", member.Name),
 			)
-			return member.Fetch(ctx, "/"+strings.TrimPrefix(plan.Path, "/"))
+			result, err := member.Fetch(ctx, "/"+strings.TrimPrefix(plan.Path, "/"))
+			if status := upstreamStatus(err); status != 0 && !isAbsenceStatus(status) {
+				otherAnswer = true
+			}
+			return result, err
 		})
 		if err != nil {
-			return nil, "", 0, "", &transparentUpstreamError{name: served.Name, cause: err}
+			missing := isAbsenceStatus(upstreamStatus(err))
+			revoked := plan.Optional && plan.PresenceIsAnswer && missing
+			absent := plan.Optional && missing && !otherAnswer
+			return nil, "", 0, "", &transparentUpstreamError{name: served.Name, cause: err, revoked: revoked, absent: absent}
 		}
 		body := cache.WithResponseValidators(fetched.Body, fetched.ETag, fetched.LastModified)
 		return body, fetched.ContentType, fetched.Size, served.Name, nil
@@ -90,14 +139,29 @@ func (proxy *TransparentProxy) Serve(c *gin.Context, plan TransparentPlan) {
 		if errors.As(err, &upstreamFailure) {
 			upstreamName = upstreamFailure.name
 		}
-		zap.L().Error("transparent upstream fetch failed",
-			zap.String("adapter_type", proxy.adapterType),
-			zap.String("path", plan.Path),
-			zap.Error(err),
-		)
+		if upstreamFailure != nil && upstreamFailure.absent {
+			// Optional content the pool does not offer, such as the checksum
+			// database behind a proxy that does not mirror it.
+			zap.L().Debug("transparent upstream does not offer optional content",
+				zap.String("adapter_type", proxy.adapterType),
+				zap.String("path", plan.Path),
+				zap.Error(err),
+			)
+		} else {
+			zap.L().Error("transparent upstream fetch failed",
+				zap.String("adapter_type", proxy.adapterType),
+				zap.String("path", plan.Path),
+				zap.Error(err),
+			)
+		}
 		status, code := http.StatusBadGateway, "UPSTREAM_UNAVAILABLE"
 		if upstream.IsNotFound(err) {
 			// Every member that answered reported the file missing.
+			status, code = http.StatusNotFound, "NOT_FOUND"
+		} else if plan.Optional && upstreamStatus(err) == http.StatusGone {
+			status, code = http.StatusGone, "GONE"
+		} else if plan.Optional && plan.PresenceIsAnswer {
+			// No member said the content is offered and no copy is cached.
 			status, code = http.StatusNotFound, "NOT_FOUND"
 		}
 		LogAccess(c.Request.Context(), proxy.database, proxy.adapterType, c.Request.Method, plan.CacheKey, false, upstreamName, time.Since(start), status, c.ClientIP(), 0)

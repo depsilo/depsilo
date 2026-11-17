@@ -2,6 +2,12 @@ package packagekey
 
 import "strings"
 
+// goSumDBKeyPrefix starts every cache key of the Go adapter's checksum
+// database relay. It repeats db.GoSumDBKeyPrefix, which this package cannot
+// import because internal/db imports this package; a test in internal/adapter
+// holds the two together.
+const goSumDBKeyPrefix = "go/sumdb/"
+
 // IsPackageFile reports whether a cache key represents an actual package
 // file download (as opposed to a metadata / index request). Only package
 // files should be recorded for SBOM and security scanning.
@@ -12,7 +18,10 @@ func IsPackageFile(adapterType, key string) bool {
 	case "npm":
 		return strings.HasSuffix(key, ".tgz")
 	case "go":
-		return strings.HasSuffix(key, ".zip")
+		// A checksum database lookup names a version, which may end in ".zip"
+		// like a module archive; it is verification data, never a package file.
+		// The prefix is matched exactly, as db.ClassifyCacheKind matches it.
+		return strings.HasSuffix(key, ".zip") && !strings.HasPrefix(key, goSumDBKeyPrefix)
 	case "cargo":
 		return strings.HasSuffix(key, ".crate")
 	case "apt":

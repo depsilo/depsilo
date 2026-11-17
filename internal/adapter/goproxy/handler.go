@@ -17,6 +17,7 @@ import (
 
 type Handler struct {
 	proxy *adapter.TransparentProxy
+	cache *cache.Manager
 	cfg   config.CacheConfig
 }
 
@@ -25,7 +26,7 @@ func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheCo
 	// Module proxies serve the same immutable module versions, which the go
 	// command verifies against go.sum and the checksum database.
 	proxy.RetryMissingArtifacts = true
-	return &Handler{proxy: proxy, cfg: cfg}
+	return &Handler{proxy: proxy, cache: cacheMgr, cfg: cfg}
 }
 
 func (h *Handler) Type() string { return "go" }
@@ -37,6 +38,13 @@ func (h *Handler) Register(rg *gin.RouterGroup) {
 
 func (h *Handler) handleRequest(c *gin.Context) {
 	path := strings.TrimPrefix(c.Param("path"), "/")
+
+	// "sumdb" is the checksum database namespace of the GOPROXY protocol,
+	// never the first element of a module path.
+	if path == "sumdb" || strings.HasPrefix(path, "sumdb/") {
+		h.proxySumDB(c, strings.TrimPrefix(path, "sumdb"))
+		return
+	}
 
 	// Determine request type from path suffix
 	switch {

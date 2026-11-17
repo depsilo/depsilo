@@ -72,6 +72,7 @@ func TestFetchFromPoolAsksTheNextMemberOnlyWhenOneCannotProvide(t *testing.T) {
 		{"missing immutable artifact", poolMember{name: "mirror", status: http.StatusNotFound}, true, "official", true},
 		{"missing where 404 is final", poolMember{name: "mirror", status: http.StatusNotFound}, false, "", false},
 		{"forbidden", poolMember{name: "mirror", status: http.StatusForbidden}, true, "", false},
+		{"gone", poolMember{name: "mirror", status: http.StatusGone}, true, "", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			selector, members, hits := newTestPool(t, tc.first, poolMember{name: "official", status: http.StatusOK})
