@@ -378,15 +378,17 @@ func TestDirectRegistryRefusesFakeIPAnswerWithTheRemedy(t *testing.T) {
 	const remedy = "a fake-IP address from proxy software in TUN/fake-IP mode; " +
 		"set [egress] upstream_proxy or DEPSILO_EGRESS_UPSTREAM_PROXY to the proxy software's HTTP port and restart, " +
 		"see docs/deployment.md#upstream-network-egress"
+	fakeIP := net.IPAddr{IP: net.ParseIP("198.18.0.10")}
 	for _, tt := range []struct {
 		name      string
+		origin    string
 		resolver  staticIPResolver
 		wantError string
 		wantDials []string
 	}{
 		{
 			name:      "registry",
-			resolver:  staticIPResolver{"registry.example": {{IP: net.ParseIP("198.18.0.10")}}},
+			resolver:  staticIPResolver{"registry.example": {fakeIP}},
 			wantError: "registry.example resolved to 198.18.0.10, " + remedy,
 		},
 		{
@@ -398,23 +400,50 @@ func TestDirectRegistryRefusesFakeIPAnswerWithTheRemedy(t *testing.T) {
 			wantError: "auth.example resolved to 198.18.0.11, " + remedy,
 			wantDials: []string{"93.184.216.34:80"},
 		},
+		// A proxy refuses each of the following answers too, so setting one
+		// would not help and the refusal does not suggest it.
 		{
 			name: "link-local answer keeps its refusal",
 			resolver: staticIPResolver{
-				"registry.example": {{IP: net.ParseIP("169.254.169.254")}, {IP: net.ParseIP("198.18.0.10")}},
+				"registry.example": {{IP: net.ParseIP("169.254.169.254")}, fakeIP},
 			},
+			wantError: "unsafe Docker dial target",
+		},
+		{
+			name:      "fake-IP and public answers keep the refusal",
+			resolver:  staticIPResolver{"registry.example": {fakeIP, {IP: net.ParseIP("93.184.216.34")}}},
+			wantError: "unsafe Docker dial target",
+		},
+		{
+			name:      "private and fake-IP answers keep the refusal",
+			resolver:  staticIPResolver{"registry.example": {{IP: net.ParseIP("10.0.0.5")}, fakeIP}},
+			wantError: "unsafe Docker dial target",
+		},
+		{
+			name:      "fake-IP and unique-local IPv6 answers keep the refusal",
+			resolver:  staticIPResolver{"registry.example": {fakeIP, {IP: net.ParseIP("fc00::a")}}},
+			wantError: "unsafe Docker dial target",
+		},
+		{
+			name:      "literal fake-IP registry keeps the refusal",
+			origin:    "http://198.18.0.10",
+			resolver:  staticIPResolver{"198.18.0.10": {fakeIP}},
 			wantError: "unsafe Docker dial target",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			origin := tt.origin
+			if origin == "" {
+				origin = "http://registry.example"
+			}
 			dialer := &routedDialer{direct: registry.Listener.Addr().String()}
-			client, err := newRegistryClient("http://registry.example", "", tt.resolver, dialer.DialContext)
+			client, err := newRegistryClient(origin, "", tt.resolver, dialer.DialContext)
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			_, err = NewAuthManager().GetToken(
-				context.Background(), client, "http://registry.example", "registry", "operator", "secret",
+				context.Background(), client, origin, "registry", "operator", "secret",
 				"repository:acme/widget:pull",
 			)
 			if err == nil || !strings.HasSuffix(err.Error(), ": "+tt.wantError) {

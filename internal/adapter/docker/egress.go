@@ -227,27 +227,15 @@ func allFakeIP(addresses []net.IPAddr) bool {
 	return len(addresses) > 0
 }
 
-// fakeIPAnswer returns the first refused address of a DNS answer when it is a
-// fake-IP placeholder, the case the Upstream guard reports as egress_fake_ip.
-func fakeIPAnswer(addresses []net.IPAddr) (netip.Addr, bool) {
-	for _, address := range addresses {
-		if scope, _ := literalNetworkScope(address.IP.String()); scope != networkUnsafe {
-			continue
-		}
-		ip, ok := netip.AddrFromSlice(address.IP)
-		ip = ip.Unmap()
-		return ip, ok && egress.BenchmarkingRange.Contains(ip)
-	}
-	return netip.Addr{}, false
-}
-
-// fakeIPDialError explains a direct dial refused for a fake-IP answer and
-// names the remedy. A Docker client reads it in the 502 body, so it carries
-// only the dialed host and the refused address.
-func fakeIPDialError(host string, address netip.Addr) error {
+// fakeIPDialError explains a direct dial refused for a host name answered
+// only with fake-IP addresses, the one answer a proxy would carry, and names
+// that remedy. A Docker client reads it in the 502 body, so it carries only
+// the dialed host and its first address.
+func fakeIPDialError(host string, addresses []net.IPAddr) error {
+	address, _ := netip.AddrFromSlice(addresses[0].IP)
 	return fmt.Errorf("%s resolved to %s, a fake-IP address from proxy software in TUN/fake-IP mode; "+
 		"set [egress] upstream_proxy or DEPSILO_EGRESS_UPSTREAM_PROXY to the proxy software's HTTP port and restart, "+
-		"see docs/deployment.md#upstream-network-egress", host, address)
+		"see docs/deployment.md#upstream-network-egress", host, address.Unmap())
 }
 
 func (transport *scopePreflightRoundTripper) pinOriginScope(scope networkScope) bool {
@@ -290,8 +278,11 @@ func (dialer *guardedDialer) DialContext(ctx context.Context, network, address s
 	}
 	targetScope := resolvedScope(addresses)
 	if targetScope == networkUnsafe {
-		if address, fake := fakeIPAnswer(addresses); fake {
-			return nil, fakeIPDialError(host, address)
+		// Only the answer that proxiedScope accepts is worth the proxy
+		// remedy. Mixed answers and address literals stay refused through
+		// a proxy too, so they keep the plain refusal.
+		if dnsHostName(host) && allFakeIP(addresses) {
+			return nil, fakeIPDialError(host, addresses)
 		}
 		return nil, errors.New("unsafe Docker dial target")
 	}
