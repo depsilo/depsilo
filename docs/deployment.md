@@ -1514,6 +1514,12 @@ and the address, for example:
 auth discovery failed: Get "https://registry-1.docker.io/v2/": registry-1.docker.io resolved to 198.18.0.10, a fake-IP address from proxy software in TUN/fake-IP mode; set [egress] upstream_proxy or DEPSILO_EGRESS_UPSTREAM_PROXY to the proxy software's HTTP port and restart, see docs/deployment.md#upstream-network-egress
 ```
 
+When `no_proxy` or a loopback URL keeps the registry off a configured
+`upstream_proxy`, setting the proxy cannot help, so the message ends instead
+with `[egress] no_proxy or a loopback registry URL keeps this registry off the
+proxy, so give its host names real DNS answers, for example with
+fake-ip-filter in the proxy software, or remove the registry from no_proxy`.
+
 The server log repeats the message. Read it there when a client resolves tags
 with `HEAD`, as containerd does: the answer to a `HEAD` request has no body.
 When the proxy that carries a registry cannot be reached, the `502` message

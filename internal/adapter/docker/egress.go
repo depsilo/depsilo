@@ -30,18 +30,40 @@ const (
 	egressRouteDirect       = "direct"
 )
 
-// registryProxy chooses, once per registry, the proxy that carries every
-// request of its client, including the Bearer realm and redirects. The
-// registry's own proxy wins. Otherwise the [egress] default applies exactly as
-// it does to a package Upstream, so loopback and no_proxy hosts stay direct.
-func registryProxy(registry config.RegistryConfig, policy egress.Policy) (proxy, route string) {
+// Remedies that a direct fake-IP refusal names. A registry without any proxy
+// needs one; a registry that [egress] keeps direct already has a default
+// proxy it may not use, so it needs real DNS answers instead.
+const (
+	fakeIPRemedySetProxy = "set [egress] upstream_proxy or DEPSILO_EGRESS_UPSTREAM_PROXY to the proxy software's HTTP port and restart, " +
+		"see docs/deployment.md#upstream-network-egress"
+	fakeIPRemedyKeptDirect = "[egress] no_proxy or a loopback registry URL keeps this registry off the proxy, " +
+		"so give its host names real DNS answers, for example with fake-ip-filter in the proxy software, " +
+		"or remove the registry from no_proxy, see docs/deployment.md#upstream-network-egress"
+)
+
+// registryEgress is a registry's route, chosen once per registry: the proxy
+// that carries every request of its client, including the Bearer realm and
+// redirects, or none.
+type registryEgress struct {
+	proxy  string // empty for a direct registry
+	route  string // named in the startup log line
+	remedy string // advice of a direct client's fake-IP refusal
+}
+
+// registryEgressFor chooses a registry's route. The registry's own proxy
+// wins. Otherwise the [egress] default applies exactly as it does to a
+// package Upstream, so loopback and no_proxy hosts stay direct.
+func registryEgressFor(registry config.RegistryConfig, policy egress.Policy) registryEgress {
 	if registry.Proxy != "" {
-		return registry.Proxy, egressRouteOwnProxy
+		return registryEgress{proxy: registry.Proxy, route: egressRouteOwnProxy}
 	}
-	if proxy = policy.UpstreamProxyFor(registry.URL); proxy != "" {
-		return proxy, egressRouteDefaultProxy
+	if proxy := policy.UpstreamProxyFor(registry.URL); proxy != "" {
+		return registryEgress{proxy: proxy, route: egressRouteDefaultProxy}
 	}
-	return "", egressRouteDirect
+	if policy.HasUpstreamProxy() {
+		return registryEgress{route: egressRouteDirect, remedy: fakeIPRemedyKeptDirect}
+	}
+	return registryEgress{route: egressRouteDirect, remedy: fakeIPRemedySetProxy}
 }
 
 // logRegistryEgress names a registry's route in the manner of the Upstream
@@ -64,17 +86,30 @@ func proxyOrigin(raw string) string {
 }
 
 type guardedDialer struct {
-	origin      *url.URL
-	resolver    ipResolver
-	dialContext func(context.Context, string, string) (net.Conn, error)
+	origin       *url.URL
+	resolver     ipResolver
+	dialContext  func(context.Context, string, string) (net.Conn, error)
+	fakeIPRemedy string
 
 	mu             sync.Mutex
 	originScope    networkScope
 	originScopeSet bool
 }
 
+// newRegistryClient builds the client of a registry that no [egress] policy
+// keeps direct: without a proxy, its fake-IP refusal suggests setting one.
 func newRegistryClient(
 	origin, proxy string,
+	resolver ipResolver,
+	dialContext func(context.Context, string, string) (net.Conn, error),
+) (*http.Client, error) {
+	return buildRegistryClient(origin, proxy, fakeIPRemedySetProxy, resolver, dialContext)
+}
+
+// buildRegistryClient builds a registry's client. fakeIPRemedy is the advice
+// of a direct client's refusal of a fake-IP answer; a proxied client has none.
+func buildRegistryClient(
+	origin, proxy, fakeIPRemedy string,
 	resolver ipResolver,
 	dialContext func(context.Context, string, string) (net.Conn, error),
 ) (*http.Client, error) {
@@ -107,7 +142,7 @@ func newRegistryClient(
 			transport: transport,
 		}
 	} else {
-		guard := &guardedDialer{origin: originURL, resolver: resolver, dialContext: dialContext}
+		guard := &guardedDialer{origin: originURL, resolver: resolver, dialContext: dialContext, fakeIPRemedy: fakeIPRemedy}
 		transport.DialContext = guard.DialContext
 	}
 	return &http.Client{
@@ -229,13 +264,15 @@ func allFakeIP(addresses []net.IPAddr) bool {
 
 // fakeIPDialError explains a direct dial refused for a host name answered
 // only with fake-IP addresses, the one answer a proxy would carry, and names
-// that remedy. A Docker client reads it in the 502 body, so it carries only
-// the dialed host and its first address.
-func fakeIPDialError(host string, addresses []net.IPAddr) error {
+// the remedy. A Docker client reads it in the 502 body, so it carries only
+// the dialed host, its first address and a fixed remedy.
+func fakeIPDialError(host string, addresses []net.IPAddr, remedy string) error {
+	if remedy == "" {
+		remedy = fakeIPRemedySetProxy
+	}
 	address, _ := netip.AddrFromSlice(addresses[0].IP)
-	return fmt.Errorf("%s resolved to %s, a fake-IP address from proxy software in TUN/fake-IP mode; "+
-		"set [egress] upstream_proxy or DEPSILO_EGRESS_UPSTREAM_PROXY to the proxy software's HTTP port and restart, "+
-		"see docs/deployment.md#upstream-network-egress", host, address.Unmap())
+	return fmt.Errorf("%s resolved to %s, a fake-IP address from proxy software in TUN/fake-IP mode; %s",
+		host, address.Unmap(), remedy)
 }
 
 func (transport *scopePreflightRoundTripper) pinOriginScope(scope networkScope) bool {
@@ -282,7 +319,7 @@ func (dialer *guardedDialer) DialContext(ctx context.Context, network, address s
 		// remedy. Mixed answers and address literals stay refused through
 		// a proxy too, so they keep the plain refusal.
 		if dnsHostName(host) && allFakeIP(addresses) {
-			return nil, fakeIPDialError(host, addresses)
+			return nil, fakeIPDialError(host, addresses, dialer.fakeIPRemedy)
 		}
 		return nil, errors.New("unsafe Docker dial target")
 	}

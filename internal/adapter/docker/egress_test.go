@@ -458,3 +458,76 @@ func TestDirectRegistryRefusesFakeIPAnswerWithTheRemedy(t *testing.T) {
 		})
 	}
 }
+
+// A registry that no_proxy or a loopback URL keeps off an existing default
+// proxy cannot be helped by setting upstream_proxy, so its fake-IP refusal
+// asks for real DNS answers instead.
+func TestRegistryKeptDirectRefusesFakeIPAnswerWithTheDNSRemedy(t *testing.T) {
+	proxy := newRecordingProxy(t, nil)
+	registry := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		response.Header().Set("Www-Authenticate", `Bearer realm="http://auth.example/token",service="registry.local"`)
+		response.WriteHeader(http.StatusUnauthorized)
+	}))
+	t.Cleanup(registry.Close)
+
+	policy, err := egress.NewPolicy(proxy.URL, []string{"mirror.lan"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const remedy = "a fake-IP address from proxy software in TUN/fake-IP mode; " +
+		"[egress] no_proxy or a loopback registry URL keeps this registry off the proxy, " +
+		"so give its host names real DNS answers, for example with fake-ip-filter in the proxy software, " +
+		"or remove the registry from no_proxy, see docs/deployment.md#upstream-network-egress"
+	for _, tt := range []struct {
+		name      string
+		url       string
+		resolver  staticIPResolver
+		wantError string
+		wantDials []string
+	}{
+		{
+			name:      "no_proxy registry",
+			url:       "http://mirror.lan",
+			resolver:  staticIPResolver{"mirror.lan": {{IP: net.ParseIP("198.18.0.10")}}},
+			wantError: "mirror.lan resolved to 198.18.0.10, " + remedy,
+		},
+		{
+			name: "Bearer realm of a loopback registry",
+			url:  "http://localhost:5000",
+			resolver: staticIPResolver{
+				"localhost":    {{IP: net.ParseIP("127.0.0.1")}},
+				"auth.example": {{IP: net.ParseIP("198.18.0.11")}},
+			},
+			wantError: "auth.example resolved to 198.18.0.11, " + remedy,
+			wantDials: []string{"127.0.0.1:5000"},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dialer := &routedDialer{
+				proxies: map[string]bool{proxy.address(): true},
+				direct:  registry.Listener.Addr().String(),
+			}
+			resolver := newResolver(config.DockerConfig{Registries: []config.RegistryConfig{
+				{Name: "kept-direct", URL: tt.url},
+			}}, policy, tt.resolver, dialer.DialContext)
+			reg := resolver.Default()
+
+			_, err := NewAuthManager().GetToken(
+				context.Background(), reg.Client, reg.URL, reg.Name, "", "",
+				"repository:acme/widget:pull",
+			)
+			if err == nil || !strings.HasSuffix(err.Error(), ": "+tt.wantError) {
+				t.Fatalf("GetToken error = %v, want it to end with %q", err, tt.wantError)
+			}
+			if strings.Contains(err.Error(), "set [egress] upstream_proxy") {
+				t.Fatalf("GetToken error suggests the proxy that already exists: %v", err)
+			}
+			if got := dialer.directDials(); !slices.Equal(got, tt.wantDials) {
+				t.Fatalf("direct dials = %v, want %v", got, tt.wantDials)
+			}
+			if got := proxy.requestedHosts(); len(got) != 0 {
+				t.Fatalf("proxy carried %v, want nothing for a registry kept direct", got)
+			}
+		})
+	}
+}

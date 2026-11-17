@@ -117,7 +117,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   resolves to a private or loopback address for a public registry are still
   refused. Without a proxy, a host name answered only with fake-IP addresses
   gets a `502` that names the host, its address and `[egress] upstream_proxy`
-  instead of `unsafe Docker dial target`. The startup log names each
+  instead of `unsafe Docker dial target`; for a registry that `no_proxy` or a
+  loopback URL keeps off a configured `upstream_proxy`, it asks for real DNS
+  answers for the registry's host names instead. The startup log names each
   registry's route in a `docker registry egress` line.
 - npm: unsigned tarball paths (`/npm/<package>/-/<file>.tgz` and the scoped
   form) still answer `404`, now with a JSON body, code

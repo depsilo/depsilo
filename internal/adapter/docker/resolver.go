@@ -50,13 +50,13 @@ func newResolver(
 	}
 
 	for _, rc := range cfg.Registries {
-		proxy, route := registryProxy(rc, policy)
-		client, clientErr := newRegistryClient(rc.URL, proxy, lookup, dialContext)
+		route := registryEgressFor(rc, policy)
+		client, clientErr := buildRegistryClient(rc.URL, route.proxy, route.remedy, lookup, dialContext)
 		if clientErr != nil {
 			zap.L().Error("docker: invalid registry HTTP configuration", zap.String("registry", rc.Name), zap.Error(clientErr))
 			client = &http.Client{Transport: errorRoundTripper{err: clientErr}}
 		} else {
-			logRegistryEgress(rc.Name, route, proxy)
+			logRegistryEgress(rc.Name, route.route, route.proxy)
 		}
 
 		reg := &Registry{
