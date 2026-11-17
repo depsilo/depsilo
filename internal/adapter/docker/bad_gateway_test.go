@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -731,5 +732,509 @@ func TestBadGatewayNamesTheTargetThatTheProxyRefusedToConnect(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// The hints that a failure of the [egress] default proxy adds to a 502 reason.
+// The registry's own host keeps its pinned network scope until a restart.
+func fakeIPProxyHintFor(host string) string {
+	return "; if " + host + " is on your network, give it a real DNS answer, for example with fake-ip-filter in the proxy software, " +
+		"so that Depsilo connects to it directly after a restart, see docs/deployment.md#upstream-network-egress"
+}
+
+func fakeIPProxyHintForOtherHost(host string) string {
+	return "; if " + host + " is on your network, give it a real DNS answer, for example with fake-ip-filter in the proxy software, " +
+		"so that Depsilo connects to it directly, see docs/deployment.md#upstream-network-egress"
+}
+
+func noProxyHintFor(host string) string {
+	return "; if " + host + " is reachable only without the proxy, list it in [egress] no_proxy and restart, " +
+		"see docs/deployment.md#upstream-network-egress"
+}
+
+// refuseConnect is a proxy that refuses every CONNECT with status and passes
+// plain-http requests to plain.
+func refuseConnect(status int, plain http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, request *http.Request) {
+		if request.Method == http.MethodConnect {
+			w.WriteHeader(status)
+			return
+		}
+		plain(w, request)
+	}
+}
+
+// closeTunnel is a proxy that accepts CONNECT and closes the tunnel at once,
+// as mihomo does for a host it cannot reach.
+func closeTunnel(t *testing.T) http.HandlerFunc {
+	return func(w http.ResponseWriter, request *http.Request) {
+		connection, buffered, err := http.NewResponseController(w).Hijack()
+		if err != nil {
+			t.Errorf("hijack CONNECT: %v", err)
+			return
+		}
+		_, _ = buffered.WriteString("HTTP/1.1 200 Connection established\r\n\r\n")
+		_ = buffered.Flush()
+		_ = connection.Close()
+	}
+}
+
+// gatewayAnswer answers a plain-http request with status and an error page
+// that names a signed URL.
+func gatewayAnswer(status int) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, "<html>cannot reach http://upstream.example/x?token=PROXY-SECRET</html>")
+	}
+}
+
+// tunnelTo is a proxy that accepts every CONNECT and carries the tunnel to
+// address, whichever host the client named.
+func tunnelTo(t *testing.T, address string) http.HandlerFunc {
+	return func(w http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodConnect {
+			http.Error(w, "plain request to a tunneling proxy", http.StatusBadRequest)
+			return
+		}
+		target, err := net.Dial("tcp", address)
+		if err != nil {
+			t.Errorf("dial tunnel target: %v", err)
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		defer target.Close()
+		connection, buffered, err := http.NewResponseController(w).Hijack()
+		if err != nil {
+			t.Errorf("hijack CONNECT: %v", err)
+			return
+		}
+		defer connection.Close()
+		_, _ = buffered.WriteString("HTTP/1.1 200 Connection established\r\n\r\n")
+		_ = buffered.Flush()
+		go func() {
+			_, _ = io.Copy(target, buffered.Reader)
+			_ = target.Close()
+		}()
+		_, _ = io.Copy(connection, target)
+	}
+}
+
+// A request that the [egress] default proxy failed to carry gets a hint in
+// its 502 reason: for a host whose local answer was fake-IP, when the proxy
+// refused CONNECT, the connection through it failed, for example because the
+// proxy closed the tunnel, or it answered plain http with 502, 503 or 504, a
+// real DNS answer; for the registry's own host answered publicly, when the
+// proxy refused CONNECT or answered with such a status, no_proxy. A hint
+// names its host as the 502 body names the origin. A TLS failure, the
+// registry's own proxy, the direct leg and a proxy that cannot be reached
+// give no hint, and no 502 names the proxy, the proxy's text or an address
+// of the answer.
+func TestBadGatewayHintsWhyTheDefaultProxyFailed(t *testing.T) {
+	const manifest = "/v2/library/widget/manifests/latest"
+	const blob = "/v2/library/widget/blobs/sha256:4f1e"
+	fakeIPAnswers := staticIPResolver{"registry.home.lan": dnsAnswer("198.18.0.10", "2001:2::a")}
+	publicAnswers := staticIPResolver{"registry.example": dnsAnswer("93.184.216.34")}
+	// untrusted is an https server whose certificate registry clients do not
+	// trust.
+	untrusted := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	untrusted.Config.ErrorLog = log.New(io.Discard, "", 0)
+	untrusted.StartTLS()
+	t.Cleanup(untrusted.Close)
+	for _, tt := range []struct {
+		name     string
+		registry string
+		// own makes the proxy the registry's own; unreachable replaces the
+		// default proxy with an address that refuses connections.
+		own, unreachable bool
+		answers          staticIPResolver
+		proxy            http.HandlerFunc
+		// direct serves the direct dials; nil refuses them.
+		direct http.HandlerFunc
+		path   string
+		// want is the 502 message before its request suffix. With
+		// transportCode, its %s is the failure code of a closed tunnel.
+		want          string
+		transportCode bool
+	}{
+		{
+			name:     "CONNECT refused for a fake-IP answer",
+			registry: "https://registry.home.lan",
+			answers:  fakeIPAnswers,
+			proxy:    refuseConnect(http.StatusBadGateway, nil),
+			path:     manifest,
+			want:     "auth discovery failed at https://registry.home.lan: egress proxy refused CONNECT (502)" + fakeIPProxyHintFor("registry.home.lan"),
+		},
+		{
+			name:     "CONNECT refused for a public answer",
+			registry: "https://registry.example",
+			answers:  publicAnswers,
+			proxy:    refuseConnect(http.StatusForbidden, nil),
+			path:     manifest,
+			want:     "auth discovery failed at https://registry.example: egress proxy refused CONNECT (403)" + noProxyHintFor("registry.example"),
+		},
+		{
+			name:     "502 from the proxy for plain http and a fake-IP answer",
+			registry: "http://registry.home.lan",
+			answers:  fakeIPAnswers,
+			proxy:    gatewayAnswer(http.StatusBadGateway),
+			path:     manifest,
+			want:     "auth discovery failed at http://registry.home.lan: returned 502 through the egress proxy" + fakeIPProxyHintFor("registry.home.lan"),
+		},
+		{
+			name:     "502 from the proxy for plain http and a public answer",
+			registry: "http://registry.example",
+			answers:  publicAnswers,
+			proxy:    gatewayAnswer(http.StatusBadGateway),
+			path:     manifest,
+			want:     "auth discovery failed at http://registry.example: returned 502 through the egress proxy" + noProxyHintFor("registry.example"),
+		},
+		{
+			name:     "503 from the proxy for plain http",
+			registry: "http://registry.example",
+			answers:  publicAnswers,
+			proxy:    gatewayAnswer(http.StatusServiceUnavailable),
+			path:     manifest,
+			want:     "auth discovery failed at http://registry.example: returned 503 through the egress proxy" + noProxyHintFor("registry.example"),
+		},
+		{
+			name:     "504 from the proxy for plain http",
+			registry: "http://registry.home.lan",
+			answers:  fakeIPAnswers,
+			proxy:    gatewayAnswer(http.StatusGatewayTimeout),
+			path:     manifest,
+			want:     "auth discovery failed at http://registry.home.lan: returned 504 through the egress proxy" + fakeIPProxyHintFor("registry.home.lan"),
+		},
+		{
+			name:          "tunnel closed right after CONNECT for a fake-IP answer",
+			registry:      "https://registry.home.lan",
+			answers:       fakeIPAnswers,
+			proxy:         closeTunnel(t),
+			path:          manifest,
+			want:          "auth discovery failed at https://registry.home.lan: %s" + fakeIPProxyHintFor("registry.home.lan"),
+			transportCode: true,
+		},
+		{
+			name:          "tunnel closed right after CONNECT for a public answer",
+			registry:      "https://registry.example",
+			answers:       publicAnswers,
+			proxy:         closeTunnel(t),
+			path:          manifest,
+			want:          "auth discovery failed at https://registry.example: %s",
+			transportCode: true,
+		},
+		{
+			// The proxy reached a server whose certificate fails, which a
+			// real DNS answer would not change.
+			name:     "TLS failure through the tunnel for a fake-IP answer",
+			registry: "https://registry.home.lan",
+			answers:  fakeIPAnswers,
+			proxy:    tunnelTo(t, untrusted.Listener.Addr().String()),
+			path:     manifest,
+			want:     "auth discovery failed at https://registry.home.lan: tls",
+		},
+		{
+			name:     "fake-IP redirect target that a 502 body may not name",
+			registry: "http://harbor.lan",
+			answers: staticIPResolver{
+				"harbor.lan":  dnsAnswer("192.168.1.20"),
+				"a!b.example": dnsAnswer("198.18.0.12"),
+			},
+			proxy:  refuseConnect(http.StatusBadGateway, nil),
+			direct: redirectTo("https://a!b.example/registry-v2/data?Signature=SECRET-SIGNATURE"),
+			path:   blob,
+			want:   "blob failed at ***: egress proxy refused CONNECT (502)" + fakeIPProxyHintForOtherHost("***"),
+		},
+		{
+			name:     "registry that a 502 body may not name",
+			registry: "http://a!b.example",
+			answers:  staticIPResolver{"a!b.example": dnsAnswer("93.184.216.34")},
+			proxy:    gatewayAnswer(http.StatusBadGateway),
+			path:     manifest,
+			want:     "auth discovery failed at ***: returned 502 through the egress proxy" + noProxyHintFor("***"),
+		},
+		{
+			name:     "fake-IP realm of a registry dialed directly",
+			registry: "http://harbor.lan",
+			answers: staticIPResolver{
+				"harbor.lan":    dnsAnswer("192.168.1.20"),
+				"auth.home.lan": dnsAnswer("198.18.0.11"),
+			},
+			proxy:  refuseConnect(http.StatusBadGateway, nil),
+			direct: challengeWith(`Bearer realm="https://auth.home.lan/token",service="harbor.lan"`),
+			path:   manifest,
+			want:   "token fetch failed at https://auth.home.lan: egress proxy refused CONNECT (502)" + fakeIPProxyHintForOtherHost("auth.home.lan"),
+		},
+		{
+			// A registry pinned public may not reach a private answer, so a
+			// real DNS answer would not help its CDN host.
+			name:     "fake-IP redirect target of a fake-IP registry",
+			registry: "http://registry.home.lan",
+			answers: staticIPResolver{
+				"registry.home.lan": dnsAnswer("198.18.0.10"),
+				"cdn.example":       dnsAnswer("198.18.0.12"),
+			},
+			proxy: refuseConnect(http.StatusBadGateway, redirectTo("https://cdn.example/registry-v2/data?Signature=SECRET-SIGNATURE")),
+			path:  blob,
+			want:  "blob failed at https://cdn.example: egress proxy refused CONNECT (502)",
+		},
+		{
+			// no_proxy decides from the registry's own host only.
+			name:     "public redirect target of a public registry",
+			registry: "http://registry.example",
+			answers: staticIPResolver{
+				"registry.example": dnsAnswer("93.184.216.34"),
+				"cdn.example":      dnsAnswer("93.184.216.35"),
+			},
+			proxy: refuseConnect(http.StatusForbidden, redirectTo("https://cdn.example/registry-v2/data?Signature=SECRET-SIGNATURE")),
+			path:  blob,
+			want:  "blob failed at https://cdn.example: egress proxy refused CONNECT (403)",
+		},
+		{
+			name:     "registry's own proxy refusing CONNECT for a fake-IP answer",
+			registry: "https://registry.home.lan",
+			own:      true,
+			answers:  fakeIPAnswers,
+			proxy:    refuseConnect(http.StatusBadGateway, nil),
+			path:     manifest,
+			want:     "auth discovery failed at https://registry.home.lan: egress proxy refused CONNECT (502)",
+		},
+		{
+			name:     "registry's own proxy answering 502 for plain http",
+			registry: "http://registry.home.lan",
+			own:      true,
+			answers:  fakeIPAnswers,
+			proxy:    gatewayAnswer(http.StatusBadGateway),
+			path:     manifest,
+			want:     "auth discovery failed at http://registry.home.lan: returned 502",
+		},
+		{
+			name:     "direct leg that cannot connect",
+			registry: "http://harbor.lan",
+			answers:  staticIPResolver{"harbor.lan": dnsAnswer("192.168.1.20")},
+			proxy:    refuseConnect(http.StatusBadGateway, gatewayAnswer(http.StatusBadGateway)),
+			path:     manifest,
+			want:     "auth discovery failed at http://harbor.lan: connection_refused",
+		},
+		{
+			name:        "default proxy that cannot be reached",
+			registry:    "https://registry.home.lan",
+			unreachable: true,
+			answers:     fakeIPAnswers,
+			path:        manifest,
+			want:        "auth discovery failed at https://registry.home.lan: connection to the egress proxy failed",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			proxy := newRecordingProxy(t, tt.proxy)
+			proxyURL, proxyAddress := proxy.URL, proxy.address()
+			if tt.unreachable {
+				proxyAddress = closedAddress(t)
+				proxyURL = "http://" + proxyAddress
+			}
+			dialer := &routedDialer{proxies: map[string]bool{proxyAddress: true}, direct: closedAddress(t)}
+			if tt.direct != nil {
+				server := httptest.NewServer(tt.direct)
+				t.Cleanup(server.Close)
+				dialer.direct = server.Listener.Addr().String()
+			}
+			registry := config.RegistryConfig{Name: "hub", URL: tt.registry}
+			policy := egress.Policy{}
+			if tt.own {
+				registry.Proxy = proxyURL
+			} else {
+				var err error
+				if policy, err = egress.NewPolicy(proxyURL, nil, nil); err != nil {
+					t.Fatal(err)
+				}
+			}
+			core, logs := observer.New(zap.ErrorLevel)
+			t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
+			router, _ := newRoutedDockerRouter(t, registry, policy, tt.answers, dialer.DialContext, false)
+
+			response := serveWithRequestID(router, http.MethodGet, tt.path, testRequestID)
+			_, message := badGatewayBody(t, response)
+			text, ok := strings.CutSuffix(message, testRequestSuffix)
+			matched := ok && text == tt.want
+			if ok && tt.transportCode {
+				matched = text == fmt.Sprintf(tt.want, "network") || text == fmt.Sprintf(tt.want, "connection_refused")
+			}
+			if !matched {
+				t.Fatalf("502 message = %q, want %q", message, tt.want+testRequestSuffix)
+			}
+			if len(text) > maxClientMessageBytes {
+				t.Fatalf("502 message of %d bytes exceeds the cap", len(text))
+			}
+			for _, hidden := range []string{
+				proxyAddress, "198.18.0.10", "198.18.0.11", "198.18.0.12", "2001:2::a", "192.168.1.20", "93.184.216.3",
+				"PROXY-SECRET", "SECRET-SIGNATURE", "Bad Gateway", "Forbidden", "Connection established", "a!b",
+			} {
+				if strings.Contains(message, hidden) {
+					t.Fatalf("502 message %q contains %q", message, hidden)
+				}
+			}
+			if logged := loggedErrorsOf(logs, testRequestID); len(logged) != 1 || strings.Contains(logged[0], "PROXY-SECRET") {
+				t.Fatalf("errors logged under request %s = %q, want one without the proxy page's token", testRequestID, logged)
+			}
+		})
+	}
+}
+
+// The [egress] default proxy may answer a plain-http request with 502, 503 or
+// 504 itself, so the proxied leg turns such an answer into a refusal. Over
+// https, the proxy only tunnels, and the same status comes from the registry,
+// so the leg passes it on as an answer.
+func TestProxiedLegRefusesAGatewayStatusOnlyForPlainHTTP(t *testing.T) {
+	policy, err := egress.NewPolicy("http://proxy.example:3128", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, status := range []int{http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout} {
+		for _, scheme := range []string{"https", "http"} {
+			t.Run(fmt.Sprintf("%s/%d", scheme, status), func(t *testing.T) {
+				registry := config.RegistryConfig{Name: "hub", URL: scheme + "://registry.example"}
+				client, err := buildRegistryClient(
+					registry.Name, registry.URL, registryEgressFor(registry, policy),
+					staticIPResolver{"registry.example": dnsAnswer("93.184.216.34")}, nil,
+				)
+				if err != nil {
+					t.Fatal(err)
+				}
+				split, ok := client.Transport.(*splitRoundTripper)
+				if !ok {
+					t.Fatalf("transport = %T, want the default proxy's split", client.Transport)
+				}
+				// The proxied leg's answer stands in for the proxy's or, through
+				// a tunnel, the registry's.
+				split.preflight.transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+					return &http.Response{
+						StatusCode: status,
+						Header:     http.Header{},
+						Body:       io.NopCloser(strings.NewReader("registry page")),
+						Request:    request,
+					}, nil
+				})
+
+				response, err := client.Get(registry.URL + "/v2/")
+				if scheme == "https" {
+					if err != nil {
+						t.Fatalf("GET over https: %v, want the registry's %d", err, status)
+					}
+					body, readErr := io.ReadAll(response.Body)
+					_ = response.Body.Close()
+					if response.StatusCode != status || readErr != nil || string(body) != "registry page" {
+						t.Fatalf("answer = %d %q (%v), want the registry's %d", response.StatusCode, body, readErr, status)
+					}
+					return
+				}
+				if response != nil {
+					_ = response.Body.Close()
+				}
+				want := fmt.Sprintf("returned %d through the egress proxy", status) + noProxyHintFor("registry.example")
+				if err == nil || clientReasonOf(err) != want {
+					t.Fatalf("GET over plain http: error %v, want the refusal %q", err, want)
+				}
+			})
+		}
+	}
+}
+
+// The direct leg's 502 names the host, never the private address it
+// resolved to or the address that a changed answer brought, and never the
+// proxy; the server log keeps the changed answer.
+func TestBadGatewayOfTheDirectLegNamesNoAddress(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		path string
+		// changed is the host whose answer turns public at its dial.
+		changed string
+		// refused makes the registry refuse connections.
+		refused bool
+		want    string
+		logged  string
+	}{
+		{
+			name:    "registry that refuses the connection",
+			path:    "/v2/library/widget/manifests/latest",
+			refused: true,
+			want:    "auth discovery failed at http://harbor.lan: connection_refused",
+			logged:  "connection refused",
+		},
+		{
+			name:    "registry whose answer turned public",
+			path:    "/v2/library/widget/manifests/latest",
+			changed: "harbor.lan",
+			want:    "auth discovery failed at http://harbor.lan: " + directTargetLeftPrivateNetwork,
+			logged:  "harbor.lan resolved to 93.184.216.34",
+		},
+		{
+			name:    "storage redirect whose answer turned public",
+			path:    "/v2/library/widget/blobs/sha256:4f1e",
+			changed: "minio.lan",
+			want:    "blob failed at http://minio.lan: " + directTargetLeftPrivateNetwork,
+			logged:  "minio.lan resolved to 93.184.216.34",
+		},
+		{
+			name:   "storage redirect to a loopback answer",
+			path:   "/v2/library/widget/blobs/sha256:4f1e",
+			want:   "blob failed at http://loopback.lan: Docker proxy target crossed network scope",
+			logged: "Docker proxy target crossed network scope",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			location := "http://minio.lan/bucket/blob?X-Amz-Signature=SECRET-SIGNATURE"
+			if tt.changed == "" && !tt.refused {
+				location = "http://loopback.lan/bucket/blob"
+			}
+			registry := httptest.NewServer(redirectTo(location))
+			t.Cleanup(registry.Close)
+			proxy := newRecordingProxy(t, nil)
+			dialer := &routedDialer{proxies: map[string]bool{proxy.address(): true}, direct: registry.Listener.Addr().String()}
+			if tt.refused {
+				dialer.direct = closedAddress(t)
+			}
+			policy, err := egress.NewPolicy("http://operator:proxy-secret@"+proxy.address(), nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			answers := map[string]string{"harbor.lan": "192.168.1.20", "minio.lan": "192.168.1.22", "loopback.lan": "127.0.0.1"}
+			var mu sync.Mutex
+			lookups := map[string]int{}
+			resolve := ipResolverFunc(func(_ context.Context, host string) ([]net.IPAddr, error) {
+				mu.Lock()
+				defer mu.Unlock()
+				lookups[host]++
+				if host == tt.changed && lookups[host] > 1 {
+					return dnsAnswer("93.184.216.34"), nil
+				}
+				if address, ok := answers[host]; ok {
+					return dnsAnswer(address), nil
+				}
+				return nil, fmt.Errorf("unexpected DNS lookup for %s", host)
+			})
+			core, logs := observer.New(zap.ErrorLevel)
+			t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
+			router, _ := newRoutedDockerRouter(t, config.RegistryConfig{Name: "hub", URL: "http://harbor.lan"}, policy, resolve, dialer.DialContext, false)
+
+			response := serveWithRequestID(router, http.MethodGet, tt.path, testRequestID)
+			_, message := badGatewayBody(t, response)
+			if message != tt.want+testRequestSuffix {
+				t.Fatalf("502 message = %q, want %q", message, tt.want+testRequestSuffix)
+			}
+			for _, hidden := range []string{
+				"192.168.1.20", "192.168.1.22", "127.0.0.1", "93.184.216.34", proxy.address(), "proxy-secret", "SECRET-SIGNATURE",
+			} {
+				if strings.Contains(message, hidden) {
+					t.Fatalf("502 message %q contains %q", message, hidden)
+				}
+			}
+			if logged := loggedErrorsOf(logs, testRequestID); len(logged) != 1 || !strings.Contains(logged[0], tt.logged) {
+				t.Fatalf("errors logged under request %s = %q, want one containing %q", testRequestID, logged, tt.logged)
+			}
+			if got := proxy.requestedHosts(); len(got) != 0 {
+				t.Fatalf("proxy carried %v, want nothing", got)
+			}
+		})
 	}
 }

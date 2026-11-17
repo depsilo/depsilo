@@ -52,6 +52,11 @@ import (
 // supply the draws.
 var newInitialAdminPassword = config.NewSecureToken
 
+// dockerRegistryDialer opens the connections of the Docker registry clients;
+// nil keeps the adapter's net.Dialer. It is a variable so a test can keep a
+// registry's connections on the test machine.
+var dockerRegistryDialer func(ctx context.Context, network, address string) (net.Conn, error)
+
 // StartServer initializes all components and starts the HTTP server.
 // Returns the *http.Server for lifecycle control by the caller.
 // Cancelling the provided context requests an orderly server shutdown. The
@@ -792,7 +797,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	}
 
 	if len(cfg.Docker.Registries) > 0 {
-		dockerHandler := dockeradapter.New(cacheMgr, cfg.Cache, database, cfg.Docker, egressPolicy)
+		dockerHandler := dockeradapter.New(cacheMgr, cfg.Cache, database, cfg.Docker, egressPolicy, dockerRegistryDialer)
 		if quarantinePolicy.Threshold("docker") > 0 {
 			dockerHandler.SetProvenanceRequired(true)
 			zap.L().Info("docker observation-age gate enabled")

@@ -194,8 +194,9 @@ func (p Policy) IsDeclaredPrivate(address netip.Addr) bool {
 // UpstreamProxyFor returns the default proxy for an upstream or Docker
 // registry whose configured origin is origin, or "" when it keeps direct
 // egress. The choice is made once per upstream or registry: like its own
-// proxy, it then carries every request of that upstream or registry,
-// including redirects.
+// proxy, it then carries every request of that upstream, including
+// redirects. A Docker registry's client still dials the hosts whose answers
+// are private or loopback directly; see internal/adapter/docker.
 func (p Policy) UpstreamProxyFor(origin string) string {
 	if p.upstreamProxy == "" {
 		return ""

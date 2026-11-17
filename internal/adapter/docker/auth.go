@@ -113,6 +113,27 @@ func (a *AuthManager) GetToken(ctx context.Context, client *http.Client, registr
 	}
 }
 
+// validateAuthRealm checks a Bearer realm, or the target of a registry
+// redirect, before anything is sent to it: an absolute http or https URL
+// without userinfo, no HTTPS downgrade from the registry URL, and no unsafe
+// address written in it. It classifies only hosts that literalNetworkScope
+// knows: localhost, .localhost names and addresses, also one written with a
+// trailing dot. A private or loopback target among them is refused unless
+// the registry URL's own host is known and lets it reach that scope.
+//
+// One exception: a registry URL with a host name leaves a target written as
+// an exact address literal, one that netip.ParseAddr accepts, to the
+// transport. Every registry client checks each target's answer against the
+// scope that the registry's own answer pinned (the preflight where a proxy
+// may carry the request, the guarded dialer on the direct route, and both on
+// the default-proxy route), and for such a literal that answer is the
+// literal itself, without DNS, so it is also the address that a proxy
+// connects to. A registry pinned private may therefore follow a redirect to
+// a private address, as package Upstreams on direct egress may, one pinned
+// loopback also to a loopback address, and one pinned public to neither.
+// localhost, a .localhost name and an address written with a trailing dot
+// stay refused by their form: they go to a resolver, Depsilo's or the
+// proxy's, which may answer them with any address.
 func validateAuthRealm(registryURL, realm string) error {
 	origin, originErr := url.Parse(registryURL)
 	target, targetErr := url.ParseRequestURI(realm)
@@ -128,6 +149,9 @@ func validateAuthRealm(registryURL, realm string) error {
 	originScope, originKnown := literalNetworkScope(origin.Hostname())
 	targetScope, targetKnown := literalNetworkScope(target.Hostname())
 	if !targetKnown {
+		return nil
+	}
+	if _, err := netip.ParseAddr(target.Hostname()); err == nil && !originKnown && targetScope != networkUnsafe {
 		return nil
 	}
 	switch targetScope {

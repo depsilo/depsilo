@@ -453,3 +453,55 @@ func TestGetTokenDoesNotTreatBasicChallengeAsTokenRealm(t *testing.T) {
 		t.Fatalf("non-Bearer auth endpoint requests = %d, want 0", got)
 	}
 }
+
+// validateAuthRealm classifies only localhost, .localhost names and
+// addresses. A private or loopback target among them is refused when the
+// registry URL may not reach it. A registry configured by host name leaves an
+// exact address literal to the origin pin of its transport, which the
+// registry clients' tests show for every route, but localhost names and an
+// address written with a trailing dot stay refused by their form, since a
+// resolver may answer them with any address. The other checks hold for every
+// registry.
+func TestValidateAuthRealmLeavesPrivateLiteralsOfNamedRegistriesToTheTransport(t *testing.T) {
+	for _, tt := range []struct {
+		registry, realm string
+		want            error
+	}{
+		{registry: "https://registry.example", realm: "https://10.0.0.30:9000/bucket/blob"},
+		{registry: "https://registry.example", realm: "https://[fd12:3456:789a::5]/token"},
+		{registry: "https://registry.example", realm: "https://[::ffff:10.0.0.30]/token"},
+		{registry: "https://registry.example", realm: "https://127.0.0.1/token"},
+		{registry: "https://registry.example", realm: "https://localhost/token", want: errLoopbackRealmTarget},
+		{registry: "https://registry.example", realm: "https://admin.localhost:9090/token", want: errLoopbackRealmTarget},
+		{registry: "https://registry.example", realm: "https://127.0.0.1./token", want: errLoopbackRealmTarget},
+		{registry: "https://registry.example", realm: "https://10.0.0.30.:9000/bucket/blob", want: errPrivateRealmTarget},
+		{registry: "https://registry.example", realm: "https://169.254.169.254./latest", want: errUnsafeRealmTarget},
+		{registry: "https://registry.example", realm: "https://93.184.216.35/token"},
+		{registry: "https://registry.example", realm: "https://auth.example/token"},
+		{registry: "https://registry.example", realm: "https://169.254.169.254/latest", want: errUnsafeRealmTarget},
+		{registry: "https://registry.example", realm: "https://100.100.100.200/latest", want: errUnsafeRealmTarget},
+		{registry: "https://registry.example", realm: "https://198.18.0.12/token", want: errUnsafeRealmTarget},
+		{registry: "https://registry.example", realm: "https://[fe80::1]/token", want: errUnsafeRealmTarget},
+		{registry: "https://registry.example", realm: "https://[fdfe:dcba:9876::1]/token", want: errUnsafeRealmTarget},
+		{registry: "https://registry.example", realm: "http://10.0.0.30/token", want: errRealmDowngrade},
+		{registry: "https://registry.example", realm: "https://operator:secret@10.0.0.30/token", want: errInvalidRealmURL},
+		{registry: "https://registry.example", realm: "ftp://10.0.0.30/token", want: errInvalidRealmURL},
+		{registry: "https://registry.example", realm: "/token", want: errInvalidRealmURL},
+		// A registry configured by address or localhost keeps the lexical
+		// rules.
+		{registry: "https://93.184.216.34", realm: "https://10.0.0.30/token", want: errPrivateRealmTarget},
+		{registry: "https://93.184.216.34", realm: "https://127.0.0.1/token", want: errLoopbackRealmTarget},
+		{registry: "https://93.184.216.34", realm: "https://localhost/token", want: errLoopbackRealmTarget},
+		{registry: "https://93.184.216.34", realm: "https://auth.lan/token"},
+		{registry: "https://10.0.0.5", realm: "https://10.0.0.30/token"},
+		{registry: "https://10.0.0.5", realm: "https://127.0.0.1/token", want: errLoopbackRealmTarget},
+		{registry: "https://10.0.0.5", realm: "https://169.254.169.254/latest", want: errUnsafeRealmTarget},
+		{registry: "https://[fd12:3456:789a::5]", realm: "https://10.0.0.30/token"},
+		{registry: "https://127.0.0.1:5000", realm: "https://10.0.0.30/token"},
+		{registry: "https://localhost:5000", realm: "https://127.0.0.1/token"},
+	} {
+		if got := validateAuthRealm(tt.registry, tt.realm); got != tt.want {
+			t.Errorf("validateAuthRealm(%s, %s) = %v, want %v", tt.registry, tt.realm, got, tt.want)
+		}
+	}
+}

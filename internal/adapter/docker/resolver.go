@@ -31,18 +31,23 @@ type Resolver struct {
 
 // NewResolver builds one HTTP client per configured registry. A registry
 // without its own proxy follows policy's default proxy, as a package Upstream
-// does.
+// does, except that the hosts whose answers are private or loopback are
+// dialed directly.
 func NewResolver(cfg config.DockerConfig, policy egress.Policy) *Resolver {
-	dialer := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
-	return newResolver(cfg, policy, net.DefaultResolver, dialer.DialContext)
+	return newResolver(cfg, policy, net.DefaultResolver, nil)
 }
 
+// newResolver builds the registry clients, which resolve hosts with lookup and
+// connect with dialContext, or with a net.Dialer when dialContext is nil.
 func newResolver(
 	cfg config.DockerConfig,
 	policy egress.Policy,
 	lookup ipResolver,
 	dialContext func(context.Context, string, string) (net.Conn, error),
 ) *Resolver {
+	if dialContext == nil {
+		dialContext = (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext
+	}
 	r := &Resolver{
 		registries: make(map[string]*Registry),
 		domainMap:  make(map[string]string),
@@ -51,7 +56,7 @@ func newResolver(
 
 	for _, rc := range cfg.Registries {
 		route := registryEgressFor(rc, policy)
-		client, clientErr := buildRegistryClient(rc.URL, route.proxy, route.remedy, lookup, dialContext)
+		client, clientErr := buildRegistryClient(rc.Name, rc.URL, route, lookup, dialContext)
 		if clientErr != nil {
 			zap.L().Error("docker: invalid registry HTTP configuration", zap.String("registry", rc.Name), zap.Error(clientErr))
 			client = &http.Client{Transport: errorRoundTripper{err: clientErr}}

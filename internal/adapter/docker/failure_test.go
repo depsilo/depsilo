@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/netip"
 	"net/url"
 	"slices"
@@ -325,5 +326,32 @@ func TestRedactLogURLKeepsQueryKeysAndDropsCredentials(t *testing.T) {
 	transportErr := &url.Error{Op: "Get", URL: `https://cdn.example/data?Signature=a"b`, Err: errors.New("dial tcp 192.0.2.10:443: i/o timeout")}
 	if got, want := logText(transportErr), `Get "https://cdn.example/data?Signature=REDACTED": dial tcp 192.0.2.10:443: i/o timeout`; got != want {
 		t.Fatalf("logText = %q, want %q", got, want)
+	}
+}
+
+// A proxy hint names its host twice, in the origin and in the advice. The
+// cap stays a safety net: with a host name of 111 characters on a five-digit
+// port, the longest stage and the longest reason, a hinted message keeps its
+// advice whole.
+func TestProxyHintedMessagesFitTheCap(t *testing.T) {
+	host := strings.Repeat("a", 63) + "." + strings.Repeat("b", 39) + ".example"
+	if len(host) != 111 {
+		t.Fatalf("host has %d characters, want 111", len(host))
+	}
+	hop := mustParseURL(t, "https://"+host+":65535/v2/")
+	for name, cause := range map[string]error{
+		"refused CONNECT with the fake-IP hint":  &proxyHintedFailure{err: &proxyConnectRefusal{status: 502}, hint: fakeIPProxyHint(host, true)},
+		"gateway status with the fake-IP hint":   &proxyStatusRefusal{status: 504, hint: fakeIPProxyHint(host, true)},
+		"refused CONNECT with the no_proxy hint": &proxyHintedFailure{err: &proxyConnectRefusal{status: 403}, hint: noProxyHint(host)},
+		"closed tunnel with the fake-IP hint":    &proxyHintedFailure{err: io.EOF, hint: fakeIPProxyHint(host, true)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			message := clientErrorMessage(&registryFailure{stage: stageTagResolution, hop: hop, cause: cause}, testRequestID)
+			text, ok := strings.CutSuffix(message, testRequestSuffix)
+			if !ok || len(text) > maxClientMessageBytes || !strings.HasPrefix(text, "tag resolution failed at https://"+host+":65535: ") ||
+				!strings.HasSuffix(text, ", see docs/deployment.md#upstream-network-egress") {
+				t.Fatalf("message of %d bytes = %q, want the whole hint within %d bytes", len(text), message, maxClientMessageBytes)
+			}
+		})
 	}
 }

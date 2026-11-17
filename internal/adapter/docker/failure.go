@@ -49,7 +49,9 @@ const (
 	// messages reach: a fake-IP refusal of Docker Hub's CDN host
 	// (production.cloudfront.docker.com) with the no_proxy remedy is 516
 	// bytes with its suffix, so a 512-byte cap on the whole message would cut
-	// that remedy.
+	// that remedy. A proxy hint names its host twice, in the origin and in
+	// the advice; it stays whole for host names of up to 111 characters on
+	// any port.
 	maxClientMessageBytes = 512
 	// maxSpecErrorCodes caps the error codes a 502 message repeats.
 	maxSpecErrorCodes = 3
@@ -161,14 +163,7 @@ func (f *registryFailure) clientText() string {
 }
 
 // reason states why the hop failed from the response status and its
-// specification error codes, or from the type of the cause: a refusal that
-// Depsilo wrote, a failed connection to the proxy, or otherwise the failure
-// code that upstream.ClassifyFailure gives a package Upstream, which is
-// network when nothing more specific applies. Every cause that is not
-// Depsilo's own refusal is a transport error, because registryFailures are
-// built only where Depsilo calls a registry. Text from the registry, the
-// proxy, or Go's transport is never quoted: it can carry a response's bytes,
-// such as a malformed status line, HTTP/2 GOAWAY data, or certificate names.
+// specification error codes, or from its cause; see causeReason.
 func (f *registryFailure) reason() string {
 	if f.cause == nil {
 		reason := "returned " + statusDigits(f.status)
@@ -177,15 +172,34 @@ func (f *registryFailure) reason() string {
 		}
 		return reason
 	}
+	return causeReason(f.cause)
+}
+
+// causeReason states why a request got no usable response from the type of
+// cause: a refusal that Depsilo wrote, a failed connection to the proxy, or
+// otherwise the failure code that upstream.ClassifyFailure gives a package
+// Upstream, which is network when nothing more specific applies. Every cause
+// that is not Depsilo's own refusal is a transport error, because
+// registryFailures are built only where Depsilo calls a registry. Text from
+// the registry, the proxy, or Go's transport is never quoted: it can carry a
+// response's bytes, such as a malformed status line, HTTP/2 GOAWAY data, or
+// certificate names.
+func causeReason(cause error) string {
 	var explained clientReasoner
-	if errors.As(f.cause, &explained) {
+	if errors.As(cause, &explained) {
 		return explained.clientReason()
 	}
-	var opErr *net.OpError
-	if errors.As(f.cause, &opErr) && opErr.Op == "proxyconnect" {
+	if isProxyConnectFailure(cause) {
 		return proxyConnectFailure
 	}
-	return upstream.ClassifyFailure(f.cause).Code
+	return upstream.ClassifyFailure(cause).Code
+}
+
+// isProxyConnectFailure reports whether err is a failed connection to the
+// proxy itself, which Go's transport marks with the operation "proxyconnect".
+func isProxyConnectFailure(err error) bool {
+	var opErr *net.OpError
+	return errors.As(err, &opErr) && opErr.Op == "proxyconnect"
 }
 
 // clientReasoner is an error that Depsilo writes from fixed phrases and typed
@@ -303,6 +317,80 @@ func refuseProxyConnect(_ context.Context, _ *url.URL, _ *http.Request, response
 		return &proxyConnectRefusal{status: response.StatusCode}
 	}
 	return nil
+}
+
+// fakeIPProxyHint is the advice of a request that the [egress] default proxy
+// failed to carry to host, whose local answer consisted of fake-IP
+// placeholders. Proxy software in fake-IP mode hands out placeholders also
+// for names that it cannot resolve itself, such as a host on the local
+// network, and a real private answer would send the host to the direct leg.
+// For the registry's own host that takes a restart: the registry keeps the
+// network scope its first answer pinned and refuses a changed one.
+func fakeIPProxyHint(host string, registryHost bool) string {
+	when := ""
+	if registryHost {
+		when = " after a restart"
+	}
+	return "; if " + displayHost(host) + " is on your network, give it a real DNS answer, " +
+		"for example with fake-ip-filter in the proxy software, so that Depsilo connects to it directly" + when + ", " +
+		"see docs/deployment.md#upstream-network-egress"
+}
+
+// noProxyHint is the advice of a request that the [egress] default proxy
+// refused or answered with a gateway status for host, a registry's own host
+// whose local answer was public: no_proxy, read at startup, keeps such a
+// registry direct.
+func noProxyHint(host string) string {
+	return "; if " + displayHost(host) + " is reachable only without the proxy, list it in [egress] no_proxy and restart, " +
+		"see docs/deployment.md#upstream-network-egress"
+}
+
+// proxyHintedFailure is a request that the [egress] default proxy carried
+// and that failed before Depsilo got a usable answer, with a fixed hint that
+// names the host through displayHost. A 502 body gives the reason of the
+// failure itself, see causeReason, followed by the hint.
+type proxyHintedFailure struct {
+	err  error
+	hint string
+}
+
+func (e *proxyHintedFailure) Error() string        { return e.err.Error() + e.hint }
+func (e *proxyHintedFailure) Unwrap() error        { return e.err }
+func (e *proxyHintedFailure) clientReason() string { return causeReason(e.err) + e.hint }
+
+// proxyStatusRefusal is the answer 502, 503 or 504 to a plain-http request
+// that the [egress] default proxy carried. A proxy answers so when it cannot
+// reach a host, and Depsilo cannot tell that answer from the registry's own,
+// so the request fails with this refusal instead of passing the status on.
+// The answer's first 64 KiB, with URL credentials redacted, stay in the
+// server log; a 502 body gives the status and the hint, if any.
+type proxyStatusRefusal struct {
+	status int
+	body   string
+	hint   string
+}
+
+// newProxyStatusRefusal refuses response, keeping at most 64 KiB of its body
+// for the server log, and closes the body.
+func newProxyStatusRefusal(response *http.Response, hint string) error {
+	body, truncated := readErrorBody(response.Body)
+	_ = response.Body.Close()
+	refusal := &proxyStatusRefusal{status: response.StatusCode, body: redactLogURLs(string(body)), hint: hint}
+	if truncated {
+		refusal.body += "…"
+	}
+	return refusal
+}
+
+func (e *proxyStatusRefusal) Error() string {
+	if e.body == "" {
+		return e.clientReason()
+	}
+	return e.clientReason() + "; answer: " + e.body
+}
+
+func (e *proxyStatusRefusal) clientReason() string {
+	return "returned " + statusDigits(e.status) + " through the egress proxy" + e.hint
 }
 
 // statusDigits writes an HTTP status code as three digits.

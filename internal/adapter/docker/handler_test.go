@@ -70,7 +70,7 @@ func TestTagListPreservesQueryAndIsolatesCachedPages(t *testing.T) {
 			Name: "test",
 			URL:  registry.URL,
 		}},
-	}, egress.Policy{})
+	}, egress.Policy{}, nil)
 	router := gin.New()
 	handler.Register(router.Group("/v2"))
 
@@ -136,7 +136,7 @@ func TestManifestBoundsUpstreamErrorBody(t *testing.T) {
 	handler := New(manager, config.CacheConfig{TTLIndex: time.Hour}, database, config.DockerConfig{
 		DefaultRegistry: "test",
 		Registries:      []config.RegistryConfig{{Name: "test", URL: registry.URL}},
-	}, egress.Policy{})
+	}, egress.Policy{}, nil)
 	router := gin.New()
 	handler.Register(router.Group("/v2"))
 
@@ -205,7 +205,7 @@ func TestManifestHeadAnswersFromCacheWhileTheRegistryIsUnreachable(t *testing.T)
 	handler := New(manager, config.CacheConfig{TTLIndex: time.Millisecond, TTLBlob: time.Hour}, database, config.DockerConfig{
 		DefaultRegistry: "test",
 		Registries:      []config.RegistryConfig{{Name: "test", URL: registry.URL}},
-	}, egress.Policy{})
+	}, egress.Policy{}, nil)
 	router := gin.New()
 	handler.Register(router.Group("/v2"))
 	request := func(method, target string) *httptest.ResponseRecorder {
@@ -266,7 +266,7 @@ func newRoutedDockerRouter(
 		_ = manager.Close(ctx)
 	})
 	dockerCfg := config.DockerConfig{DefaultRegistry: registry.Name, Registries: []config.RegistryConfig{registry}}
-	handler := New(manager, config.CacheConfig{TTLIndex: time.Hour, TTLBlob: time.Hour}, database, dockerCfg, policy)
+	handler := New(manager, config.CacheConfig{TTLIndex: time.Hour, TTLBlob: time.Hour}, database, dockerCfg, policy, nil)
 	handler.resolver = newResolver(dockerCfg, policy, lookup, dialContext)
 	handler.SetProvenanceRequired(observationRequired)
 	router := gin.New()
@@ -519,5 +519,76 @@ func TestUnreachableProxyAddressStaysOutOfTheBadGatewayBody(t *testing.T) {
 		return strings.Contains(text, "proxyconnect") && strings.Contains(text, proxyAddress)
 	}) {
 		t.Fatalf("logged errors = %q, want the proxy connection failure with %s", logged, proxyAddress)
+	}
+}
+
+// Through the [egress] default proxy, a plain-http registry's 502, 503 or 504
+// cannot be told from the proxy's own, so a manifest HEAD answers 502 with the
+// reason instead of passing the status on, as a GET does; the server log
+// keeps the first 64 KiB of a GET's answer with its URL credentials
+// redacted. A cached manifest still answers such a HEAD.
+func TestManifestHeadThroughTheDefaultProxyAnswersAGatewayStatusWith502(t *testing.T) {
+	const mediaType = "application/vnd.oci.image.index.v1+json"
+	manifest := `{"schemaVersion":2,"mediaType":"` + mediaType + `","manifests":[]}`
+	digest := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(manifest)))
+	var failing atomic.Bool
+	proxy := newRecordingProxy(t, func(w http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.URL.Path == "/v2/":
+			w.WriteHeader(http.StatusOK)
+		case failing.Load():
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = io.WriteString(w, "maintenance, see http://status.example/?token=PROXY-SECRET "+strings.Repeat("x", 64<<10)+"DO_NOT_INCLUDE")
+		default:
+			w.Header().Set("Content-Type", mediaType)
+			w.Header().Set("Docker-Content-Digest", digest)
+			_, _ = io.WriteString(w, manifest)
+		}
+	})
+	policy, err := egress.NewPolicy(proxy.URL, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	core, logs := observer.New(zap.ErrorLevel)
+	t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
+	dialer := &routedDialer{proxies: map[string]bool{proxy.address(): true}}
+	router, database := newRoutedDockerRouter(t, config.RegistryConfig{Name: "hub", URL: "http://registry.example"}, policy,
+		staticIPResolver{"registry.example": {{IP: net.ParseIP("93.184.216.34")}}}, dialer.DialContext, false)
+
+	if got := serveWithRequestID(router, http.MethodGet, "/v2/library/widget/manifests/1.0", "online-id"); got.Code != http.StatusOK || got.Body.String() != manifest {
+		t.Fatalf("online GET = %d %q", got.Code, got.Body.String())
+	}
+	failing.Store(true)
+
+	const reason = "returned 503 through the egress proxy; if registry.example is reachable only without the proxy, " +
+		"list it in [egress] no_proxy and restart, see docs/deployment.md#upstream-network-egress"
+	code, message := badGatewayBody(t, serveWithRequestID(router, http.MethodHead, "/v2/library/widget/manifests/2.0", testRequestID))
+	if want := "manifest HEAD failed at http://registry.example: " + reason + testRequestSuffix; code != "UPSTREAM_UNAVAILABLE" || message != want {
+		t.Fatalf("HEAD answer = %s %q, want UPSTREAM_UNAVAILABLE %q", code, message, want)
+	}
+	if logged := loggedErrorsOf(logs, testRequestID); len(logged) != 1 || !strings.Contains(logged[0], reason) {
+		t.Fatalf("errors logged under request %s = %q, want one with the reason", testRequestID, logged)
+	}
+	var entries []db.AccessLog
+	if err := database.Where("request_id = ?", testRequestID).Find(&entries).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Method != http.MethodHead || entries[0].StatusCode != http.StatusBadGateway {
+		t.Fatalf("access log entries of request %s = %+v, want one HEAD answered 502", testRequestID, entries)
+	}
+
+	code, message = badGatewayBody(t, serveWithRequestID(router, http.MethodGet, "/v2/library/widget/manifests/2.0", "get-id"))
+	if want := "manifest failed at http://registry.example: " + reason + " (request get-id; details in the Depsilo server log)"; code != "UPSTREAM_UNAVAILABLE" || message != want {
+		t.Fatalf("GET answer = %s %q, want UPSTREAM_UNAVAILABLE %q", code, message, want)
+	}
+	logged := loggedErrorsOf(logs, "get-id")
+	if len(logged) != 1 || !strings.Contains(logged[0], reason+"; answer: maintenance, see http://status.example/?token=REDACTED xxxx") ||
+		!strings.HasSuffix(logged[0], "x…") || strings.Contains(logged[0], "PROXY-SECRET") || strings.Contains(logged[0], "DO_NOT_INCLUDE") {
+		t.Fatalf("errors logged under request get-id = %.300q, want the first 64 KiB of the redacted answer after the reason", logged)
+	}
+
+	cached := serveWithRequestID(router, http.MethodHead, "/v2/library/widget/manifests/1.0", "cached-id")
+	if cached.Code != http.StatusOK || cached.Header().Get("Docker-Content-Digest") != digest {
+		t.Fatalf("HEAD of a cached manifest = %d digest %q, want the cached manifest", cached.Code, cached.Header().Get("Docker-Content-Digest"))
 	}
 }
