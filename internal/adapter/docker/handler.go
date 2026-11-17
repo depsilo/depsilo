@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -36,6 +37,25 @@ const quarantineProvenanceFirstObserved = "first_observed"
 // without Docker-Content-Digest: identity cannot be proven, so the armed gate
 // refuses instead of guessing.
 var errMissingManifestDigest = errors.New("docker registry did not return a manifest digest")
+
+// proxyConnectFailure stands in a 502 body for the transport's text about a
+// failed connection to the registry's proxy.
+const proxyConnectFailure = "connection to the egress proxy failed (details in the Depsilo server log)"
+
+// clientErrorMessage is the message of a 502 body, which anonymous clients
+// read. The transport's "proxyconnect" error names the proxy's host and port,
+// so that part is replaced; the server log keeps the full error.
+func clientErrorMessage(err error) string {
+	message := err.Error()
+	var proxyErr *net.OpError
+	if !errors.As(err, &proxyErr) || proxyErr.Op != "proxyconnect" {
+		return message
+	}
+	if detail := proxyErr.Error(); strings.Contains(message, detail) {
+		return strings.Replace(message, detail, proxyConnectFailure, 1)
+	}
+	return proxyConnectFailure
+}
 
 type Handler struct {
 	cacheMgr *cache.Manager
@@ -128,8 +148,9 @@ func (h *Handler) handleManifest(c *gin.Context, reg *Registry, imageName, endpo
 				c.Status(status)
 				return
 			}
+			zap.L().Error("docker manifest digest resolution failed", zap.String("image", imageName), zap.String("ref", reference), zap.Error(err))
 			adapter.LogAccess(c.Request.Context(), h.db, "docker", c.Request.Method, ManifestCacheKey(reg.Name, imageName, reference), false, reg.Name, time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
-			c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+			c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": clientErrorMessage(err)})
 			return
 		}
 		firstSeen, err := h.observations.Observe(c.Request.Context(), reg.Name, digest)
@@ -177,7 +198,7 @@ func (h *Handler) handleManifest(c *gin.Context, reg *Registry, imageName, endpo
 	})
 	if err != nil {
 		zap.L().Error("docker manifest fetch failed", zap.String("image", imageName), zap.String("ref", reference), zap.Error(err))
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": clientErrorMessage(err)})
 		adapter.LogAccess(c.Request.Context(), h.db, "docker", c.Request.Method, cacheKey, false, reg.Name, time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		return
 	}
@@ -197,7 +218,7 @@ func (h *Handler) handleBlob(c *gin.Context, reg *Registry, imageName, endpoint 
 	})
 	if err != nil {
 		zap.L().Error("docker blob fetch failed", zap.String("digest", digest), zap.Error(err))
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": clientErrorMessage(err)})
 		adapter.LogAccess(c.Request.Context(), h.db, "docker", c.Request.Method, cacheKey, false, reg.Name, time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		return
 	}
@@ -221,7 +242,7 @@ func (h *Handler) handleTagList(c *gin.Context, reg *Registry, imageName, rawQue
 	})
 	if err != nil {
 		zap.L().Error("docker tags list failed", zap.String("image", imageName), zap.Error(err))
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": clientErrorMessage(err)})
 		adapter.LogAccess(c.Request.Context(), h.db, "docker", c.Request.Method, cacheKey, false, reg.Name, time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		return
 	}
@@ -279,7 +300,9 @@ func (h *Handler) handleHead(c *gin.Context, reg *Registry, imageName, endpoint,
 		if h.headFromCache(c, reg, cacheKey, ttl, start, err) {
 			return
 		}
-		c.JSON(http.StatusBadGateway, gin.H{"code": "AUTH_FAILED", "message": err.Error()})
+		// A HEAD answer has no body, so only the log carries the reason.
+		zap.L().Error("docker manifest HEAD failed", zap.String("image", imageName), zap.String("endpoint", endpoint), zap.Error(err))
+		c.JSON(http.StatusBadGateway, gin.H{"code": "AUTH_FAILED", "message": clientErrorMessage(err)})
 		return
 	}
 
@@ -300,7 +323,8 @@ func (h *Handler) handleHead(c *gin.Context, reg *Registry, imageName, endpoint,
 		if h.headFromCache(c, reg, cacheKey, ttl, start, err) {
 			return
 		}
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		zap.L().Error("docker manifest HEAD failed", zap.String("image", imageName), zap.String("endpoint", endpoint), zap.Error(err))
+		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": clientErrorMessage(err)})
 		return
 	}
 	defer resp.Body.Close()
