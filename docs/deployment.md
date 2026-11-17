@@ -1347,13 +1347,14 @@ common networks resolve to such addresses; Admin → Upstreams names the case on
 the failing Upstream and in its check result.
 
 **Proxy software in fake-IP mode.** Clash, mihomo, Surge and sing-box in
-TUN/fake-IP mode answer DNS queries for public hosts with addresses from
-`198.18.0.0/15`. Depsilo refuses those addresses, so every Upstream fails its
-check and Docker pulls fail with `502`. Route Upstreams and Docker registries
-through the proxy software's HTTP port instead, or give Depsilo a DNS server
-that returns real addresses. Prefer the proxy port: proxy software in TUN mode
-can also answer queries addressed to another DNS server, and a container
-started with `--dns` then still receives fake-IP addresses.
+TUN/fake-IP mode answer DNS queries for public hosts with fake-IP addresses
+from `198.18.0.0/15`, and with IPv6 fake-IP on, from an IPv6 range as well.
+Depsilo refuses those addresses, so every Upstream fails its check and Docker
+pulls fail with `502`. Route Upstreams and Docker registries through the
+proxy software's HTTP port instead, or give Depsilo a DNS server that returns
+real addresses. Prefer the proxy port: proxy software in TUN mode can also
+answer queries addressed to another DNS server, and a container started with
+`--dns` then still receives fake-IP addresses.
 
 ```toml
 [egress]
@@ -1406,6 +1407,35 @@ address of the host other than `127.0.0.1`. Proxy software that listens only
 on the host's `127.0.0.1` does not accept connections to it. Let the proxy
 software listen on an address that containers can reach; Clash and mihomo
 call that option `allow-lan`.
+
+**IPv6 fake-IP.** With IPv6 fake-IP on, proxy software also answers AAAA
+queries with fake-IP addresses. Depsilo treats `2001:2::/48`, the IPv6
+benchmarking range, like `198.18.0.0/15`. It cannot tell a unique-local
+fake-IP address from a private network, and treating one as private would let
+a public registry's Bearer realm or redirect reach private addresses. The
+unique-local ranges that proxy software documents for IPv6 fake-IP and for its
+own TUN, VIF and DNS addresses, `fdfe:dcba:9876::/48`, `fd00:6152::/32` and
+`fc00::/18`, are therefore refused for every Upstream, cascade parent and
+Docker registry and never count as a private network; a failed Upstream check
+records `egress_fake_ip`. Package Upstreams behind `upstream_proxy` are not
+affected, because the proxy resolves their host names. Docker registries are
+affected even through a proxy, because Depsilo checks the answers for their
+host names before the proxy carries a request: a registry, Bearer realm or
+redirect host name whose answer consists of fake-IP and unique-local
+addresses only, with at least one unique-local address and either a fake-IP
+address or an address in one of those ranges, fails with a `502` that asks
+for the setting below (see **Finding the reason**). A unique-local answer
+outside those ranges and without fake-IP addresses stays a private network.
+Set the IPv6 fake-IP range to `2001:2::/48`, or a part of it, or turn IPv6
+fake-IP off:
+
+| Proxy software | Setting |
+| --- | --- |
+| mihomo | `fake-ip-range6: 2001:2::/64` under `dns`, or IPv6 fake-IP off with `ipv6: false` under `dns` |
+| Clash Verge Rev | `fake-ip-range6: 2001:2::/64` in its DNS settings, or its IPv6 switch off. Since 2.5.5 it fills in this range by itself in TUN fake-IP mode when no `fake-ip-range6` is set; its DNS-settings template writes `fdfe:dcba:9876::1/64`. In TUN fake-IP mode it also sets `ipv6` under `dns` from its IPv6 switch, so `ipv6: false` under `dns` has no effect there |
+| sing-box | `"inet6_range": "2001:2::/48"` on the `fakeip` DNS server, as its examples use since 2026-10 (they used `fc00::/18` before) |
+| v2rayN | the `2001:2::/48` choice for the IPv6 fake-IP range, or IPv6 fake-IP off |
+| Surge | `ipv6-vif = disabled`, its default. Surge's IPv6 fake-IP prefix lies under `fd00:6152::` and cannot be changed. It answers A queries only over IPv4 and AAAA queries only over IPv6, so through its IPv6 DNS address a host resolves to `fd00:6152::` addresses alone |
 
 **Overlay networks.** Tailscale, Headscale and NetBird assign node addresses
 from the shared address space `100.64.0.0/10`, which Depsilo also refuses by
@@ -1492,7 +1522,7 @@ Depsilo shows it in four places:
 
 | Code | Meaning |
 | --- | --- |
-| `egress_fake_ip` | DNS answered with an address in `198.18.0.0/15`, as proxy software in fake-IP mode does |
+| `egress_fake_ip` | DNS answered with a fake-IP address, as proxy software in fake-IP mode does: one in `198.18.0.0/15` or `2001:2::/48`, or in a unique-local range of proxy software (`fdfe:dcba:9876::/48`, `fd00:6152::/32`, `fc00::/18`) |
 | `egress_shared_address` | The host resolved into `100.64.0.0/10`, and no `private_ranges` entry covers the address |
 | `egress_reserved` | The host resolved to another special-purpose address, or the DNS answer mixed network scopes |
 | `egress_private` | The request was directed to a private or loopback address that this Upstream may not reach |
@@ -1527,11 +1557,12 @@ redirect named, such as a CDN or object storage. The reason is one of:
   `egress proxy refused CONNECT (403)`, with the status the proxy answered,
   when it refuses to connect to an `https` origin;
 - one of Depsilo's own refusals, such as `unsafe Docker redirect target` or
-  `unsupported authentication challenge`, or the fake-IP refusal described
-  below. Depsilo resolves the registry, realm and redirect hosts itself
-  before it connects, so such a host name that does not resolve reads
-  `resolve Docker dial target`, or `resolve Docker proxy target` when a
-  proxy carries the registry, rather than the `dns` failure code.
+  `unsupported authentication challenge`, or the fake-IP and IPv6 fake-IP
+  refusals described below. Depsilo resolves the registry, realm and
+  redirect hosts itself before it connects, so such a host name that does
+  not resolve reads `resolve Docker dial target`, or
+  `resolve Docker proxy target` when a proxy carries the registry, rather
+  than the `dns` failure code.
 
 Any other failure reads `Docker registry request failed`. The message never
 repeats text that a registry, proxy or other server sent: no answer body,
@@ -1542,8 +1573,9 @@ no proxy address.
 When no proxy carries a registry (it has no `proxy` of its own, and
 `upstream_proxy` is unset or `no_proxy` or a loopback URL keeps it direct)
 and the registry, its Bearer realm or a redirect target has a host name that
-resolves only to fake-IP addresses, the reason names the host and the
-address, for example:
+resolves only to fake-IP addresses, from `198.18.0.0/15`, `2001:2::/48` or
+both, the reason names the host and one address, an IPv4 one when the answer
+has one, for example:
 
 ```text
 auth discovery failed at https://registry-1.docker.io: registry-1.docker.io resolved to 198.18.0.10, a fake-IP address from proxy software in TUN/fake-IP mode; set [egress] upstream_proxy or DEPSILO_EGRESS_UPSTREAM_PROXY to the proxy software's HTTP port and restart, see docs/deployment.md#upstream-network-egress (request 4f0c9a52-8d1e-4b7a-9c3f-2e6d5b1a0f87; details in the Depsilo server log)
@@ -1555,6 +1587,24 @@ When `no_proxy` or a loopback URL keeps the registry off a configured
 URL keeps this registry off the proxy, so give its host names real DNS
 answers, for example with fake-ip-filter in the proxy software, or remove the
 registry from no_proxy, see docs/deployment.md#upstream-network-egress`.
+
+When the registry, its Bearer realm or a redirect target has a host name
+whose answer is unique-local IPv6 fake-IP as described under
+**IPv6 fake-IP** above, the reason names the host and asks for the proxy
+software's IPv6 fake-IP range instead, whether or not a proxy carries the
+registry. It names the documented range that one of the addresses lies in,
+for example:
+
+```text
+auth discovery failed at https://registry-1.docker.io: registry-1.docker.io resolved into fdfe:dcba:9876::/48, an IPv6 fake-IP range that Depsilo cannot tell from a private network; set the proxy software's IPv6 fake-IP range (fake-ip-range6 or inet6_range) to 2001:2::/48 or turn IPv6 fake-IP off, see docs/deployment.md#upstream-network-egress (request 4f0c9a52-8d1e-4b7a-9c3f-2e6d5b1a0f87; details in the Depsilo server log)
+```
+
+When none of the answer's unique-local addresses lies in a documented range,
+the reason reads `<host> resolved to fake-IP addresses and a unique-local
+address, which Depsilo cannot tell from a private network;` followed by the
+same remedy. Such a prefix can be an internal network's, so the message names
+no unique-local address or prefix; the server log line lists the whole
+answer after `DNS answer:`.
 
 The request ID leads to the details. Every answer carries it in the
 `X-Request-ID` header. Admin → Access Logs shows it in a request's details,
@@ -1582,13 +1632,19 @@ resolves the registry, Bearer realm, or redirect hostname locally. It rejects
 unresolved targets, mixed network scopes, unsafe special-purpose addresses, and
 a target that crosses the registry's pinned public/private/loopback scope. One
 answer is the exception: when every address a host name resolves to lies in
-`198.18.0.0/15`, the answer comes from proxy software in fake-IP mode and says
-nothing about the real address, so Depsilo treats the host as public and lets
-the proxy resolve it. An answer that mixes such addresses with others and a
-`198.18.x.x` address written in a URL are still rejected, and without a proxy
-a fake-IP answer is rejected too. The proxy socket itself may intentionally be
-a local service such as `http://127.0.0.1:7890` and is not classified as an
-Upstream target.
+`198.18.0.0/15` or `2001:2::/48`, in either family or both and in any order,
+the answer comes from proxy software in fake-IP mode and says nothing about
+the real address, so Depsilo treats the host as public and lets the proxy
+resolve it. An answer that mixes such addresses with any other address and
+an address from either range written in a URL are still rejected, and
+without a proxy a fake-IP answer is rejected too. Unique-local IPv6 fake-IP
+gets no such exception: an address in a unique-local range of proxy software
+(`fdfe:dcba:9876::/48`, `fd00:6152::/32`, `fc00::/18`) is rejected, never
+treated as a private network, and so is an answer that puts fake-IP
+addresses next to any unique-local address; see
+[IPv6 fake-IP](#upstream-network-egress). The proxy socket itself may
+intentionally be a local service such as `http://127.0.0.1:7890` and is not
+classified as an Upstream target.
 
 This preflight is not an end-to-end DNS pin when the forward proxy performs its
 own name resolution. In split-DNS deployments, the proxy can receive a
@@ -1596,7 +1652,10 @@ different address from the one Depsilo checked, and for a host answered with
 fake-IP addresses the proxy's resolution is the only one. Treat the proxy's
 resolver and egress ACL as part of the security boundary: block loopback,
 link-local, metadata-service, and unintended private destinations there as
-well.
+well. A name whose real DNS records lie in `198.18.0.0/15` or `2001:2::/48`
+also counts as public, so the proxy is asked to connect to such an address,
+including the proxy host's own TUN address when it lies in one of these
+ranges.
 
 Docker authentication services are commonly on a different public origin from
 the registry itself; Docker Hub, for example, delegates authentication to

@@ -82,11 +82,17 @@ The following are known limitations, not vulnerabilities:
   registry, Bearer realm, and redirect target before handing the request to
   that proxy, but cannot require the proxy to receive the same DNS answer. A
   host name whose every local answer is a fake-IP address in `198.18.0.0/15`
-  counts as public and is left to the proxy to resolve. Configure the proxy's
-  DNS policy and ACLs to reject loopback, link-local, metadata, and unintended
-  private targets. A configured registry may nominate a public cross-origin
-  Bearer realm, so registry credentials also trust that authentication
-  delegation; this is required for registries such as Docker Hub.
+  or `2001:2::/48` counts as public and is left to the proxy to resolve, also
+  when real records of a hostile realm or redirect name point there. The
+  unique-local ranges that proxy software documents for IPv6 fake-IP and for
+  its own TUN, VIF and DNS addresses (`fdfe:dcba:9876::/48`,
+  `fd00:6152::/32`, `fc00::/18`) are refused and never count as private, with
+  or without a proxy. Configure the proxy's DNS policy and ACLs to reject
+  loopback, link-local, metadata, and unintended private targets, including
+  the proxy host's own TUN address. A configured registry may nominate a
+  public cross-origin Bearer realm, so registry credentials also trust that
+  authentication delegation; this is required for registries such as Docker
+  Hub.
 
 ## Security Best Practices
 

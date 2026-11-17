@@ -65,14 +65,18 @@ public registries to reserved/private synthetic IPs (for example `198.18.0.0/15`
 Depsilo's outbound safety policy rejects the mirror request; Docker may
 silently fall back to Hub and this check correctly fails. Use public DNS for
 this network-dependent test; do not weaken the outbound checks. Behind proxy
-software in fake-IP mode (`198.18.0.0/15`), you can instead set
+software in fake-IP mode (`198.18.0.0/15`, and `2001:2::/48` with IPv6
+fake-IP on), you can instead set
 `DEPSILO_EGRESS_UPSTREAM_PROXY` to the proxy software's HTTP port in the
 environment of `make`, for example
 `DEPSILO_EGRESS_UPSTREAM_PROXY=http://127.0.0.1:7890 make test-docker-docker`.
 The test server reads the tracked `config.example.toml` and takes the variable
 from that environment; registries without their own proxy then use it, and
 the proxy resolves the fake-IP names
-([deployment](../deployment.md#upstream-network-egress)). The other
+([deployment](../deployment.md#upstream-network-egress)). IPv6 fake-IP from a
+unique-local range, such as `fdfe:dcba:9876::/48`, `fd00:6152::/32` or
+`fc00::/18`, still fails through the proxy: set the proxy software's IPv6
+fake-IP range to `2001:2::/48` or turn IPv6 fake-IP off. The other
 real-client targets accept the same variable for package Upstreams.
 
 The tag-triggered release workflow invokes the real-client workflow in release

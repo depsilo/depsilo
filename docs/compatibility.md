@@ -203,11 +203,25 @@ consequence.
   whose host `no_proxy` matches, stays direct (IP and CIDR entries match only
   a URL written with an address), and a registry's own `proxy` always wins.
   When a proxy carries a registry request, a host name whose every DNS answer
-  lies in `198.18.0.0/15` counts as public; without a proxy such an answer is
-  refused, and the reason in the `502` message names the host, the address,
-  and `[egress] upstream_proxy`, or, when `no_proxy` or a loopback URL keeps
-  the registry off a configured `upstream_proxy`, asks for real DNS answers
-  for its host names.
+  lies in `198.18.0.0/15` or `2001:2::/48` counts as public; without a proxy
+  such an answer is refused, and the reason in the `502` message names the
+  host, one address (an IPv4 one when the answer has one), and
+  `[egress] upstream_proxy`, or, when `no_proxy` or a loopback URL keeps the
+  registry off a configured `upstream_proxy`, asks for real DNS answers for
+  its host names.
+- Addresses in the unique-local ranges that proxy software documents for IPv6
+  fake-IP and for its own TUN, VIF and DNS addresses, `fdfe:dcba:9876::/48`,
+  `fd00:6152::/32` and `fc00::/18`, are refused for package Upstreams,
+  cascade parents and Docker registries and no longer count as a private
+  network; an Upstream check refused for one records `egress_fake_ip`, as one
+  refused for an address in `2001:2::/48` now does (it recorded
+  `egress_reserved`). A Docker registry, Bearer realm or redirect host name
+  whose answer consists of fake-IP and unique-local addresses only, with at
+  least one unique-local address and either a fake-IP address or an address
+  in these ranges, gets a `502` reason, with or without a proxy, that asks to
+  set the proxy software's IPv6 fake-IP range to `2001:2::/48` or turn IPv6
+  fake-IP off. A unique-local answer outside these ranges and without fake-IP
+  addresses remains a private network.
 - `[server] host` and `DEPSILO_SERVER_HOST` accept an IPv6 address with or
   without brackets (`::1` or `[::1]`).
 - Optional `[auth.sources.<id>]` configuration declares stable source IDs and

@@ -87,12 +87,16 @@ make test-docker-docker
 Docker Hub 而未访问 Depsilo 时测试失败。需要本机有 `jq`、`curl` 和特权
 Docker 支持。如果 DNS 把 Docker Hub 解析到 `198.18.0.0/15` 等非公网地址，
 Depsilo 的出站安全检查会拒绝该请求，Docker 可能回退直连；应使用公网 DNS，
-不要关闭出站检查。本机代理软件开启 TUN/fake-IP（应答落在 `198.18.0.0/15`）
+不要关闭出站检查。本机代理软件开启 TUN/fake-IP（应答落在 `198.18.0.0/15`，
+开启 IPv6 fake-IP 时还有 `2001:2::/48`）
 时，也可以在 `make` 的环境里把 `DEPSILO_EGRESS_UPSTREAM_PROXY` 设为代理软件的
 HTTP 端口，例如
 `DEPSILO_EGRESS_UPSTREAM_PROXY=http://127.0.0.1:7890 make test-docker-docker`：
 测试服务读取仓库里的 `config.example.toml`，并从这个环境取得该变量，未单独
 配置 proxy 的 registry 随即经这个代理出站，fake-IP 域名交给代理解析。
+IPv6 fake-IP 地址段若是 `fdfe:dcba:9876::/48`、`fd00:6152::/32`、`fc00::/18`
+这类唯一本地地址段，经代理也会被拒绝：把代理软件的 IPv6 fake-IP 地址段改为
+`2001:2::/48`，或关闭 IPv6 fake-IP。
 
 ## 编译缓存夹具
 

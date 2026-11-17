@@ -109,18 +109,29 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   `no_proxy` like a package Upstream; a registry whose URL names `localhost`
   or a loopback address stays direct, and a registry's own `proxy` still
   wins. Through a proxy, a registry, Bearer realm or redirect host whose
-  every DNS answer is a fake-IP address (`198.18.0.0/15`) is left to the
-  proxy to resolve, so pulls work behind proxy software in TUN/fake-IP mode,
-  also through a registry's own `proxy`, where they failed with
+  every DNS answer is a fake-IP address (`198.18.0.0/15` or `2001:2::/48`,
+  from either family or both, in any order) is left to the proxy to resolve,
+  so pulls work behind proxy software in TUN/fake-IP mode, also through a
+  registry's own `proxy`, where they failed with
   `unsafe Docker proxy target`. Answers that mix fake-IP and other
-  addresses, literal `198.18.x.x` hosts, and a realm or redirect target that
-  resolves to a private or loopback address for a public registry are still
-  refused. Without a proxy, a host name answered only with fake-IP addresses
-  gets a `502` that names the host, its address and `[egress] upstream_proxy`
+  addresses, address literals in either range, and a realm or redirect
+  target that resolves to a private or loopback address for a public
+  registry are still refused. Without a proxy, a host name answered only
+  with fake-IP addresses gets a `502` that names the host, one of its
+  addresses (an IPv4 one when there is one) and `[egress] upstream_proxy`
   instead of `unsafe Docker dial target`; for a registry that `no_proxy` or a
   loopback URL keeps off a configured `upstream_proxy`, it asks for real DNS
   answers for the registry's host names instead. The startup log names each
   registry's route in a `docker registry egress` line.
+- Egress: `2001:2::/48`, the IPv6 benchmarking range (RFC 5180 as corrected
+  by RFC Errata 1752), counts as fake-IP like `198.18.0.0/15`; Clash Verge
+  Rev in TUN fake-IP mode (since 2.5.5), sing-box's examples and OpenClash
+  use it for IPv6 fake-IP. A package Upstream refused for an address in it
+  records `egress_fake_ip` instead of `egress_reserved`, whichever address
+  family DNS lists first, so Admin, `depsilo doctor` and the `502` give the
+  `upstream_proxy` remedy. Admin and "Connect a client" speak of fake-IP
+  ranges, naming `198.18.0.0/15` and `2001:2::/48`, instead of the
+  benchmarking range.
 - npm: unsigned tarball paths (`/npm/<package>/-/<file>.tgz` and the scoped
   form) still answer `404`, now with a JSON body, code
   `NPM_UNSIGNED_TARBALL`, and a recovery message; npm `404` and `502` bodies
@@ -298,6 +309,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   `invalid Docker request path` instead of Go's parse error, which quoted
   the configured registry URL with any userinfo. The server log keeps the
   error without userinfo.
+- DNS answers in the unique-local ranges that proxy software documents for
+  IPv6 fake-IP and for its own TUN, VIF and DNS addresses
+  (`fdfe:dcba:9876::/48`, `fd00:6152::/32`, `fc00::/18`) no longer count as
+  a private network. Such an answer pinned a public Docker registry, with or
+  without a proxy, or a direct package Upstream or cascade parent as a
+  private origin, whose Bearer realm or redirect could then reach private
+  addresses. These addresses are now refused everywhere, and an Upstream
+  check records `egress_fake_ip`. A Docker registry, Bearer realm or redirect
+  host name whose answer consists of fake-IP and unique-local addresses only,
+  with at least one unique-local address and either a fake-IP address or an
+  address in these ranges, gets a `502` reason before anything is dialed or
+  sent to the proxy: it names the host and the documented range, or says
+  `a unique-local address` and names no address or prefix, and asks to set
+  the proxy software's IPv6 fake-IP range (`fake-ip-range6` or
+  `inet6_range`) to `2001:2::/48` or turn IPv6 fake-IP off. The server log
+  keeps the whole answer. A unique-local answer outside these ranges and
+  without fake-IP addresses remains a private network.
 
 ### Upgrade notes
 - No schema migration; the database stays at schema v17.
@@ -322,6 +350,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   address. A registry kept direct keeps the connect-time check and, behind
   fake-IP DNS, needs a real DNS answer for its name. Registry URLs that name
   `localhost` or a loopback address stay direct.
+- A package Upstream, cascade parent or Docker registry that resolves into
+  `fdfe:dcba:9876::/48`, `fd00:6152::/32` or `fc00::/18`, for example on a
+  kind network whose IPv6 /64 falls in `fc00::/18`, is now refused; give it
+  an address outside these ranges. Behind proxy software that hands out IPv6
+  fake-IP addresses from such a range, Docker pulls that resolved only to
+  them now fail with a `502`, also through a proxy, until the proxy
+  software's IPv6 fake-IP range is `2001:2::/48` or IPv6 fake-IP is off.
 - `GET /api/v1/integration-prompt` and `depsilo prompt --url` reject a `url`
   that is not a bare origin (`400 INVALID_URL`, exit 1); pass
   `?url=http://depsilo.example.com:23333`.

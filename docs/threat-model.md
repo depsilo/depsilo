@@ -397,17 +397,44 @@ resolution, an answer with an unsafe address or mixed network scopes, a
 literal special-purpose address, an HTTPS downgrade, and a target outside the
 registry's pinned network scope. One exception applies only when a proxy
 carries the request: a host name (not localhost, and not an address in any
-notation) whose every DNS answer lies in `198.18.0.0/15` counts as public,
-because proxy software in TUN/fake-IP mode answers that way for public hosts,
-such an answer says nothing about the real address, and the proxy resolves
-the name itself. An answer that mixes such addresses with others is still
-refused, and without a proxy a fake-IP answer is refused too. MCP resource
-reads never fetch caller-supplied hosts.
+notation) whose every DNS answer lies in the benchmarking ranges
+`198.18.0.0/15` or `2001:2::/48`, from either family or both, counts as
+public, because proxy software in TUN/fake-IP mode answers that way for
+public hosts, such an answer says nothing about the real address, and the
+proxy resolves the name itself. An answer that mixes such addresses with any
+other address is still refused, and without a proxy a fake-IP answer is
+refused too. Unique-local fake-IP addresses get no exception, because they
+cannot be told from a private network: the unique-local ranges that proxy
+software documents for IPv6 fake-IP and for its own TUN, VIF and DNS
+addresses (`fdfe:dcba:9876::/48`, `fd00:6152::/32`, `fc00::/18`) are unsafe
+for every package Upstream, cascade parent and Docker registry, never
+private. A fake answer from them used to pin a public Docker registry, with or
+without a proxy, or a direct package Upstream as a private origin, after
+which its Bearer realm or redirect could reach private addresses. A Docker
+host name answered from these ranges, or with fake-IP addresses next to any
+unique-local address, is refused before anything is dialed or sent to a
+proxy; its `502` may name a documented range, but never a unique-local
+address or any other unique-local prefix. MCP resource reads never fetch
+caller-supplied hosts.
 
 **Residual:** an operator-configured HTTP proxy owns DNS for proxied
 upstreams and Docker registries, and is the only resolver for a registry host
 whose local answer was fake-IP; registry Bearer realms may be cross-origin by
-protocol (both documented in `SECURITY.md`).
+protocol (both documented in `SECURITY.md`). The fake-IP exception has the
+following limits:
+
+- `2001:2::/48` is accepted under a proxy exactly like `198.18.0.0/15`, so a
+  hostile realm or redirect name can publish AAAA records there, and the
+  proxy is then asked to connect to that address.
+- A proxy's own TUN address inside an accepted range, such as `198.18.0.1` or
+  a user's `2001:2::1/126`, can be reached through the proxy when a name
+  really resolves to it.
+- A unique-local fake-IP range that an operator chose outside the documented
+  list still counts as a private network, so a fake answer from it alone can
+  still pin a public Docker registry or direct package Upstream as private.
+- A kind network whose IPv6 /64 falls in `fc00::/18` is refused like proxy
+  software's addresses; the default `kind` network, `fc00:f853:ccd:e793::/64`,
+  lies outside it.
 
 ### 5.10 Denial of service and resource exhaustion
 
@@ -475,7 +502,7 @@ These are deliberate, documented, and not vulnerabilities:
 | Minimum release age provenance | `internal/adapter/*/provenance_test.go` (including Docker's tag-resolve/observe/pin flow), `internal/quarantine/policy_capability_test.go`, `docs/specs/2026-10-06-min-release-age-provenance.md` |
 | Tamper detection | `internal/tamper/recorder_test.go`, `internal/cache` tamper paths |
 | Snapshot-only mode | `internal/snapshot`, `internal/quarantine/snapshot_gate_test.go`, `docs/specs/2026-10-06-freeze-snapshot.md` |
-| SSRF and redirect guards | `internal/upstream/request` tests, `internal/api/mcp_ssrf_test.go`, Docker resolver and egress tests (`internal/adapter/docker/egress_test.go`) |
+| SSRF and redirect guards | `internal/upstream/request` tests, `internal/upstream/egress_failure_test.go`, `internal/egress/egress_test.go` (fake-IP and proxy-software ranges), `internal/api/mcp_ssrf_test.go`, Docker resolver and egress tests (`internal/adapter/docker/egress_test.go`) |
 | Docker `502` text and its log redaction | `internal/adapter/docker/bad_gateway_test.go`, `internal/adapter/docker/failure_test.go` |
 | Capability groups and Pro gates | `internal/api/router_permissions_test.go`, `web/e2e` permission cases |
 | Preset bootstrap token rule | `internal/config/loader_test.go` |
