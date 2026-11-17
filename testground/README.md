@@ -86,8 +86,13 @@ make test-docker-docker
 镜像，并检查 Depsilo 的请求数及第二个客户端的缓存命中数；镜像客户端回退到
 Docker Hub 而未访问 Depsilo 时测试失败。需要本机有 `jq`、`curl` 和特权
 Docker 支持。如果 DNS 把 Docker Hub 解析到 `198.18.0.0/15` 等非公网地址，
-Depsilo 的出站安全检查会拒绝该请求，Docker 可能回退直连；应使用公网 DNS
-或给仓库配置可信的出站代理，不要关闭出站检查。
+Depsilo 的出站安全检查会拒绝该请求，Docker 可能回退直连；应使用公网 DNS，
+不要关闭出站检查。本机代理软件开启 TUN/fake-IP（应答落在 `198.18.0.0/15`）
+时，也可以在 `make` 的环境里把 `DEPSILO_EGRESS_UPSTREAM_PROXY` 设为代理软件的
+HTTP 端口，例如
+`DEPSILO_EGRESS_UPSTREAM_PROXY=http://127.0.0.1:7890 make test-docker-docker`：
+测试服务读取仓库里的 `config.example.toml`，并从这个环境取得该变量，未单独
+配置 proxy 的 registry 随即经这个代理出站，fake-IP 域名交给代理解析。
 
 ## 编译缓存夹具
 

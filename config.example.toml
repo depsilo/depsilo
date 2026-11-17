@@ -60,9 +60,12 @@ lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
 # Depsilo 默认不连接这类地址：把 upstream_proxy 设为代理软件的 HTTP 端口。
 # 它是所有未单独配置代理、也未走级联的包上游，以及未单独配置 proxy 的
 # Docker registry 的默认代理；no_proxy 中的上游和 registry 主机保持直连，
-# 代理到不了的私有 registry 要写进 no_proxy。回环地址始终直连。
+# 代理到不了的私有 registry 要按 URL 里的主机名写进 no_proxy：IP 和 CIDR
+# 只匹配 URL 里直接写 IP 地址的上游和 registry。保持直连的 registry 在
+# fake-IP 模式下需要真实的 DNS 应答。URL 写 localhost 或回环地址的始终直连。
 # Tailscale / Headscale / NetBird 节点地址在 100.64.0.0/10，
-# 需要在 private_ranges 中声明后才能作为上游或级联父节点。
+# 需要在 private_ranges 中声明后才能作为上游或级联父节点
+# （Docker registry 不使用 private_ranges）。
 # 这三项也可以用环境变量设置，环境变量优先于本文件：DEPSILO_EGRESS_UPSTREAM_PROXY、
 # DEPSILO_EGRESS_NO_PROXY、DEPSILO_EGRESS_PRIVATE_RANGES（后两项用逗号分隔）。
 # 在容器里 127.0.0.1 指的是容器自己，代理在宿主机上时要填宿主机的地址，
@@ -410,7 +413,8 @@ url      = "https://registry-1.docker.io"
 # password = ""
 # proxy    = "http://127.0.0.1:7890"
 # Without its own proxy, a registry uses [egress] upstream_proxy unless its
-# host is loopback or listed in [egress] no_proxy.
+# URL names localhost or a loopback address, or [egress] no_proxy lists its
+# host (by name: IP and CIDR entries match only URLs written with an address).
 # Every registry, Bearer realm, and redirect hostname is resolved locally and
 # checked against the registry's pinned network scope before a proxied request.
 # A hostname whose every answer is a fake-IP address (198.18.0.0/15) is left to

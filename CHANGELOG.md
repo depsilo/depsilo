@@ -106,13 +106,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   for `egress_fake_ip`) until the Upstream succeeds again.
 - Docker: a registry without its own `proxy` follows
   `[egress] upstream_proxy` (or `DEPSILO_EGRESS_UPSTREAM_PROXY`) and
-  `no_proxy` like a package Upstream; a loopback registry stays direct and a
-  registry's own `proxy` still wins. Through a proxy, a registry, Bearer
-  realm or redirect host whose every DNS answer is a fake-IP address
-  (`198.18.0.0/15`) is left to the proxy to resolve, so pulls work behind
-  proxy software in TUN/fake-IP mode; real private or loopback answers, mixed
-  answers and literal `198.18.x.x` hosts are still refused. Without a proxy,
-  the `502` names the host, its fake-IP address and `[egress] upstream_proxy`
+  `no_proxy` like a package Upstream; a registry whose URL names `localhost`
+  or a loopback address stays direct, and a registry's own `proxy` still
+  wins. Through a proxy, a registry, Bearer realm or redirect host whose
+  every DNS answer is a fake-IP address (`198.18.0.0/15`) is left to the
+  proxy to resolve, so pulls work behind proxy software in TUN/fake-IP mode,
+  also through a registry's own `proxy`, where they failed with
+  `unsafe Docker proxy target`. Answers that mix fake-IP and other
+  addresses, literal `198.18.x.x` hosts, and a realm or redirect target that
+  resolves to a private or loopback address for a public registry are still
+  refused. Without a proxy, a host name answered only with fake-IP addresses
+  gets a `502` that names the host, its address and `[egress] upstream_proxy`
   instead of `unsafe Docker dial target`. The startup log names each
   registry's route in a `docker registry egress` line.
 - npm: unsigned tarball paths (`/npm/<package>/-/<file>.tgz` and the scoped
@@ -242,6 +246,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   stdin. The archive has no `./` entry and includes the icon
   `depsilo-tray.svg` (a 256x256 PNG with `rsvg-convert`, ImageMagick
   `convert`, or Inkscape).
+- Docker: a manifest `HEAD` answered with `502`, which has no body, and a
+  `502` from tag resolution for the observation-age gate now log their
+  reason in the server log, as a `GET` does, so the fake-IP remedy reaches
+  the operator when containerd resolves a tag.
 
 ### Security
 - Failed and slow SQL statements are logged with placeholders instead of
@@ -257,6 +265,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   set-up instance does not read the variable.
 - Refused npm tarball requests are audited without a guessed version.
 - The setup page warns when opened over plain HTTP from another machine.
+- A Docker `502` no longer names the host and port of a registry's proxy, or
+  of the `[egress]` proxy, that cannot be reached; its message says
+  `connection to the egress proxy failed (details in the Depsilo server log)`
+  instead, and the server log keeps the address.
 
 ### Upgrade notes
 - No schema migration; the database stays at schema v17.
@@ -272,9 +284,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   the service environment for leftovers, which override `[egress]`, replace
   file lists whole, and stop startup when invalid.
 - With `[egress] upstream_proxy` set, Docker registries without their own
-  `proxy` now go through it. Add the host of a registry that must stay
-  direct, for example a private registry the proxy cannot reach, to
-  `no_proxy` (or `DEPSILO_EGRESS_NO_PROXY`); loopback registries stay direct.
+  `proxy` now go through it. Like package Upstreams, they then rely on the
+  proxy's DNS and egress rules instead of Depsilo's connect-time address
+  check, and a plain-HTTP registry's credentials pass through the proxy.
+  List a registry that must stay direct, for example a private registry the
+  proxy cannot reach, in `no_proxy` (or `DEPSILO_EGRESS_NO_PROXY`) by the
+  host name in its URL: IP and CIDR entries match only a URL written with an
+  address. A registry kept direct keeps the connect-time check and, behind
+  fake-IP DNS, needs a real DNS answer for its name. Registry URLs that name
+  `localhost` or a loopback address stay direct.
 - `GET /api/v1/integration-prompt` and `depsilo prompt --url` reject a `url`
   that is not a bare origin (`400 INVALID_URL`, exit 1); pass
   `?url=http://depsilo.example.com:23333`.

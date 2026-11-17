@@ -1358,27 +1358,43 @@ started with `--dns` then still receives fake-IP addresses.
 ```toml
 [egress]
 upstream_proxy = "http://127.0.0.1:7890"   # the proxy software's HTTP or mixed port
-no_proxy = ["mirror.lan", "192.168.0.0/16"] # optional: Upstream and registry hosts that stay direct
+# Optional: hosts that stay direct. An IP address or CIDR range matches only
+# a URL written with an address, such as http://192.168.1.20:5000.
+no_proxy = ["mirror.lan", "192.168.0.0/16"]
 ```
 
 `upstream_proxy` is the default HTTP(S) proxy for every package Upstream and
 extra index that has neither its own proxy nor a cascade parent, and for every
 Docker registry without its own `proxy`; it is chosen once per Upstream or
-registry from its configured host. An own proxy always wins, loopback hosts
-are never proxied, and `no_proxy` accepts host names, domains (a leading `.`
-matches subdomains only), IP addresses and CIDR ranges. List a registry that
-must stay direct there, for example a private registry the proxy cannot reach.
-Like an Upstream's own proxy, the proxy then resolves and connects to every
-host that Upstream or registry uses, so its egress rules become part of the
-boundary. Before the proxy carries a Docker registry request, Depsilo still
-checks the host it names; see
+registry from the host in its configured URL. An own proxy always wins, and a
+URL that names `localhost` or a loopback address is never proxied. `no_proxy`
+accepts host names, domains (a leading `.` matches subdomains only), IP
+addresses and CIDR ranges. An IP address or CIDR range matches only a URL
+written with an address, so list an Upstream or registry configured by name
+under that name, even when it resolves into a listed range. Like an
+Upstream's own proxy, the proxy then resolves and connects to every host that
+Upstream or registry uses, so its egress rules become part of the boundary,
+and a plain-HTTP Upstream or registry sends its requests, credentials
+included, through the proxy unencrypted. Before the proxy carries a Docker
+registry request, Depsilo still checks the host it names; see
 [Docker Registry forward-proxy boundary](#docker-registry-forward-proxy-boundary).
 The cascade relay and vulnerability or blocklist sync keep their own settings.
 
+List a registry that must stay direct in `no_proxy`, for example a private
+registry the proxy cannot reach. A registry kept direct needs real DNS answers
+for its name and for the hosts it redirects to. Behind proxy software in
+fake-IP mode, exempt those names from fake-IP answers in that software, for
+example with `fake-ip-filter` in Clash and mihomo; otherwise its pulls fail
+with the fake-IP `502` described under **Finding the reason**, and
+`upstream_proxy` does not help a registry that `no_proxy` keeps direct.
+
 Inside a container, `127.0.0.1` is the container itself, not the Docker host
 on which the proxy software runs; every Upstream then fails with
-`connection_refused`. Give the host's address as the container sees it, for
-example `http://host.docker.internal:7890`. Docker Desktop and OrbStack
+`connection_refused`, and Docker pulls fail with `502` and
+`connection to the egress proxy failed`, while the server log shows
+`proxyconnect tcp: dial tcp 127.0.0.1:7890: connect: connection refused`.
+Give the host's address as the container sees it, for example
+`http://host.docker.internal:7890`. Docker Desktop and OrbStack
 resolve that name without further options. On Docker Engine for Linux the
 name exists only when you add it: Docker documents the special value
 `host-gateway`, which resolves to the internal IP address of the host, for
@@ -1407,8 +1423,10 @@ still cannot redirect into them. Only ranges inside `100.64.0.0/10` are
 accepted, `100.100.100.200` (the Alibaba Cloud instance-metadata endpoint)
 stays blocked, and `198.18.0.0/15` is rejected with a pointer to
 `upstream_proxy`, because treating fake-IP answers as private would let every
-public Upstream redirect into the local network. `[egress]` settings are read
-at startup; restart after changing them.
+public Upstream redirect into the local network. Docker registries do not use
+`private_ranges`: a registry, Bearer realm or redirect target that resolves
+into `100.64.0.0/10` is refused with or without a proxy. `[egress]` settings
+are read at startup; restart after changing them.
 
 **Environment variables.** Each `[egress]` setting has an environment variable
 that overrides the value in `config.toml`. For a container, this avoids
@@ -1485,17 +1503,24 @@ Depsilo shows it in four places:
 | `http_status` | The Upstream answered with an HTTP status that marks it unhealthy |
 | `network` | Any other network failure |
 
-A Docker registry has no check and no failure code. When a registry without a
-proxy, its Bearer realm or a redirect target resolves to a fake-IP address,
-the Docker client receives `502` with a message that names the host and the
-address, for example:
+A Docker registry has no check and no failure code. When no proxy carries a
+registry (it has no `proxy` of its own, and `upstream_proxy` is unset or
+`no_proxy` or a loopback URL keeps it direct) and the registry, its Bearer
+realm or a redirect target has a host name that resolves only to fake-IP
+addresses, the Docker client receives `502` with a message that names the host
+and the address, for example:
 
 ```text
 auth discovery failed: Get "https://registry-1.docker.io/v2/": registry-1.docker.io resolved to 198.18.0.10, a fake-IP address from proxy software in TUN/fake-IP mode; set [egress] upstream_proxy or DEPSILO_EGRESS_UPSTREAM_PROXY to the proxy software's HTTP port and restart, see docs/deployment.md#upstream-network-egress
 ```
 
-At startup the server log names each registry's route in a
-`docker registry egress` line: `own proxy`, `default proxy` or `direct`.
+The server log repeats the message. Read it there when a client resolves tags
+with `HEAD`, as containerd does: the answer to a `HEAD` request has no body.
+When the proxy that carries a registry cannot be reached, the `502` message
+says `connection to the egress proxy failed (details in the Depsilo server log)`
+instead of naming the proxy's address, which the server log keeps. At startup
+the server log names each registry's route in a `docker registry egress` line:
+`own proxy`, `default proxy` or `direct`.
 
 ## Docker Registry forward-proxy boundary
 

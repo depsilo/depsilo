@@ -64,10 +64,16 @@ seconds for the batched access-log counters. On hosts that resolve
 public registries to reserved/private synthetic IPs (for example `198.18.0.0/15`),
 Depsilo's outbound safety policy rejects the mirror request; Docker may
 silently fall back to Hub and this check correctly fails. Use public DNS for
-this network-dependent test; do not weaken the outbound checks. Package
-Upstreams and Docker registries on such hosts can use `[egress] upstream_proxy`
-([deployment](../deployment.md#upstream-network-egress)); without a proxy,
-Docker registries still refuse fake-IP answers.
+this network-dependent test; do not weaken the outbound checks. Behind proxy
+software in fake-IP mode (`198.18.0.0/15`), you can instead set
+`DEPSILO_EGRESS_UPSTREAM_PROXY` to the proxy software's HTTP port in the
+environment of `make`, for example
+`DEPSILO_EGRESS_UPSTREAM_PROXY=http://127.0.0.1:7890 make test-docker-docker`.
+The test server reads the tracked `config.example.toml` and takes the variable
+from that environment; registries without their own proxy then use it, and
+the proxy resolves the fake-IP names
+([deployment](../deployment.md#upstream-network-egress)). The other
+real-client targets accept the same variable for package Upstreams.
 
 The tag-triggered release workflow invokes the real-client workflow in release
 qualification mode. GitHub release assets wait for all 14 package clients,
