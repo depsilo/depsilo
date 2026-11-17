@@ -221,6 +221,38 @@ func TestCreateProjectProxyURLUsesProjectPrefix(t *testing.T) {
 	}
 }
 
+// X-Forwarded-Proto reaches proxy_url. Two chained proxies send a list, and any
+// client can send anything, so the value must never become the URL scheme as
+// it is.
+func TestProjectProxyURLTakesOnlyAnHTTPSchemeFromForwardedProto(t *testing.T) {
+	r, database := newProjectsContractRouter(t)
+	project := createContractProject(t, database)
+	for _, test := range []struct {
+		forwarded string
+		want      string
+	}{
+		{forwarded: "https, http", want: "https://depsilo.example.test/p/ai-platform"},
+		{forwarded: "HTTPS", want: "https://depsilo.example.test/p/ai-platform"},
+		{forwarded: "gopher", want: "http://depsilo.example.test/p/ai-platform"},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/projects/"+jsonNumber(project.ID), nil)
+		req.Host = "depsilo.example.test"
+		req.Header.Set("X-Forwarded-Proto", test.forwarded)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("X-Forwarded-Proto %q: status = %d, body = %s", test.forwarded, rec.Code, rec.Body.String())
+		}
+		var body map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if body["proxy_url"] != test.want {
+			t.Errorf("X-Forwarded-Proto %q: proxy_url = %v, want %s", test.forwarded, body["proxy_url"], test.want)
+		}
+	}
+}
+
 func TestProjectLookupsDistinguishNotFoundFromDatabaseFailure(t *testing.T) {
 	tests := []struct {
 		name   string

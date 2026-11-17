@@ -86,7 +86,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	if err := configureTrustedProxies(r, cfg.Server.TrustedProxies); err != nil {
 		return nil, fmt.Errorf("configure server.trusted_proxies: %w", err)
 	}
-	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
+	addr := listenAddress(cfg.Server.Host, cfg.Server.Port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("listen on %s: %w", addr, err)

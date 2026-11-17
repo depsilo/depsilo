@@ -17,6 +17,7 @@ import (
 	"depsilo/internal/adapter"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
+	"depsilo/internal/requestorigin"
 	"depsilo/internal/upstream"
 )
 
@@ -340,14 +341,7 @@ func (h *Handler) proxyTarball(
 }
 
 func getBaseURL(c *gin.Context) string {
-	scheme := "http"
-	if c.Request.TLS != nil {
-		scheme = "https"
-	}
-	if proto := c.GetHeader("X-Forwarded-Proto"); proto != "" {
-		scheme = proto
-	}
-	return scheme + "://" + c.Request.Host
+	return requestorigin.Scheme(c.Request) + "://" + c.Request.Host
 }
 
 func npmRouteContext(c *gin.Context) (routePrefix, audience string) {

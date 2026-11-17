@@ -504,7 +504,7 @@ jobs:
             if [ "$startup_count" -ge 2 ] \
               && curl --fail --silent "http://127.0.0.1:${port}/ready" >/dev/null \
               && curl --fail --silent "http://127.0.0.1:${port}/api/v1/setup/status" \
-                | jq -e '.needs_setup == false' >/dev/null; then
+                | jq -e '.needs_setup == false and .restart_pending != true' >/dev/null; then
               configured=true
               break
             fi

@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"depsilo/internal/config"
 	"depsilo/internal/db"
@@ -255,6 +256,7 @@ func TestSetupCompleteRequiresBootstrapTokenFromRemotePeer(t *testing.T) {
 // not reveal whether a token was absent, from an earlier start, or simply wrong.
 func TestSetupCompleteExplainsBootstrapTokenWithoutDistinguishingRejections(t *testing.T) {
 	handler, cfg, root, restarts := newSetupTestHandler(t)
+	stubRunningInContainer(t, false)
 	stale, err := config.NewSecureToken()
 	if err != nil {
 		t.Fatal(err)
@@ -305,16 +307,81 @@ func TestSetupCompleteExplainsBootstrapTokenWithoutDistinguishingRejections(t *t
 	if !strings.Contains(recorder.Body.String(), `depsilo setup token --port 24646\"`) {
 		t.Fatalf("rejection on a non-default port = %s", recorder.Body.String())
 	}
+
+	// On a host 127.0.0.1 does not reach it would find no instance.
+	cfg.Server.Host = "::1"
+	recorder = setupRequest(handler, "203.0.113.10:4321", "", validSetupRequest(t, root))
+	if !strings.Contains(recorder.Body.String(), `run \"depsilo setup token --port 24646 --host ::1\"`) {
+		t.Fatalf("rejection on an IPv6 loopback listener = %s", recorder.Body.String())
+	}
+
+	// In a container the command works only through the container runtime.
+	stubRunningInContainer(t, true)
+	recorder = setupRequest(handler, "203.0.113.10:4321", "", validSetupRequest(t, root))
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(response.Message, `run "docker exec <container> depsilo setup token --port 24646 --host ::1" on the server`) {
+		t.Fatalf("rejection in a container = %s", response.Message)
+	}
 }
 
-func TestSetupTokenCommandNamesOnlyNonDefaultPorts(t *testing.T) {
-	for port, want := range map[int]string{
-		23333: "depsilo setup token",
-		0:     "depsilo setup token",
-		24646: "depsilo setup token --port 24646",
+// stubRunningInContainer makes the process look as if it runs, or does not
+// run, in a container for the rest of the test.
+func stubRunningInContainer(t *testing.T, inContainer bool) {
+	t.Helper()
+	previous := runningInContainer
+	runningInContainer = func() bool { return inContainer }
+	t.Cleanup(func() { runningInContainer = previous })
+}
+
+// "depsilo setup token" asks 127.0.0.1:23333 unless told otherwise, so the
+// command names a port and a host only when that default does not reach the
+// listener.
+func TestSetupTokenCommandNamesOnlyWhatItsDefaultsDoNotReach(t *testing.T) {
+	for _, test := range []struct {
+		host string
+		port int
+		want string
+	}{
+		{"127.0.0.1", 23333, "depsilo setup token"},
+		{"127.0.0.1", 0, "depsilo setup token"},
+		{"127.0.0.1", 24646, "depsilo setup token --port 24646"},
+		// Hosts 127.0.0.1 reaches: no host, the wildcards, the loopback names.
+		{"", 23333, "depsilo setup token"},
+		{"0.0.0.0", 23333, "depsilo setup token"},
+		{"::", 23333, "depsilo setup token"},
+		{"[::]", 24646, "depsilo setup token --port 24646"},
+		{"localhost", 23333, "depsilo setup token"},
+		{"LocalHost", 23333, "depsilo setup token"},
+		// Hosts it does not reach, IPv6 without the brackets the flag does not need.
+		{"::1", 23333, "depsilo setup token --host ::1"},
+		{"[::1]", 24646, "depsilo setup token --port 24646 --host ::1"},
+		{" ::1 ", 23333, "depsilo setup token --host ::1"},
+		{"192.0.2.10", 23333, "depsilo setup token --host 192.0.2.10"},
+		{"2001:db8::10", 24646, "depsilo setup token --port 24646 --host 2001:db8::10"},
+		{"depsilo.internal", 23333, "depsilo setup token --host depsilo.internal"},
 	} {
-		if got := SetupTokenCommand(port); got != want {
-			t.Errorf("SetupTokenCommand(%d) = %q, want %q", port, got, want)
+		if got := SetupTokenCommand(test.host, test.port, false); got != test.want {
+			t.Errorf("SetupTokenCommand(%q, %d) = %q, want %q", test.host, test.port, got, test.want)
+		}
+	}
+}
+
+// In a container "depsilo setup token" runs only inside it, so the command
+// takes the docker exec form with the flags the bare command would get.
+func TestSetupTokenCommandInAContainerRunsThroughDockerExec(t *testing.T) {
+	for _, test := range []struct {
+		host string
+		port int
+		want string
+	}{
+		{"0.0.0.0", 23333, "docker exec <container> depsilo setup token"},
+		{"0.0.0.0", 24646, "docker exec <container> depsilo setup token --port 24646"},
+		{"[::1]", 24646, "docker exec <container> depsilo setup token --port 24646 --host ::1"},
+	} {
+		if got := SetupTokenCommand(test.host, test.port, true); got != test.want {
+			t.Errorf("SetupTokenCommand(%q, %d, true) = %q, want %q", test.host, test.port, got, test.want)
 		}
 	}
 }
@@ -341,7 +408,9 @@ func TestSetupCompleteCreatesAdminAndProtectedConfig(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode setup response: %v", err)
 	}
-	if response.ReconnectURL != "http://example.com:23333/" || response.RestartStrategy != setupRestartExec {
+	// httptest addresses the request to "example.com" without a port, so it
+	// did not name the listening port and the client returns to its own origin.
+	if response.ReconnectURL != "http://example.com/" || response.RestartStrategy != setupRestartExec {
 		t.Fatalf("setup response = %#v", response)
 	}
 	info, err := os.Stat(cfg.ConfigPath)
@@ -879,16 +948,42 @@ func TestSetupCompleteRetriesWhenAnotherWriterMakesTheDatabaseBusy(t *testing.T)
 	}
 }
 
-func TestSetupCompleteGivesUpOnAPersistentlyBusyDatabase(t *testing.T) {
+// A scripted setup sent right after the first start meets the first blocklist
+// sync, which commits batch after batch for tens of seconds. Setup keeps
+// running its transaction again for as long as that takes, not a fixed small
+// number of times.
+func TestSetupCompleteOutlastsALongRunOfBusyAttempts(t *testing.T) {
 	handler, cfg, root, restarts := newPersistentSetupTestHandler(t)
-	conflicts := competeWithSetupWrites(t, handler, cfg, setupBusyAttempts+10)
+	conflicts := competeWithSetupWrites(t, handler, cfg, 8)
 
 	recorder := setupRequest(handler, "203.0.113.10:4321", cfg.BootstrapToken, validSetupRequest(t, root))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d after %d busy attempts, body = %s", recorder.Code, *conflicts, recorder.Body.String())
+	}
+	if *conflicts != 8 || *restarts != 1 {
+		t.Fatalf("injected conflicts = %d, restarts = %d; want 8 and 1", *conflicts, *restarts)
+	}
+}
+
+func TestSetupCompleteGivesUpOnAPersistentlyBusyDatabase(t *testing.T) {
+	handler, cfg, root, restarts := newPersistentSetupTestHandler(t)
+	handler.busyBudget = 400 * time.Millisecond
+	conflicts := competeWithSetupWrites(t, handler, cfg, 1_000_000)
+
+	started := time.Now()
+	recorder := setupRequest(handler, "203.0.113.10:4321", cfg.BootstrapToken, validSetupRequest(t, root))
+	elapsed := time.Since(started)
 	if recorder.Code != http.StatusInternalServerError || !strings.Contains(recorder.Body.String(), "ADMIN_CREATE_FAILED") {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
-	if *conflicts != setupBusyAttempts {
-		t.Fatalf("setup attempts = %d, want the bound of %d", *conflicts, setupBusyAttempts)
+	// One attempt can outlast this short budget where hashing is slow (the
+	// race detector), so the test checks the time it gave up, not a count;
+	// TestSetupCompleteOutlastsALongRunOfBusyAttempts covers repeated attempts.
+	if *conflicts < 1 {
+		t.Fatalf("setup attempts = %d, want at least one", *conflicts)
+	}
+	if elapsed < handler.busyBudget || elapsed > handler.busyBudget+5*time.Second {
+		t.Fatalf("setup gave up after %s, want about the busy budget of %s", elapsed, handler.busyBudget)
 	}
 	if *restarts != 0 || !cfg.IsDefault || fileExists(t, cfg.ConfigPath) {
 		t.Fatalf("a failed setup closed the gate: restarts=%d pending=%t", *restarts, cfg.IsDefault)
@@ -1002,11 +1097,104 @@ func TestSetupPersistsEffectiveDatabaseForCustomConfigPath(t *testing.T) {
 
 func TestSetupReconnectURLUsesRequestedPortAndDirectTLS(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "https://[::1]:8443/api/v1/setup/complete", nil)
-	if got := setupReconnectURL(request, 24444); got != "https://[::1]:24444/" {
+	if got := setupReconnectURL(request, 8443, 24444); got != "https://[::1]:24444/" {
 		t.Fatalf("setupReconnectURL = %q", got)
 	}
 	if got := setupRestartStrategy("windows"); got != setupRestartSupervisorRequired {
 		t.Fatalf("Windows restart strategy = %q", got)
+	}
+}
+
+// reconnect_url tells a scripted client where the service is after the
+// restart. Only a request that reached the listener directly can follow a
+// port chosen in the setup form; behind a published container port or a
+// reverse proxy the client's own origin is the only address it can use.
+func TestSetupCompleteReconnectURLFollowsHowTheRequestArrived(t *testing.T) {
+	for _, test := range []struct {
+		name           string
+		listenPort     int
+		configuredPort int
+		host           string
+		forwardedProto string
+		want           string
+	}{
+		{
+			name:       "direct request with unchanged port",
+			listenPort: 23333, configuredPort: 23333, host: "127.0.0.1:23333",
+			want: "http://127.0.0.1:23333/",
+		},
+		{
+			name:       "direct request with a changed port",
+			listenPort: 23333, configuredPort: 24444, host: "depsilo.example.test:23333",
+			want: "http://depsilo.example.test:24444/",
+		},
+		{
+			name:       "direct request to an IPv6 address with a changed port",
+			listenPort: 23333, configuredPort: 24444, host: "[::1]:23333",
+			want: "http://[::1]:24444/",
+		},
+		{
+			name:       "published container port",
+			listenPort: 23333, configuredPort: 23333, host: "127.0.0.1:24901",
+			want: "http://127.0.0.1:24901/",
+		},
+		{
+			name:       "published container port ignores a changed port",
+			listenPort: 23333, configuredPort: 24444, host: "127.0.0.1:24901",
+			want: "http://127.0.0.1:24901/",
+		},
+		{
+			name:       "TLS proxy with a Host without port",
+			listenPort: 23333, configuredPort: 23333, host: "depsilo.example.test", forwardedProto: "https",
+			want: "https://depsilo.example.test/",
+		},
+		{
+			name:       "TLS proxy on its own port",
+			listenPort: 23333, configuredPort: 23333, host: "depsilo.example.test:24920", forwardedProto: "https",
+			want: "https://depsilo.example.test:24920/",
+		},
+		{
+			name:       "proxy on the listening port still decides the address",
+			listenPort: 23333, configuredPort: 24444, host: "depsilo.example.test:23333", forwardedProto: "https, http",
+			want: "https://depsilo.example.test:23333/",
+		},
+		{
+			name:       "plain proxy without a forwarded scheme",
+			listenPort: 23333, configuredPort: 23333, host: "depsilo.example.test",
+			want: "http://depsilo.example.test/",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			handler, cfg, root, _ := newSetupTestHandler(t)
+			cfg.Server.Port = test.listenPort
+			setup := decodeValidSetupRequest(t, root)
+			setup.Server.Port = test.configuredPort
+			body, err := json.Marshal(setup)
+			if err != nil {
+				t.Fatal(err)
+			}
+			router := gin.New()
+			router.POST("/setup/complete", handler.Complete)
+			request := httptest.NewRequest(http.MethodPost, "/setup/complete", bytes.NewReader(body))
+			request.Host = test.host
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set(BootstrapTokenHeader, cfg.BootstrapToken)
+			if test.forwardedProto != "" {
+				request.Header.Set("X-Forwarded-Proto", test.forwardedProto)
+			}
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, request)
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+			}
+			var response map[string]any
+			if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+				t.Fatalf("decode setup response: %v", err)
+			}
+			if response["reconnect_url"] != test.want {
+				t.Fatalf("reconnect_url = %#v, want %q", response["reconnect_url"], test.want)
+			}
+		})
 	}
 }
 
@@ -1349,6 +1537,44 @@ func TestSetupStatusDisclosesNothingAboutAConfiguredServer(t *testing.T) {
 	want := map[string]any{"needs_setup": false, "token_required": false}
 	if got := setupStatusFields(t, handler); !reflect.DeepEqual(got, want) {
 		t.Fatalf("configured setup status = %#v, want exactly %#v", got, want)
+	}
+}
+
+// Between a completed setup and the restart, the process answers needs_setup
+// false while it still serves no package route. restart_pending is the one
+// signal a script has for that window, and it exists in no other state.
+func TestSetupStatusReportsRestartPendingOnlyBetweenCompletionAndRestart(t *testing.T) {
+	handler, cfg, root, restarts := newSetupTestHandler(t)
+	if fields := setupStatusFields(t, handler); fields["needs_setup"] != true {
+		t.Fatalf("status before setup = %#v", fields)
+	} else if _, present := fields["restart_pending"]; present {
+		t.Fatalf("status before setup carries restart_pending: %#v", fields)
+	}
+
+	rejected := setupRequest(handler, "203.0.113.10:4321", "wrong-token", validSetupRequest(t, root))
+	if rejected.Code != http.StatusForbidden {
+		t.Fatalf("rejected setup status = %d, body = %s", rejected.Code, rejected.Body.String())
+	}
+	if _, present := setupStatusFields(t, handler)["restart_pending"]; present {
+		t.Fatal("a rejected setup request reported a pending restart")
+	}
+
+	recorder := setupRequest(handler, "203.0.113.10:4321", cfg.BootstrapToken, validSetupRequest(t, root))
+	if recorder.Code != http.StatusOK || *restarts != 1 {
+		t.Fatalf("status = %d, restarts = %d, body = %s", recorder.Code, *restarts, recorder.Body.String())
+	}
+	want := map[string]any{"needs_setup": false, "token_required": false, "restart_pending": true}
+	if got := setupStatusFields(t, handler); !reflect.DeepEqual(got, want) {
+		t.Fatalf("status after completion and before restart = %#v, want exactly %#v", got, want)
+	}
+
+	// The restarted process loads the written config and is constructed as
+	// configured: it answers exactly what a configured server always answered.
+	restartedCfg := *cfg
+	restarted := NewSetupHandler(&restartedCfg, handler.db)
+	want = map[string]any{"needs_setup": false, "token_required": false}
+	if got := setupStatusFields(t, restarted); !reflect.DeepEqual(got, want) {
+		t.Fatalf("status of a configured server = %#v, want exactly %#v", got, want)
 	}
 }
 

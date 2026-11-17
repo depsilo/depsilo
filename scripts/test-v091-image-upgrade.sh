@@ -254,7 +254,8 @@ curl --fail --silent --show-error \
 configured=false
 for _ in $(seq 1 300); do
   if curl --fail --silent "$origin/ready" >/dev/null &&
-      curl --fail --silent "$origin/api/v1/setup/status" | jq -e '.needs_setup == false' >/dev/null; then
+      curl --fail --silent "$origin/api/v1/setup/status" |
+        jq -e '.needs_setup == false and .restart_pending != true' >/dev/null; then
     configured=true
     break
   fi

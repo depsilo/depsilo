@@ -23,40 +23,89 @@ import (
 
 	"depsilo/internal/config"
 	"depsilo/internal/db"
+	"depsilo/internal/requestorigin"
 )
 
 const BootstrapTokenHeader = "X-Depsilo-Bootstrap-Token"
 
 const maxSetupRequestBodyBytes int64 = 1 << 20
 
-// setupBusyAttempts bounds how often the administrator transaction runs while
-// SQLite reports the database busy. Each attempt may already wait for the
-// connection's busy_timeout, so the bound also caps how long a request waits.
-const setupBusyAttempts = 4
+// setupBusyBudget bounds how long setup keeps running the administrator
+// transaction again while SQLite reports the database busy. The first
+// blocklist sync writes in batches for tens of seconds right after the first
+// start, which is when a script sends its setup request; the budget outlasts
+// that while staying below the minute the documentation tells clients to
+// allow. A single attempt may also wait for the connection's busy_timeout.
+const setupBusyBudget = 45 * time.Second
+
+// setupBusyMaxDelay caps the pause between two attempts; the pause grows by
+// 50 ms per attempt up to it.
+const setupBusyMaxDelay = 500 * time.Millisecond
 
 // defaultListenPort is the port "depsilo setup token" asks when it is given
 // no other; it matches the [server] port default.
 const defaultListenPort = 23333
 
-// SetupTokenCommand returns the command that prints the current bootstrap
-// token of the instance listening on port. The bare command asks the default
-// port, so any other port must be named or the answer comes from a different
-// instance.
-func SetupTokenCommand(port int) string {
-	if port <= 0 || port == defaultListenPort {
-		return "depsilo setup token"
+// runningInContainer reports whether this process runs in a container. Docker
+// creates /.dockerenv and Podman /run/.containerenv in every container. Tests
+// replace it.
+var runningInContainer = func() bool {
+	for _, marker := range []string{"/.dockerenv", "/run/.containerenv"} {
+		if _, err := os.Stat(marker); err == nil {
+			return true
+		}
 	}
-	return "depsilo setup token --port " + strconv.Itoa(port)
+	return false
+}
+
+// RunningInContainer reports whether this process runs in a container, where
+// "depsilo setup token" works only through the container runtime.
+func RunningInContainer() bool { return runningInContainer() }
+
+// SetupTokenCommand returns the command that prints the current bootstrap
+// token of the instance listening on bindHost and port. The bare command asks
+// 127.0.0.1 on the default port, so any other port must be named or the
+// answer comes from a different instance, and so must a host that 127.0.0.1
+// does not reach or the command finds no instance at all. In a container the
+// command runs inside it, so an operator reading the container's output on the
+// host needs the docker exec form, with the same flags.
+func SetupTokenCommand(bindHost string, port int, inContainer bool) string {
+	command := "depsilo setup token"
+	if inContainer {
+		command = "docker exec <container> " + command
+	}
+	if port > 0 && port != defaultListenPort {
+		command += " --port " + strconv.Itoa(port)
+	}
+	if host := setupTokenCommandHost(bindHost); host != "" {
+		command += " --host " + host
+	}
+	return command
+}
+
+// setupTokenCommandHost returns the host "depsilo setup token" must be given
+// to reach a listener bound to bindHost, or "" when its default does: a
+// wildcard listener and the IPv4 loopback names answer on 127.0.0.1. An IPv6
+// host is returned without brackets, the form the --host flag documents.
+func setupTokenCommandHost(bindHost string) string {
+	host := strings.Trim(strings.TrimSpace(bindHost), "[]")
+	if host == "" || host == "127.0.0.1" || strings.EqualFold(host, "localhost") {
+		return ""
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.IsUnspecified() {
+		return ""
+	}
+	return host
 }
 
 // bootstrapTokenRequiredMessage explains how to obtain and send the token. It
 // depends only on server state, never on the rejected candidate, so a missing,
 // stale, and wrong token stay indistinguishable.
-func bootstrapTokenRequiredMessage(port int) string {
+func bootstrapTokenRequiredMessage(bindHost string, port int) string {
 	return "A valid bootstrap token is required to complete initial setup. " +
 		"Send it in the " + BootstrapTokenHeader + " header. " +
 		"The token changes every time Depsilo restarts unless DEPSILO_BOOTSTRAP_TOKEN sets it; " +
-		`run "` + SetupTokenCommand(port) + `" on the server to print the current one.`
+		`run "` + SetupTokenCommand(bindHost, port, runningInContainer()) + `" on the server to print the current one.`
 }
 
 const (
@@ -107,6 +156,12 @@ type SetupHandler struct {
 	// half-published document, so the path alone no longer answers whether an
 	// operator's configuration is being replaced. Guarded by mu.
 	previousConfigKept bool
+	// restartPending records that this process completed setup and still runs
+	// the first-run routes: the package routes exist only after the restart.
+	// It is never set in a process that started configured. Guarded by mu.
+	restartPending bool
+	// busyBudget is setupBusyBudget; tests shorten it.
+	busyBudget time.Duration
 }
 
 // NewSetupHandler creates a new setup handler.
@@ -162,6 +217,12 @@ func (h *SetupHandler) Status(c *gin.Context) {
 		}
 		status["config_exists"] = configExists
 	}
+	if h.restartPending {
+		// needs_setup is already false, but this process serves no package
+		// route and is about to be replaced. A script that waits for setup
+		// must wait for this field to go away as well.
+		status["restart_pending"] = true
+	}
 	c.JSON(http.StatusOK, status)
 }
 
@@ -180,7 +241,7 @@ func (h *SetupHandler) Complete(c *gin.Context) {
 	if !h.validBootstrapToken(c.GetHeader(BootstrapTokenHeader)) {
 		c.JSON(http.StatusForbidden, gin.H{
 			"code":    "BOOTSTRAP_TOKEN_REQUIRED",
-			"message": bootstrapTokenRequiredMessage(h.cfg.Server.Port),
+			"message": bootstrapTokenRequiredMessage(h.cfg.Server.Host, h.cfg.Server.Port),
 		})
 		return
 	}
@@ -309,6 +370,7 @@ func (h *SetupHandler) Complete(c *gin.Context) {
 	}
 
 	h.cfg.IsDefault = false
+	h.restartPending = true
 	h.cfg.BootstrapToken = ""
 	if err := config.ClearBootstrapToken(configPath); err != nil {
 		// Setup has already committed. The HTTP gate is closed and the next
@@ -327,7 +389,7 @@ func (h *SetupHandler) Complete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":           "ok",
 		"message":          message,
-		"reconnect_url":    setupReconnectURL(c.Request, req.Server.Port),
+		"reconnect_url":    setupReconnectURL(c.Request, h.cfg.Server.Port, req.Server.Port),
 		"restart_strategy": restartStrategy,
 	})
 
@@ -360,23 +422,36 @@ func adminCreateFailure(message string) *setupFailure {
 // for tens of seconds), and a commit of theirs between this transaction's read
 // and its first write fails it with SQLITE_BUSY however long busy_timeout is.
 // Nothing is durable before the commit and every failed attempt is rolled
-// back, so the whole transaction is simply run again on a fresh snapshot, a
-// bounded number of times.
+// back, so the whole transaction is simply run again on a fresh snapshot
+// until it commits or the busy budget is spent.
 func (h *SetupHandler) commitAdministrator(ctx context.Context, req config.SetupRequest) *setupFailure {
+	budget := h.busyBudget
+	if budget <= 0 {
+		budget = setupBusyBudget
+	}
+	deadline := time.Now().Add(budget)
 	for attempt := 1; ; attempt++ {
 		failure := h.commitAdministratorOnce(ctx, req)
 		if failure == nil {
+			if attempt > 1 {
+				zap.L().Info("created the initial administrator after the database was busy",
+					zap.Int("attempts", attempt))
+			}
 			return nil
 		}
-		if !db.IsSQLiteBusy(failure.cause) || attempt >= setupBusyAttempts {
+		remaining := time.Until(deadline)
+		if !db.IsSQLiteBusy(failure.cause) || remaining <= 0 {
 			if failure.logMessage != "" {
-				zap.L().Error(failure.logMessage, zap.Error(failure.cause))
+				zap.L().Error(failure.logMessage, zap.Error(failure.cause), zap.Int("attempts", attempt))
 			}
 			return failure
 		}
-		zap.L().Warn("database is busy during setup; retrying the administrator transaction",
-			zap.Int("attempt", attempt), zap.Error(failure.cause))
-		timer := time.NewTimer(time.Duration(attempt) * 50 * time.Millisecond)
+		if attempt == 1 {
+			zap.L().Warn("database is busy during setup; retrying the administrator transaction",
+				zap.Duration("for_at_most", budget), zap.Error(failure.cause))
+		}
+		delay := min(time.Duration(attempt)*50*time.Millisecond, setupBusyMaxDelay, remaining)
+		timer := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -498,18 +573,36 @@ func setupRestartStrategy(goos string) string {
 	return setupRestartExec
 }
 
-func setupReconnectURL(request *http.Request, port int) string {
+// setupReconnectURL returns where the client finds this service after the
+// restart. listenPort is the port this process listens on and configuredPort
+// the one the submitted configuration asks for.
+//
+// A request that names the listening port reached the listener directly, so
+// the client can follow the service to a port the operator has just chosen.
+// Any other request came through something that maps the address (a published
+// container port, a reverse proxy), and that mapping does not change with the
+// configuration: the client comes back the way it came.
+func setupReconnectURL(request *http.Request, listenPort, configuredPort int) string {
+	requested := &url.URL{Host: request.Host}
+	forwarded := len(request.Header.Values("X-Forwarded-Proto")) > 0
+	if request.Host != "" && (forwarded || requested.Port() != strconv.Itoa(listenPort)) {
+		return (&url.URL{
+			Scheme: requestorigin.Scheme(request),
+			Host:   request.Host,
+			Path:   "/",
+		}).String()
+	}
 	scheme := "http"
 	if request.TLS != nil {
 		scheme = "https"
 	}
-	hostname := (&url.URL{Host: request.Host}).Hostname()
+	hostname := requested.Hostname()
 	if hostname == "" {
 		hostname = "localhost"
 	}
 	return (&url.URL{
 		Scheme: scheme,
-		Host:   net.JoinHostPort(hostname, strconv.Itoa(port)),
+		Host:   net.JoinHostPort(hostname, strconv.Itoa(configuredPort)),
 		Path:   "/",
 	}).String()
 }

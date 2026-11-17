@@ -22,6 +22,7 @@ import (
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
+	"depsilo/internal/requestorigin"
 	"depsilo/internal/traffic"
 	"depsilo/internal/upstream"
 )
@@ -565,14 +566,7 @@ func (h *Handler) resolveExternalArtifact(filepath string) (externalArtifactTarg
 
 // getBaseURL extracts the base URL from the request (scheme + host).
 func getBaseURL(c *gin.Context) string {
-	scheme := "http"
-	if c.Request.TLS != nil {
-		scheme = "https"
-	}
-	if proto := c.GetHeader("X-Forwarded-Proto"); proto != "" {
-		scheme = proto
-	}
-	return scheme + "://" + c.Request.Host
+	return requestorigin.Scheme(c.Request) + "://" + c.Request.Host
 }
 
 // lastPathSegment returns the substring after the final '/'. Used by

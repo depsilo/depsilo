@@ -1,7 +1,6 @@
 package public
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -49,11 +48,7 @@ func (h *IntegrationPromptHandler) Get(c *gin.Context) {
 			return
 		}
 	} else {
-		scheme := "http"
-		if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
-			scheme = "https"
-		}
-		base = fmt.Sprintf("%s://%s", scheme, c.Request.Host)
+		base = requestBase(c)
 	}
 
 	ecosystem := c.Query("ecosystem")

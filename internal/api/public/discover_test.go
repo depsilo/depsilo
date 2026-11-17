@@ -239,3 +239,58 @@ func TestDiscoverDocumentationAnchorPointsAtAnExistingHeading(t *testing.T) {
 	}
 	t.Fatalf("%s has no heading for #%s", file, anchor)
 }
+
+// Every URL this package writes for a client comes from one rule for the
+// request's scheme, so the catalog, the agent prompt and the integration
+// prompt cannot disagree about it, and none of them repeats a header value
+// that is not a scheme.
+func TestRequestOriginTakesOnlyAnHTTPSchemeFromForwardedProto(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	discover := NewDiscoverHandler([]string{"npm"})
+	router := gin.New()
+	router.GET("/api/v1/discover", discover.Discover)
+	router.GET("/api/v1/agent-prompt", discover.AgentPrompt)
+	router.GET("/api/v1/integration-prompt", NewIntegrationPromptHandler().Get)
+
+	for _, test := range []struct {
+		forwarded string
+		want      string
+	}{
+		{forwarded: "https", want: "https://depsilo.example.test"},
+		{forwarded: "https, http", want: "https://depsilo.example.test"},
+		{forwarded: "HTTPS", want: "https://depsilo.example.test"},
+		{forwarded: "http, https", want: "http://depsilo.example.test"},
+		{forwarded: "gopher", want: "http://depsilo.example.test"},
+	} {
+		get := func(path string) string {
+			t.Helper()
+			request := httptest.NewRequest(http.MethodGet, path, nil)
+			request.Host = "depsilo.example.test"
+			request.Header.Set("X-Forwarded-Proto", test.forwarded)
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, request)
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("X-Forwarded-Proto %q: GET %s status = %d, body = %.300s", test.forwarded, path, recorder.Code, recorder.Body.String())
+			}
+			return recorder.Body.String()
+		}
+
+		var catalog struct {
+			MCP struct {
+				URL string `json:"url"`
+			} `json:"mcp"`
+		}
+		if err := json.Unmarshal([]byte(get("/api/v1/discover")), &catalog); err != nil {
+			t.Fatal(err)
+		}
+		if catalog.MCP.URL != test.want+"/mcp" {
+			t.Errorf("X-Forwarded-Proto %q: discover mcp.url = %q, want %s/mcp", test.forwarded, catalog.MCP.URL, test.want)
+		}
+		for _, path := range []string{"/api/v1/agent-prompt", "/api/v1/integration-prompt?ecosystem=node"} {
+			body := get(path)
+			if !strings.Contains(body, test.want+"/npm/") {
+				t.Errorf("X-Forwarded-Proto %q: GET %s does not address the service as %s", test.forwarded, path, test.want)
+			}
+		}
+	}
+}

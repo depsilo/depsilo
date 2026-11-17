@@ -1313,3 +1313,47 @@ func TestSignedTarballFetchDropsOriginBasicAuthOnCrossOriginRedirect(t *testing.
 		t.Fatalf("configured-origin Authorization leaked across redirect: %q", gotAuthorization)
 	}
 }
+
+// X-Forwarded-Proto reaches every tarball URL written into a packument. Two
+// chained proxies send a list, and any client can send anything, so the value
+// must never become the URL scheme as it is.
+func TestMetadataTarballURLsTakeOnlyAnHTTPSchemeFromForwardedProto(t *testing.T) {
+	for _, test := range []struct {
+		forwarded string
+		want      string
+	}{
+		{forwarded: "https, http", want: "https://depsilo.example.test/npm/fixture/-/"},
+		{forwarded: "gopher", want: "http://depsilo.example.test/npm/fixture/-/"},
+	} {
+		t.Run(test.forwarded, func(t *testing.T) {
+			router, _, _, _ := newNPMProvenanceFixture(t, deterministicTarballSigner(t, 0x11))
+			response := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodGet, "/npm/fixture", nil)
+			request.Host = "depsilo.example.test"
+			request.Header.Set("X-Forwarded-Proto", test.forwarded)
+			router.ServeHTTP(response, request)
+			if response.Code != http.StatusOK {
+				t.Fatalf("metadata status = %d, body=%s", response.Code, response.Body.String())
+			}
+			var document struct {
+				Versions map[string]struct {
+					Dist struct {
+						Tarball string `json:"tarball"`
+					} `json:"dist"`
+				} `json:"versions"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &document); err != nil {
+				t.Fatalf("decode metadata: %v", err)
+			}
+			if len(document.Versions) != 3 {
+				t.Fatalf("versions = %d, want the fixture's 3", len(document.Versions))
+			}
+			for version, entry := range document.Versions {
+				parsed, err := url.Parse(entry.Dist.Tarball)
+				if err != nil || parsed.Host != "depsilo.example.test" || !strings.HasPrefix(entry.Dist.Tarball, test.want) {
+					t.Errorf("version %s tarball = %q (parse error %v), want prefix %q", version, entry.Dist.Tarball, err, test.want)
+				}
+			}
+		})
+	}
+}

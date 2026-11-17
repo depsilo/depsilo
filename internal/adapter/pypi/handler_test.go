@@ -761,3 +761,62 @@ func TestExtraIndexArtifactKeepsExtraPolicyIdentity(t *testing.T) {
 		t.Fatalf("checker ecosystem = %q", checker.ecosystem)
 	}
 }
+
+// X-Forwarded-Proto reaches every file link written into a project index. Two
+// chained proxies send a list, and any client can send anything, so the value
+// must never become the URL scheme as it is.
+func TestPackageIndexLinksTakeOnlyAnHTTPSchemeFromForwardedProto(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = io.WriteString(w, `<html><a href="https://files.pythonhosted.org/packages/aa/pillow-12.3.0.whl">pillow-12.3.0.whl</a></html>`)
+	}))
+	t.Cleanup(upstreamServer.Close)
+	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "pypi-scheme.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(database); err != nil {
+		t.Fatal(err)
+	}
+	storage, err := cache.NewLocalStorage(filepath.Join(t.TempDir(), "cache"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool, err := upstream.NewPool([]config.UpstreamConfig{{Name: "mock", URL: upstreamServer.URL, Priority: 1, ProbeMode: "passive"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := cache.NewManager(storage, database, cache.NewEventBus(), 72*time.Hour)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := manager.Close(ctx); err != nil {
+			t.Errorf("close cache manager: %v", err)
+		}
+	})
+	handler := New(manager, upstream.NewPrioritySelector(pool), config.CacheConfig{TTLIndex: time.Hour, TTLBlob: 72 * time.Hour}, database)
+	router := gin.New()
+	handler.Register(router.Group("/pypi"))
+
+	for _, test := range []struct {
+		forwarded string
+		want      string
+	}{
+		{forwarded: "https, http", want: `href="https://depsilo.example.test/pypi/files/`},
+		{forwarded: "gopher", want: `href="http://depsilo.example.test/pypi/files/`},
+	} {
+		response := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, "/pypi/simple/pillow/", nil)
+		request.Host = "depsilo.example.test"
+		request.Header.Set("X-Forwarded-Proto", test.forwarded)
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("X-Forwarded-Proto %q: status = %d, body=%s", test.forwarded, response.Code, response.Body.String())
+		}
+		body := response.Body.String()
+		if strings.Count(body, `href="`) != 1 || !strings.Contains(body, test.want) {
+			t.Errorf("X-Forwarded-Proto %q: index = %s, want its one link to start with %s", test.forwarded, body, test.want)
+		}
+	}
+}

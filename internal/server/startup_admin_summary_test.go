@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,12 +22,19 @@ import (
 // summary of that start together with the database path.
 func startConfiguredServerForSummary(t *testing.T, adminUsername, adminPassword string) (summary, databasePath string) {
 	t.Helper()
+	return startConfiguredServerOnHost(t, "127.0.0.1", adminUsername, adminPassword)
+}
+
+// startConfiguredServerOnHost is startConfiguredServerForSummary with the
+// [server] host of the config.toml chosen by the caller.
+func startConfiguredServerOnHost(t *testing.T, host, adminUsername, adminPassword string) (summary, databasePath string) {
+	t.Helper()
 	directory := t.TempDir()
 	configPath := filepath.Join(directory, "config.toml")
 	databasePath = filepath.Join(directory, "server.db")
 	document := fmt.Sprintf(`config_version = 1
 [server]
-host = "127.0.0.1"
+host = %q
 port = 0
 log_level = "error"
 [database]
@@ -52,7 +60,7 @@ enabled = false
 enabled = true
 jwt_secret = "startup-admin-summary-signing-secret-with-sufficient-length"
 token_ttl = "1h"
-`, databasePath, filepath.Join(directory, "cache"))
+`, host, databasePath, filepath.Join(directory, "cache"))
 	if err := os.WriteFile(configPath, []byte(document), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -139,5 +147,34 @@ func TestStartServerNeverPrintsSuppliedAdministratorPassword(t *testing.T) {
 	}
 	if !strings.Contains(summary, "Portal:") {
 		t.Fatalf("startup summary was not captured:\n%s", summary)
+	}
+}
+
+// A host written the way the operator knows it ("::1") must reach the
+// listener: an address needs the brackets, a configuration value does not.
+func TestStartServerListensOnIPv6HostWithOrWithoutBrackets(t *testing.T) {
+	probe, err := net.Listen("tcp", "[::1]:0")
+	if err != nil {
+		t.Skipf("this machine has no IPv6 loopback: %v", err)
+	}
+	_ = probe.Close()
+
+	for _, host := range []string{"::1", "[::1]"} {
+		t.Run(host, func(t *testing.T) {
+			summary, _ := startConfiguredServerOnHost(t, host, "ops", "Startup-summary-test-password-012345")
+
+			match := regexp.MustCompile(`(?m)^Portal:\n  (http://\[::1\]:\d+)$`).FindStringSubmatch(summary)
+			if match == nil {
+				t.Fatalf("startup summary does not print the bracketed IPv6 Portal address:\n%s", summary)
+			}
+			response, err := http.Get(match[1] + "/health")
+			if err != nil {
+				t.Fatalf("the printed Portal address does not answer: %v", err)
+			}
+			_ = response.Body.Close()
+			if response.StatusCode != http.StatusOK {
+				t.Fatalf("GET %s/health = %d", match[1], response.StatusCode)
+			}
+		})
 	}
 }

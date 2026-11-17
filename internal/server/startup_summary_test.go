@@ -21,6 +21,8 @@ func TestStartupPortalURL(t *testing.T) {
 		{name: "loopback", host: "127.0.0.1", want: "http://127.0.0.1:23333"},
 		{name: "hostname", host: "localhost", want: "http://localhost:23333"},
 		{name: "IPv6 loopback", host: "::1", want: "http://[::1]:23333"},
+		{name: "bracketed IPv6 loopback", host: "[::1]", want: "http://[::1]:23333"},
+		{name: "IPv6 address", host: "2001:db8::10", want: "http://[2001:db8::10]:23333"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -31,7 +33,34 @@ func TestStartupPortalURL(t *testing.T) {
 	}
 }
 
+func TestListenAddress(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		host string
+		want string
+	}{
+		{name: "IPv4 loopback", host: "127.0.0.1", want: "127.0.0.1:23333"},
+		{name: "IPv4 wildcard", host: "0.0.0.0", want: "0.0.0.0:23333"},
+		{name: "empty wildcard", host: "", want: ":23333"},
+		{name: "hostname", host: "localhost", want: "localhost:23333"},
+		{name: "IPv6 loopback", host: "::1", want: "[::1]:23333"},
+		{name: "bracketed IPv6 loopback", host: "[::1]", want: "[::1]:23333"},
+		{name: "IPv6 wildcard", host: "::", want: "[::]:23333"},
+		{name: "bracketed IPv6 wildcard", host: "[::]", want: "[::]:23333"},
+		{name: "IPv6 address", host: "2001:db8::10", want: "[2001:db8::10]:23333"},
+		{name: "IPv6 address with a zone", host: "fe80::1%lo0", want: "[fe80::1%lo0]:23333"},
+		{name: "surrounding space", host: " ::1 ", want: "[::1]:23333"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := listenAddress(test.host, 23333); got != test.want {
+				t.Fatalf("listenAddress(%q) = %q, want %q", test.host, got, test.want)
+			}
+		})
+	}
+}
+
 func TestWriteStartupSummaryForFirstRun(t *testing.T) {
+	stubRunningInContainer(t, false)
 	var output bytes.Buffer
 	summary := newStartupSummary("0.9.0", "0.0.0.0", 23333, true, "bootstrap-token", true)
 	if err := writeStartupSummary(&output, summary); err != nil {
@@ -64,6 +93,7 @@ func TestWriteStartupSummaryForFirstRun(t *testing.T) {
 // "depsilo setup token" asks port 23333 unless told otherwise. On another port
 // the summary must print the command that reaches this instance.
 func TestWriteStartupSummaryNamesNonDefaultPortInTokenCommand(t *testing.T) {
+	stubRunningInContainer(t, false)
 	var output bytes.Buffer
 	summary := newStartupSummary("0.9.0", "127.0.0.1", 24646, true, "bootstrap-token", true)
 	if err := writeStartupSummary(&output, summary); err != nil {
@@ -76,6 +106,69 @@ func TestWriteStartupSummaryNamesNonDefaultPortInTokenCommand(t *testing.T) {
 	// The release workflow reads the token from this exact line.
 	if !strings.Contains(got, "  Bootstrap token: bootstrap-token\n") {
 		t.Errorf("startup summary changed the bootstrap token line:\n%s", got)
+	}
+}
+
+// In the container image "depsilo setup token" runs only inside the
+// container, so an operator reading its output on the host is given the
+// docker exec form, with the same flags.
+func TestWriteStartupSummaryGivesTheContainerTokenCommandInAContainer(t *testing.T) {
+	for _, test := range []struct {
+		inContainer bool
+		port        int
+		want        string
+	}{
+		{true, 23333, "docker exec <container> depsilo setup token"},
+		{true, 24646, "docker exec <container> depsilo setup token --port 24646"},
+		{false, 23333, "depsilo setup token"},
+	} {
+		stubRunningInContainer(t, test.inContainer)
+		var output bytes.Buffer
+		summary := newStartupSummary("0.9.0", "0.0.0.0", test.port, true, "bootstrap-token", true)
+		if err := writeStartupSummary(&output, summary); err != nil {
+			t.Fatal(err)
+		}
+		if want := "  Retrieve the current bootstrap token: " + test.want + "\n"; !strings.Contains(output.String(), want) {
+			t.Errorf("in container %v, port %d: startup summary missing %q:\n%s", test.inContainer, test.port, want, output.String())
+		}
+	}
+}
+
+// stubRunningInContainer makes the process look as if it runs, or does not
+// run, in a container for the rest of the test.
+func stubRunningInContainer(t *testing.T, inContainer bool) {
+	t.Helper()
+	previous := runningInContainer
+	runningInContainer = func() bool { return inContainer }
+	t.Cleanup(func() { runningInContainer = previous })
+}
+
+// "depsilo setup token" asks 127.0.0.1 unless told otherwise. A listener on
+// the IPv6 loopback or on one specific address is not there, so the summary
+// names the host; a wildcard listener is, and the command stays as it was.
+func TestWriteStartupSummaryNamesHostInTokenCommandOnlyWhenLoopbackMissesIt(t *testing.T) {
+	stubRunningInContainer(t, false)
+	for _, test := range []struct {
+		host string
+		port int
+		want string
+	}{
+		{"::1", 23333, "depsilo setup token --host ::1"},
+		{"[::1]", 24646, "depsilo setup token --port 24646 --host ::1"},
+		{"192.0.2.10", 23333, "depsilo setup token --host 192.0.2.10"},
+		{"0.0.0.0", 23333, "depsilo setup token"},
+		{"::", 23333, "depsilo setup token"},
+		{"", 24646, "depsilo setup token --port 24646"},
+		{"127.0.0.1", 23333, "depsilo setup token"},
+	} {
+		var output bytes.Buffer
+		summary := newStartupSummary("0.9.0", test.host, test.port, true, "bootstrap-token", true)
+		if err := writeStartupSummary(&output, summary); err != nil {
+			t.Fatal(err)
+		}
+		if want := "  Retrieve the current bootstrap token: " + test.want + "\n"; !strings.Contains(output.String(), want) {
+			t.Errorf("host %q port %d: startup summary missing %q:\n%s", test.host, test.port, want, output.String())
+		}
 	}
 }
 

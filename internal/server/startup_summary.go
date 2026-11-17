@@ -5,18 +5,24 @@ import (
 	"io"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"depsilo/internal/api"
 )
 
 type startupSummary struct {
-	Version        string
-	PortalURL      string
+	Version   string
+	PortalURL string
+	// BindHost is the configured listen host as the operator wrote it.
+	BindHost       string
 	Port           int
 	SetupRequired  bool
 	BootstrapToken string
 	TokenGenerated bool
+	// InContainer marks a process running in a container, where the token
+	// command must be run through docker exec.
+	InContainer bool
 	// SetupReopened marks a pending setup that will replace an existing
 	// config.toml, as opposed to the first run of a blank instance.
 	SetupReopened bool
@@ -38,15 +44,30 @@ func (summary *startupSummary) reportInitialAdmin(outcome api.InitialAdminOutcom
 	summary.GeneratedAdminPassword = outcome.GeneratedPassword
 }
 
+// runningInContainer reports whether this process runs in a container. Tests
+// replace it.
+var runningInContainer = api.RunningInContainer
+
 func newStartupSummary(version, bindHost string, port int, setupRequired bool, bootstrapToken string, tokenGenerated bool) startupSummary {
 	return startupSummary{
 		Version:        version,
 		PortalURL:      startupPortalURL(bindHost, port),
+		BindHost:       bindHost,
 		Port:           port,
 		SetupRequired:  setupRequired,
 		BootstrapToken: bootstrapToken,
 		TokenGenerated: tokenGenerated,
+		InContainer:    runningInContainer(),
 	}
+}
+
+// listenAddress joins the configured host and port into the address the
+// listener binds. The host may be written with or without brackets ("::1" and
+// "[::1]" are the same host); an IPv6 host needs them in an address, and
+// net.JoinHostPort adds them.
+func listenAddress(bindHost string, port int) string {
+	host := strings.Trim(strings.TrimSpace(bindHost), "[]")
+	return net.JoinHostPort(host, strconv.Itoa(port))
 }
 
 func startupPortalURL(bindHost string, port int) string {
@@ -95,9 +116,11 @@ func writeStartupSummary(writer io.Writer, summary startupSummary) error {
 		} else {
 			output.WriteString("  Bootstrap token: configured via DEPSILO_BOOTSTRAP_TOKEN\n\n")
 		}
-		// The bare command asks the default port; on any other port it would
-		// report a different instance, so print the command that reaches this one.
-		fmt.Fprintf(&output, "  Retrieve the current bootstrap token: %s\n\n", api.SetupTokenCommand(summary.Port))
+		// The bare command asks 127.0.0.1 on the default port; on any other
+		// port it would report a different instance and on a host 127.0.0.1
+		// does not reach it finds none, so print the command that reaches
+		// this one.
+		fmt.Fprintf(&output, "  Retrieve the current bootstrap token: %s\n\n", api.SetupTokenCommand(summary.BindHost, summary.Port, summary.InContainer))
 		if summary.AdminEnvironmentIgnored {
 			output.WriteString("  DEPSILO_ADMIN_USERNAME and DEPSILO_ADMIN_PASSWORD are ignored: they apply only\n")
 			output.WriteString("  when a configuration file exists, so they created no administrator. Finish setup\n")

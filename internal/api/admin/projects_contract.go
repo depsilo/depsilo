@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"depsilo/internal/db"
+	"depsilo/internal/requestorigin"
 )
 
 type createProjectRequest struct {
@@ -84,14 +85,7 @@ type regenerateProjectTokenResponse struct {
 }
 
 func projectProxyURL(req *http.Request, slug string) string {
-	scheme := "http"
-	if req.TLS != nil {
-		scheme = "https"
-	}
-	if forwarded := req.Header.Get("X-Forwarded-Proto"); forwarded != "" {
-		scheme = forwarded
-	}
-	return scheme + "://" + req.Host + "/p/" + slug
+	return requestorigin.Scheme(req) + "://" + req.Host + "/p/" + slug
 }
 
 func toProjectPackageResponses(items []db.ProjectPackage) []projectPackageResponse {
