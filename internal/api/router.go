@@ -160,14 +160,19 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 
 	// Model Context Protocol endpoint — JSON-RPC 2.0 over Streamable HTTP.
 	// AI clients (Claude Code, Cursor, etc.) POST initialize / tools/list /
-	// tools/call / resources/read / prompts/get here.
+	// tools/call / resources/read / prompts/get here. GET and DELETE are part
+	// of the transport but unsupported, so they answer 405 instead of falling
+	// through as an unknown route; they sit behind the same authentication.
 	mcpHandler := public.NewMCPHandler(deps.DB, deps.Ecosystems, deps.Config.AccessLog.RollupEnabled, statsHandler)
-	r.POST(
+	mcpHandler.SetDiscover(discoverHandler)
+	mcpGroup := r.Group(
 		"/mcp",
 		middleware.Authenticate(deps.Config.Auth.JWTSecret, deps.DB),
 		middleware.ReadRequired(),
-		mcpHandler.Handle,
 	)
+	mcpGroup.POST("", mcpHandler.Handle)
+	mcpGroup.GET("", mcpHandler.MethodNotAllowed)
+	mcpGroup.DELETE("", mcpHandler.MethodNotAllowed)
 
 	// Live "Now" strip — polled every 5s by authenticated Admin clients.
 	// It includes the most recent request identity, so it must not share the
@@ -192,6 +197,13 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 
 	// Setup wizard (no auth required)
 	setupHandler := NewSetupHandler(deps.Config, deps.DB)
+	// Discovery reports whether first-run setup is pending. It gets that one
+	// fact, read under the lock setup completion holds while it changes it.
+	discoverHandler.SetSetupRequired(func() bool {
+		setupHandler.mu.Lock()
+		defer setupHandler.mu.Unlock()
+		return setupHandler.cfg.IsDefault
+	})
 	apiV1.GET("/setup/status", setupHandler.Status)
 	apiV1.POST("/setup/complete", setupHandler.Complete)
 

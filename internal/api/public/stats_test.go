@@ -2,6 +2,7 @@ package public
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -216,6 +217,93 @@ func TestStatsServiceStatusReflectsUpstreamHealth(t *testing.T) {
 				t.Fatalf("status=%#v want=%q", got, tt.want)
 			}
 		})
+	}
+}
+
+// Rollup rows are keyed by the request's UTC date. "Today" has to be that
+// same UTC day wherever the host's clock is: local midnight converted to UTC
+// names the previous date on a UTC+8 host from 08:00 local, and the next
+// UTC day's rows are missed on a UTC-5 host in the evening.
+func TestStatsTodayIsTheCurrentUTCDayOnNonUTCHosts(t *testing.T) {
+	// One instant per case, 2026-11-16 UTC in both.
+	cases := map[string]time.Time{
+		"UTC+8 afternoon": time.Date(2026, time.November, 16, 16, 36, 0, 0, time.FixedZone("CST", 8*3600)),
+		"UTC-5 evening":   time.Date(2026, time.November, 15, 20, 30, 0, 0, time.FixedZone("EST", -5*3600)),
+	}
+	for name, now := range cases {
+		for _, useRollup := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s rollup=%t", name, useRollup), func(t *testing.T) {
+				if got := now.UTC().Format("2006-01-02"); got != "2026-11-16" {
+					t.Fatalf("test instant is on UTC date %s", got)
+				}
+				database := newStatsTestDB(t)
+				if err := database.AutoMigrate(&db.AccessLog{}, &db.CacheEntry{}, &db.AccessLogHourly{}, &db.AccessLogDaily{}); err != nil {
+					t.Fatal(err)
+				}
+				seedStatsDays(t, database, useRollup)
+
+				snapshot := NewStatsHandler(database, nil, nil, nil, nil, useRollup).snapshot(now)
+				today := snapshot["today"].(gin.H)
+				// 2026-11-16 UTC: 3 hits of 100 bytes and 1 miss of 50 bytes.
+				for field, want := range map[string]int64{"total_requests": 4, "hit_count": 3, "miss_count": 1, "bytes_served": 350, "bytes_saved": 300} {
+					if got := today[field]; got != want {
+						t.Errorf("today.%s = %v, want %d", field, got, want)
+					}
+				}
+				// The week adds 2026-11-10 through 2026-11-15 (one hit of 10
+				// bytes each day that has data) and leaves 2026-11-09 out.
+				week := snapshot["week"].(gin.H)
+				for field, want := range map[string]int64{"total_requests": 6, "hit_count": 5, "bytes_saved": 320} {
+					if got := week[field]; got != want {
+						t.Errorf("week.%s = %v, want %d", field, got, want)
+					}
+				}
+			})
+		}
+	}
+}
+
+// seedStatsDays records the same traffic either as rollup rows or as raw
+// access logs: four requests on 2026-11-16 UTC, one hit on 2026-11-15 and on
+// 2026-11-10, and one on 2026-11-09, which is outside the seven-day window.
+func seedStatsDays(t *testing.T, database *gorm.DB, useRollup bool) {
+	t.Helper()
+	if useRollup {
+		hourly := []db.AccessLogHourly{
+			{Date: "2026-11-16", Hour: 0, AdapterType: "pypi", Hit: true, RequestCount: 2, TotalBytes: 200},
+			{Date: "2026-11-16", Hour: 1, AdapterType: "pypi", Hit: true, RequestCount: 1, TotalBytes: 100},
+			{Date: "2026-11-16", Hour: 1, AdapterType: "pypi", Hit: false, RequestCount: 1, TotalBytes: 50},
+			// The compactor leaves hourly rows in place; they must not be
+			// counted again as today.
+			{Date: "2026-11-15", Hour: 23, AdapterType: "pypi", Hit: true, RequestCount: 1, TotalBytes: 10},
+		}
+		daily := []db.AccessLogDaily{
+			{Date: "2026-11-15", AdapterType: "pypi", Hit: true, RequestCount: 1, TotalBytes: 10},
+			{Date: "2026-11-10", AdapterType: "pypi", Hit: true, RequestCount: 1, TotalBytes: 10},
+			{Date: "2026-11-09", AdapterType: "pypi", Hit: true, RequestCount: 1, TotalBytes: 10},
+		}
+		if err := database.Create(&hourly).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := database.Create(&daily).Error; err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	at := func(day, hour, minute int) time.Time {
+		return time.Date(2026, time.November, day, hour, minute, 0, 0, time.UTC)
+	}
+	logs := []db.AccessLog{
+		{AdapterType: "pypi", Hit: true, BytesSent: 100, CreatedAt: at(16, 0, 0)},
+		{AdapterType: "pypi", Hit: true, BytesSent: 100, CreatedAt: at(16, 0, 20)},
+		{AdapterType: "pypi", Hit: true, BytesSent: 100, CreatedAt: at(16, 1, 5)},
+		{AdapterType: "pypi", Hit: false, BytesSent: 50, CreatedAt: at(16, 1, 10)},
+		{AdapterType: "pypi", Hit: true, BytesSent: 10, CreatedAt: at(15, 23, 59)},
+		{AdapterType: "pypi", Hit: true, BytesSent: 10, CreatedAt: at(10, 0, 0)},
+		{AdapterType: "pypi", Hit: true, BytesSent: 10, CreatedAt: at(9, 23, 59)},
+	}
+	if err := database.Create(&logs).Error; err != nil {
+		t.Fatal(err)
 	}
 }
 

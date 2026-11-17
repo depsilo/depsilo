@@ -31,13 +31,24 @@ func NewIntegrationPromptHandler() *IntegrationPromptHandler {
 //
 // Optional query param ?url=<override> lets the user pin a specific URL (e.g.
 // the internal LAN address when the Portal is reached via a public DNS name).
+// The endpoint is anonymous and the value is written into every instruction
+// of the prompt, so only a bare http(s) origin is accepted; anything else is a
+// 400 with code INVALID_URL.
 //
 // Optional query param ?ecosystem=<id> (a Portal ecosystem id such as
 // "python") limits the prompt to that ecosystem; an unknown id is a 400 that
 // lists the accepted ones.
 func (h *IntegrationPromptHandler) Get(c *gin.Context) {
 	base := c.Query("url")
-	if base == "" {
+	if base != "" {
+		if err := prompts.ValidateBaseURL(base); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    "INVALID_URL",
+				"message": "url " + err.Error() + "; pass the service origin only, for example http://depsilo.example:23333",
+			})
+			return
+		}
+	} else {
 		scheme := "http"
 		if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
 			scheme = "https"

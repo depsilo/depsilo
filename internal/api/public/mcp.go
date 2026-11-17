@@ -28,6 +28,9 @@ import (
 //	resources/list, resources/read
 //	prompts/list, prompts/get
 //
+// Notifications are acknowledged with 202 and no body. The server opens no
+// SSE stream and keeps no session, so GET and DELETE answer 405.
+//
 // Any MCP-aware client (Claude Code, Cursor, Hermes, OpenClaw,
 // modelcontextprotocol.io clients) can connect by pointing at the URL.
 // Unlike /api/v1/agent-prompt — which is text the agent must parse and
@@ -42,10 +45,25 @@ type MCPHandler struct {
 	Ecosystems []string
 	UseRollup  bool
 	stats      *StatsHandler
+	discover   *DiscoverHandler
 }
 
 func NewMCPHandler(db *gorm.DB, ecosystems []string, useRollup bool, stats *StatsHandler) *MCPHandler {
 	return &MCPHandler{DB: db, Ecosystems: ecosystems, UseRollup: useRollup, stats: stats}
+}
+
+// SetDiscover makes the discover resource and the setup prompt come from the
+// handler that serves /api/v1/discover and /api/v1/agent-prompt, so both
+// interfaces describe the same service state.
+func (h *MCPHandler) SetDiscover(discover *DiscoverHandler) {
+	h.discover = discover
+}
+
+func (h *MCPHandler) discoverHandler() *DiscoverHandler {
+	if h.discover != nil {
+		return h.discover
+	}
+	return NewDiscoverHandler(h.Ecosystems)
 }
 
 // ── JSON-RPC framing ──────────────────────────────────────────────────
@@ -108,6 +126,11 @@ func (h *MCPHandler) Handle(c *gin.Context) {
 				responses = append(responses, resp)
 			}
 		}
+		if len(responses) == 0 {
+			// Nothing but notifications: accepted, no body.
+			c.Status(http.StatusAccepted)
+			return
+		}
 		c.JSON(http.StatusOK, responses)
 		return
 	}
@@ -120,15 +143,32 @@ func (h *MCPHandler) Handle(c *gin.Context) {
 	if resp, ok := h.dispatch(c, req); ok {
 		c.JSON(http.StatusOK, resp)
 	} else {
-		// Notification: per JSON-RPC spec, no response body.
-		c.Status(http.StatusOK)
+		// Notification: JSON-RPC forbids a reply, and the Streamable HTTP
+		// transport acknowledges it with 202 Accepted and no body.
+		c.Status(http.StatusAccepted)
 	}
+}
+
+// MethodNotAllowed answers GET and DELETE on the MCP endpoint. GET would open
+// a server-initiated SSE stream and DELETE would end a session; this server
+// offers neither, for which the transport prescribes 405.
+func (h *MCPHandler) MethodNotAllowed(c *gin.Context) {
+	c.Header("Allow", http.MethodPost)
+	c.JSON(http.StatusMethodNotAllowed, gin.H{
+		"code":    "METHOD_NOT_ALLOWED",
+		"message": "The MCP endpoint accepts POST only",
+	})
 }
 
 // dispatch routes a single request. Returns (response, false) for
 // notifications (which have no `id` field and expect no reply).
 func (h *MCPHandler) dispatch(c *gin.Context, req rpcRequest) (rpcResponse, bool) {
-	isNotification := len(req.ID) == 0
+	if len(req.ID) == 0 {
+		// A request without an id is a notification whatever its method: it
+		// must not be answered, and every method here is read-only, so there
+		// is nothing to run on its behalf.
+		return rpcResponse{}, false
+	}
 	mk := func(result any) rpcResponse {
 		return rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: result}
 	}
@@ -151,9 +191,6 @@ func (h *MCPHandler) dispatch(c *gin.Context, req rpcRequest) (rpcResponse, bool
 			},
 			"instructions": "Depsilo is a supply-chain enforcement proxy for 14 package ecosystems plus Docker OCI. Call tools/list to see what you can do; depsilo_status is a good first call to verify connectivity. For human-readable bootstrap text, also fetch GET /api/v1/agent-prompt.",
 		}), true
-
-	case "notifications/initialized", "notifications/cancelled":
-		return rpcResponse{}, false // notifications have no reply
 
 	case "tools/list":
 		return mk(map[string]any{"tools": h.toolDefinitions()}), true
@@ -211,9 +248,6 @@ func (h *MCPHandler) dispatch(c *gin.Context, req rpcRequest) (rpcResponse, bool
 		return mk(map[string]any{}), true
 
 	default:
-		if isNotification {
-			return rpcResponse{}, false
-		}
 		return mkErr(errMethodNotFound, "Method not found: "+req.Method, nil), true
 	}
 }
@@ -237,6 +271,11 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 		return map[string]any{"type": "array", "items": map[string]any{"type": itemType}, "description": desc}
 	}
 	obj := func(properties map[string]any, required ...string) map[string]any {
+		// A nil map would encode as "properties": null, which the MCP schema
+		// forbids and strict clients reject for the whole listing.
+		if properties == nil {
+			properties = map[string]any{}
+		}
 		o := map[string]any{"type": "object", "properties": properties}
 		if len(required) > 0 {
 			o["required"] = required
@@ -297,6 +336,19 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 			}, "ecosystem", "packages"),
 		},
 	}
+}
+
+// mcpToolNames lists the tool names in tools/list order, so prose that names
+// the tools is generated from the definitions instead of repeating them.
+func mcpToolNames() []string {
+	definitions := (&MCPHandler{}).toolDefinitions()
+	names := make([]string, 0, len(definitions))
+	for _, definition := range definitions {
+		if name, ok := definition["name"].(string); ok {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 func (h *MCPHandler) callTool(c *gin.Context, name string, args json.RawMessage) (any, error) {
@@ -462,27 +514,27 @@ func jsonResult(v any) any {
 }
 
 func (h *MCPHandler) toolStatus(c *gin.Context) (any, error) {
-	return jsonResult(h.statusSnapshot(requestBase(c))), nil
+	return jsonResult(h.statusSnapshot(requestBase(c), time.Now())), nil
 }
 
 // statusSnapshot builds the status tool result in-process. base is
 // client-visible output only and is never used as a network destination.
-func (h *MCPHandler) statusSnapshot(base string) map[string]any {
+func (h *MCPHandler) statusSnapshot(base string, now time.Time) map[string]any {
 	var hits, misses, totalFiles int64
 	var totalSize int64
-	now := time.Now().UTC()
-	start := now.AddDate(0, 0, -1)
+	start := now.UTC().Add(-24 * time.Hour)
 	if h.UseRollup {
-		// "Last 24h" rolls neatly onto access_log_hourly because the
-		// window is hour-aligned by design (the rollup tables themselves
-		// granulate to hours). Compare on date string to match the
-		// rollup PK; include partial-hour rows by including today.
+		// access_log_hourly granulates to UTC hours, so the window starts at
+		// the hour bucket that holds now-24h: the last 24 hours plus the part
+		// of that bucket before it, as the Admin Overview reads the same
+		// table. Filtering on the date alone took in all of yesterday, up to
+		// 48 hours.
 		startDate := start.Format("2006-01-02")
 		var t struct{ Hits, Misses int64 }
 		h.DB.Table("access_log_hourly").
 			Select(`COALESCE(SUM(CASE WHEN hit = 1 THEN request_count ELSE 0 END), 0) AS hits,
 				COALESCE(SUM(CASE WHEN hit = 0 THEN request_count ELSE 0 END), 0) AS misses`).
-			Where("date >= ?", startDate).
+			Where("date > ? OR (date = ? AND hour >= ?)", startDate, startDate, start.Hour()).
 			Scan(&t)
 		hits = t.Hits
 		misses = t.Misses
@@ -780,7 +832,7 @@ func (h *MCPHandler) resourceDefinitions() []map[string]any {
 func (h *MCPHandler) readResource(c *gin.Context, uri string) (map[string]any, error) {
 	switch uri {
 	case "depsilo://discover":
-		return resourceContent(uri, "application/json", NewDiscoverHandler(h.Ecosystems).catalog(requestBase(c)))
+		return resourceContent(uri, "application/json", h.discoverHandler().catalog(requestBase(c)))
 	case "depsilo://stats":
 		if h.stats == nil {
 			return nil, fmt.Errorf("stats resource is unavailable")
@@ -820,7 +872,7 @@ func (h *MCPHandler) getPrompt(c *gin.Context, name string) (any, error) {
 			"role": "user",
 			"content": map[string]any{
 				"type": "text",
-				"text": NewDiscoverHandler(h.Ecosystems).agentPrompt(requestBase(c)),
+				"text": h.discoverHandler().agentPrompt(requestBase(c)),
 			},
 		}},
 	}, nil

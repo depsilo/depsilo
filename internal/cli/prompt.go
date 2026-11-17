@@ -48,6 +48,12 @@ func runPrompt(args []string) int {
 
 	if url == "" {
 		url = getServerURL()
+	} else if err := prompts.ValidateBaseURL(url); err != nil {
+		// The value is written into every instruction of the prompt, so it
+		// has to be an origin and nothing that could carry more text.
+		fmt.Fprintf(os.Stderr, "invalid --url %q: %v\n", url, err)
+		fmt.Fprintln(os.Stderr, "Pass the service origin only, for example: depsilo prompt --url http://10.4.20.52:23333")
+		return 1
 	}
 
 	prompt, ok := prompts.IntegrationFor(url, ecosystem)
@@ -74,7 +80,8 @@ explicitly asks for mirror-only mode.
 
 Flags:
     --url <url>     mirror URL to embed (default: $DEPSILO_URL or
-                    http://localhost:23333)
+                    http://localhost:23333); the origin only, such as
+                    http://host:port, with no path, query or credentials
     --ecosystem <id>
                     limit the prompt to one ecosystem (see below)
     -h, --help      show this message

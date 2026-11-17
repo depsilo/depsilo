@@ -241,7 +241,13 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 // HTTP and MCP callers serialize this value directly; neither needs to fetch
 // the public route over the network.
 func (h *StatsHandler) snapshot(now time.Time) gin.H {
-	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	// "Today" is the current UTC day (docs/adr/0002-access-log-rollup.md):
+	// rollup rows are keyed by the request's UTC date, so the day boundary
+	// must not follow the host's time zone. Local midnight converted to UTC
+	// names the previous UTC date east of Greenwich and hid every request
+	// made after the UTC day began.
+	nowUTC := now.UTC()
+	todayStartUTC := time.Date(nowUTC.Year(), nowUTC.Month(), nowUTC.Day(), 0, 0, 0, 0, time.UTC)
 	since := now.Add(-1 * time.Hour)
 
 	// KPI series (12 x 5-min buckets)
@@ -253,7 +259,6 @@ func (h *StatsHandler) snapshot(now time.Time) gin.H {
 	var totalRequests, hitCount, missCount int64
 	var bytesSent, bytesSaved int64
 
-	todayStartUTC := todayStart.UTC()
 	if h.useRollup {
 		todayDate := todayStartUTC.Format("2006-01-02")
 		var t struct {
