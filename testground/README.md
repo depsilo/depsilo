@@ -93,7 +93,8 @@ Depsilo 的出站安全检查会拒绝该请求，Docker 可能回退直连；�
 HTTP 端口，例如
 `DEPSILO_EGRESS_UPSTREAM_PROXY=http://127.0.0.1:7890 make test-docker-docker`：
 测试服务读取仓库里的 `config.example.toml`，并从这个环境取得该变量，未单独
-配置 proxy 的 registry 随即经这个代理出站，fake-IP 域名交给代理解析。
+配置 proxy 的 registry 随即让公网和 fake-IP 应答的主机经这个代理出站
+（解析到私网地址的主机仍直连），fake-IP 域名交给代理解析。
 IPv6 fake-IP 地址段若是 `fdfe:dcba:9876::/48`、`fd00:6152::/32`、`fc00::/18`
 这类唯一本地地址段，经代理也会被拒绝：把代理软件的 IPv6 fake-IP 地址段改为
 `2001:2::/48`，或关闭 IPv6 fake-IP。

@@ -89,7 +89,12 @@ The following are known limitations, not vulnerabilities:
   `fd00:6152::/32`, `fc00::/18`) are refused and never count as private, with
   or without a proxy. Configure the proxy's DNS policy and ACLs to reject
   loopback, link-local, metadata, and unintended private targets, including
-  the proxy host's own TUN address. A configured registry may nominate a
+  the proxy host's own TUN address. Under `[egress] upstream_proxy`, a target
+  whose local answer is private or loopback is dialed directly instead, with
+  the address checked at connect time, so the proxy's ACLs do not apply to
+  it, and a registry whose own answer is private may reach any private
+  address that way; set the registry's own `proxy` to keep its private
+  targets behind the proxy. A configured registry may nominate a
   public cross-origin Bearer realm, so registry credentials also trust that
   authentication delegation; this is required for registries such as Docker
   Hub.

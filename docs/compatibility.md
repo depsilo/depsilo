@@ -202,6 +202,16 @@ consequence.
   Upstream: an entry whose URL names `localhost` or a loopback address, or
   whose host `no_proxy` matches, stays direct (IP and CIDR entries match only
   a URL written with an address), and a registry's own `proxy` always wins.
+  Such an entry sends a request through `upstream_proxy` only when Depsilo's
+  own answer for the request's host (the registry, its Bearer realm, or a
+  redirect target) is public or fake-IP; a private or loopback answer, or
+  such an address written in the URL, is dialed directly. When
+  `upstream_proxy` answers a plain-`http` request with `502`, `503` or `504`,
+  the request fails with a `502` whose reason reads
+  `returned <status> through the egress proxy`, and a manifest `HEAD` then
+  answers `502` instead of passing the status on. A failure of
+  `upstream_proxy` can add a hint to the reason, which asks for a real DNS
+  answer or a `no_proxy` entry.
   When a proxy carries a registry request, a host name whose every DNS answer
   lies in `198.18.0.0/15` or `2001:2::/48` counts as public; without a proxy
   such an answer is refused, and the reason in the `502` message names the
@@ -209,6 +219,12 @@ consequence.
   `[egress] upstream_proxy`, or, when `no_proxy` or a loopback URL keeps the
   registry off a configured `upstream_proxy`, asks for real DNS answers for
   its host names.
+- A Docker Bearer realm or redirect target written as a private or loopback
+  IP address is no longer refused for a registry configured by host name:
+  the network scope that the registry's own answer pinned decides, as it
+  does for a host name. `localhost`, `.localhost` names, an address written
+  with a trailing dot and an unsafe address stay refused, and a registry
+  configured by address keeps the earlier rule.
 - Addresses in the unique-local ranges that proxy software documents for IPv6
   fake-IP and for its own TUN, VIF and DNS addresses, `fdfe:dcba:9876::/48`,
   `fd00:6152::/32` and `fc00::/18`, are refused for package Upstreams,

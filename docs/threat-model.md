@@ -391,11 +391,24 @@ The guarded dialer rejects loopback/link-local/multicast/unspecified targets,
 re-checks the resolved address at connect time (closing the DNS
 check/use race), and rejects HTTPS→HTTP downgrades. A Docker registry without
 its own proxy follows `[egress] upstream_proxy` and `no_proxy` as a package
-upstream does. Before a proxy carries a registry request, Depsilo resolves the
-registry, Bearer realm, and redirect host names locally and refuses a failed
-resolution, an answer with an unsafe address or mixed network scopes, a
-literal special-purpose address, an HTTPS downgrade, and a target outside the
-registry's pinned network scope. One exception applies only when a proxy
+upstream does, but routes each request by Depsilo's own answer for the
+request's host: a private or loopback answer is dialed directly, by a dialer
+that resolves the host again and dials only private or loopback addresses
+that the registry's pinned scope allows, and only public and fake-IP answers
+go through the proxy. Before a proxy carries a registry request, and before
+the direct dialer takes it, Depsilo resolves the registry, Bearer realm, and
+redirect host names locally and refuses a failed resolution, an answer with
+an unsafe address or mixed network scopes, a literal special-purpose
+address, an HTTPS downgrade, and a target outside the registry's pinned
+network scope. A realm or redirect target of a registry configured by host
+name that is written as a private or loopback IP address is left to that pin
+instead of being refused by its form, because the checked address is the one
+that is dialed or that a proxy connects to: a registry pinned private may
+follow a private address, one pinned loopback also a loopback address, and
+one pinned public neither. `localhost`, `.localhost` names and addresses
+written with a trailing dot are still refused by their form, because a
+resolver, a proxy's included, may answer them with any address.
+One exception applies only when a proxy
 carries the request: a host name (not localhost, and not an address in any
 notation) whose every DNS answer lies in the benchmarking ranges
 `198.18.0.0/15` or `2001:2::/48`, from either family or both, counts as
@@ -418,10 +431,17 @@ address or any other unique-local prefix. MCP resource reads never fetch
 caller-supplied hosts.
 
 **Residual:** an operator-configured HTTP proxy owns DNS for proxied
-upstreams and Docker registries, and is the only resolver for a registry host
-whose local answer was fake-IP; registry Bearer realms may be cross-origin by
-protocol (both documented in `SECURITY.md`). The fake-IP exception has the
-following limits:
+upstreams, for every host of a Docker registry with its own proxy, and for
+the hosts with public or fake-IP answers of a registry under
+`[egress] upstream_proxy`; it is the only resolver for a registry host whose
+local answer was fake-IP. Registry Bearer realms may be cross-origin by
+protocol (both documented in `SECURITY.md`). The private and loopback targets
+of a registry under `[egress] upstream_proxy` are dialed directly, so the
+proxy's egress ACL does not apply to them: a registry whose own answer is
+private may reach every private address directly, by name or by address
+literal in a realm or redirect. Only the registry's own proxy keeps those
+targets behind the proxy's ACL. The fake-IP exception has the following
+limits:
 
 - `2001:2::/48` is accepted under a proxy exactly like `198.18.0.0/15`, so a
   hostile realm or redirect name can publish AAAA records there, and the

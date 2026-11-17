@@ -61,9 +61,14 @@ lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
 # Depsilo 默认不连接这类地址：把 upstream_proxy 设为代理软件的 HTTP 端口。
 # 它是所有未单独配置代理、也未走级联的包上游，以及未单独配置 proxy 的
 # Docker registry 的默认代理；no_proxy 中的上游和 registry 主机保持直连，
-# 代理到不了的私有 registry 要按 URL 里的主机名写进 no_proxy：IP 和 CIDR
-# 只匹配 URL 里直接写 IP 地址的上游和 registry。保持直连的 registry 在
-# fake-IP 模式下需要真实的 DNS 应答。URL 写 localhost 或回环地址的始终直连。
+# IP 和 CIDR 只匹配 URL 里直接写 IP 地址的上游和 registry。
+# 走默认代理的 registry 按每个请求的主机（registry、Bearer realm、重定向目标）
+# 在本机的 DNS 应答分流：私网或回环地址直连，公网和 fake-IP 应答走代理，
+# 所以解析到私网地址的私有 registry 不必写进 no_proxy。fake-IP 模式下，
+# 用代理软件的 fake-ip-filter 让私有 registry 的域名得到真实的私网应答即可，
+# 改完后重启 Depsilo。只有代理能到达、或要让全部流量都经代理时，
+# 给该 registry 单独配置 proxy。保持直连的 registry 在 fake-IP 模式下
+# 需要真实的 DNS 应答。URL 写 localhost 或回环地址的始终直连。
 # 代理软件的 IPv6 fake-IP 地址段请设为 2001:2::/48，或关闭 IPv6 fake-IP：
 # fdfe:dcba:9876::/48、fd00:6152::/32、fc00::/18 这类唯一本地地址段
 # 无法与私网区分，Depsilo 一律拒绝，经代理的 Docker registry 也不例外。
@@ -421,15 +426,19 @@ url      = "https://registry-1.docker.io"
 # host (by name: IP and CIDR entries match only URLs written with an address).
 # Every registry, Bearer realm, and redirect hostname is resolved locally and
 # checked against the registry's pinned network scope before a proxied request.
+# Under upstream_proxy, a host whose answer is private or loopback is then
+# dialed directly and only public and fake-IP answers go through the proxy;
+# set the registry's own proxy to send all of its requests through a proxy.
 # A hostname whose every answer is a fake-IP address (198.18.0.0/15 or
 # 2001:2::/48) is left to the proxy to resolve; without a proxy such an answer
 # is refused. Unique-local IPv6 fake-IP ranges (fdfe:dcba:9876::/48,
 # fd00:6152::/32, fc00::/18) are refused with or without a proxy: set the proxy
 # software's IPv6 fake-IP range to 2001:2::/48 or turn IPv6 fake-IP off.
 # A forward proxy can resolve the same hostname differently, so its DNS policy
-# and egress ACL remain a trust boundary and must reject unintended internal
-# targets. Registries may nominate a public cross-origin Bearer realm (Docker
-# Hub uses auth.docker.io); configuring credentials trusts that delegation.
+# and egress ACL remain a trust boundary for the hosts it carries and must
+# reject unintended internal targets. Registries may nominate a public
+# cross-origin Bearer realm (Docker Hub uses auth.docker.io); configuring
+# credentials trusts that delegation.
 
 # [[docker.registries]]
 # name     = "ghcr"

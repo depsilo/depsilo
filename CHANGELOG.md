@@ -108,8 +108,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   `[egress] upstream_proxy` (or `DEPSILO_EGRESS_UPSTREAM_PROXY`) and
   `no_proxy` like a package Upstream; a registry whose URL names `localhost`
   or a loopback address stays direct, and a registry's own `proxy` still
-  wins. Through a proxy, a registry, Bearer realm or redirect host whose
-  every DNS answer is a fake-IP address (`198.18.0.0/15` or `2001:2::/48`,
+  wins. Under `upstream_proxy`, each request goes where Depsilo's own DNS
+  answer for its host (the registry, its Bearer realm, every redirect
+  target) sends it: a private or loopback answer, an address written in the
+  URL included, is dialed directly, and a public or fake-IP answer goes
+  through the proxy, so a private registry's redirects to public storage
+  keep the proxy. The direct path resolves the host again when it connects
+  and refuses an answer that is no longer private or loopback with
+  `Docker direct target left the private network`. Through a proxy, a
+  registry, Bearer realm or redirect host whose every DNS answer is a
+  fake-IP address (`198.18.0.0/15` or `2001:2::/48`,
   from either family or both, in any order) is left to the proxy to resolve,
   so pulls work behind proxy software in TUN/fake-IP mode, also through a
   registry's own `proxy`, where they failed with
@@ -122,7 +130,44 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   instead of `unsafe Docker dial target`; for a registry that `no_proxy` or a
   loopback URL keeps off a configured `upstream_proxy`, it asks for real DNS
   answers for the registry's host names instead. The startup log names each
-  registry's route in a `docker registry egress` line.
+  registry's route in a `docker registry egress` line (`own proxy`,
+  `default proxy (private answers direct)` or `direct`), and a
+  `docker registry host dialed directly` line names the registry and the
+  host, without its address, the first time Depsilo dials that host
+  directly.
+- Docker: when `[egress] upstream_proxy` fails a request, the `502` reason
+  can end with a hint. For a host answered with fake-IP addresses, the
+  registry's own or a realm or redirect host of a registry whose answer is
+  private or loopback, it reads `; if <host> is on your network, give it a
+  real DNS answer, for example with fake-ip-filter in the proxy software, so
+  that Depsilo connects to it directly, see
+  docs/deployment.md#upstream-network-egress`, with `after a restart` after
+  `directly` for the registry's own host, whose first answer pins its
+  network scope until a restart, when the proxy refused
+  `CONNECT`, when the connection through the proxy failed, for example
+  because the proxy closed the tunnel after accepting it (as mihomo does for
+  a host it cannot reach) or because it timed out, or when the proxy
+  answered plain `http` with `502`, `503` or `504`; a TLS failure gets no
+  hint. For the registry's own host with a public answer, when the proxy
+  refused `CONNECT` or answered such a status, it reads `; if <host> is
+  reachable only without the proxy, list it in [egress] no_proxy and
+  restart, see docs/deployment.md#upstream-network-egress`. A plain-`http`
+  `502`, `503`
+  or `504` through `upstream_proxy`, the registry's own included, now reads
+  `returned <status> through the egress proxy`, and a manifest `HEAD` then
+  answers `502` instead of passing the status on; a cached manifest still
+  answers it. A proxy that cannot be reached, a registry's own `proxy` and
+  the direct path give no hint.
+- Docker: a Bearer realm or redirect target written as a private or loopback
+  IP address, such as a storage redirect to MinIO at
+  `http://10.0.0.30:9000`, is no longer refused for a registry configured by
+  host name. The network scope that the registry's own DNS answer pinned
+  decides, as for a host name: a registry that resolves privately follows a
+  private address, one that resolves to loopback also a loopback address,
+  and one that resolves publicly neither; it is refused before anything is
+  sent. `localhost`, `.localhost` names and addresses written with a
+  trailing dot stay refused, and so do unsafe addresses; registries
+  configured by address keep the earlier rule.
 - Egress: `2001:2::/48`, the IPv6 benchmarking range (RFC 5180 as corrected
   by RFC Errata 1752), counts as fake-IP like `198.18.0.0/15`; Clash Verge
   Rev in TUN fake-IP mode (since 2.5.5), sing-box's examples and OpenClash
@@ -341,15 +386,25 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   the service environment for leftovers, which override `[egress]`, replace
   file lists whole, and stop startup when invalid.
 - With `[egress] upstream_proxy` set, Docker registries without their own
-  `proxy` now go through it. Like package Upstreams, they then rely on the
+  `proxy` now send each request whose host has a public or fake-IP answer
+  through it. Like package Upstreams, those requests then rely on the
   proxy's DNS and egress rules instead of Depsilo's connect-time address
-  check, and a plain-HTTP registry's credentials pass through the proxy.
-  List a registry that must stay direct, for example a private registry the
-  proxy cannot reach, in `no_proxy` (or `DEPSILO_EGRESS_NO_PROXY`) by the
-  host name in its URL: IP and CIDR entries match only a URL written with an
-  address. A registry kept direct keeps the connect-time check and, behind
-  fake-IP DNS, needs a real DNS answer for its name. Registry URLs that name
-  `localhost` or a loopback address stay direct.
+  check, and a plain-HTTP registry's credentials pass through the proxy. A
+  request whose host resolves to a private or loopback address, or is
+  written as one, is dialed directly with the connect-time check, so a
+  private registry whose name resolves to a private address needs no
+  `no_proxy` entry, and the proxy's access rules no longer see its private
+  targets. Set a registry's own `proxy` where only a proxy reaches it or
+  where all of its traffic must pass a proxy. Behind fake-IP DNS, give a
+  private registry's names real answers, for example with a `fake-ip-filter`
+  entry in the proxy software; otherwise its requests go through the proxy
+  like public ones. List a registry that must stay entirely direct in
+  `no_proxy` (or `DEPSILO_EGRESS_NO_PROXY`) by the host name in its URL: IP
+  and CIDR entries match only a URL written with an address. A registry kept
+  direct keeps the connect-time check and, behind fake-IP DNS, needs a real
+  DNS answer for its name. Registry URLs that name `localhost` or a loopback
+  address stay direct. Through `upstream_proxy`, a plain-`http` registry's
+  `502`, `503` or `504` to a manifest `HEAD` is answered with `502`.
 - A package Upstream, cascade parent or Docker registry that resolves into
   `fdfe:dcba:9876::/48`, `fd00:6152::/32` or `fc00::/18`, for example on a
   kind network whose IPv6 /64 falls in `fc00::/18`, is now refused; give it

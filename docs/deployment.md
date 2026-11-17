@@ -1366,28 +1366,52 @@ no_proxy = ["mirror.lan", "192.168.0.0/16"]
 
 `upstream_proxy` is the default HTTP(S) proxy for every package Upstream and
 extra index that has neither its own proxy nor a cascade parent, and for every
-Docker registry without its own `proxy`; it is chosen once per Upstream or
-registry from the host in its configured URL. An own proxy always wins, and a
-URL that names `localhost` or a loopback address is never proxied. `no_proxy`
-accepts host names, domains (a leading `.` matches subdomains only), IP
-addresses and CIDR ranges. An IP address or CIDR range matches only a URL
-written with an address, so list an Upstream or registry configured by name
-under that name, even when it resolves into a listed range. Like an
-Upstream's own proxy, the proxy then resolves and connects to every host that
-Upstream or registry uses, so its egress rules become part of the boundary,
-and a plain-HTTP Upstream or registry sends its requests, credentials
-included, through the proxy unencrypted. Before the proxy carries a Docker
-registry request, Depsilo still checks the host it names; see
-[Docker Registry forward-proxy boundary](#docker-registry-forward-proxy-boundary).
-The cascade relay and vulnerability or blocklist sync keep their own settings.
+Docker registry without its own `proxy`; whether it applies is decided once
+per Upstream or registry from the host in its configured URL. An own proxy
+always wins, and a URL that names `localhost` or a loopback address is never
+proxied. `no_proxy` accepts host names, domains (a leading `.` matches
+subdomains only), IP addresses and CIDR ranges. An IP address or CIDR range
+matches only a URL written with an address, so list an Upstream or registry
+configured by name under that name, even when it resolves into a listed
+range. Like an Upstream's own proxy, the proxy then resolves and connects to
+every host that Upstream uses, so its egress rules become part of the
+boundary, and a plain-HTTP Upstream sends its requests, credentials included,
+through the proxy unencrypted. The cascade relay and vulnerability or
+blocklist sync keep their own settings.
 
-List a registry that must stay direct in `no_proxy`, for example a private
-registry the proxy cannot reach. A registry kept direct needs real DNS answers
-for its name and for the hosts it redirects to. Behind proxy software in
-fake-IP mode, exempt those names from fake-IP answers in that software, for
-example with `fake-ip-filter` in Clash and mihomo; otherwise its pulls fail
-with the fake-IP `502` described under **Finding the reason**, and
-`upstream_proxy` does not help a registry that `no_proxy` keeps direct.
+A Docker registry that `upstream_proxy` applies to is routed per request
+instead. Depsilo resolves the host of every request itself: the registry's,
+its Bearer realm's and each redirect target's. A host whose answer is private
+or loopback (RFC 1918, unique-local IPv6 outside the proxy-software ranges
+under **IPv6 fake-IP** below, or loopback, whether written as an address or
+resolved from a name) is dialed directly, and a host whose answer is public
+or consists of fake-IP addresses goes through the proxy. A private
+registry whose name resolves to a private address therefore needs no
+`no_proxy` entry, while its redirects to public storage keep the proxy. The
+answer for the registry's own host pins its network scope until Depsilo
+restarts: a registry with a public answer reaches no private or loopback
+host on either path. A plain-HTTP registry sends what goes through the proxy,
+credentials included, unencrypted. Before either path is taken, Depsilo
+checks the host; see
+[Docker Registry forward-proxy boundary](#docker-registry-forward-proxy-boundary).
+
+Behind proxy software in fake-IP mode, a private registry's name gets a
+fake-IP answer unless the software exempts it, and the registry then goes
+through the proxy like a public host, which fails when the proxy cannot reach
+it. Exempt the names of the registry and of the hosts it uses, such as its
+realm and storage, for example with `fake-ip-filter` in Clash and mihomo, so
+that they get their real private answers; no `no_proxy` entry is needed.
+Restart Depsilo after the change, because a registry keeps the network scope
+of its first answer.
+
+Set a registry's own `proxy` when only a proxy reaches the registry, or to keep
+all of its traffic on a proxy, for example so that the proxy's access rules
+apply to its private hosts too. List a registry in `no_proxy` to keep all of
+its traffic off the proxy. A registry kept direct needs real DNS answers for
+its name and for the hosts it redirects to; behind proxy software in fake-IP
+mode, its pulls otherwise fail with the fake-IP `502` described under
+**Finding the reason**, and `upstream_proxy` does not help a registry that
+`no_proxy` keeps direct.
 
 Inside a container, `127.0.0.1` is the container itself, not the Docker host
 on which the proxy software runs; every Upstream then fails with
@@ -1556,13 +1580,25 @@ redirect named, such as a CDN or object storage. The reason is one of:
   registry cannot be reached, also when its host name does not resolve, or
   `egress proxy refused CONNECT (403)`, with the status the proxy answered,
   when it refuses to connect to an `https` origin;
+- `returned <status> through the egress proxy` when `upstream_proxy` carried
+  a plain-`http` request and the answer was `502`, `503` or `504`. A proxy
+  answers so when it cannot reach a host, and Depsilo cannot tell that answer
+  from the registry's own, so a plain-`http` registry's own `502`, `503` or
+  `504` through `upstream_proxy` reads the same way, and a manifest `HEAD`
+  then answers `502` instead of passing the status on; a cached manifest
+  still answers such a `HEAD`;
 - one of Depsilo's own refusals, such as `unsafe Docker redirect target` or
   `unsupported authentication challenge`, or the fake-IP and IPv6 fake-IP
   refusals described below. Depsilo resolves the registry, realm and
   redirect hosts itself before it connects, so such a host name that does
-  not resolve reads `resolve Docker dial target`, or
-  `resolve Docker proxy target` when a proxy carries the registry, rather
-  than the `dns` failure code.
+  not resolve reads `resolve Docker proxy target` when the registry has a
+  proxy, its own or `upstream_proxy`, and `resolve Docker dial target`
+  otherwise, rather than the `dns` failure code. On the direct path of a
+  registry that `upstream_proxy` applies to, Depsilo resolves the host again
+  when it connects: `resolve Docker dial target` then means that this lookup
+  failed, and `Docker direct target left the private network` that its
+  answer was no longer private or loopback; the server log names that
+  answer.
 
 Any other failure reads `Docker registry request failed`. The message never
 repeats text that a registry, proxy or other server sent: no answer body,
@@ -1606,6 +1642,35 @@ same remedy. Such a prefix can be an internal network's, so the message names
 no unique-local address or prefix; the server log line lists the whole
 answer after `DNS answer:`.
 
+When `upstream_proxy` carries a request that fails before Depsilo gets a
+usable answer, the reason can end with a hint that names the host. For a host
+whose answer consisted of fake-IP addresses, the hint asks for a real DNS
+answer when the proxy refused `CONNECT`, when the connection through the
+proxy failed in any other way, for example because the proxy closed it after
+accepting it (mihomo does so for an `https` host it cannot reach) or because
+it timed out, or when the proxy answered a plain-`http` request with `502`,
+`503` or `504`. A TLS failure, whose reason reads `tls`, gets no hint,
+because the proxy did reach a server. For example:
+
+```text
+auth discovery failed at https://registry.home.lan: egress proxy refused CONNECT (502); if registry.home.lan is on your network, give it a real DNS answer, for example with fake-ip-filter in the proxy software, so that Depsilo connects to it directly after a restart, see docs/deployment.md#upstream-network-egress (request 4f0c9a52-8d1e-4b7a-9c3f-2e6d5b1a0f87; details in the Depsilo server log)
+```
+
+The registry's own host needs the restart because its first answer pins the
+registry's network scope until Depsilo restarts; a changed answer before
+that reads `Docker registry changed network scope`. For a realm or redirect
+host, the hint ends with `directly, see` instead. For the registry's own
+host with a public answer, when the proxy refused `CONNECT` or answered a
+plain-`http` request with `502`, `503` or `504`, the hint reads `; if <host>
+is reachable only without the proxy, list it in [egress] no_proxy and
+restart, see docs/deployment.md#upstream-network-egress`. No other
+host gets that hint, because `no_proxy` decides from the host in a registry's
+URL. The fake-IP hint is given for the registry's own host, and for a realm
+or redirect host only when the registry's answer was private or loopback: a
+registry with a public or fake-IP answer may not reach a host that answers
+privately. A proxy that cannot be reached, a registry's own `proxy` and the
+direct path give no hint.
+
 The request ID leads to the details. Every answer carries it in the
 `X-Request-ID` header. Admin → Access Logs shows it in a request's details,
 and the MCP tool `depsilo_recent` explains one request given its
@@ -1622,7 +1687,11 @@ own `5xx`, also has its server log line. One exception: with the
 observation-age gate armed, a registry `4xx` to tag resolution is passed on
 and recorded only in the audit log. At
 startup the server log names each registry's route in a
-`docker registry egress` line: `own proxy`, `default proxy` or `direct`.
+`docker registry egress` line: `own proxy`,
+`default proxy (private answers direct)` or `direct`. On the route of
+`upstream_proxy`, a `docker registry host dialed directly` line names the
+registry and the host, without its address, the first time Depsilo dials
+that host directly.
 
 ## Docker Registry forward-proxy boundary
 
@@ -1646,6 +1715,27 @@ addresses next to any unique-local address; see
 intentionally be a local service such as `http://127.0.0.1:7890` and is not
 classified as an Upstream target.
 
+For a registry that `[egress] upstream_proxy` applies to, the same check also
+routes the request. A host whose answer passed as private or loopback is
+dialed directly: Depsilo resolves it again when it connects and dials only
+an answer that is still private or loopback and that the registry's pinned
+scope allows. An answer that is no longer private or loopback fails with
+`Docker direct target left the private network`. Only hosts whose answers
+are public or fake-IP reach the proxy. A registry's own `proxy` carries every
+request as before.
+
+For a registry configured by host name, a Bearer realm or redirect target
+written as a private or loopback IP address, such as a storage redirect to
+`http://10.0.0.30:9000`, is checked like a host name: the registry's pinned
+scope decides, so a registry whose answer is private follows a private
+address, one whose answer is loopback also a loopback address, and one whose
+answer is public neither. `localhost`, `.localhost` names and addresses
+written with a trailing dot are still refused as such targets, because a
+resolver, the proxy's included, may answer them with any address. A registry
+configured by address may reach a private or loopback target only when its
+own address allows it, and a target written as an unsafe address is always
+refused.
+
 This preflight is not an end-to-end DNS pin when the forward proxy performs its
 own name resolution. In split-DNS deployments, the proxy can receive a
 different address from the one Depsilo checked, and for a host answered with
@@ -1655,7 +1745,12 @@ link-local, metadata-service, and unintended private destinations there as
 well. A name whose real DNS records lie in `198.18.0.0/15` or `2001:2::/48`
 also counts as public, so the proxy is asked to connect to such an address,
 including the proxy host's own TUN address when it lies in one of these
-ranges.
+ranges. Through `upstream_proxy`, this concerns only hosts with public or
+fake-IP answers: a registry's private and loopback targets are dialed
+directly, so the proxy no longer resolves them, and its access rules no
+longer apply to them either. A registry whose answer is private may reach
+every private address that way, by name or by address. Set the registry's
+own `proxy` to keep its private targets behind the proxy's access rules.
 
 Docker authentication services are commonly on a different public origin from
 the registry itself; Docker Hub, for example, delegates authentication to

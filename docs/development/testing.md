@@ -71,8 +71,9 @@ fake-IP on), you can instead set
 environment of `make`, for example
 `DEPSILO_EGRESS_UPSTREAM_PROXY=http://127.0.0.1:7890 make test-docker-docker`.
 The test server reads the tracked `config.example.toml` and takes the variable
-from that environment; registries without their own proxy then use it, and
-the proxy resolves the fake-IP names
+from that environment; registries without their own proxy then send their
+hosts with public and fake-IP answers through it (hosts with private answers
+stay direct), and the proxy resolves the fake-IP names
 ([deployment](../deployment.md#upstream-network-egress)). IPv6 fake-IP from a
 unique-local range, such as `fdfe:dcba:9876::/48`, `fd00:6152::/32` or
 `fc00::/18`, still fails through the proxy: set the proxy software's IPv6
