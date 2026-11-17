@@ -3,11 +3,11 @@ package public
 import (
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"depsilo/internal/ecosystem"
+	"depsilo/internal/prompts"
 	"depsilo/internal/version"
 )
 
@@ -93,12 +93,14 @@ func (h *DiscoverHandler) catalog(base string) gin.H {
 		})
 	}
 
-	// While first-run setup is pending nothing is served yet. Say so, and
-	// say who finishes it; agent-facing text never explains how.
+	// While first-run setup is pending, say so and say who finishes it;
+	// agent-facing text never explains how. It makes no claim about package
+	// routes: setup is also reopened for a configured instance that has lost
+	// its administrator, and that instance keeps serving its ecosystems.
 	setupRequired := h.setupPending()
 	agentSummary := "Use the bootstrap prompt for local developer-machine settings or the Portal integration prompt for project build/CI edits."
 	if setupRequired {
-		agentSummary = "First-run setup is not finished, so this service does not serve packages yet. A human operator must complete setup in the Portal at " + base + "/. Do not configure package managers against this service until setup_required is false."
+		agentSummary = "First-run setup is not finished. A human operator must complete it in the Portal at " + base + "/. Do not change package manager configuration for this service until setup_required is false."
 	}
 
 	return gin.H{
@@ -157,10 +159,9 @@ func (h *DiscoverHandler) catalog(base string) gin.H {
 // text. It is distinct from /api/v1/integration-prompt, which is the Portal's
 // project build/CI integration prompt.
 //
-// embeddedAgentPrompt in internal/cli/initagent.go is the offline fallback
-// "depsilo init-agent" uses when it cannot reach this endpoint: keep its
-// configuration steps in step with the text here. The operator-facing
-// description is the "AI coding agents" section of docs/deployment.md.
+// The text is prompts.Bootstrap, which "depsilo init-agent" also renders when
+// it cannot reach this endpoint. The operator-facing description is the "AI
+// coding agents" section of docs/deployment.md.
 // URLs are templated with the request host so deployments behind LB/ingress get
 // the correct URL.
 func (h *DiscoverHandler) AgentPrompt(c *gin.Context) {
@@ -169,98 +170,33 @@ func (h *DiscoverHandler) AgentPrompt(c *gin.Context) {
 }
 
 // agentPrompt builds bootstrap guidance without making a request back into the
-// service. The base remains visible to the client in every generated command.
+// service. The base remains visible to the client in every generated command,
+// and only the ecosystems this instance serves are listed.
 func (h *DiscoverHandler) agentPrompt(base string) string {
 	if h.setupPending() {
 		return setupPendingPrompt(base)
 	}
-	return fmt.Sprintf(`This workspace has a local dependency cache called Depsilo at %s.
-It proxies 14 package ecosystems plus Docker OCI and serves cached artifacts at LAN speed.
-
-Before running any package install in this workspace:
-
-1. Verify it's reachable: curl -sf %s/health
-
-2. Detect which package managers this project uses (requirements.txt,
-   package.json, go.mod, Cargo.toml, pom.xml, Gemfile, composer.json,
-   *.csproj, environment.yml, DESCRIPTION, Chart.yaml, or import transformers /
-   import huggingface_hub in Python source, etc.).
-
-3. Configure ONLY the detected tools. Pick from:
-
-   pip:          pip config set global.index-url %s/pypi/simple/
-   npm:          npm config set registry %s/npm/
-   go:           go env -w GOPROXY=%s/go,direct
-   cargo:        visit %s/ and copy the Cargo block to ~/.cargo/config.toml
-   maven:        visit %s/ and copy the Maven mirror block to ~/.m2/settings.xml
-   gem:          bundle config mirror.https://rubygems.org %s/rubygems/
-   composer:     composer config -g repo.packagist composer %s/composer/
-   nuget:        dotnet nuget add source %s/nuget/v3/index.json -n depsilo
-   conda:        add channel %s/conda/ to ~/.condarc
-   helm:         helm repo add depsilo %s/helm/
-   huggingface:  export HF_ENDPOINT=%s/huggingface
-   R/CRAN:       options(repos = c(CRAN = "%s/cran/")) in ~/.Rprofile
-
-4. Run install commands normally — they auto-route through Depsilo.
-
-These settings do not provide reliable outage failover. Even Go's ",direct"
-suffix advances only after a 404/410 response, not when Depsilo is unreachable.
-Keep the original registry settings as documented rollback instructions; do
-not use GOPROXY "|direct", which would also bypass Depsilo's 451 enforcement.
-
-Native MCP integration (preferred for MCP-aware agents like Claude Code,
-Cursor): create a read-only API token in Admin > Users, point your client at
-%s/mcp, and send it as an Authorization: Bearer header. POST initialize to
-begin, then tools/list to enumerate. Available tools:
-%s.
-`,
-		base, base,
-		base, base, base, base, base, base, base, base, base, base, base, base,
-		base,
-		wrapCommaList(mcpToolNames(), 78),
-	)
+	return prompts.Bootstrap(base, h.ecosystems, mcpToolNames())
 }
 
 // setupPendingPrompt replaces the bootstrap prompt until first-run setup is
-// done. Package routes are not mounted before that, so configuration commands
-// would only break installs. It names who completes setup and where, and
-// deliberately nothing about how: that is a human operator's step.
+// done: configuration instructions are handed out only by an instance whose
+// operator has finished setting it up. It names who completes setup and
+// where, and deliberately nothing about how: that is a human operator's step.
+// It does not say whether packages are served, because setup is also pending
+// on a configured instance that has lost its administrator.
 func setupPendingPrompt(base string) string {
-	return fmt.Sprintf(`Depsilo at %[1]s has not finished first-run setup, so it does not
-serve packages yet.
+	return fmt.Sprintf(`Depsilo at %[1]s has not finished first-run setup.
 
-Do not point any package manager at this service, and do not attempt the setup
-yourself: a human operator must complete it in the Portal at %[1]s/.
+Do not change package manager configuration for this service yet, and do not
+attempt the setup yourself: a human operator must complete it in the
+Portal at %[1]s/.
 
 Tell the user that setup is pending, then stop. After the operator has
 finished, fetch %[1]s/api/v1/agent-prompt again for the configuration
 instructions. "setup_required" in %[1]s/api/v1/discover is false once setup is
 done.
 `, base)
-}
-
-// wrapCommaList joins items with ", " and breaks the result into lines of at
-// most width columns, matching the hard-wrapped prompt text around it.
-func wrapCommaList(items []string, width int) string {
-	var out strings.Builder
-	column := 0
-	for index, item := range items {
-		if index < len(items)-1 {
-			item += ","
-		}
-		switch {
-		case column == 0:
-		case column+1+len(item) > width:
-			out.WriteByte('\n')
-			column = 0
-		default:
-			out.WriteByte(' ')
-			column++
-		}
-		out.WriteString(item)
-		column += len(item)
-	}
-	return out.String()
 }
 
 func requestBase(c *gin.Context) string {

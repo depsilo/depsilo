@@ -643,6 +643,13 @@ func (h *MCPHandler) toolDoctor(c *gin.Context) (any, error) {
 
 func (h *MCPHandler) toolConfigure(c *gin.Context, ecosystem string) (any, error) {
 	base := requestBase(c)
+	// Composer and .NET SDK 9 refuse a plain-HTTP source unless it opts in,
+	// as the bootstrap prompt says (internal/prompts); HTTPS needs neither.
+	composerHTTPOptIn, nugetHTTPOptIn := "", ""
+	if strings.HasPrefix(base, "http://") {
+		composerHTTPOptIn = "composer config -g secure-http false\n"
+		nugetHTTPOptIn = " --allow-insecure-connections"
+	}
 	snippets := map[string]map[string]string{
 		"pypi": {
 			"shell":  fmt.Sprintf("pip config set global.index-url %s/pypi/simple/", base),
@@ -655,6 +662,8 @@ func (h *MCPHandler) toolConfigure(c *gin.Context, ecosystem string) (any, error
 			"env":    fmt.Sprintf("npm_config_registry=%s/npm/", base),
 			"config": fmt.Sprintf("# ~/.npmrc\nregistry=%s/npm/", base),
 			"verify": "npm view express version",
+			// The bootstrap prompt's lockfile note (internal/prompts).
+			"note": `A project that commits package-lock.json should also set omit-lockfile-registry-resolved=true in its .npmrc. An existing lockfile whose "resolved" URLs point at registry.npmjs.org fails through Depsilo with 404; one whose URLs point at another registry installs from there and bypasses Depsilo. Rewrite either with "npm install --package-lock-only --omit-lockfile-registry-resolved" (adding the flag to "npm ci" alone does not help); ask before rewriting it.`,
 		},
 		"go": {
 			"shell":  fmt.Sprintf("go env -w GOPROXY=%s/go,direct", base),
@@ -669,14 +678,15 @@ func (h *MCPHandler) toolConfigure(c *gin.Context, ecosystem string) (any, error
 			"config": fmt.Sprintf("# ~/.m2/settings.xml mirror\n<mirror>\n  <id>depsilo</id>\n  <mirrorOf>*</mirrorOf>\n  <url>%s/maven/</url>\n</mirror>", base),
 		},
 		"rubygems": {
-			"shell":  fmt.Sprintf("bundle config mirror.https://rubygems.org %s/rubygems/", base),
+			"shell":  fmt.Sprintf("bundle config set --local mirror.https://rubygems.org %s/rubygems/", base),
+			"note":   "--local writes the project's .bundle/config; --global writes ~/.bundle/config. Check \"bundle --version\" first: before Bundler 2.1, leave out \"set\".",
 			"verify": "gem fetch rake --source " + base + "/rubygems/",
 		},
 		"composer": {
-			"shell": fmt.Sprintf("composer config -g repo.packagist composer %s/composer/", base),
+			"shell": composerHTTPOptIn + fmt.Sprintf("composer config -g repo.packagist composer %s/composer/", base),
 		},
 		"nuget": {
-			"shell": fmt.Sprintf("dotnet nuget add source %s/nuget/v3/index.json -n depsilo", base),
+			"shell": fmt.Sprintf("dotnet nuget add source %s/nuget/v3/index.json -n depsilo", base) + nugetHTTPOptIn,
 		},
 		"conda": {
 			"config": fmt.Sprintf("# ~/.condarc\nchannels:\n  - %s/conda/", base),
@@ -702,6 +712,9 @@ func (h *MCPHandler) toolConfigure(c *gin.Context, ecosystem string) (any, error
 		"docker": {
 			"config": fmt.Sprintf("# Host-level /etc/docker/daemon.json - show to the operator; do not edit automatically.\n# Use the service root; Docker requests /v2/ itself.\n{\"registry-mirrors\": [\"%s\"]}\n# For plain HTTP, also add the host to insecure-registries. Then restart Docker.", base),
 		},
+	}
+	if nugetHTTPOptIn != "" {
+		snippets["nuget"]["note"] = ".NET SDK 8 and earlier reject --allow-insecure-connections: leave it out there."
 	}
 	s, ok := snippets[ecosystem]
 	if !ok {

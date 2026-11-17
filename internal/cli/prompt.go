@@ -52,7 +52,7 @@ func runPrompt(args []string) int {
 		// The value is written into every instruction of the prompt, so it
 		// has to be an origin and nothing that could carry more text.
 		fmt.Fprintf(os.Stderr, "invalid --url %q: %v\n", url, err)
-		fmt.Fprintln(os.Stderr, "Pass the service origin only, for example: depsilo prompt --url http://10.4.20.52:23333")
+		fmt.Fprintln(os.Stderr, "Pass the service origin only, for example: depsilo prompt --url http://depsilo.example:23333")
 		return 1
 	}
 
@@ -88,7 +88,7 @@ Flags:
 
 Examples:
     depsilo prompt
-    depsilo prompt --url http://10.4.20.52:23333
+    depsilo prompt --url http://depsilo.example:23333
     depsilo prompt --ecosystem python
     depsilo prompt > integrate.md
     depsilo prompt | pbcopy            # macOS

@@ -5,12 +5,12 @@
 // Both the public HTTP endpoint (GET /api/v1/integration-prompt) and the CLI
 // (depsilo prompt) render it by substituting placeholders against a base URL.
 //
-// Distinct from internal/api/public.DiscoverHandler.AgentPrompt — that one
-// configures the user's local DEVELOPER MACHINE (`pip config set`, `npm config
-// set`); this one rewrites the user's PROJECT SOURCE (Dockerfile / CI / build
-// scripts) and is intentionally transparent: generated edits should name
-// Depsilo, include the mirror URL, and preserve an explicit public-registry
-// recovery path.
+// Distinct from Bootstrap (bootstrap.go), the prompt behind
+// GET /api/v1/agent-prompt and "depsilo init-agent" — that one configures the
+// user's local DEVELOPER MACHINE (`pip config set`, `npm config set`); this
+// one rewrites the user's PROJECT SOURCE (Dockerfile / CI / build scripts) and
+// is intentionally transparent: generated edits should name Depsilo, include
+// the mirror URL, and preserve an explicit public-registry recovery path.
 package prompts
 
 import (

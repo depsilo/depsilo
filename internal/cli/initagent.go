@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"depsilo/internal/prompts"
 )
 
 // init-agent writes (or refreshes) the agent-instruction files most AI
@@ -82,10 +84,14 @@ func runInitAgent(args []string) int {
 		endpoint = getServerURL()
 	}
 
+	prompt, source := fetchAgentPrompt(endpoint)
+
 	// Until first-run setup is done the server's prompt is a notice that
 	// setup is pending, not instructions. Writing that into a project would
-	// outlive the state it describes, so stop instead.
-	if initAgentSetupPending(endpoint) {
+	// outlive the state it describes, so stop instead. A server that did not
+	// answer with a prompt is not asked a second time: against an address
+	// that drops packets that would double the wait for the embedded text.
+	if source == promptSourceServer && initAgentSetupPending(endpoint) {
 		message := fmt.Sprintf("Depsilo at %s has not finished first-run setup; complete it in the Portal at %s/ and run init-agent again", endpoint, strings.TrimRight(endpoint, "/"))
 		if jsonMode {
 			printJSON(map[string]any{"ok": false, "endpoint": endpoint, "error": message})
@@ -95,7 +101,10 @@ func runInitAgent(args []string) int {
 		return 1
 	}
 
-	prompt := fetchAgentPrompt(endpoint)
+	if source == promptSourceEmbedded {
+		// Still a usable file, but not this instance's own text: say so.
+		fmt.Fprintf(os.Stderr, "Warning: could not fetch the prompt from %s; using the text built into this binary, which lists every ecosystem instead of the ones that instance serves.\n", endpoint)
+	}
 
 	targets, err := resolveTargets(outDir, format)
 	if err != nil {
@@ -109,23 +118,37 @@ func runInitAgent(args []string) int {
 
 	type result struct {
 		Path    string `json:"path"`
-		Action  string `json:"action"` // "created" | "updated" | "skipped" | "would-create" | "would-update"
+		Action  string `json:"action"` // "created" | "updated" | "skipped" | "would-create" | "would-update" | "error"
 		Message string `json:"message,omitempty"`
 	}
 	results := make([]result, 0, len(targets))
 
+	failed := 0
 	for _, t := range targets {
 		action, msg, err := applyTarget(t, prompt, endpoint, dryRun)
 		if err != nil {
+			failed++
 			results = append(results, result{Path: t.path, Action: "error", Message: err.Error()})
 			continue
 		}
 		results = append(results, result{Path: t.path, Action: action, Message: msg})
 	}
+	// One file that could not be handled fails the run, even when the others
+	// were written.
+	exitCode := 0
+	failure := ""
+	if failed > 0 {
+		exitCode = 1
+		failure = fmt.Sprintf("%d of %d files could not be updated", failed, len(targets))
+	}
 
 	if jsonMode {
-		printJSON(map[string]any{"ok": true, "endpoint": endpoint, "dry_run": dryRun, "results": results})
-		return 0
+		output := map[string]any{"ok": failed == 0, "endpoint": endpoint, "source": source, "dry_run": dryRun, "results": results}
+		if failed > 0 {
+			output["error"] = failure
+		}
+		printJSON(output)
+		return exitCode
 	}
 
 	for _, r := range results {
@@ -147,6 +170,11 @@ func runInitAgent(args []string) int {
 			fmt.Printf("  (%s)", r.Message)
 		}
 		fmt.Println()
+	}
+
+	if failed > 0 {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", failure)
+		return exitCode
 	}
 
 	if !dryRun {
@@ -171,6 +199,11 @@ Flags:
                           http://localhost:23333)
     --dry-run             show what would change without writing
     --json, -j            machine-readable JSON output
+
+The prompt comes from the Depsilo instance and lists the ecosystems it
+serves. If the instance cannot be reached, the text built into this binary
+is written instead, with a warning. Exits 1 when any file could not be
+updated, including one whose depsilo:start marker has lost its end marker.
 
 Examples:
     depsilo init-agent
@@ -257,8 +290,15 @@ func applyTarget(t initTarget, prompt, endpoint string, dryRun bool) (action, me
 	// otherwise append.
 	src := string(existing)
 	i := strings.Index(src, startMark)
-	j := strings.Index(src, endMark)
-	if i >= 0 && j > i {
+	if i >= 0 {
+		j := strings.Index(src[i:], endMark)
+		if j < 0 {
+			// Appending here would leave two start markers, and the next
+			// run would replace everything between the first and the new
+			// end marker. The file needs a person.
+			return "", "", fmt.Errorf("found %q without a closing %q; restore the closing marker or remove the block, then run again", startMark, endMark)
+		}
+		j += i
 		// Replace existing block.
 		before := src[:i]
 		after := src[j+len(endMark):]
@@ -367,10 +407,18 @@ func initAgentSetupPending(endpoint string) bool {
 	return catalog.SetupRequired
 }
 
-// fetchAgentPrompt tries the live server first, falls back to a static
-// template embedded here. Either way, the URLs end up template-substituted
-// with the resolved endpoint.
-func fetchAgentPrompt(endpoint string) string {
+// Where the prompt init-agent wrote came from; the "source" field of the
+// JSON output.
+const (
+	promptSourceServer   = "server"
+	promptSourceEmbedded = "embedded"
+)
+
+// fetchAgentPrompt asks the live server for its bootstrap prompt, which lists
+// the ecosystems that instance serves. When the server cannot be reached it
+// falls back to the same text rendered in this binary for every ecosystem.
+// source reports which of the two the caller got.
+func fetchAgentPrompt(endpoint string) (prompt, source string) {
 	url := endpoint + "/api/v1/agent-prompt"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err == nil {
@@ -380,59 +428,10 @@ func fetchAgentPrompt(endpoint string) string {
 			if resp.StatusCode == 200 {
 				body, _ := io.ReadAll(resp.Body)
 				if len(body) > 0 {
-					return strings.TrimSpace(string(body))
+					return strings.TrimSpace(string(body)), promptSourceServer
 				}
 			}
 		}
 	}
-	return embeddedAgentPrompt(endpoint)
-}
-
-func embeddedAgentPrompt(base string) string {
-	// Mirrors internal/api/public/discover.go AgentPrompt() so users who
-	// run init-agent against a non-running server still get a usable file.
-	return fmt.Sprintf(`This workspace has a local dependency cache called Depsilo at %s.
-It proxies 14 package ecosystems plus Docker OCI and serves cached artifacts at LAN speed.
-
-Before running any package install in this workspace:
-
-1. Verify it's reachable: curl -sf %s/health
-
-2. Detect which package managers this project uses (requirements.txt,
-   package.json, go.mod, Cargo.toml, pom.xml, Gemfile, composer.json,
-   *.csproj, environment.yml, DESCRIPTION, Chart.yaml, or import transformers /
-   import huggingface_hub in Python source, etc.).
-
-3. Configure ONLY the detected tools. Pick from:
-
-   pip:          pip config set global.index-url %s/pypi/simple/
-   npm:          npm config set registry %s/npm/
-   go:           go env -w GOPROXY=%s/go,direct
-   cargo:        visit %s/ and copy the Cargo block to ~/.cargo/config.toml
-   maven:        visit %s/ and copy the Maven mirror block to ~/.m2/settings.xml
-   gem:          bundle config mirror.https://rubygems.org %s/rubygems/
-   composer:     composer config -g repo.packagist composer %s/composer/
-   nuget:        dotnet nuget add source %s/nuget/v3/index.json -n depsilo
-   conda:        add channel %s/conda/ to ~/.condarc
-   helm:         helm repo add depsilo %s/helm/
-   huggingface:  export HF_ENDPOINT=%s/huggingface
-   R/CRAN:       options(repos = c(CRAN = "%s/cran/")) in ~/.Rprofile
-
-4. Run install commands normally — they auto-route through Depsilo.
-
-These settings do not provide reliable outage failover. Even Go's ",direct"
-suffix advances only after a 404/410 response, not when Depsilo is unreachable.
-Keep the original registry settings as documented rollback instructions; do
-not use GOPROXY "|direct", which would also bypass Depsilo's 451 enforcement.
-
-For machine-readable access:
-  GET %s/api/v1/discover     - service catalog
-  GET %s/api/v1/stats        - cache metrics
-  POST %s/mcp                - MCP server; send Authorization: Bearer with a
-                               read-only API token created in Admin > Users
-`,
-		base, base,
-		base, base, base, base, base, base, base, base, base, base, base, base,
-		base, base, base,
-	)
+	return strings.TrimSpace(prompts.BootstrapOffline(endpoint)), promptSourceEmbedded
 }

@@ -134,7 +134,7 @@ func TestAgentPromptSaysSetupIsPendingInsteadOfConfiguring(t *testing.T) {
 	handler.SetSetupRequired(func() bool { return true })
 
 	prompt := serveDiscover(t, handler, "/api/v1/agent-prompt").Body.String()
-	for _, expected := range []string{"has not finished first-run setup", "human operator", "Portal at http://depsilo.example/", "Do not point any package manager"} {
+	for _, expected := range []string{"has not finished first-run setup", "human operator", "Portal at http://depsilo.example/", "Do not change package manager configuration"} {
 		if !strings.Contains(prompt, expected) {
 			t.Errorf("pending prompt omits %q:\n%s", expected, prompt)
 		}
@@ -148,6 +148,63 @@ func TestAgentPromptSaysSetupIsPendingInsteadOfConfiguring(t *testing.T) {
 	handler.SetSetupRequired(func() bool { return false })
 	if configured := serveDiscover(t, handler, "/api/v1/agent-prompt").Body.String(); !strings.Contains(configured, "pip config set global.index-url http://depsilo.example/pypi/simple/") {
 		t.Fatalf("configured prompt lost its instructions:\n%s", configured)
+	}
+}
+
+// Setup is also pending on a configured instance that has lost its
+// administrator. That instance keeps serving its ecosystems, so the pending
+// texts must not claim that nothing is served.
+func TestPendingSetupTextsDoNotDenyThatPackagesAreServed(t *testing.T) {
+	handler := NewDiscoverHandler([]string{"pypi"})
+	handler.SetSetupRequired(func() bool { return true })
+
+	var catalog struct {
+		SetupRequired bool `json:"setup_required"`
+		Ecosystems    []struct {
+			Name string `json:"name"`
+		} `json:"ecosystems"`
+		AgentSetup struct {
+			Summary string `json:"summary"`
+		} `json:"agent_setup"`
+	}
+	if err := json.Unmarshal(serveDiscover(t, handler, "/api/v1/discover").Body.Bytes(), &catalog); err != nil {
+		t.Fatal(err)
+	}
+	if !catalog.SetupRequired || len(catalog.Ecosystems) != 1 || catalog.Ecosystems[0].Name != "pypi" {
+		t.Fatalf("catalog = %+v, want pending setup with pypi listed", catalog)
+	}
+	prompt := serveDiscover(t, handler, "/api/v1/agent-prompt").Body.String()
+	for name, text := range map[string]string{"discover summary": catalog.AgentSetup.Summary, "agent prompt": prompt} {
+		for _, claim := range []string{"serve packages", "not serve", "serves no", "nothing is served"} {
+			if strings.Contains(text, claim) {
+				t.Errorf("%s claims %q while pypi is listed: %s", name, claim, text)
+			}
+		}
+		if !strings.Contains(text, "human operator") || !strings.Contains(text, "Portal at http://depsilo.example/") {
+			t.Errorf("%s does not say who completes setup and where: %s", name, text)
+		}
+	}
+}
+
+// The bootstrap prompt is specific to the instance: it names the ecosystems
+// the handler was built with and no others, and asks before anything that
+// outlives the project.
+func TestAgentPromptListsOnlyTheEcosystemsThisInstanceServes(t *testing.T) {
+	prompt := serveDiscover(t, NewDiscoverHandler([]string{"pypi", "npm"}), "/api/v1/agent-prompt").Body.String()
+	for _, expected := range []string{
+		"PIP_INDEX_URL=http://depsilo.example/pypi/simple/",
+		"registry=http://depsilo.example/npm/",
+		"omit-lockfile-registry-resolved=true",
+		"show the user the exact\nchanges and wait for approval",
+	} {
+		if !strings.Contains(prompt, expected) {
+			t.Errorf("prompt omits %q:\n%s", expected, prompt)
+		}
+	}
+	for _, absent := range []string{"GOPROXY", "/crates/", "/maven/", "/composer/", "HF_ENDPOINT", "registry-mirrors"} {
+		if strings.Contains(prompt, absent) {
+			t.Errorf("prompt names %q, which this instance does not serve", absent)
+		}
 	}
 }
 

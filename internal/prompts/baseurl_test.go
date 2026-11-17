@@ -9,7 +9,7 @@ import (
 func TestValidateBaseURL_AcceptsOriginsOnly(t *testing.T) {
 	for _, raw := range []string{
 		"http://localhost:23333",
-		"http://10.4.20.52:23333",
+		"http://192.0.2.10:23333",
 		"https://depsilo.example.com",
 		"https://depsilo.example.com/",
 		"https://mirror.other-team.example:8443",

@@ -4,7 +4,7 @@
 > their coding LLM (Claude Code, Cursor, Copilot Chat, …). Placeholders are
 > substituted at render time:
 >
-> - `{{MIRROR_URL}}` → the running service's public URL (e.g. `http://10.4.20.52:23333`)
+> - `{{MIRROR_URL}}` → the running service's public URL (e.g. `http://depsilo.example:23333`)
 >
 > The text below `---` is what reaches the LLM. Keep it transparent,
 > security-tool-discipline, prescriptive. Edits here ship to every user
@@ -64,45 +64,63 @@ report at the end instead of editing it silently.
    `DESCRIPTION`, `Chart.yaml`, `.npmrc`, `pip.conf`, `.condarc`,
    `nuget.config`, `Rprofile.site`.
 
-2. **Reuse existing knobs.** If the project already exposes a mirror-like
+2. **Present a plan and wait.** After discovery and before changing any file,
+   list every file you intend to change and the edit for each, worked out
+   under the rules below. Then stop and wait for the user to confirm. If
+   nobody can confirm (a non-interactive run), stop after presenting the plan.
+
+3. **Reuse existing knobs.** If the project already exposes a mirror-like
    build-arg (`NPM_REGISTRY`, `ALPINE_MIRROR`, `--cn-mirror`, etc.) feed it the
    new value. Do **not** add a parallel mechanism.
 
-3. **Inject at build time, not in checked-in dev configs.** Prefer build-args,
+4. **Inject at build time, not in checked-in dev configs.** Prefer build-args,
    CI variables, and `ENV` lines in Dockerfiles. Do not commit a personal
    `.npmrc` / `pip.conf` / `~/.cargo/config.toml` to the repo root unless that
-   project already does.
+   project already does. Where the table below gives a client only a project
+   file, use that file and list it in the plan, unless the project publishes
+   it (a library's `pyproject.toml`): then leave it and report.
 
-4. **Be idempotent.** If the URL is already wired for an ecosystem, skip it.
+5. **Be idempotent.** If the URL is already wired for an ecosystem, skip it.
    If a previous Depsilo integration edit is present (look for the
    `# Routed via Depsilo cache` marker), refresh the URL if needed but do not
    duplicate the line.
 
-5. **Stay in scope.** Do not refactor surrounding code, do not "tidy up"
-   unrelated files, do not modify lockfiles. If multiple competing patterns
-   exist or you find more than three ecosystems, stop and ask the user which to
-   wire first.
+6. **Stay in scope.** Do not refactor surrounding code, do not "tidy up"
+   unrelated files, do not modify lockfiles (the one exception is under "Hard
+   constraints"). If multiple competing patterns exist or you find more than
+   three ecosystems, stop and ask the user which to wire first.
 
 ## Per-ecosystem endpoints
 
 Append the path below to `{{MIRROR_URL}}`. Use whichever delivery vehicle (env
 var, config file, build-arg) matches the project's existing style. The "native
-knob" column lists the language's own variable / config syntax — use those
-names verbatim, do not invent new ones.
+knob" column lists the setting each client reads — use those names verbatim;
+do not invent new ones or carry one client's setting over to another.
 
 | Ecosystem                     | URL path                            | Native knob                                                                               |
 | ----------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------- |
-| npm / pnpm / yarn             | `/npm/`                             | env `npm_config_registry`; or `registry=` in `.npmrc`                                     |
-| Python (pip / uv / poetry)    | `/pypi/simple/`                     | env `PIP_INDEX_URL`; add `PIP_TRUSTED_HOST=<host>` only for plain HTTP, never HTTPS; or `[global] index-url = …` in `pip.conf` |
+| npm                           | `/npm/`                             | `registry=<URL>/npm/` in the project `.npmrc`; or env `npm_config_registry`               |
+| pnpm                          | `/npm/`                             | `registry=<URL>/npm/` in the project `.npmrc` (every version); or env `PNPM_CONFIG_REGISTRY` for pnpm 11 and later (they ignore `npm_config_registry`), `npm_config_registry` for pnpm 10 and earlier |
+| Yarn 2+                       | `/npm/`                             | `npmRegistryServer: "<URL>/npm/"` in `.yarnrc.yml`; for plain HTTP also list the host name, without the port, under `unsafeHttpWhitelist:` |
+| Yarn 1                        | `/npm/`                             | `registry "<URL>/npm/"` in `.yarnrc`                                                      |
+| Bun                           | `/npm/`                             | `[install] registry = "<URL>/npm/"` in `bunfig.toml`                                      |
+| pip                           | `/pypi/simple/`                     | env `PIP_INDEX_URL`; add `PIP_TRUSTED_HOST=<host>` only for plain HTTP, never HTTPS; or `[global] index-url = …` in `pip.conf` |
+| uv                            | `/pypi/simple/`                     | env `UV_INDEX_URL`; or `[[tool.uv.index]]` with `name = "depsilo"`, `url = "<URL>/pypi/simple/"`, `default = true` in `pyproject.toml` |
+| Poetry                        | `/pypi/simple/`                     | `[[tool.poetry.source]]` with `name = "depsilo"`, `url = "<URL>/pypi/simple/"`, `priority = "primary"` in `pyproject.toml` |
+| PDM                           | `/pypi/simple/`                     | `[[tool.pdm.source]]` with `name = "pypi"`, `url = "<URL>/pypi/simple/"` in `pyproject.toml`; add `verify_ssl = false` only for plain HTTP |
+| Pipenv                        | `/pypi/simple/`                     | env `PIPENV_PYPI_MIRROR`; or `[[source]]` with `name = "depsilo"`, `url = "<URL>/pypi/simple/"` in `Pipfile`, plus `verify_ssl = false` only for plain HTTP |
 | Go modules                    | `/go`                               | env `GOPROXY="<URL>/go,direct"`                                                           |
 | Rust / Cargo                  | `/crates/`                          | `~/.cargo/config.toml` `[source.crates-io] replace-with = "depsilo"` + `[source.depsilo] registry = "sparse+<URL>/crates/"` |
-| Maven / Gradle                | `/maven/`                           | `~/.m2/settings.xml` `<mirrors><mirror><mirrorOf>*</mirrorOf><name>depsilo</name><url>…</url></mirror></mirrors>` |
-| Ruby / Bundler                | `/rubygems/`                        | `bundle config mirror.https://rubygems.org <URL>`; or `~/.bundle/config`                  |
-| PHP / Composer                | `/composer/`                        | `composer config -g repo.packagist composer <URL>`; or project `repositories` block       |
-| .NET / NuGet                  | `/nuget/v3/index.json`              | `nuget.config` `<packageSources>` entry named `depsilo`                                   |
+| Maven                         | `/maven/`                           | `~/.m2/settings.xml` `<mirrors><mirror><id>depsilo</id><mirrorOf>*</mirrorOf><url>…</url></mirror></mirrors>` |
+| Gradle                        | `/maven/`                           | `maven { url "<URL>/maven/" }` in the `repositories` block of the build file, or of `allprojects` in `~/.gradle/init.gradle`; for plain HTTP also `allowInsecureProtocol = true` (Kotlin DSL: `isAllowInsecureProtocol`) |
+| sbt                           | `/maven/`                           | `[repositories]` in `~/.sbt/repositories` with `depsilo: <URL>/maven/` and `local`; run sbt with `-Dsbt.override.build.repos=true` |
+| RubyGems (`gem`)              | `/rubygems/`                        | `gem install --source <URL>/rubygems/`; or `:sources:` in `.gemrc`                        |
+| Bundler                       | `/rubygems/`                        | `bundle config set --local mirror.https://rubygems.org <URL>/rubygems/` writes the project's `.bundle/config`; `--global` writes `~/.bundle/config`; check `bundle --version` first: before 2.1 leave out `set` |
+| PHP / Composer                | `/composer/`                        | `composer config -g repo.packagist composer <URL>/composer/`; or project `repositories` block; for plain HTTP also `composer config -g secure-http false` |
+| .NET / NuGet                  | `/nuget/v3/index.json`              | `nuget.config` `<packageSources>` entry named `depsilo`; for plain HTTP also `allowInsecureConnections="true"` on it |
 | Conda / Mamba                 | `/conda/`                           | `~/.condarc` channels                                                                     |
-| R / CRAN                      | `/cran/`                            | `Rprofile.site` `options(repos = c(CRAN = "<URL>"))`                                      |
-| Helm                          | `/helm/`                            | `helm repo add depsilo <URL>`                                                             |
+| R / CRAN                      | `/cran/`                            | `Rprofile.site` `options(repos = c(CRAN = "<URL>/cran/"))`                                |
+| Helm                          | `/helm/`                            | `helm repo add depsilo <URL>/helm/`                                                       |
 | Debian / Ubuntu (apt)         | `/apt/<distro>` (e.g. `/apt/debian`) | rewrite `/etc/apt/sources.list` to point at the URL; do not disable signature checking    |
 | Alpine (apk)                  | `/alpine/<version>/<repo>`           | rewrite `/etc/apk/repositories`                                                           |
 | Docker registry mirror        | service root; Docker requests `/v2/` | `/etc/docker/daemon.json` `registry-mirrors` (host-level; only suggest, do not edit the user's daemon config) |
@@ -127,9 +145,9 @@ the client points at an unavailable Depsilo instance.
   Depsilo and does not guarantee automatic fallthrough on mirror failure. Keep
   the original repository settings and document disabling the mirror entry as
   the rollback; do not set `<blocked>true</blocked>`.
-- **npm / pnpm / yarn.** The native registry knob takes a single URL, so the
-  fallback lives at the CI level: in CI configs, set the mirror URL via env
-  but leave a documented commented-out line restoring the public registry, so
+- **npm / pnpm / Yarn / Bun.** The native registry knob takes a single URL, so
+  the fallback lives at the CI level: in CI configs, set the mirror URL but
+  leave a documented commented-out line restoring the public registry, so
   bringing the pipeline back up during an outage is a one-line revert.
 - **pip.** Do not set `PIP_EXTRA_INDEX_URL` as fallback: pip considers all
   configured indexes during normal resolution, which can bypass Depsilo policy
@@ -149,9 +167,44 @@ from a controlled mirror), the user will tell you. Do not assume.
 - **Never** disable signature / GPG / checksum verification
   (`--allow-unauthenticated`, `--no-verify`, `--insecure-registry`,
   `GOSUMDB=off` for projects that don't already set it, etc.). The mirror
-  preserves upstream signatures unchanged.
-- **Never** modify lockfiles. The mirror serves the same artifacts as the
-  public registry; integrity hashes still match.
+  preserves upstream signatures unchanged. Go checksum verification stays on
+  and `GOSUMDB` needs no change: Depsilo relays checksum-database requests
+  when a Go Upstream mirrors the database, and otherwise the go command asks
+  sum.golang.org itself; only where that host is unreachable, propose
+  `GOSUMDB=sum.golang.google.cn`.
+- **Never** modify lockfiles, with one exception that the user approves as
+  part of the plan. Depsilo's npm route serves only the signed tarball URLs it
+  writes into package metadata; the conventional tarball paths an existing
+  lockfile records return 404. A Node lockfile that records the public
+  registry's URLs therefore fails through Depsilo wherever the client's own
+  cache is cold (CI, container builds, new machines), even if it installs on
+  a developer machine. npm follows URLs of a registry other than
+  `registry.npmjs.org` as recorded: such a `package-lock.json` installs, but
+  bypasses Depsilo.
+  - **npm — the exception.** For a `package-lock.json` with `resolved` URLs
+    of any registry (`registry.npmjs.org`: 404; any other: bypass), propose
+    rewriting it with
+    `npm install --package-lock-only --omit-lockfile-registry-resolved`. That
+    drops the `resolved` URLs and keeps every `integrity` value; the result
+    installs both through Depsilo and directly from the public registry.
+    Passing the flag to `npm ci` or `npm install` alone, or only setting it in
+    `.npmrc`, does not repair an existing lockfile. Also propose
+    `omit-lockfile-registry-resolved=true` in the project `.npmrc`, so later
+    installs do not record URLs again. A lockfile cannot carry the
+    identification comment: name it in the report.
+  - **pnpm / Yarn / Bun.** Do not edit or regenerate `pnpm-lock.yaml`,
+    `yarn.lock`, `bun.lock` or `bun.lockb`. These clients have no equivalent
+    flag, and a lockfile regenerated through Depsilo is tied to this instance
+    (its address, signing secret and npm Upstream) and no longer installs
+    from the public registry. Report the limitation to the user and let them
+    decide. Yarn 1, and Bun with another registry's URLs, do not fail: they
+    follow the recorded URLs and bypass Depsilo.
+  - **uv / Poetry / PDM / Pipenv.** An index set in `pyproject.toml` or
+    `Pipfile`, or through `UV_INDEX_URL`, makes `uv.lock`, `poetry.lock`,
+    `pdm.lock` or `Pipfile.lock` stale, and a re-lock resolves it against
+    this instance (a plain `uv sync` re-locks unasked). Do not re-lock: name
+    the stale lockfile in the plan and let the user decide.
+  - Every other lockfile stays untouched.
 - **Never** hardcode the URL inside files that get published to a registry
   (e.g. inside a published `package.json` `publishConfig`, a `setup.py`).
   Build-time injection only.
@@ -196,7 +249,8 @@ Then:
      verify the public PyPI URL remains in a rollback comment or runbook.
    - npm: `npm config get registry` inside the container should print the
      Depsilo URL.
-2. Surface anything you skipped and why (e.g. "lockfile present, not touched";
+2. Surface anything you skipped and why (e.g. "`pnpm-lock.yaml` records
+   another registry — not touched, installs through Depsilo will return 404";
    "two competing CN-mirror flags — confirm preference"; "binary config file,
    could not add identification comment, please verify manually").
 3. Suggest the commit subject:

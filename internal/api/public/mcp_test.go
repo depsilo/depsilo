@@ -11,11 +11,18 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"depsilo/internal/db"
+	"depsilo/internal/prompts"
 )
 
 // serveMCP sends one request to a router that mounts the handler the way
 // internal/api/router.go does, without the authentication middleware.
 func serveMCP(t *testing.T, method, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	return serveMCPAt(t, method, "/mcp", body)
+}
+
+// serveMCPAt is serveMCP for a target such as "https://depsilo.example/mcp".
+func serveMCPAt(t *testing.T, method, target, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	handler := NewMCPHandler(nil, []string{"pypi"}, false, nil)
@@ -24,7 +31,7 @@ func serveMCP(t *testing.T, method, body string) *httptest.ResponseRecorder {
 	router.GET("/mcp", handler.MethodNotAllowed)
 	router.DELETE("/mcp", handler.MethodNotAllowed)
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(method, "/mcp", strings.NewReader(body))
+	request := httptest.NewRequest(method, target, strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(recorder, request)
 	return recorder
@@ -48,6 +55,122 @@ func listMCPTools(t *testing.T) []map[string]any {
 		t.Fatalf("tools/list returned no tools: %s", recorder.Body.String())
 	}
 	return envelope.Result.Tools
+}
+
+// configureViaMCP calls depsilo_configure through tools/call and returns the
+// decoded tool result.
+func configureViaMCP(t *testing.T, ecosystem string) map[string]any {
+	t.Helper()
+	return configureViaMCPAt(t, "/mcp", ecosystem)
+}
+
+func configureViaMCPAt(t *testing.T, target, ecosystem string) map[string]any {
+	t.Helper()
+	recorder := serveMCPAt(t, http.MethodPost, target, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"depsilo_configure","arguments":{"ecosystem":"`+ecosystem+`"}}}`)
+	var envelope struct {
+		Result struct {
+			Content []struct {
+				Text string `json:"text"`
+			} `json:"content"`
+			IsError bool `json:"isError"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &envelope); err != nil || len(envelope.Result.Content) != 1 || envelope.Result.IsError {
+		t.Fatalf("depsilo_configure %s: status = %d, err = %v, body = %s", ecosystem, recorder.Code, err, recorder.Body.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(envelope.Result.Content[0].Text), &result); err != nil {
+		t.Fatalf("depsilo_configure %s: result is not JSON: %v; text = %s", ecosystem, err, envelope.Result.Content[0].Text)
+	}
+	return result
+}
+
+// "bundle config NAME VALUE" without a scope flag writes ~/.bundle/config
+// with Bundler 1.x and the project's .bundle/config with Bundler 2.1 and
+// later inside a project, so the snippet names its scope.
+func TestMCPConfigureBundlerSnippetNamesItsScope(t *testing.T) {
+	setup := configureViaMCP(t, "rubygems")["setup"].(map[string]any)
+	if got, want := setup["shell"], "bundle config set --local mirror.https://rubygems.org http://example.com/rubygems/"; got != want {
+		t.Errorf("setup.shell = %q, want %q", got, want)
+	}
+	note, _ := setup["note"].(string)
+	for _, expected := range []string{"--local writes the project's .bundle/config", "--global writes ~/.bundle/config", `Check "bundle --version" first: before Bundler 2.1, leave out "set".`} {
+		if !strings.Contains(note, expected) {
+			t.Errorf("setup.note omits %q: %q", expected, note)
+		}
+	}
+	if verify, _ := setup["verify"].(string); !strings.Contains(verify, "http://example.com/rubygems/") {
+		t.Errorf("setup.verify = %q", verify)
+	}
+}
+
+// Composer and .NET SDK 9 refuse a plain-HTTP source unless it opts in, so
+// the tool gives the opt-ins, the bootstrap prompt's, for an http address only.
+func TestMCPConfigureNuGetAndComposerOptInToPlainHTTP(t *testing.T) {
+	for _, tc := range []struct {
+		target, composer, nuget, nugetNote string
+	}{
+		{
+			"/mcp",
+			"composer config -g secure-http false\ncomposer config -g repo.packagist composer http://example.com/composer/",
+			"dotnet nuget add source http://example.com/nuget/v3/index.json -n depsilo --allow-insecure-connections",
+			".NET SDK 8 and earlier reject --allow-insecure-connections: leave it out there.",
+		},
+		{
+			"https://example.com/mcp",
+			"composer config -g repo.packagist composer https://example.com/composer/",
+			"dotnet nuget add source https://example.com/nuget/v3/index.json -n depsilo",
+			"",
+		},
+	} {
+		composer := configureViaMCPAt(t, tc.target, "composer")["setup"].(map[string]any)
+		if got := composer["shell"]; got != tc.composer {
+			t.Errorf("%s composer setup.shell = %q, want %q", tc.target, got, tc.composer)
+		}
+		nuget := configureViaMCPAt(t, tc.target, "nuget")["setup"].(map[string]any)
+		if got := nuget["shell"]; got != tc.nuget {
+			t.Errorf("%s nuget setup.shell = %q, want %q", tc.target, got, tc.nuget)
+		}
+		if got, _ := nuget["note"].(string); got != tc.nugetNote {
+			t.Errorf("%s nuget setup.note = %q, want %q", tc.target, got, tc.nugetNote)
+		}
+	}
+}
+
+// Depsilo's npm route serves only the signed tarball URLs of its rewritten
+// metadata, so an agent that only sets the registry leaves a project with a
+// committed lockfile failing with 404. The tool says what the bootstrap
+// prompt says, in the same words.
+func TestMCPConfigureNpmCarriesTheLockfileNote(t *testing.T) {
+	setup := configureViaMCP(t, "npm")["setup"].(map[string]any)
+	note, _ := setup["note"].(string)
+	for _, expected := range []string{
+		"omit-lockfile-registry-resolved=true in its .npmrc",
+		`"npm install --package-lock-only --omit-lockfile-registry-resolved"`,
+		"404",
+		`"npm ci" alone does not help`,
+		"ask before rewriting it",
+	} {
+		if !strings.Contains(note, expected) {
+			t.Fatalf("setup.note omits %q: %q", expected, note)
+		}
+	}
+	prompt := strings.Join(strings.Fields(prompts.Bootstrap("http://example.com", []string{"npm"}, nil)), " ")
+	if !strings.Contains(prompt, "npm lockfiles: "+strings.ToLower(note[:1])+note[1:]) {
+		t.Errorf("setup.note and the bootstrap prompt's lockfile note differ:\nnote: %s\nprompt: %s", note, prompt)
+	}
+
+	// The fields the tool already returned are unchanged.
+	for field, want := range map[string]string{
+		"shell":  "npm config set registry http://example.com/npm/",
+		"env":    "npm_config_registry=http://example.com/npm/",
+		"config": "# ~/.npmrc\nregistry=http://example.com/npm/",
+		"verify": "npm view express version",
+	} {
+		if got := setup[field]; got != want {
+			t.Errorf("setup.%s = %q, want %q", field, got, want)
+		}
+	}
 }
 
 // The MCP schema types inputSchema as {"type":"object","properties"?:{...}}.

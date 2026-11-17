@@ -112,7 +112,7 @@ func TestAgentPromptDoesNotPromiseAutomaticOutageFallback(t *testing.T) {
 	context, _ := gin.CreateTestContext(recorder)
 	context.Request = httptest.NewRequest("GET", "https://depsilo.example/api/v1/agent-prompt", nil)
 
-	(&DiscoverHandler{}).AgentPrompt(context)
+	NewDiscoverHandler([]string{"go"}).AgentPrompt(context)
 	body := recorder.Body.String()
 	if !strings.Contains(body, "do not provide reliable outage failover") || !strings.Contains(body, `GOPROXY "|direct"`) || strings.Contains(body, "tools fall back to public registries") {
 		t.Fatalf("unsafe outage guidance: %s", body)
