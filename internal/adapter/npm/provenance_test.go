@@ -21,6 +21,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"depsilo/internal/accesslog"
 	"depsilo/internal/adapter"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
@@ -525,21 +526,95 @@ func nonCanonicalRawBase64URL(encoded string) string {
 	return encoded[:len(encoded)-1] + string(alphabet[alternateIndex])
 }
 
+// npmAccessCapture records what the adapter writes to the access log.
+type npmAccessCapture struct {
+	mu     sync.Mutex
+	events []accesslog.Event
+}
+
+func (capture *npmAccessCapture) Record(event accesslog.Event) {
+	capture.mu.Lock()
+	defer capture.mu.Unlock()
+	capture.events = append(capture.events, event)
+}
+
+func (*npmAccessCapture) Flush(context.Context) error { return nil }
+func (*npmAccessCapture) Close(context.Context) error { return nil }
+
+func (capture *npmAccessCapture) snapshot() []accesslog.Event {
+	capture.mu.Lock()
+	defer capture.mu.Unlock()
+	return append([]accesslog.Event(nil), capture.events...)
+}
+
 func TestLegacyDirectTarballIsRejectedWithoutMakingVersionDecision(t *testing.T) {
 	router, _, tarballRequests, _ := newNPMProvenanceFixture(t, deterministicTarballSigner(t, 0x22))
 	checker := &npmRecordingQuarantineChecker{}
 	ruleChecker := &npmRecordingPackageRuleChecker{
 		decision: adapter.PackageRuleDecision{Outcome: adapter.PackageRuleAllow},
 	}
-	scoped := adapter.NewRequestScope(nil, nil, checker, ruleChecker).Wrap(router)
+	access := &npmAccessCapture{}
+	audit := &auditCapture{}
+	scoped := adapter.NewRequestScope(access, audit, checker, ruleChecker).Wrap(router)
 
-	for _, path := range []string{
-		"/npm/fixture/-/pkg-custom.tgz",
-		"/npm/@scope/fixture/-/pkg-custom.tgz",
-	} {
-		response := requestURLPath(t, scoped, path)
+	tests := []struct{ path, packageName, cacheKey string }{
+		{"/npm/fixture/-/pkg-custom.tgz", "fixture", "npm-exact-v1/fixture/-/pkg-custom.tgz"},
+		{"/npm/@scope/fixture/-/pkg-custom.tgz", "@scope/fixture", "npm-exact-v1/@scope/fixture/-/pkg-custom.tgz"},
+		{"/p/acme/npm/fixture/-/pkg-custom.tgz", "fixture", "npm-exact-v1/fixture/-/pkg-custom.tgz"},
+		// A file name that looks like a version is still only the client's claim.
+		{"/npm/fixture/-/fixture-9.9.9.tgz", "fixture", "npm-exact-v1/fixture/-/fixture-9.9.9.tgz"},
+	}
+	for _, test := range tests {
+		response := requestURLPath(t, scoped, test.path)
 		if response.Code != http.StatusNotFound {
-			t.Errorf("legacy tarball %q status = %d, want 404; body=%s", path, response.Code, response.Body.String())
+			t.Errorf("legacy tarball %q status = %d, want 404; body=%s", test.path, response.Code, response.Body.String())
+		}
+		// The 404 must say why and what to do: a lockfile that points at the
+		// public registry otherwise fails with an empty response.
+		var body struct{ Code, Message, Error string }
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+			t.Fatalf("legacy tarball %q body is not a JSON error: %v; body=%s", test.path, err, response.Body.String())
+		}
+		if body.Code != "NPM_UNSIGNED_TARBALL" {
+			t.Errorf("legacy tarball %q code = %q, want NPM_UNSIGNED_TARBALL", test.path, body.Code)
+		}
+		// The npm client prints only the registry "error" field.
+		if body.Error != body.Message {
+			t.Errorf("legacy tarball %q error = %q, want the message %q", test.path, body.Error, body.Message)
+		}
+		for _, part := range []string{
+			"not issued by this Depsilo",
+			"package metadata through Depsilo",
+			`"npm install --package-lock-only --omit-lockfile-registry-resolved"`,
+		} {
+			if !strings.Contains(body.Message, part) {
+				t.Errorf("legacy tarball %q message %q does not contain %q", test.path, body.Message, part)
+			}
+		}
+
+		events := access.snapshot()
+		if len(events) == 0 {
+			t.Fatalf("legacy tarball %q was not recorded in the access log", test.path)
+		}
+		event := events[len(events)-1]
+		if event.AdapterType != "npm" || event.Method != http.MethodGet || event.StatusCode != http.StatusNotFound ||
+			event.PackageName != test.packageName || event.CacheKey != test.cacheKey ||
+			event.Hit || event.Upstream != "" || event.BytesSent != 0 {
+			t.Errorf("legacy tarball %q access event = %+v", test.path, event)
+		}
+	}
+	if events := access.snapshot(); len(events) != len(tests) {
+		t.Fatalf("access events = %d, want one per rejected request", len(events))
+	}
+	// The audit log is hash-chained and forwarded: a refused request must not
+	// appear there as a download of the version its file name suggests.
+	if len(audit.entries) != len(tests) {
+		t.Fatalf("audit entries = %#v, want one per rejected request", audit.entries)
+	}
+	for index, entry := range audit.entries {
+		if entry.Ecosystem != "npm" || entry.PackageName != tests[index].packageName || entry.Version != "" ||
+			entry.StatusCode != http.StatusNotFound || entry.CacheResult != "miss" || entry.BytesSent != 0 {
+			t.Errorf("legacy tarball %q audit entry = %#v, want no version", tests[index].path, entry)
 		}
 	}
 	if calls := checker.snapshot(); len(calls) != 0 {
@@ -550,6 +625,73 @@ func TestLegacyDirectTarballIsRejectedWithoutMakingVersionDecision(t *testing.T)
 	}
 	if got := tarballRequests.Load(); got != 0 {
 		t.Fatalf("legacy tarball contacted upstream: requests = %d", got)
+	}
+}
+
+func TestRejectedSignedTarballIsRecordedWithoutTokenOrVersion(t *testing.T) {
+	signer := deterministicTarballSigner(t, 0x23)
+	router, _, tarballRequests, newRouter := newNPMProvenanceFixture(t, signer)
+	signedURL := requestNPMMetadataTarballURL(t, router)
+	parsed, err := url.Parse(signedURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := strings.Split(strings.SplitN(parsed.Path, "/"+SignedTarballRouteSegment+"/", 2)[1], "/")[0]
+	if token == "" {
+		t.Fatalf("signed URL %q carries no token", signedURL)
+	}
+
+	// The same deployment key in front of another upstream models an operator
+	// who replaced the npm upstream: the token verifies, its source is gone.
+	replaced := newNPMProvenanceRouterFactory(t, []config.UpstreamConfig{{
+		Name: "replacement", URL: "http://replacement.invalid", Priority: 1, ProbeMode: "passive",
+	}})(signer)
+	// A selector that cannot resolve provenance sources must fail the same way.
+	unresolvable := gin.New()
+	newHandlerWithSigner(nil, unavailableSelector{}, config.CacheConfig{}, nil, signer).Register(unresolvable.Group("/npm"))
+
+	for _, test := range []struct {
+		name   string
+		router http.Handler
+	}{
+		// Another signing key models a lockfile written through a different or
+		// re-keyed Depsilo.
+		{"invalid token", newRouter(deterministicTarballSigner(t, 0x24))},
+		{"source no longer resolves", replaced},
+		{"selector cannot resolve sources", unresolvable},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			access := &npmAccessCapture{}
+			audit := &auditCapture{}
+			response := requestURLPath(t, adapter.NewRequestScope(access, audit, nil, nil).Wrap(test.router), signedURL)
+			if response.Code != http.StatusNotFound || response.Body.Len() != 0 {
+				t.Fatalf("status=%d body=%q, want an undifferentiated 404", response.Code, response.Body.String())
+			}
+
+			events := access.snapshot()
+			if len(events) != 1 {
+				t.Fatalf("access events = %+v, want the rejected request", events)
+			}
+			event := events[0]
+			// The key marks the signed route, so these rows differ from
+			// unsigned paths, and names the path only: the token is a
+			// capability for the artifact.
+			wantKey := "npm-exact-v1/fixture/-/" + SignedTarballRouteSegment + "/pkg-custom.tgz"
+			if event.AdapterType != "npm" || event.StatusCode != http.StatusNotFound || event.PackageName != "fixture" ||
+				event.CacheKey != wantKey || event.Hit || event.Upstream != "" || event.BytesSent != 0 {
+				t.Fatalf("access event = %+v, want key %q", event, wantKey)
+			}
+			if strings.Contains(event.CacheKey, token) {
+				t.Fatalf("access event recorded the signed token: %q", event.CacheKey)
+			}
+			if len(audit.entries) != 1 || audit.entries[0].PackageName != "fixture" || audit.entries[0].Version != "" ||
+				audit.entries[0].StatusCode != http.StatusNotFound {
+				t.Fatalf("audit entries = %#v, want one entry without a version", audit.entries)
+			}
+			if got := tarballRequests.Load(); got != 0 {
+				t.Fatalf("rejected signed URL contacted upstream: requests = %d", got)
+			}
+		})
 	}
 }
 
@@ -881,9 +1023,37 @@ func TestSignedTarballDoesNotFailOverToAnotherUpstream(t *testing.T) {
 	if response.Code != http.StatusBadGateway {
 		t.Fatalf("artifact with unavailable provenance source status=%d body=%s", response.Code, response.Body.String())
 	}
+	assertNPMErrorFieldRepeatsMessage(t, response, "UPSTREAM_UNAVAILABLE")
 	if got := sourceBRequests.Load(); got != 0 {
 		t.Fatalf("artifact request failed over to source B: requests=%d", got)
 	}
+}
+
+// assertNPMErrorFieldRepeatsMessage checks the registry "error" field, the
+// only part of an error body the npm client prints.
+func assertNPMErrorFieldRepeatsMessage(t *testing.T, response *httptest.ResponseRecorder, wantCode string) {
+	t.Helper()
+	var body struct{ Code, Message, Error string }
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("error body is not JSON: %v; body=%s", err, response.Body.String())
+	}
+	if body.Code != wantCode || body.Message == "" || body.Error != body.Message {
+		t.Fatalf("error body = %+v, want code %s and error equal to message", body, wantCode)
+	}
+}
+
+func TestMetadataUpstreamFailureReachesTheNPMClient(t *testing.T) {
+	unreachable := httptest.NewServer(http.NotFoundHandler())
+	unreachable.Close()
+	router := newNPMProvenanceRouterFactory(t, []config.UpstreamConfig{{
+		Name: "mock", URL: unreachable.URL, Priority: 1, ProbeMode: "passive",
+	}})(deterministicTarballSigner(t, 0x7b))
+
+	response := requestURLPath(t, router, "/npm/fixture")
+	if response.Code != http.StatusBadGateway {
+		t.Fatalf("metadata with unreachable upstream status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertNPMErrorFieldRepeatsMessage(t, response, "UPSTREAM_UNAVAILABLE")
 }
 
 func TestAuthenticatedTarballCacheKeySeparatesSourcesTargetsAndDigests(t *testing.T) {

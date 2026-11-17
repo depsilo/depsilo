@@ -88,7 +88,16 @@ func updateAccessHooks(update func(*accessHookSnapshot)) {
 // LogAccess submits an access log entry to the request's recorder snapshot.
 // When ctx has no RequestScope, the process-wide compatibility hooks are used.
 func LogAccess(ctx context.Context, database *gorm.DB, adapterType, method, cacheKey string, hit bool, upstreamName string, latency time.Duration, statusCode int, clientIP string, bytesSent int64) {
-	logAccess(ctx, database, adapterType, method, cacheKey, hit, upstreamName, latency, statusCode, clientIP, bytesSent, "unknown", "response_completion_not_recorded")
+	logAccess(ctx, database, adapterType, method, cacheKey, hit, upstreamName, latency, statusCode, clientIP, bytesSent, "unknown", "response_completion_not_recorded", true)
+}
+
+// LogRefusedAccess records a request an adapter refused before it established
+// which artifact the request names. The access entry keeps the requested key,
+// so Admin logs show the response the client received. The audit entry names
+// no version: the file name in a refused path is the client's claim, not an
+// identity Depsilo verified, and must not read as a download of that version.
+func LogRefusedAccess(ctx context.Context, database *gorm.DB, adapterType, method, cacheKey string, latency time.Duration, statusCode int, clientIP string) {
+	logAccess(ctx, database, adapterType, method, cacheKey, false, "", latency, statusCode, clientIP, 0, "unknown", "response_completion_not_recorded", false)
 }
 
 // LogAccessDelivery records the actual stream completion separately from the
@@ -98,21 +107,26 @@ func LogAccessDelivery(ctx context.Context, database *gorm.DB, adapterType, meth
 	if deliveryErr != nil {
 		result, reason = "failed", "response_body_incomplete"
 	}
-	logAccess(ctx, database, adapterType, method, cacheKey, hit, upstreamName, latency, statusCode, clientIP, bytesSent, result, reason)
+	logAccess(ctx, database, adapterType, method, cacheKey, hit, upstreamName, latency, statusCode, clientIP, bytesSent, result, reason, true)
 }
 
-func logAccess(ctx context.Context, database *gorm.DB, adapterType, method, cacheKey string, hit bool, upstreamName string, latency time.Duration, statusCode int, clientIP string, bytesSent int64, deliveryResult, deliveryReason string) {
+// logAccess writes the access entry and its audit entry. versionKnown is false
+// only for a refused request, whose audit entry then carries no version.
+func logAccess(ctx context.Context, database *gorm.DB, adapterType, method, cacheKey string, hit bool, upstreamName string, latency time.Duration, statusCode int, clientIP string, bytesSent int64, deliveryResult, deliveryReason string, versionKnown bool) {
 	if ctx != nil {
 		if suppressed, _ := ctx.Value(suppressAccessLoggingContextKey{}).(bool); suppressed {
 			return
 		}
 	}
 	pkgName := packagekey.ExtractName(adapterType, cacheKey)
-	version := packagekey.ExtractVersion(adapterType, cacheKey)
-	if authenticated, ok := AuthenticatedArtifactCoordinateFromContext(ctx); ok &&
-		authenticated.Ecosystem == adapterType {
-		pkgName = authenticated.PackageName
-		version = authenticated.Version
+	version := ""
+	if versionKnown {
+		version = packagekey.ExtractVersion(adapterType, cacheKey)
+		if authenticated, ok := AuthenticatedArtifactCoordinateFromContext(ctx); ok &&
+			authenticated.Ecosystem == adapterType {
+			pkgName = authenticated.PackageName
+			version = authenticated.Version
+		}
 	}
 	now := time.Now().UTC()
 	requestID := requestid.FromContext(ctx)

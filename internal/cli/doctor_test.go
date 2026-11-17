@@ -258,8 +258,11 @@ func TestDoctorExplainsUpstreamFailures(t *testing.T) {
 			token:       adminToken,
 			adminList:   adminList,
 			wantMessage: "failure codes: egress_fake_ip x2, other x1, timeout x1",
-			wantHint: []string{"upstream_proxy under [egress] in config.toml", "DNS server that returns real addresses",
-				"docs/deployment.md#upstream-network-egress", "open /admin/upstreams"},
+			// A container operator sets the service's environment rather than
+			// a file inside the volume, so both forms are named.
+			wantHint: []string{"set upstream_proxy under [egress] in config.toml, or DEPSILO_EGRESS_UPSTREAM_PROXY in the service's environment, " +
+				"or give Depsilo a DNS server that returns real addresses; see docs/deployment.md#upstream-network-egress",
+				"open /admin/upstreams"},
 		},
 		{
 			name:        "token without a fake-IP failure",
@@ -267,7 +270,7 @@ func TestDoctorExplainsUpstreamFailures(t *testing.T) {
 			adminList:   `{"total":1,"items":[{"name":"npm-official","adapter_type":"npm","healthy":false,"last_failure":{"code":"dns"}}]}`,
 			wantMessage: "failure codes: dns x1",
 			wantHint:    []string{"open /admin/upstreams or verify network reachability"},
-			rejectHint:  []string{"fake-IP", "upstream_proxy"},
+			rejectHint:  []string{"fake-IP", "upstream_proxy", "DEPSILO_EGRESS_UPSTREAM_PROXY"},
 		},
 		{
 			// An upstream can be unhealthy with no failed check on record:

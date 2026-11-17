@@ -152,7 +152,7 @@ func (h *Handler) proxyMetadata(c *gin.Context, fullName, cacheKey, upstreamPath
 			code = "UPSTREAM_INVALID_METADATA"
 			message = "npm metadata could not be verified"
 		}
-		c.JSON(http.StatusBadGateway, gin.H{"code": code, "message": message})
+		c.JSON(http.StatusBadGateway, errorBody(code, message))
 		return
 	}
 	defer result.Reader.Close()
@@ -179,7 +179,7 @@ func (h *Handler) proxyMetadata(c *gin.Context, fullName, cacheKey, upstreamPath
 			zap.Error(err),
 		)
 		adapter.LogAccess(c.Request.Context(), h.db, "npm", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_INVALID_METADATA", "message": "npm metadata could not be verified"})
+		c.JSON(http.StatusBadGateway, errorBody("UPSTREAM_INVALID_METADATA", "npm metadata could not be verified"))
 		return
 	}
 
@@ -194,14 +194,49 @@ func (h *Handler) proxyMetadata(c *gin.Context, fullName, cacheKey, upstreamPath
 	adapter.LogAccess(c.Request.Context(), h.db, "npm", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
 }
 
+// unsignedTarballMessage tells the person behind a failed install why a
+// conventional registry tarball path is refused and how to get a served URL.
+const unsignedTarballMessage = "The lockfile or client asked for a tarball URL that was not issued by this Depsilo. " +
+	"npm tarballs are served only through the URLs in package metadata returned by Depsilo. " +
+	"Reinstall so the client reads package metadata through Depsilo; for package-lock.json, rewrite it with " +
+	"\"npm install --package-lock-only --omit-lockfile-registry-resolved\"."
+
+// errorBody is the standard error body plus the registry's "error" field. The
+// npm client builds its failure text from that field alone, so an explanation
+// carried only in "message" never reaches the terminal of the person
+// installing.
+func errorBody(code, message string) gin.H {
+	return gin.H{"code": code, "message": message, "error": message}
+}
+
 func (h *Handler) handleTarball(c *gin.Context) {
 	// A direct archive URL has no authenticated packument version. Serving it
 	// would let an End User bypass hard malware decisions by skipping metadata.
-	c.Status(http.StatusNotFound)
+	h.rejectUnsignedTarball(c, c.Param("package"))
 }
 
 func (h *Handler) handleScopedTarball(c *gin.Context) {
-	c.Status(http.StatusNotFound)
+	h.rejectUnsignedTarball(c, "@"+c.Param("scope")+"/"+c.Param("package"))
+}
+
+func (h *Handler) rejectUnsignedTarball(c *gin.Context, fullName string) {
+	start := time.Now()
+	c.JSON(http.StatusNotFound, errorBody("NPM_UNSIGNED_TARBALL", unsignedTarballMessage))
+	h.logRejectedTarball(c, fullName, c.Param("filename"), start)
+}
+
+// logRejectedSignedTarball records a refused signed URL. The key keeps the
+// signed route segment, which tells these rows apart from unsigned paths (the
+// remedies differ), and leaves out the token: it is a capability.
+func (h *Handler) logRejectedSignedTarball(c *gin.Context, fullName string, start time.Time) {
+	h.logRejectedTarball(c, fullName, SignedTarballRouteSegment+"/"+c.Param("filename"), start)
+}
+
+// logRejectedTarball records a refused tarball request so Admin logs show the
+// 404 a client received. The key names the requested path only, and no version
+// is decided for it, so the audit entry names none.
+func (h *Handler) logRejectedTarball(c *gin.Context, fullName, file string, start time.Time) {
+	adapter.LogRefusedAccess(c.Request.Context(), h.db, "npm", c.Request.Method, TarballCacheKey(fullName, file), time.Since(start), http.StatusNotFound, c.ClientIP())
 }
 
 func (h *Handler) handleSignedTarball(c *gin.Context) {
@@ -217,17 +252,20 @@ func (h *Handler) handleScopedSignedTarball(c *gin.Context) {
 }
 
 func (h *Handler) proxyAuthenticatedTarball(c *gin.Context, fullName string) {
+	start := time.Now()
 	filename := c.Param("filename")
 	_, audience := npmRouteContext(c)
 	claims, valid := h.signer.verify(c.Param("token"), audience, fullName, filename)
 	if !valid {
 		// Do not reveal whether the key, claims, package, or filename differed.
 		c.Status(http.StatusNotFound)
+		h.logRejectedSignedTarball(c, fullName, start)
 		return
 	}
 	resolver, ok := h.selector.(upstream.ProvenanceSourceResolver)
 	if !ok {
 		c.Status(http.StatusNotFound)
+		h.logRejectedSignedTarball(c, fullName, start)
 		return
 	}
 	source, err := resolver.ResolveProvenanceSource(claims.Source)
@@ -235,6 +273,7 @@ func (h *Handler) proxyAuthenticatedTarball(c *gin.Context, fullName string) {
 		// A token may not fail over to another mirror when its original source
 		// disappears or changes configuration.
 		c.Status(http.StatusNotFound)
+		h.logRejectedSignedTarball(c, fullName, start)
 		return
 	}
 	adapter.BindAuthenticatedArtifactCoordinate(c, "npm", claims.Package, claims.Version)
@@ -278,7 +317,7 @@ func (h *Handler) proxyTarball(
 	if err != nil {
 		zap.L().Error("failed to get npm tarball", zap.String("package", claims.Package), zap.Error(err))
 		adapter.LogAccess(c.Request.Context(), h.db, "npm", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		c.JSON(http.StatusBadGateway, errorBody("UPSTREAM_UNAVAILABLE", err.Error()))
 		return
 	}
 	defer result.Reader.Close()

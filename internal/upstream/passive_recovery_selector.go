@@ -88,7 +88,7 @@ func (s *PassiveRecoverySelector) selectCandidate(_ context.Context, excluded ..
 	if excludesAny(excluded) {
 		return nil, fmt.Errorf("no healthy alternate upstream")
 	}
-	return nil, fmt.Errorf("all upstreams are unhealthy")
+	return nil, allUnhealthyError(upstreams)
 }
 
 func (u *Upstream) reservePassiveRecovery(now time.Time, cooldown time.Duration) bool {

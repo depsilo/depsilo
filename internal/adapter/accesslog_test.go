@@ -211,6 +211,34 @@ func TestLogAccessPrefersAuthenticatedArtifactCoordinate(t *testing.T) {
 	}
 }
 
+func TestLogRefusedAccessRecordsTheRequestWithoutAVersion(t *testing.T) {
+	accessHooks.Store(nil)
+	t.Cleanup(func() { accessHooks.Store(nil) })
+
+	recorder := &timestampAccessRecorder{}
+	audit := &captureAuditEntries{}
+	InstallAccessHooks(recorder, audit)
+
+	// The same key through LogAccess would put version 9.9.9 in the audit log.
+	const key = "npm-exact-v1/fixture/-/fixture-9.9.9.tgz"
+	LogRefusedAccess(context.Background(), nil, "npm", http.MethodGet, key, time.Millisecond, http.StatusNotFound, "192.0.2.10")
+
+	event := recorder.event
+	if event.AdapterType != "npm" || event.CacheKey != key || event.PackageName != "fixture" ||
+		event.StatusCode != http.StatusNotFound || event.Hit || event.Upstream != "" || event.BytesSent != 0 ||
+		event.CacheResult != "unknown" {
+		t.Fatalf("access event = %+v", event)
+	}
+	if len(audit.entries) != 1 {
+		t.Fatalf("audit entries = %#v, want one", audit.entries)
+	}
+	entry := audit.entries[0]
+	if entry.PackageName != "fixture" || entry.Version != "" || entry.StatusCode != http.StatusNotFound ||
+		entry.CacheResult != "miss" || entry.ClientIP != "192.0.2.10" {
+		t.Fatalf("audit entry = %#v, want the package and no version", entry)
+	}
+}
+
 func TestLogPolicyBlockUsesUnifiedAuditOutcome(t *testing.T) {
 	accessHooks.Store(nil)
 	t.Cleanup(func() { accessHooks.Store(nil) })

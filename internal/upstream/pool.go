@@ -90,6 +90,9 @@ type healthState struct {
 	lastCheckedAt          time.Time
 	// lastFailure explains the newest failed probe; a passing probe clears it.
 	lastFailure *Failure
+	// succeededSinceProbe records a successful exchange after the newest
+	// probe: lastFailure then no longer explains why traffic fails now.
+	succeededSinceProbe bool
 	// slowFailures counts consecutive slow failed exchanges since the last
 	// success or passing probe.
 	slowFailures int
@@ -141,6 +144,7 @@ func (h *healthState) applyProbe(result ProbeResult) {
 	h.healthy = result.Healthy && !h.criticalFailureLatched
 	h.lastCheckedAt = result.CheckedAt
 	h.lastFailure = nil
+	h.succeededSinceProbe = false
 	if !result.Healthy {
 		h.lastFailure = ClassifyFailure(result.Err)
 		if h.lastFailure == nil {
@@ -626,6 +630,7 @@ func (u *Upstream) reportLocked(latency time.Duration, success bool) (tripped bo
 	u.health.totalReqs++
 	if success {
 		u.health.successReqs++
+		u.health.succeededSinceProbe = true
 	}
 	u.health.successRate = float64(u.health.successReqs) / float64(u.health.totalReqs)
 
@@ -730,6 +735,18 @@ func (u *Upstream) HealthSnapshot() HealthSnapshot {
 		RuntimeSampleCount: u.health.totalReqs,
 		LastFailure:        lastFailure,
 	}
+}
+
+// standingFailureCode returns the code of the newest failed probe while it
+// still explains the upstream's state, and "" once an exchange has succeeded
+// since: a later failure then has another, unrecorded cause.
+func (u *Upstream) standingFailureCode() string {
+	u.mu.RLock()
+	defer u.mu.RUnlock()
+	if u.health.lastFailure == nil || u.health.succeededSinceProbe {
+		return ""
+	}
+	return u.health.lastFailure.Code
 }
 
 // AvgLatency returns the current average latency.

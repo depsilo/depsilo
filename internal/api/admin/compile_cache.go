@@ -34,7 +34,7 @@ func NewCompileCacheHandler(database *gorm.DB, service *compilecache.Service, en
 type createCompileCacheCredentialRequest struct {
 	Name        string `json:"name" binding:"required"`
 	Namespace   string `json:"namespace" binding:"required"`
-	Permissions string `json:"permissions" binding:"required,oneof=readonly readwrite"`
+	Permissions string `json:"permissions"`
 	TTLDays     *int   `json:"ttl_days"`
 }
 
@@ -106,6 +106,12 @@ func (h *CompileCacheHandler) CreateCredential(c *gin.Context) {
 	var request createCompileCacheCredentialRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": err.Error()})
+		return
+	}
+	// Required. Checked here rather than by a binding tag so the message lists
+	// the allowed values instead of the validator's "failed on the 'oneof' tag".
+	if request.Permissions != "readonly" && request.Permissions != "readwrite" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": `permissions must be "readonly" or "readwrite"`})
 		return
 	}
 	request.Name = strings.TrimSpace(request.Name)

@@ -195,6 +195,50 @@ func TestCompileCacheCredentialLifecycleUsesConfiguredEndpoint(t *testing.T) {
 	}
 }
 
+func TestCompileCacheCredentialRejectsUnknownPermissionsWithAllowedValues(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "compile-cache-permissions.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.AutoMigrate(&db.CompileCacheCredential{}); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewCompileCacheHandler(database, nil, true, "https://cache.example.test/")
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", uint(7))
+		c.Next()
+	})
+	router.POST("/credentials", handler.CreateCredential)
+
+	for _, body := range []string{
+		`{"name":"ci","namespace":"team-a","permissions":"write"}`,
+		`{"name":"ci","namespace":"team-a","permissions":"ReadWrite"}`,
+		`{"name":"ci","namespace":"team-a","permissions":""}`,
+		`{"name":"ci","namespace":"team-a"}`,
+	} {
+		request := httptest.NewRequest(http.MethodPost, "/credentials", bytes.NewBufferString(body))
+		request.Header.Set("Content-Type", "application/json")
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		var problem struct{ Code, Message string }
+		if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
+			t.Fatalf("%s: body %q is not a JSON error: %v", body, response.Body.String(), err)
+		}
+		if response.Code != http.StatusBadRequest || problem.Code != "BAD_REQUEST" {
+			t.Fatalf("%s = %d %s, want 400 BAD_REQUEST", body, response.Code, response.Body.String())
+		}
+		if problem.Message != `permissions must be "readonly" or "readwrite"` {
+			t.Fatalf("%s message = %q, want the allowed values", body, problem.Message)
+		}
+	}
+	var stored int64
+	if err := database.Model(&db.CompileCacheCredential{}).Count(&stored).Error; err != nil || stored != 0 {
+		t.Fatalf("rejected requests stored %d credentials (err=%v)", stored, err)
+	}
+}
+
 func TestCompileCacheRemoteStorageMatchesClientAndCredentialMode(t *testing.T) {
 	for name, test := range map[string]struct {
 		endpoint    string

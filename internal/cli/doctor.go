@@ -433,7 +433,8 @@ func upstreamFailureHint(codes map[string]int, asked bool) string {
 		return upstreamGenericHint
 	}
 	hint := failureFakeIP + " means DNS answered with fake-IP addresses, as proxy software in TUN/fake-IP mode does: " +
-		"set upstream_proxy under [egress] in config.toml, or give Depsilo a DNS server that returns real addresses; see " + egressGuideAnchor
+		"set upstream_proxy under [egress] in config.toml, or DEPSILO_EGRESS_UPSTREAM_PROXY in the service's environment, " +
+		"or give Depsilo a DNS server that returns real addresses; see " + egressGuideAnchor
 	if len(codes) > 1 {
 		hint += ". For the other codes, " + upstreamGenericHint
 	}

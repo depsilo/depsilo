@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 func npmVersionTarballURL(t *testing.T, packageName, version string) string {
@@ -101,9 +102,63 @@ func TestNpm_LegacyDirectTarballRejected(t *testing.T) {
 	before := mockRequestCountForPath(upstreamPath)
 	resp := httpGet(t, depsiloURL+"/npm"+upstreamPath)
 	assertStatus(t, resp, http.StatusNotFound)
-	_ = readBody(t, resp)
+	// A lockfile that points at the public registry lands here. The 404 says
+	// why and how to get a URL this Depsilo serves.
+	var problem struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+		Error   string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(readBody(t, resp)), &problem); err != nil {
+		t.Fatalf("unsigned npm tarball body is not a JSON error: %v", err)
+	}
+	// npm prints only the "error" field, so it must carry the explanation too.
+	if problem.Code != "NPM_UNSIGNED_TARBALL" || problem.Error != problem.Message ||
+		!strings.Contains(problem.Message, "not issued by this Depsilo") ||
+		!strings.Contains(problem.Message, "npm install --package-lock-only --omit-lockfile-registry-resolved") {
+		t.Fatalf("unsigned npm tarball error = %+v", problem)
+	}
 	if got := mockRequestCountForPath(upstreamPath); got != before {
 		t.Fatalf("unsigned npm tarball contacted upstream: before=%d after=%d", before, got)
+	}
+}
+
+func TestNpm_RejectedTarballReachesAdminLogs(t *testing.T) {
+	// The access-log batch is written every few seconds. Waiting for it between
+	// sequential tests would let the 2s blob TTL expire under the cache-hit
+	// tests, so this one runs after them.
+	t.Parallel()
+
+	const upstreamPath = "/legacy-log-fixture/-/legacy-log-fixture-1.0.0.tgz"
+	resp := httpGet(t, depsiloURL+"/npm"+upstreamPath)
+	assertStatus(t, resp, http.StatusNotFound)
+	_ = readBody(t, resp)
+
+	type accessLogs struct {
+		Items []struct {
+			CacheKey   string `json:"cache_key"`
+			StatusCode int    `json:"status_code"`
+			Upstream   string `json:"upstream"`
+		} `json:"items"`
+	}
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		response := adminGet(t, depsiloURL+"/api/v1/admin/logs?adapter_type=npm&search=legacy-log-fixture")
+		assertStatus(t, response, http.StatusOK)
+		var logs accessLogs
+		if err := json.Unmarshal([]byte(readBody(t, response)), &logs); err != nil {
+			t.Fatalf("decode access logs: %v", err)
+		}
+		for _, item := range logs.Items {
+			if item.StatusCode == http.StatusNotFound && item.Upstream == "" &&
+				strings.HasSuffix(item.CacheKey, upstreamPath) {
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("rejected npm tarball did not reach Admin access logs: %+v", logs.Items)
+		}
+		time.Sleep(250 * time.Millisecond)
 	}
 }
 

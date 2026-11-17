@@ -35,7 +35,7 @@ func (h *TokenHandler) List(c *gin.Context) {
 
 type createTokenRequest struct {
 	Name        string `json:"name" binding:"required"`
-	Permissions string `json:"permissions" binding:"required,oneof=readonly readwrite"`
+	Permissions string `json:"permissions"`
 	TTLDays     int    `json:"ttl_days"` // 0 = never expires
 	TTL         string `json:"ttl"`      // "7d" | "30d" | "90d" | "never" (frontend format)
 }
@@ -44,6 +44,12 @@ func (h *TokenHandler) Create(c *gin.Context) {
 	var req createTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": err.Error()})
+		return
+	}
+	// Required. Checked here rather than by a binding tag so the message lists
+	// the allowed values instead of the validator's "failed on the 'oneof' tag".
+	if req.Permissions != "readonly" && req.Permissions != "readwrite" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": `permissions must be "readonly" or "readwrite"`})
 		return
 	}
 
