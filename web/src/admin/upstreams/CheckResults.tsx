@@ -45,7 +45,7 @@ export function CheckResults({ open, onOpenChange, records }: {
                 </p>
                 {probe && !probe.healthy && probe.failure ? (
                   <>
-                    <FailureReason failure={probe.failure} />
+                    <FailureReason failure={probe.failure} proxySource={(record.result?.upstream ?? record.upstream).proxy_source} />
                     {probe.error && probe.error !== genericCheckError && (
                       <details className="text-[12px] text-muted-foreground">
                         <summary className="w-fit cursor-pointer rounded-sm focus-visible:outline-2 focus-visible:outline-ring">{t('upstreams.failureDetails')}</summary>

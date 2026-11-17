@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -103,6 +104,50 @@ func TestAllUnhealthyErrorNamesTheSharedEgressReason(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// A proxy that is down, or that cannot reach the upstreams it carries, fails
+// them all at once. The message names the proxy and its remedy, whichever
+// way each check failed there, and never calls it a refusal by the outbound
+// guard. [egress] no_proxy keeps hosts off upstream_proxy only, never off an
+// upstream's own proxy, and the remedy says so. Like a guard refusal, the
+// message carries the code only: no status, address or host name.
+func TestAllUnhealthyErrorNamesAFailureAtTheEgressProxy(t *testing.T) {
+	const want = "all upstreams are unhealthy: every upstream failed at the egress proxy (egress_proxy); " +
+		"check that the proxy runs and that [egress] upstream_proxy or an upstream's own proxy points at it; " +
+		"to keep hosts on your own network off upstream_proxy, list them in [egress] no_proxy and restart, " +
+		"see docs/deployment.md#upstream-network-egress"
+	failAtProxy := func(u *Upstream, cause error) {
+		u.applyProbe(ProbeResult{Healthy: false, CheckedAt: time.Now(), Err: &url.Error{Op: "Head", URL: u.URL, Err: cause}})
+	}
+	unreachable := &net.OpError{Op: "proxyconnect", Net: "tcp", Err: &net.OpError{Op: "dial", Net: "tcp", Err: syscall.ECONNREFUSED}}
+	for _, selector := range []struct {
+		name  string
+		build func(*Pool) Selector
+	}{
+		{"priority", func(pool *Pool) Selector { return NewPrioritySelector(pool) }},
+		{"passive recovery", func(pool *Pool) Selector { return NewPassiveRecoverySelector(pool) }},
+	} {
+		t.Run(selector.name, func(t *testing.T) {
+			pool := unhealthyPool(t)
+			upstreams := pool.Snapshot()
+			failAtProxy(upstreams[0], unreachable)
+			failAtProxy(upstreams[1], &proxyConnectError{status: 502})
+			_, err := selector.build(pool).Select(context.Background())
+			if err == nil || err.Error() != want {
+				t.Fatalf("error = %v, want %q", err, want)
+			}
+			if strings.Contains(err.Error(), "outbound guard") || strings.Contains(err.Error(), "502") {
+				t.Fatalf("error %q blames the guard or repeats a status", err)
+			}
+
+			// A guard refusal of the other upstream is a different reason.
+			refuseByGuard(t, upstreams[1], "198.18.0.65")
+			if _, err := selector.build(pool).Select(context.Background()); err == nil || err.Error() != "all upstreams are unhealthy" {
+				t.Fatalf("error with mixed egress reasons = %v, want the plain message", err)
+			}
+		})
 	}
 }
 

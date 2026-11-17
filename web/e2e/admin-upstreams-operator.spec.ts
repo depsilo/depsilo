@@ -496,6 +496,90 @@ test('fake-IP DNS failing every upstream is explained once for the page', async 
     + 'Linux 上的 Docker Engine 还要加 --add-host=host.docker.internal:host-gateway。详见部署指南的“Upstream network egress”一节。')
 })
 
+test('a failure at the egress proxy is explained on the card and in check results', async ({ page }) => {
+  const action = 'Check that the proxy runs and that [egress] upstream_proxy in config.toml, or this upstream\'s HTTP proxy, '
+    + 'points at it. If the proxy cannot reach this upstream because it is on your own network, list its host under '
+    + '[egress] no_proxy and restart, so Depsilo connects to it directly.'
+  // The proxy answered CONNECT with 502; then the check could not reach it.
+  const refused = { code: 'egress_proxy' as const, status: 502 }
+  const unreachable = { code: 'egress_proxy' as const }
+  const failed = makeUpstream(1, {
+    name: 'internal', url: 'https://pypi.internal.example', healthy: false, success_rate: 0, proxy_source: 'default', last_failure: refused,
+  })
+  const result = checkResponse(failed, false)
+  result.upstream.last_failure = unreachable
+  result.check.error = 'upstream check failed'
+  result.check.failure = unreachable
+  await setUiPreferences(page, 'light', 'en')
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/upstreams': listResponse([failed]),
+    'POST /api/v1/admin/upstreams/1/check': result,
+  })
+  await page.goto('/admin/upstreams')
+
+  const reason = page.locator('[data-upstream-row][data-upstream-status="failed"] [data-upstream-failure="egress_proxy"]')
+  await expect(reason).toContainText('The egress proxy refused to open a connection for this upstream (CONNECT answered 502).')
+  await expect(reason).toContainText(action)
+  // It is not a fake-IP answer, so the page has no shared fake-IP notice.
+  await expect(page.locator('[data-upstream-shared-failure]')).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Check internal', exact: true }).click()
+  await page.getByRole('button', { name: /^Check results/ }).click()
+  const check = page.getByRole('dialog', { name: 'Check results', exact: true }).locator('[data-upstream-check-result="1"]')
+  await expect(check.locator('[data-upstream-failure="egress_proxy"]')).toContainText(
+    'Depsilo could not connect to the egress proxy that carries this upstream.')
+  await expect(check.locator('[data-upstream-failure="egress_proxy"]')).toContainText(action)
+  await expect(check).not.toContainText('CONNECT answered')
+  await page.keyboard.press('Escape')
+
+  await setUiPreferences(page, 'light', 'zh')
+  await page.reload()
+  await expect(reason).toContainText('出站代理拒绝为这个上游建立连接（CONNECT 请求返回了 502）。')
+  // An IP entry in no_proxy matches only a URL written with that address.
+  await expect(reason).toContainText('把它 URL 里的主机名（URL 写的是 IP 时就写 IP）加入 [egress] no_proxy 后重启，Depsilo 就会直接连接它。')
+})
+
+test('a failure at an upstream\'s own proxy is not sent to no_proxy, which cannot bypass that proxy', async ({ page }) => {
+  const action = 'Check that the proxy runs and that this upstream\'s HTTP proxy points at it. [egress] no_proxy does not apply '
+    + 'to an upstream with its own HTTP proxy: if the proxy cannot reach this upstream, or its cascade parent, because it is '
+    + 'on your own network, clear this upstream\'s HTTP proxy. An upstream that is not a cascade then uses [egress] '
+    + 'upstream_proxy when one is set, so also list its host under [egress] no_proxy and restart.'
+  const refused = { code: 'egress_proxy' as const, status: 403 }
+  const failed = makeUpstream(1, {
+    name: 'corp', url: 'https://pypi.corp.example', proxy: 'http://proxy.example:3128', healthy: false, success_rate: 0,
+    proxy_source: 'upstream', last_failure: refused,
+  })
+  const result = checkResponse(failed, false)
+  result.upstream.last_failure = refused
+  result.check.error = 'upstream check failed'
+  result.check.failure = refused
+  await setUiPreferences(page, 'light', 'en')
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/upstreams': listResponse([failed]),
+    'POST /api/v1/admin/upstreams/1/check': result,
+  })
+  await page.goto('/admin/upstreams')
+
+  const reason = page.locator('[data-upstream-row][data-upstream-status="failed"] [data-upstream-failure="egress_proxy"]')
+  await expect(reason).toContainText('The egress proxy refused to open a connection for this upstream (CONNECT answered 403).')
+  await expect(reason).toContainText(action)
+  await expect(reason).not.toContainText('so Depsilo connects to it directly')
+
+  await page.getByRole('button', { name: 'Check corp', exact: true }).click()
+  await page.getByRole('button', { name: /^Check results/ }).click()
+  const check = page.getByRole('dialog', { name: 'Check results', exact: true }).locator('[data-upstream-check-result="1"]')
+  await expect(check.locator('[data-upstream-failure="egress_proxy"]')).toContainText(action)
+  await expect(check).not.toContainText('so Depsilo connects to it directly')
+  await page.keyboard.press('Escape')
+
+  await setUiPreferences(page, 'light', 'zh')
+  await page.reload()
+  await expect(reason).toContainText('[egress] no_proxy 对单独配置了 HTTP 代理的上游不起作用')
+  await expect(reason).toContainText('请清空这个上游的 HTTP 代理。')
+  await expect(reason).toContainText('非级联的上游会改用 [egress] upstream_proxy')
+  await expect(reason).not.toContainText('Depsilo 就会直接连接它')
+})
+
 test('bulk checking is capped at four requests and leaves a durable outcome summary', async ({ page }) => {
   const upstreams = Array.from({ length: 6 }, (_, index) => makeUpstream(index + 1, {
     name: `bulk-${index + 1}`,

@@ -748,7 +748,7 @@ export default function Upstreams() {
                 renderMetadata={(upstream) => (
                   <div className="space-y-2 text-[13px] leading-relaxed">
                     <p className="break-all font-mono text-[12px]" title={upstreamEndpointLabel(upstream.url ?? '')}>{upstreamEndpointLabel(upstream.url ?? '')}</p>
-                    {upstream.failure && upstreamStatus(upstream) === 'failed' && <FailureReason failure={upstream.failure} short={sharedFakeIP} />}
+                    {upstream.failure && upstreamStatus(upstream) === 'failed' && <FailureReason failure={upstream.failure} proxySource={upstream.proxySource} short={sharedFakeIP} />}
                     <div className="flex flex-wrap gap-x-4 gap-y-1">
                       <span>{t('upstreams.priorityValue', { priority: upstream.priority ?? 1 })}</span>
                       <span>{upstream.probeMode === 'active' && upstream.workerRunning === false

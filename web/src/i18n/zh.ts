@@ -1442,6 +1442,12 @@ const zh = {
           titleNoAddress: '请求被导向私网或本机地址，但这个上游配置的源站不在私网内，所以被拒绝。',
           action: '局域网内的上游请直接用它的局域网地址作为上游 URL；公网上游不能重定向到私网。',
         },
+        egress_proxy: {
+          title: '出站代理拒绝为这个上游建立连接（CONNECT 请求返回了 {{status}}）。',
+          titleUnreachable: 'Depsilo 无法连接这个上游使用的出站代理。',
+          action: '确认代理正在运行，并且 config.toml 中 [egress] 的 upstream_proxy（或这个上游的 HTTP 代理）指向它。如果这个上游在你自己的网络里、代理访问不到它，把它 URL 里的主机名（URL 写的是 IP 时就写 IP）加入 [egress] no_proxy 后重启，Depsilo 就会直接连接它。',
+          actionOwnProxy: '确认代理正在运行，并且这个上游的 HTTP 代理指向它。[egress] no_proxy 对单独配置了 HTTP 代理的上游不起作用：如果这个上游（或它的级联父节点）在你自己的网络里、代理访问不到，请清空这个上游的 HTTP 代理。清空后，非级联的上游会改用 [egress] upstream_proxy（如果设置了），所以还要把它的主机名也写进 [egress] no_proxy，然后重启。',
+        },
         dns: {
           title: '无法解析这个上游的域名。',
           action: '检查 Depsilo 所在机器的 DNS 设置和网络连接。',

@@ -75,14 +75,16 @@ func orderedUpstreams(pool *Pool) []*Upstream {
 	return upstreams
 }
 
-// egressDocs is where the deployment guide explains the outbound guard.
+// egressDocs is where the deployment guide explains the outbound guard and
+// the egress proxy.
 const egressDocs = "docs/deployment.md#upstream-network-egress"
 
 // allUnhealthyError is what a client receives when no pool member can be
-// selected. When every member's newest check was refused by the outbound guard
-// for the same reason, it names that reason: otherwise a host whose DNS returns
-// fake-IP addresses only ever says that everything is unhealthy. Only the
-// bounded failure code is added, never an address or a host name.
+// selected. When every member's newest check failed for the same egress
+// reason, a refusal by the outbound guard or a failure at the egress proxy, it
+// names that reason: otherwise a host whose DNS returns fake-IP addresses, or
+// a proxy that is down, only ever says that everything is unhealthy. Only the
+// bounded failure code is added, never an address, a host name or a status.
 func allUnhealthyError(upstreams []*Upstream) error {
 	const message = "all upstreams are unhealthy"
 	switch code := sharedEgressFailure(upstreams); code {
@@ -92,14 +94,19 @@ func allUnhealthyError(upstreams []*Upstream) error {
 		return fmt.Errorf("%s: the outbound guard refused every upstream (%s) because DNS returned fake-IP addresses; set [egress] upstream_proxy in config.toml (in a container, the environment variable DEPSILO_EGRESS_UPSTREAM_PROXY) and restart, see %s", message, code, egressDocs)
 	case FailureSharedAddress:
 		return fmt.Errorf("%s: the outbound guard refused every upstream (%s) because they resolve into the shared address space; declare your own range under [egress] private_ranges in config.toml and restart, see %s", message, code, egressDocs)
+	case FailureEgressProxy:
+		// [egress] no_proxy cannot bypass an upstream's own proxy, so the
+		// remedy says which proxy it keeps hosts off.
+		return fmt.Errorf("%s: every upstream failed at the egress proxy (%s); check that the proxy runs and that [egress] upstream_proxy or an upstream's own proxy points at it; to keep hosts on your own network off upstream_proxy, list them in [egress] no_proxy and restart, see %s", message, code, egressDocs)
 	default:
 		return fmt.Errorf("%s: the outbound guard refused every upstream (%s); see %s", message, code, egressDocs)
 	}
 }
 
-// sharedEgressFailure returns the outbound-guard failure code that every
-// upstream's newest failed check carries, or "" when they do not all agree.
-// A check that traffic has succeeded past explains nothing and counts as none.
+// sharedEgressFailure returns the egress failure code (see isEgressFailure)
+// that every upstream's newest failed check carries, or "" when they do not
+// all agree. A check that traffic has succeeded past explains nothing and
+// counts as none.
 func sharedEgressFailure(upstreams []*Upstream) string {
 	shared := ""
 	for _, u := range upstreams {
@@ -112,9 +119,12 @@ func sharedEgressFailure(upstreams []*Upstream) string {
 	return shared
 }
 
+// isEgressFailure reports whether code explains a failure on the way out of
+// Depsilo rather than at the upstream: a refusal by the outbound guard, or a
+// failure at the egress proxy. allUnhealthyError names each such code.
 func isEgressFailure(code string) bool {
 	switch code {
-	case FailureFakeIP, FailureSharedAddress, FailureReserved, FailurePrivate:
+	case FailureFakeIP, FailureSharedAddress, FailureReserved, FailurePrivate, FailureEgressProxy:
 		return true
 	}
 	return false

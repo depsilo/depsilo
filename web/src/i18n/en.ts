@@ -1435,6 +1435,12 @@ const en = {
           titleNoAddress: 'The request was directed to a private or loopback address, but this upstream\'s configured origin is not private, so it was refused.',
           action: 'Configure an upstream on your LAN with its LAN address as the URL. A public upstream cannot redirect into a private network.',
         },
+        egress_proxy: {
+          title: 'The egress proxy refused to open a connection for this upstream (CONNECT answered {{status}}).',
+          titleUnreachable: 'Depsilo could not connect to the egress proxy that carries this upstream.',
+          action: 'Check that the proxy runs and that [egress] upstream_proxy in config.toml, or this upstream\'s HTTP proxy, points at it. If the proxy cannot reach this upstream because it is on your own network, list its host under [egress] no_proxy and restart, so Depsilo connects to it directly.',
+          actionOwnProxy: 'Check that the proxy runs and that this upstream\'s HTTP proxy points at it. [egress] no_proxy does not apply to an upstream with its own HTTP proxy: if the proxy cannot reach this upstream, or its cascade parent, because it is on your own network, clear this upstream\'s HTTP proxy. An upstream that is not a cascade then uses [egress] upstream_proxy when one is set, so also list its host under [egress] no_proxy and restart.',
+        },
         dns: {
           title: 'The upstream host name could not be resolved.',
           action: 'Check DNS settings and network connectivity on the machine running Depsilo.',

@@ -6,7 +6,9 @@ import (
 	"crypto/x509"
 	"errors"
 	"net"
+	"net/http"
 	"net/netip"
+	"net/url"
 	"strconv"
 	"syscall"
 
@@ -14,7 +16,9 @@ import (
 )
 
 // Failure codes explain why an upstream check failed. They are stable API
-// values that Admin maps to operator guidance.
+// values that Admin maps to operator guidance. The egress_ codes other than
+// FailureEgressProxy are refusals by the outbound guard; FailureEgressProxy
+// is a failure at the proxy that carries the upstream.
 const (
 	// FailureFakeIP: DNS answered from a range that local proxies in fake-IP
 	// mode answer public hosts from: a benchmarking range, 198.18.0.0/15
@@ -29,7 +33,20 @@ const (
 	// mixed network scopes.
 	FailureReserved = "egress_reserved"
 	// FailurePrivate: a private or loopback target this origin may not reach.
-	FailurePrivate     = "egress_private"
+	FailurePrivate = "egress_private"
+	// FailureEgressProxy: the request failed at the proxy that carries the
+	// upstream, its own or [egress] upstream_proxy. Either Depsilo could not
+	// connect to the proxy, or the proxy answered the CONNECT request for an
+	// https target with a status other than 200, which Failure.Status holds.
+	// Nothing else tells a failure at the proxy from one at the upstream, so
+	// other failures keep their codes: a proxy that does not answer before
+	// the check's deadline is FailureTimeout, and a tunnel that the proxy
+	// closes, instead of answering or after a 200 that proxy software such
+	// as mihomo sends before it connects, is FailureRefused or
+	// FailureNetwork. A plain-http upstream needs no CONNECT, so the proxy's
+	// answer counts as the upstream's own: a 5xx is FailureHTTPStatus, and a
+	// 4xx passes the check.
+	FailureEgressProxy = "egress_proxy"
 	FailureDNS         = "dns"
 	FailureTimeout     = "timeout"
 	FailureTLS         = "tls"
@@ -47,7 +64,9 @@ type Failure struct {
 	Address string
 	// Range is the special-purpose range containing Address.
 	Range string
-	// Status is the HTTP status of a FailureHTTPStatus result.
+	// Status is the HTTP status of a FailureHTTPStatus result, or the status
+	// with which the egress proxy answered CONNECT in a FailureEgressProxy
+	// result. It is zero when Depsilo could not connect to the proxy.
 	Status int
 }
 
@@ -66,6 +85,26 @@ func (e *EgressDeniedError) Error() string { return e.message }
 type StatusError struct{ Code int }
 
 func (e *StatusError) Error() string { return "upstream returned status " + strconv.Itoa(e.Code) }
+
+// proxyConnectError reports an egress proxy that answered the CONNECT request
+// for an https target with a status other than 200. It holds only the status:
+// the status text and body are the proxy's own and stay out of messages.
+type proxyConnectError struct{ status int }
+
+func (e *proxyConnectError) Error() string {
+	return "egress proxy refused CONNECT (" + strconv.Itoa(e.status) + ")"
+}
+
+// refuseProxyConnect is the http.Transport.OnProxyConnectResponse of every
+// proxied upstream client. Without it, Go fails the request with the status
+// text of the proxy's answer, which ClassifyFailure cannot tell apart from
+// any other network failure.
+func refuseProxyConnect(_ context.Context, _ *url.URL, _ *http.Request, response *http.Response) error {
+	if response.StatusCode != http.StatusOK {
+		return &proxyConnectError{status: response.StatusCode}
+	}
+	return nil
+}
 
 // unsafeDenial names the first refused address among a resolver answer, and
 // the range that makes it unsafe when one does.
@@ -149,6 +188,19 @@ func ClassifyFailure(err error) *Failure {
 	var status *StatusError
 	if errors.As(err, &status) {
 		return &Failure{Code: FailureHTTPStatus, Status: status.Code}
+	}
+	// Both egress proxy failures come first. Go wraps the error of a failed
+	// connection to the proxy, whether resolving or dialing it or the TLS
+	// handshake with an https proxy failed, in a *net.OpError whose Op is
+	// "proxyconnect", and the rules below would read that cause as the
+	// upstream's own.
+	var connect *proxyConnectError
+	if errors.As(err, &connect) {
+		return &Failure{Code: FailureEgressProxy, Status: connect.status}
+	}
+	var opErr *net.OpError
+	if errors.As(err, &opErr) && opErr.Op == "proxyconnect" {
+		return &Failure{Code: FailureEgressProxy}
 	}
 	var dnsErr *net.DNSError
 	if errors.As(err, &dnsErr) {

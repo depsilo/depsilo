@@ -783,6 +783,9 @@ func buildClient(proxy, origin string, policy egress.Policy) (*http.Client, erro
 			return nil, fmt.Errorf("parse proxy URL %s: invalid URL", safeURLOrigin(proxy))
 		}
 		transport.Proxy = http.ProxyURL(proxyURL)
+		// Probes, Admin checks, fetches and a cascade parent's relay calls
+		// all share this transport, so the hook covers each of them.
+		transport.OnProxyConnectResponse = refuseProxyConnect
 		zap.L().Info("using proxy", zap.String("proxy", safeURLOrigin(proxy)))
 	} else {
 		dialer := &net.Dialer{

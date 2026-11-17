@@ -1033,6 +1033,7 @@ export type UpstreamFailureCode =
   | 'egress_shared_address'
   | 'egress_reserved'
   | 'egress_private'
+  | 'egress_proxy'
   | 'dns'
   | 'timeout'
   | 'tls'
@@ -1045,6 +1046,7 @@ export interface UpstreamFailure {
   code: UpstreamFailureCode
   address?: string
   range?: string
+  /** HTTP status of http_status, or the egress proxy's CONNECT answer for egress_proxy (absent when the proxy could not be reached). */
   status?: number
 }
 
