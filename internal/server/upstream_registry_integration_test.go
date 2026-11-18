@@ -22,6 +22,7 @@ import (
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
+	"depsilo/internal/ecosystem"
 	"depsilo/internal/upstream"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -604,7 +605,7 @@ func TestSeedSourcesExcludeDefaultedAlpineAndActiveDefinitionsExcludeInactive(t 
 		Alpine:                     config.AdapterConfig{Upstreams: []config.UpstreamConfig{{Name: "built-in", URL: "https://dl-cdn.alpinelinux.org/alpine", Priority: 1}}},
 	}
 	definitions := standardEcosystemDefinitions(cfg, nil)
-	result, err := upstream.ReconcileBootstrap(serverTestDB(t), seedSources(definitions))
+	result, err := upstream.ReconcileBootstrap(serverTestDB(t), seedSources(definitions), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -842,5 +843,22 @@ func TestRegisterActiveAdaptersInjectsPyPIProvenanceKey(t *testing.T) {
 		adapterProvenanceWiring{pypiKey: []byte(strings.Repeat("k", 32))},
 	); err != nil {
 		t.Fatalf("registerActiveAdapters with PyPI provenance key: %v", err)
+	}
+}
+
+func TestBuiltInSeedSourcesActivateEverySetupEcosystemBeforeSetup(t *testing.T) {
+	result, err := upstream.ReconcileBootstrap(serverTestDB(t), nil, builtInSeedSources())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := make([]string, 0)
+	for _, definition := range ecosystem.SetupDefinitions() {
+		want = append(want, definition.Name)
+	}
+	if !reflect.DeepEqual(result.ActiveEcosystems, want) {
+		t.Fatalf("active=%v want=%v", result.ActiveEcosystems, want)
+	}
+	if _, err := activeDefinitions(standardEcosystemDefinitions(&config.Config{}, nil), result.ActiveEcosystems); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -385,8 +385,9 @@ clean-all: clean                ## 额外删除本地运行数据与开发 JWT�
 
 lint: lint-go lint-web lint-i18n  ## Go/前端/i18n 静态检查
 
-generate:                       ## 由 internal/api/contract 重新生成前端 API 类型
+generate:                       ## 重新生成前端 API 类型与设置向导默认上游
 	$(GO_DEV_TOOL) tygo generate
+	DEPSILO_UPDATE_GENERATED=1 go test ./internal/ecosystem -run TestSetupWizardDefaultsAreGeneratedFromTheCatalog -count=1
 
 lint-go: prepare-go             # 内部：检查 gofmt、go vet、staticcheck、不可达函数与生成的 API 类型
 	@unformatted="$$(git ls-files --cached --others --exclude-standard -z -- '*.go' | \

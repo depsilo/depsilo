@@ -55,7 +55,7 @@ func TestReconcileBootstrap_FirstSeedMergesLegacyRowsAndWritesBothStates(t *test
 	got, err := ReconcileBootstrap(database, []SeedSource{
 		source("pypi", config.UpstreamConfig{Name: "legacy", URL: "https://config-must-not-overwrite.example", Priority: 9}, config.UpstreamConfig{Name: "fallback", URL: "https://fallback.example", Priority: 2}),
 		source("npm", config.UpstreamConfig{Name: "npmjs", URL: "https://registry.npmjs.org", Priority: 1}),
-	})
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,13 +103,13 @@ func TestReconcileBootstrap_SeededRestartDoesNotRestoreDeletedActiveRow(t *testi
 		config.UpstreamConfig{Name: "primary", URL: "https://one.example", Priority: 1},
 		config.UpstreamConfig{Name: "secondary", URL: "https://two.example", Priority: 2},
 	)}
-	if _, err := ReconcileBootstrap(database, sources); err != nil {
+	if _, err := ReconcileBootstrap(database, sources, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := database.Where("adapter_type = ? AND name = ?", "pypi", "secondary").Delete(&dbmodel.UpstreamRecord{}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ReconcileBootstrap(database, sources); err != nil {
+	if _, err := ReconcileBootstrap(database, sources, nil); err != nil {
 		t.Fatal(err)
 	}
 	var count int64
@@ -121,14 +121,14 @@ func TestReconcileBootstrap_SeededRestartDoesNotRestoreDeletedActiveRow(t *testi
 
 func TestReconcileBootstrap_SeededConfigActivatesOnlyNewEcosystem(t *testing.T) {
 	database := bootstrapDB(t)
-	if _, err := ReconcileBootstrap(database, []SeedSource{source("pypi", config.UpstreamConfig{Name: "one", URL: "https://one.example", Priority: 1})}); err != nil {
+	if _, err := ReconcileBootstrap(database, []SeedSource{source("pypi", config.UpstreamConfig{Name: "one", URL: "https://one.example", Priority: 1})}, nil); err != nil {
 		t.Fatal(err)
 	}
 
 	got, err := ReconcileBootstrap(database, []SeedSource{
 		source("pypi", config.UpstreamConfig{Name: "must-not-import", URL: "https://must-not-import.example", Priority: 2}),
 		source("npm", config.UpstreamConfig{Name: "npmjs", URL: "https://registry.npmjs.org", Priority: 1}),
-	})
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestReconcileBootstrap_MigratesExactLegacyBuiltInUpstreamURLs(t *testing.T)
 		}
 	}
 
-	bootstrap, err := ReconcileBootstrap(database, nil)
+	bootstrap, err := ReconcileBootstrap(database, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +249,7 @@ func TestReconcileBootstrap_MigratesExactLegacyBuiltInUpstreamURLs(t *testing.T)
 	if err := database.Order("id").Find(&afterFirst).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ReconcileBootstrap(database, nil); err != nil {
+	if _, err := ReconcileBootstrap(database, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	var afterSecond []dbmodel.UpstreamRecord
@@ -304,7 +304,7 @@ func TestReconcileBootstrap_DoesNotMigrateCustomizedUpstreamURLs(t *testing.T) {
 			if err := database.First(&before, record.ID).Error; err != nil {
 				t.Fatal(err)
 			}
-			if _, err := ReconcileBootstrap(database, nil); err != nil {
+			if _, err := ReconcileBootstrap(database, nil, nil); err != nil {
 				t.Fatal(err)
 			}
 			var after dbmodel.UpstreamRecord
@@ -358,7 +358,7 @@ func TestReconcileBootstrap_LegacyRubyGemsRenameConflictFallsBackToURLOnly(t *te
 		t.Fatal(err)
 	}
 
-	if _, err := ReconcileBootstrap(database, nil); err != nil {
+	if _, err := ReconcileBootstrap(database, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	var legacyAfter, operatorAfter dbmodel.UpstreamRecord
@@ -402,7 +402,7 @@ func TestReconcileBootstrap_BuiltInURLMigrationDoesNotOverrideLaterAdminEdit(t *
 			t.Fatal(err)
 		}
 	}
-	if _, err := ReconcileBootstrap(database, nil); err != nil {
+	if _, err := ReconcileBootstrap(database, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := database.Model(&record).UpdateColumns(map[string]any{
@@ -415,7 +415,7 @@ func TestReconcileBootstrap_BuiltInURLMigrationDoesNotOverrideLaterAdminEdit(t *
 		t.Fatal(err)
 	}
 
-	if _, err := ReconcileBootstrap(database, nil); err != nil {
+	if _, err := ReconcileBootstrap(database, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	var after dbmodel.UpstreamRecord
@@ -431,7 +431,7 @@ func TestReconcileBootstrap_FirstSeedPreservesExplicitOldConfigDefaults(t *testi
 	database := bootstrapDB(t)
 	got, err := ReconcileBootstrap(database, []SeedSource{source("cargo", config.UpstreamConfig{
 		Name: "rsproxy", URL: "https://rsproxy.cn/index", Priority: 1,
-	})})
+	})}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -463,7 +463,7 @@ func TestReconcileBootstrap_FirstSeedMigratesPreexistingLegacyRow(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	got, err := ReconcileBootstrap(database, nil)
+	got, err := ReconcileBootstrap(database, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -482,13 +482,13 @@ func TestReconcileBootstrap_FirstSeedMigratesPreexistingLegacyRow(t *testing.T) 
 func TestReconcileBootstrap_ActiveEcosystemWithoutRowsFailsAndDoesNotReimport(t *testing.T) {
 	database := bootstrapDB(t)
 	sources := []SeedSource{source("pypi", config.UpstreamConfig{Name: "one", URL: "https://one.example", Priority: 1})}
-	if _, err := ReconcileBootstrap(database, sources); err != nil {
+	if _, err := ReconcileBootstrap(database, sources, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := database.Where("adapter_type = ?", "pypi").Delete(&dbmodel.UpstreamRecord{}).Error; err != nil {
 		t.Fatal(err)
 	}
-	_, err := ReconcileBootstrap(database, sources)
+	_, err := ReconcileBootstrap(database, sources, nil)
 	if err == nil || err.Error() != "active ecosystem pypi has no upstreams" {
 		t.Fatalf("err=%v", err)
 	}
@@ -509,7 +509,7 @@ func TestReconcileBootstrap_IgnoresDockerAndExtraRecords(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	got, err := ReconcileBootstrap(database, []SeedSource{source("pypi")})
+	got, err := ReconcileBootstrap(database, []SeedSource{source("pypi")}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -566,7 +566,7 @@ func TestReconcileBootstrap_ValidatesAllSourcesBeforeWriting(t *testing.T) {
 			}
 			wantRows, wantStates := bootstrapRowCounts(t, database)
 
-			got, err := ReconcileBootstrap(database, tt.sources)
+			got, err := ReconcileBootstrap(database, tt.sources, nil)
 			if err == nil {
 				t.Fatal("expected validation error")
 			}
@@ -594,7 +594,7 @@ func TestReconcileBootstrap_NormalizesSeedValues(t *testing.T) {
 	database := bootstrapDB(t)
 	got, err := ReconcileBootstrap(database, []SeedSource{source("pypi", config.UpstreamConfig{
 		Name: " primary ", URL: " https://pypi.example/simple ", Proxy: " http://proxy.example ", Priority: 1, ProbeInterval: "60m",
-	})})
+	})}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -636,7 +636,7 @@ func TestReconcileBootstrap_RejectsCorruptPersistedState(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			got, err := ReconcileBootstrap(database, nil)
+			got, err := ReconcileBootstrap(database, nil, nil)
 			if err == nil {
 				t.Fatal("expected persisted state error")
 			}
@@ -676,7 +676,7 @@ func TestReconcileBootstrap_RejectsInvalidBuiltInDefaultsVersionWithoutWriting(t
 				t.Fatal(err)
 			}
 
-			if _, err := ReconcileBootstrap(database, nil); err == nil || err.Error() != test.wantErr {
+			if _, err := ReconcileBootstrap(database, nil, nil); err == nil || err.Error() != test.wantErr {
 				t.Fatalf("err=%v want=%q", err, test.wantErr)
 			}
 			var after dbmodel.UpstreamRecord
@@ -719,7 +719,7 @@ func TestReconcileBootstrap_CanonicalizesPersistedActiveOrderAndAcceptsEmpty(t *
 			if err := database.Create(&dbmodel.ControlPlaneState{Key: ActiveEcosystemsKey, Value: tc.stored}).Error; err != nil {
 				t.Fatal(err)
 			}
-			got, err := ReconcileBootstrap(database, nil)
+			got, err := ReconcileBootstrap(database, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -740,7 +740,7 @@ func TestReconcileBootstrap_StateSaveFailureRollsBackRowsAndMarker(t *testing.T)
 	}
 	wantRows, wantStates := bootstrapRowCounts(t, database)
 
-	got, err := ReconcileBootstrap(database, []SeedSource{source("pypi", config.UpstreamConfig{Name: "one", URL: "https://one.example", Priority: 1})})
+	got, err := ReconcileBootstrap(database, []SeedSource{source("pypi", config.UpstreamConfig{Name: "one", URL: "https://one.example", Priority: 1})}, nil)
 	if err == nil {
 		t.Fatal("expected injected state-save error")
 	}
@@ -799,7 +799,7 @@ func TestReconcileBootstrap_LaterStateSaveFailureRollsBackBuiltInMigrationAndVer
 	if err := database.Exec(trigger).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ReconcileBootstrap(database, nil); err == nil {
+	if _, err := ReconcileBootstrap(database, nil, nil); err == nil {
 		t.Fatal("expected injected state-save error")
 	}
 
@@ -836,7 +836,7 @@ func TestReconcileBootstrap_ConcurrentCallsAreIdempotent(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		go func() {
 			start.Wait()
-			got, err := ReconcileBootstrap(database, sources)
+			got, err := ReconcileBootstrap(database, sources, nil)
 			results <- got
 			errs <- err
 		}()
@@ -860,3 +860,135 @@ func TestReconcileBootstrap_ConcurrentCallsAreIdempotent(t *testing.T) {
 }
 
 func stringPtr(value string) *string { return &value }
+
+func builtInSources() []SeedSource {
+	return []SeedSource{
+		source("pypi", config.UpstreamConfig{Name: "tuna", URL: "https://pypi.tuna.example", Priority: 1}, config.UpstreamConfig{Name: "official", URL: "https://pypi.example", Priority: 2}),
+		source("npm", config.UpstreamConfig{Name: "npmmirror", URL: "https://npm.example", Priority: 1}),
+	}
+}
+
+func upstreamNames(t *testing.T, database *gorm.DB) []string {
+	t.Helper()
+	var rows []dbmodel.UpstreamRecord
+	if err := database.Order("adapter_type, name").Find(&rows).Error; err != nil {
+		t.Fatal(err)
+	}
+	names := make([]string, 0, len(rows))
+	for _, row := range rows {
+		names = append(names, row.AdapterType+"/"+row.Name)
+	}
+	return names
+}
+
+func TestReconcileBootstrap_UnconfiguredInstanceServesBuiltInDefaults(t *testing.T) {
+	database := bootstrapDB(t)
+	for range 2 { // a restart before setup keeps the same rows
+		got, err := ReconcileBootstrap(database, nil, builtInSources())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := []string{"pypi", "npm"}; !reflect.DeepEqual(got.ActiveEcosystems, want) {
+			t.Fatalf("active=%v want=%v", got.ActiveEcosystems, want)
+		}
+	}
+	if got, want := upstreamNames(t, database), []string{"npm/npmmirror", "pypi/official", "pypi/tuna"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("upstreams=%v want=%v", got, want)
+	}
+}
+
+func TestReconcileBootstrap_UnconfiguredInstanceSeededEmptyByOlderReleaseGetsDefaults(t *testing.T) {
+	database := bootstrapDB(t)
+	if _, err := ReconcileBootstrap(database, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReconcileBootstrap(database, nil, builtInSources())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"pypi", "npm"}; !reflect.DeepEqual(got.ActiveEcosystems, want) {
+		t.Fatalf("active=%v want=%v", got.ActiveEcosystems, want)
+	}
+}
+
+func TestReconcileBootstrap_UnconfiguredInstanceKeepsPersistedUpstreams(t *testing.T) {
+	// A database that already holds Upstreams (its config file was removed)
+	// keeps them instead of gaining the defaults.
+	database := bootstrapDB(t)
+	if _, err := ReconcileBootstrap(database, []SeedSource{source("cargo", config.UpstreamConfig{Name: "own", URL: "https://crates.example", Priority: 1})}, nil); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReconcileBootstrap(database, nil, builtInSources())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"cargo"}; !reflect.DeepEqual(got.ActiveEcosystems, want) {
+		t.Fatalf("active=%v want=%v", got.ActiveEcosystems, want)
+	}
+	if got, want := upstreamNames(t, database), []string{"cargo/own"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("upstreams=%v want=%v", got, want)
+	}
+}
+
+func TestReconcileBootstrap_ConfigAfterSetupReplacesBuiltInDefaults(t *testing.T) {
+	database := bootstrapDB(t)
+	if _, err := ReconcileBootstrap(database, nil, builtInSources()); err != nil {
+		t.Fatal(err)
+	}
+	var tuna dbmodel.UpstreamRecord
+	if err := database.Where("adapter_type = ? AND name = ?", "pypi", "tuna").First(&tuna).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Create(&dbmodel.UpstreamLatencyLog{UpstreamID: tuna.ID, LatencyMs: 12}).Error; err != nil {
+		t.Fatal(err)
+	}
+	docker := dbmodel.UpstreamRecord{AdapterType: "docker", Name: "hub", URL: "https://registry-1.docker.io", Priority: 1}
+	if err := database.Create(&docker).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	// The wizard kept PyPI with one changed Upstream and dropped npm.
+	setup := []SeedSource{source("pypi", config.UpstreamConfig{Name: "tuna", URL: "https://pypi.chosen.example", Priority: 1})}
+	for range 2 { // and a later restart changes nothing
+		got, err := ReconcileBootstrap(database, setup, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := []string{"pypi"}; !reflect.DeepEqual(got.ActiveEcosystems, want) {
+			t.Fatalf("active=%v want=%v", got.ActiveEcosystems, want)
+		}
+	}
+	if got, want := upstreamNames(t, database), []string{"docker/hub", "pypi/tuna"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("upstreams=%v want=%v", got, want)
+	}
+	var chosen dbmodel.UpstreamRecord
+	if err := database.Where("adapter_type = ? AND name = ?", "pypi", "tuna").First(&chosen).Error; err != nil {
+		t.Fatal(err)
+	}
+	if chosen.URL != "https://pypi.chosen.example" {
+		t.Fatalf("pypi/tuna URL=%q, want the configured one", chosen.URL)
+	}
+	var history, origin int64
+	database.Model(&dbmodel.UpstreamLatencyLog{}).Count(&history)
+	database.Model(&dbmodel.ControlPlaneState{}).Where("key = ?", seedOriginKey).Count(&origin)
+	if history != 0 || origin != 0 {
+		t.Fatalf("latency rows=%d origin markers=%d, want none left from the built-in seed", history, origin)
+	}
+}
+
+func TestReconcileBootstrap_ConfigWithoutUpstreamsAfterBuiltInServesNothing(t *testing.T) {
+	database := bootstrapDB(t)
+	if _, err := ReconcileBootstrap(database, nil, builtInSources()); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReconcileBootstrap(database, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.ActiveEcosystems) != 0 {
+		t.Fatalf("active=%v, want none", got.ActiveEcosystems)
+	}
+	if names := upstreamNames(t, database); len(names) != 0 {
+		t.Fatalf("upstreams=%v, want none", names)
+	}
+}

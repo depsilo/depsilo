@@ -119,6 +119,22 @@ func seedSources(definitions []ecosystemDef) []upstream.SeedSource {
 	return sources
 }
 
+// builtInSeedSources returns the setup wizard's default Upstreams, which an
+// instance without a config file serves from.
+func builtInSeedSources() []upstream.SeedSource {
+	definitions := ecosystem.SetupDefinitions()
+	sources := make([]upstream.SeedSource, 0, len(definitions))
+	for _, definition := range definitions {
+		defaults := ecosystem.DefaultUpstreams(definition.Name)
+		upstreams := make([]config.UpstreamConfig, 0, len(defaults))
+		for _, item := range defaults {
+			upstreams = append(upstreams, config.UpstreamConfig{Name: item.Name, URL: item.URL, Priority: item.Priority})
+		}
+		sources = append(sources, upstream.SeedSource{Ecosystem: definition.Name, Upstreams: upstreams})
+	}
+	return sources
+}
+
 func activeDefinitions(definitions []ecosystemDef, active []string) ([]ecosystemDef, error) {
 	byName := make(map[string]ecosystemDef, len(definitions))
 	for _, definition := range definitions {

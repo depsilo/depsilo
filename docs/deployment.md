@@ -332,6 +332,14 @@ A generated bootstrap token changes every time Depsilo starts, until setup is
 complete; print it again after a restart. A token preset through
 `DEPSILO_BOOTSTRAP_TOKEN` stays the same across restarts.
 
+**Before setup.** Package routes already work: an instance without
+`config.toml` serves every ecosystem the setup page offers, from the Upstreams
+the page proposes (regional mirrors first, then the official registry).
+Clients can use it right away. Admin, sign-in, and the Portal's connection
+guide wait for setup. Finishing setup replaces those Upstreams with the ones
+in the form when the service restarts. Cached files stay when the cache path
+is unchanged, and the form proposes the port already in use.
+
 1. Open the Portal at the address exposed by your deployment and enter the
    bootstrap token.
 2. Create the first administrator. There is no default administrator password.
@@ -1952,8 +1960,9 @@ Upstream is reachable or that a dependency download will succeed.
 `doctor` exits with 1 when any check fails. `status` exits with 1 only when
 the service cannot be reached or is not healthy.
 
-While first-run setup is pending, the service is healthy and `/ready`
-answers `200`, but no administrator can sign in yet. `doctor` then reports a
+While first-run setup is pending, the service is healthy, `/ready`
+answers `200`, and package routes serve from the built-in Upstreams, but no
+administrator can sign in yet. `doctor` then reports a
 failed `Initial setup` check and exits with 1. `status` prints a line that
 starts with `Setup:   pending` and exits with 0. Both `--json` outputs carry
 the boolean `setup_required`.

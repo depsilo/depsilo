@@ -5,6 +5,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+- Package routes work before first-run setup. An instance without
+  `config.toml` serves every ecosystem the setup page offers, from the
+  Upstreams the page proposes (regional mirrors first, then the official
+  registry); previously every package route answered 404 until setup.
+  Finishing setup replaces those Upstreams with the ones in the form on the
+  next start. A database that already holds Upstreams keeps them. The setup
+  page's defaults now come from the server's catalog
+  (`internal/ecosystem/defaults.go`), so the two cannot drift.
+
 ## [0.15.0] - 2026-11-18
 
 ### Added

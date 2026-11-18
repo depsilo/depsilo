@@ -21,6 +21,11 @@ const (
 	ActiveEcosystemsKey       = "upstreams_active_ecosystems_v1"
 	builtInDefaultsVersionKey = "upstreams_builtin_defaults_version"
 	builtInDefaultsV1         = 1
+	// seedOriginKey records that the persisted Upstreams are the built-in
+	// defaults an instance without a config file serves from, not ones an
+	// operator chose. Its only value is seedOriginBuiltIn.
+	seedOriginKey     = "upstreams_seed_origin_v1"
+	seedOriginBuiltIn = "builtin"
 )
 
 var supportedEcosystems = standardUpstreamNames()
@@ -51,10 +56,23 @@ type BootstrapResult struct {
 	ActiveEcosystems []string
 }
 
-func ReconcileBootstrap(database *gorm.DB, sources []SeedSource) (BootstrapResult, error) {
+// ReconcileBootstrap brings the persisted Upstreams in line with the explicit
+// config sources and returns the ecosystems to serve.
+//
+// builtIn is non-nil only while no config file exists. Then, if no Upstream
+// of a standard ecosystem is persisted yet, the instance seeds and serves
+// builtIn, so package routes work before first-run setup. Once a config file
+// exists (builtIn is nil), Upstreams seeded that way are removed and the
+// config is imported as on a fresh database: the setup wizard's choice
+// replaces the defaults instead of being merged into them.
+func ReconcileBootstrap(database *gorm.DB, sources []SeedSource, builtIn []SeedSource) (BootstrapResult, error) {
 	explicit, err := indexSeedSources(sources)
 	if err != nil {
 		return BootstrapResult{}, err
+	}
+	defaults, err := indexSeedSources(builtIn)
+	if err != nil {
+		return BootstrapResult{}, fmt.Errorf("built-in defaults: %w", err)
 	}
 	bootstrapMu.Lock()
 	defer bootstrapMu.Unlock()
@@ -69,6 +87,30 @@ func ReconcileBootstrap(database *gorm.DB, sources []SeedSource) (BootstrapResul
 		seeded := markerErr == nil
 		if seeded && marker.Value != "true" {
 			return fmt.Errorf("invalid seed marker value %q", marker.Value)
+		}
+		fromBuiltIn, err := seededFromBuiltIn(tx)
+		if err != nil {
+			return err
+		}
+		if fromBuiltIn && builtIn == nil {
+			if err := releaseBuiltInSeed(tx); err != nil {
+				return err
+			}
+			seeded, fromBuiltIn = false, false
+		}
+		if builtIn != nil && !fromBuiltIn && len(explicit) == 0 {
+			persisted, err := countStandardUpstreams(tx)
+			if err != nil {
+				return err
+			}
+			if persisted == 0 {
+				// Nothing to preserve: either a new database, or one an older
+				// release seeded with no ecosystem before setup.
+				explicit, seeded = defaults, false
+				if err := tx.Save(&db.ControlPlaneState{Key: seedOriginKey, Value: seedOriginBuiltIn}).Error; err != nil {
+					return fmt.Errorf("save seed origin: %w", err)
+				}
+			}
 		}
 		defaultsVersion, err := loadBuiltInDefaultsVersion(tx)
 		if err != nil {
@@ -163,6 +205,46 @@ func ReconcileBootstrap(database *gorm.DB, sources []SeedSource) (BootstrapResul
 		return BootstrapResult{}, err
 	}
 	return BootstrapResult{ActiveEcosystems: append(make([]string, 0, len(active)), active...)}, nil
+}
+
+func seededFromBuiltIn(tx *gorm.DB) (bool, error) {
+	var state db.ControlPlaneState
+	err := tx.First(&state, "key = ?", seedOriginKey).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("load seed origin: %w", err)
+	}
+	if state.Value != seedOriginBuiltIn {
+		return false, fmt.Errorf("invalid seed origin %q", state.Value)
+	}
+	return true, nil
+}
+
+func countStandardUpstreams(tx *gorm.DB) (int64, error) {
+	var count int64
+	if err := tx.Model(&db.UpstreamRecord{}).Where("adapter_type IN ?", supportedEcosystems).Count(&count).Error; err != nil {
+		return 0, fmt.Errorf("count persisted upstreams: %w", err)
+	}
+	return count, nil
+}
+
+// releaseBuiltInSeed removes the built-in Upstreams and the seed state so the
+// config can be imported as on a fresh database. Nobody can have edited those
+// rows: no administrator exists before setup.
+func releaseBuiltInSeed(tx *gorm.DB) error {
+	builtIn := tx.Model(&db.UpstreamRecord{}).Select("id").Where("adapter_type IN ?", supportedEcosystems)
+	if err := tx.Where("upstream_id IN (?)", builtIn).Delete(&db.UpstreamLatencyLog{}).Error; err != nil {
+		return fmt.Errorf("clear built-in upstream history: %w", err)
+	}
+	if err := tx.Where("adapter_type IN ?", supportedEcosystems).Delete(&db.UpstreamRecord{}).Error; err != nil {
+		return fmt.Errorf("remove built-in upstreams: %w", err)
+	}
+	if err := tx.Where("key IN ?", []string{SeedMarkerKey, ActiveEcosystemsKey, seedOriginKey}).Delete(&db.ControlPlaneState{}).Error; err != nil {
+		return fmt.Errorf("clear built-in seed state: %w", err)
+	}
+	return nil
 }
 
 func loadBuiltInDefaultsVersion(tx *gorm.DB) (int, error) {

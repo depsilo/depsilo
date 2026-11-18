@@ -159,7 +159,12 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		return nil, fmt.Errorf("initialize operator identity: %w", err)
 	}
 	seedDefinitions := standardEcosystemDefinitions(cfg, nil)
-	bootstrap, err := upstream.ReconcileBootstrap(database, seedSources(seedDefinitions))
+	var builtInUpstreams []upstream.SeedSource
+	if cfg.IsDefault {
+		// No config file yet: serve the wizard's defaults until setup writes one.
+		builtInUpstreams = builtInSeedSources()
+	}
+	bootstrap, err := upstream.ReconcileBootstrap(database, seedSources(seedDefinitions), builtInUpstreams)
 	if err != nil {
 		return nil, fmt.Errorf("reconcile upstream control plane: %w", err)
 	}

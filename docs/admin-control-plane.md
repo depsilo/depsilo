@@ -345,6 +345,12 @@ The first upgraded start imports ordinary configured upstreams and records the a
 ecosystems. After that seed, the database is authoritative for active ecosystems; restart
 does not restore a row deleted through Admin. Adding config upstreams for a previously
 inactive supported ecosystem activates and imports that ecosystem on the next restart.
+An instance without a config file seeds the Upstreams the setup page proposes
+(`internal/ecosystem/defaults.go`) when no ordinary Upstream is persisted yet, so package
+routes serve before first-run setup. Those rows are marked as built-in: the first start
+with a config file deletes them and their probe history and imports the config as on a
+fresh database, so the setup form's choice replaces the defaults instead of merging with
+them. A database that already holds Upstreams keeps them and gains no defaults.
 Versioned endpoint repairs are the narrow exception: an upgrade may rewrite an exact
 legacy built-in adapter/name/URL triple once, while preserving its ID, proxy, priority,
 and probe settings. Custom URLs are never matched, and later Admin edits remain

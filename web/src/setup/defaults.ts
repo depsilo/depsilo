@@ -1,3 +1,5 @@
+import { setupUpstreamDefaults } from '@/lib/generated/setupUpstreamDefaults'
+
 export interface UpstreamDefault {
   name: string
   url: string
@@ -11,108 +13,26 @@ export interface EcosystemDefault {
   upstreams: UpstreamDefault[]
 }
 
-export const ecosystemDefaults: EcosystemDefault[] = [
-  {
-    key: 'pypi',
-    label: 'PyPI (pip)',
-    upstreams: [
-      { name: 'tuna', url: 'https://pypi.tuna.tsinghua.edu.cn', priority: 1 },
-      { name: 'official', url: 'https://pypi.org', priority: 2 },
-    ],
-  },
-  {
-    key: 'apt',
-    label: 'APT (Debian/Ubuntu)',
-    upstreams: [
-      { name: 'tuna', url: 'https://mirrors.tuna.tsinghua.edu.cn', priority: 1 },
-      { name: 'aliyun', url: 'https://mirrors.aliyun.com', priority: 2 },
-    ],
-  },
-  {
-    key: 'npm',
-    label: 'npm (Node.js)',
-    upstreams: [
-      { name: 'npmmirror', url: 'https://registry.npmmirror.com', priority: 1 },
-      { name: 'official', url: 'https://registry.npmjs.org', priority: 2 },
-    ],
-  },
-  {
-    key: 'go',
-    label: 'Go Modules',
-    upstreams: [
-      { name: 'goproxy-cn', url: 'https://goproxy.cn', priority: 1 },
-      { name: 'official', url: 'https://proxy.golang.org', priority: 2 },
-    ],
-  },
-  {
-    key: 'cargo',
-    label: 'Cargo (Rust)',
-    upstreams: [
-      { name: 'rsproxy', url: 'https://rsproxy.cn/index/', priority: 1 },
-      { name: 'crates-io', url: 'https://index.crates.io', priority: 2 },
-    ],
-  },
-  {
-    key: 'maven',
-    label: 'Maven (Java)',
-    upstreams: [
-      { name: 'aliyun', url: 'https://maven.aliyun.com/repository/public', priority: 1 },
-      { name: 'central', url: 'https://repo.maven.apache.org/maven2/', priority: 2 },
-    ],
-  },
-  {
-    key: 'rubygems',
-    label: 'RubyGems',
-    upstreams: [
-      { name: 'tuna', url: 'https://mirrors.tuna.tsinghua.edu.cn/rubygems/', priority: 1 },
-      { name: 'rubygems', url: 'https://rubygems.org', priority: 2 },
-    ],
-  },
-  {
-    key: 'composer',
-    label: 'Composer (PHP)',
-    upstreams: [
-      { name: 'aliyun', url: 'https://mirrors.aliyun.com/composer/', priority: 1 },
-      { name: 'packagist', url: 'https://repo.packagist.org', priority: 2 },
-    ],
-  },
-  {
-    key: 'nuget',
-    label: 'NuGet (.NET)',
-    upstreams: [
-      { name: 'nuget', url: 'https://api.nuget.org', priority: 1 },
-    ],
-  },
-  {
-    key: 'conda',
-    label: 'Conda',
-    upstreams: [
-      { name: 'tuna', url: 'https://mirrors.tuna.tsinghua.edu.cn/anaconda', priority: 1 },
-      { name: 'official', url: 'https://repo.anaconda.com', priority: 2 },
-    ],
-  },
-  {
-    key: 'cran',
-    label: 'CRAN (R)',
-    upstreams: [
-      { name: 'tuna', url: 'https://mirrors.tuna.tsinghua.edu.cn/CRAN', priority: 1 },
-      { name: 'cloud-r', url: 'https://cloud.r-project.org', priority: 2 },
-    ],
-  },
-  {
-    key: 'alpine',
-    label: 'Alpine Linux (apk)',
-    upstreams: [
-      { name: 'tuna', url: 'https://mirrors.tuna.tsinghua.edu.cn/alpine', priority: 1 },
-      { name: 'official', url: 'https://dl-cdn.alpinelinux.org/alpine', priority: 2 },
-    ],
-  },
-  {
-    key: 'helm',
-    label: 'Helm (Kubernetes)',
-    upstreams: [
-      { name: 'azure-cn', url: 'https://mirror.azure.cn/kubernetes/charts', priority: 1 },
-      { name: 'bitnami', url: 'https://charts.bitnami.com/bitnami', priority: 2 },
-    ],
-  },
-]
+// The Upstreams come from internal/ecosystem/defaults.go, which an instance
+// without a config file also serves from; only the labels live here.
+const labels: Record<(typeof setupUpstreamDefaults)[number]['key'], string> = {
+  pypi: 'PyPI (pip)',
+  apt: 'APT (Debian/Ubuntu)',
+  npm: 'npm (Node.js)',
+  go: 'Go Modules',
+  cargo: 'Cargo (Rust)',
+  maven: 'Maven (Java)',
+  rubygems: 'RubyGems',
+  composer: 'Composer (PHP)',
+  nuget: 'NuGet (.NET)',
+  conda: 'Conda',
+  cran: 'CRAN (R)',
+  alpine: 'Alpine Linux (apk)',
+  helm: 'Helm (Kubernetes)',
+}
+
+export const ecosystemDefaults: EcosystemDefault[] = setupUpstreamDefaults.map(({ key, upstreams }) => ({
+  key,
+  label: labels[key],
+  upstreams: upstreams.map(upstream => ({ ...upstream })),
+}))
