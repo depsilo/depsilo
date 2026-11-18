@@ -60,7 +60,6 @@ const (
 	FailureRefused     = "connection_refused"
 	FailureHTTPStatus  = "http_status"
 	FailureNetwork     = "network"
-	failureUnavailable = ""
 )
 
 // Failure is a bounded, displayable explanation of a failed upstream check.

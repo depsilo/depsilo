@@ -1,7 +1,7 @@
 import type { AdminCascadeConfigPatch, AdminCascadeConfigState } from '@/lib/adminApi.types'
 
-export const CASCADE_MAX_HOPS = 16
-export const CASCADE_MIN_TOKEN_LENGTH = 16
+const CASCADE_MAX_HOPS = 16
+const CASCADE_MIN_TOKEN_LENGTH = 16
 
 const goDurationPattern = /^(?:0|[+-]?(?:(?:\d+(?:\.\d*)?|\.\d+)(?:ns|us|µs|μs|ms|s|m|h))+)$/
 const peerNamePattern = /^[a-z0-9][a-z0-9-]{0,63}$/
@@ -127,7 +127,7 @@ export function durationToMilliseconds(value: string): number | null {
   return Number.isFinite(total) ? total : null
 }
 
-export function isLoopbackHostname(hostname: string): boolean {
+function isLoopbackHostname(hostname: string): boolean {
   const normalized = hostname.trim().toLowerCase().replace(/^\[|\]$/g, '')
   return normalized === 'localhost' ||
     normalized.endsWith('.localhost') ||

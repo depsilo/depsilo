@@ -156,13 +156,6 @@ export const statsApi = {
   getLatencySeries: (options: ApiGetOptions = {}) => api.get('/latency-series', options),
 }
 
-export const packagesApi = {
-  list: (params?: { q?: string; type?: string; sort?: string; page?: number; per_page?: number }, options: ApiGetOptions = {}) =>
-    api.get('/packages', { ...options, params }),
-  detail: (type: string, name: string, options: ApiGetOptions = {}) =>
-    api.get(`/packages/${type}/${name}`, options),
-}
-
 export const authApi = {
   login: (data: { username: string; password: string }, options: ApiGetOptions = {}) =>
     api.post<LoginResponse>('/auth/login', data, options),

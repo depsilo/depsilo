@@ -126,11 +126,6 @@ export function formatPercentRatio(ratio: number | null, fractionDigits = 1): st
   return `${(ratio * 100).toFixed(fractionDigits)}%`
 }
 
-export function formatSignedPercent(percent: number | null, fractionDigits = 1): string {
-  if (percent === null || !Number.isFinite(percent)) return '—'
-  return `${percent >= 0 ? '+' : ''}${percent.toFixed(fractionDigits)}%`
-}
-
 /**
  * Relative change between the selected period and the same-length preceding
  * period. Returns null when the comparison is not complete (no baseline).
@@ -467,14 +462,6 @@ export function coverageDetail(
       }),
     })
     : t('overview.originPartial')
-}
-
-export function formatRelativeSeconds(seconds: number, t: TFunction): string {
-  if (seconds < 5) return t('now.justNow')
-  if (seconds < 60) return t('now.secondsAgo', { count: seconds })
-  if (seconds < 3600) return t('now.minutesAgo', { count: Math.floor(seconds / 60) })
-  if (seconds < 86400) return t('now.hoursAgo', { count: Math.floor(seconds / 3600) })
-  return t('now.daysAgo', { count: Math.floor(seconds / 86400) })
 }
 
 export function formatUptimeSeconds(seconds: number, t: TFunction): string {

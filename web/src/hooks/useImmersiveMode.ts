@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 /** Set on <html> while a page is immersive; the Admin shell hides its rail for it. */
-export const IMMERSIVE_ATTRIBUTE = 'data-admin-immersive'
+const IMMERSIVE_ATTRIBUTE = 'data-admin-immersive'
 
 /**
  * Immersive mode gives one page the whole screen. The Admin shell hides its

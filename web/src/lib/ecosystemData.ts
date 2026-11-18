@@ -104,15 +104,13 @@ export interface Language {
   group: LanguageGroup
   /** i18n key under `quickstart.subtitle` — short, direct ("Ruby 包" / "Ruby packages"). */
   subtitleKey: string
-  /** Optional first-run prominence; lower values appear first. */
-  onboardingRank?: number
   managers: ManagerConfig[]
 }
 
 const LANGUAGE_DEFINITIONS: Language[] = [
   {
     id: 'python', name: 'Python', glyph: 'PY', iconAdapter: 'pypi',
-    group: 'lang', subtitleKey: 'python', onboardingRank: 1,
+    group: 'lang', subtitleKey: 'python',
     managers: [
       {
         id: 'pip', name: 'pip', hint: 'PyPA package installer',
@@ -277,7 +275,7 @@ const LANGUAGE_DEFINITIONS: Language[] = [
   },
   {
     id: 'node', name: 'Node.js', glyph: 'JS', iconAdapter: 'npm',
-    group: 'lang', subtitleKey: 'node', onboardingRank: 2,
+    group: 'lang', subtitleKey: 'node',
     managers: [
       {
         id: 'npm', name: 'npm', hint: 'Default Node registry client',
@@ -404,7 +402,7 @@ const LANGUAGE_DEFINITIONS: Language[] = [
   },
   {
     id: 'java', name: 'Java', glyph: 'JV', iconAdapter: 'maven',
-    group: 'lang', subtitleKey: 'java', onboardingRank: 4,
+    group: 'lang', subtitleKey: 'java',
     managers: [
       {
         id: 'maven', name: 'Maven', hint: 'Apache Maven',
@@ -466,7 +464,7 @@ const LANGUAGE_DEFINITIONS: Language[] = [
   },
   {
     id: 'rust', name: 'Rust', glyph: 'RS', iconAdapter: 'cargo',
-    group: 'lang', subtitleKey: 'rust', onboardingRank: 3,
+    group: 'lang', subtitleKey: 'rust',
     managers: [
       {
         id: 'cargo', name: 'Cargo', hint: 'Rust package manager',
@@ -492,7 +490,7 @@ const LANGUAGE_DEFINITIONS: Language[] = [
   },
   {
     id: 'go', name: 'Go', glyph: 'GO', iconAdapter: 'go',
-    group: 'lang', subtitleKey: 'go', onboardingRank: 5,
+    group: 'lang', subtitleKey: 'go',
     managers: [
       {
         id: 'goenv', name: 'go env', hint: 'Persistent Go proxy setting',
@@ -908,8 +906,3 @@ export function managerHintKey(managerId: string): string {
  * small, non-mutating, and capable of producing a real proxy request.
  */
 export const LANGUAGES: Language[] = LANGUAGE_DEFINITIONS
-
-/** The five ecosystems promoted during first-run, projected from the catalog. */
-export const ONBOARDING_LANGUAGES: Language[] = LANGUAGES
-  .filter(language => language.onboardingRank !== undefined)
-  .sort((left, right) => (left.onboardingRank ?? 0) - (right.onboardingRank ?? 0))

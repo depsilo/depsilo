@@ -55,12 +55,11 @@ func NormalizeCoordinate(ecosystem, pkg, version string) (Coordinate, error) {
 // Add new values rather than reusing old ones; the audit table
 // (db.QuarantineEvent) is keyed off these for reporting.
 const (
-	ActionBlocked   = "blocked"          // request denied: too young, no bypass
-	ActionDowngrade = "served_eligible"  // serve_last_eligible mode resolved to older version
-	ActionBypassed  = "bypassed"         // matched an Allow rule
-	ActionApproved  = "approved"         // admin approved an individual version
-	ActionRevoked   = "approval_revoked" // admin revoked a prior approval
-	ActionWarned    = "warned"           // would have blocked, but observe mode served it
+	ActionBlocked  = "blocked"          // request denied: too young, no bypass
+	ActionBypassed = "bypassed"         // matched an Allow rule
+	ActionApproved = "approved"         // admin approved an individual version
+	ActionRevoked  = "approval_revoked" // admin revoked a prior approval
+	ActionWarned   = "warned"           // would have blocked, but observe mode served it
 
 	// Known-malicious blocklist actions (DIRECTION Task 2), written by
 	// Checker step 0. The override CRUD actions (override_created /

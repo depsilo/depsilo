@@ -14,11 +14,9 @@ import (
 )
 
 const (
-	ManifestFormat               = "depsilo/dependency-set-draft/v1"
-	MaxManifestBytes             = 1 << 20
-	MaxObjects                   = 4096
-	DefaultMaxObjectBytes  int64 = 1 << 30
-	DefaultMaxStorageBytes int64 = 20 << 30
+	ManifestFormat   = "depsilo/dependency-set-draft/v1"
+	MaxManifestBytes = 1 << 20
+	MaxObjects       = 4096
 )
 
 var (

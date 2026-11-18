@@ -5,7 +5,7 @@ import type { Principal } from '@/lib/adminApi.types'
 
 const principalQueryKey = ['auth', 'principal'] as const
 
-export function canWrite(principal: Principal | undefined): boolean {
+function canWrite(principal: Principal | undefined): boolean {
   return principal?.can_write === true
 }
 

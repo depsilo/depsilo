@@ -57,7 +57,7 @@ export function knownTrendStep(range: DashboardRange): number | undefined {
 }
 
 /** Seconds to add to local wall-clock time to get UTC, for the viewer's zone at a given instant. */
-export function localUtcOffsetSeconds(at: Date = new Date()): number {
+function localUtcOffsetSeconds(at: Date = new Date()): number {
   return at.getTimezoneOffset() * 60
 }
 
@@ -272,7 +272,7 @@ export function buildAttentionItems(args: {
 // ---------------------------------------------------------------------------
 // Protection coverage
 
-export const PROTECTION_KEYS = [
+const PROTECTION_KEYS = [
   'malicious_blocklist',
   'manual_rules',
   'vulnerability_scanning',

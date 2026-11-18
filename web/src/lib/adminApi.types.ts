@@ -1,7 +1,7 @@
 export type UserRole = 'admin' | 'readonly'
 export type TokenPermissions = 'readonly' | 'readwrite'
 
-export const ADMIN_ECOSYSTEMS = [
+const ADMIN_ECOSYSTEMS = [
   'pip', 'pypi', 'apt', 'npm', 'go', 'goproxy', 'cargo', 'crates',
   'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm',
   'docker', 'huggingface', 'alpine',

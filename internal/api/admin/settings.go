@@ -298,6 +298,3 @@ func writeInternalSettingsError(c *gin.Context, err error) {
 	zap.L().Error("settings request failed", zap.Error(err))
 	c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL_ERROR", "message": "internal server error"})
 }
-
-type LogsHandler struct {
-}
