@@ -61,7 +61,7 @@ func TestStatusReportsPendingInitialSetup(t *testing.T) {
 			}
 
 			text, exitCode := captureCLIStdout(t, func() int { return Run("status", nil) })
-			pendingLine := "Setup:   pending; an operator must open the Portal at " + service.URL
+			pendingLine := "Admin:   no administrator yet; open " + service.URL + "/admin to create one"
 			if exitCode != 0 || strings.Contains(text, pendingLine) != test.wantPending {
 				t.Fatalf("status text: exit=%d, pending line present=%v, want %v; output=%s",
 					exitCode, strings.Contains(text, pendingLine), test.wantPending, text)

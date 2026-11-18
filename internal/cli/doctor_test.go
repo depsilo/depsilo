@@ -116,49 +116,40 @@ func runDoctorJSON(t *testing.T) (doctorReport, string, int) {
 	return report, output, exitCode
 }
 
-func TestDoctorFailsWhileInitialSetupIsPending(t *testing.T) {
+// Before first-run setup the package routes already serve; only Admin waits
+// for an administrator. doctor notes that without failing.
+func TestDoctorNotesAMissingAdministratorWithoutFailing(t *testing.T) {
 	service := newFakeDepsilo(t, map[string]string{
 		"/health":              `{"status":"healthy","version":"dev","uptime":"1m"}`,
 		"/ready":               `{"status":"ready","checks":{"database":"ready","storage":"ready"}}`,
-		"/api/v1/stats":        `{"service":{"uptime_seconds":7200},"upstreams":[]}`,
+		"/api/v1/stats":        `{"service":{"uptime_seconds":7200},"upstreams":[{"name":"official","ecosystem":"pypi","healthy":true}]}`,
 		"/api/v1/setup/status": `{"needs_setup":true,"token_required":true,"listen_port":23333}`,
 	})
 
 	report, output, exitCode := runDoctorJSON(t)
-	if exitCode != 1 || report.OK || !*report.SetupRequired {
-		t.Fatalf("doctor treated a server that waits for setup as usable: exit=%d output=%s", exitCode, output)
+	if exitCode != 0 || !report.OK || !*report.SetupRequired {
+		t.Fatalf("doctor failed a serving instance that has no administrator yet: exit=%d output=%s", exitCode, output)
 	}
 	found := false
 	for _, check := range report.Checks {
-		if check.Name == "Initial setup" {
+		if check.Name == "Administrator" {
 			found = true
-			if check.Level != "fail" || !strings.Contains(check.Message, "not finished") {
-				t.Fatalf("initial setup check = %+v, want a failure saying setup is not finished", check)
+			if check.Level != "info" || !strings.Contains(check.Message, "not created") {
+				t.Fatalf("administrator check = %+v, want an info note", check)
 			}
-			if !strings.Contains(check.Hint, "Portal") || !strings.Contains(check.Hint, service.URL) {
-				t.Fatalf("initial setup hint = %q, want it to send an operator to the Portal at the service URL", check.Hint)
+			if check.Hint != "open "+service.URL+"/admin to create it" {
+				t.Fatalf("administrator hint = %q", check.Hint)
 			}
-		}
-		// The stats report two hours of uptime, so the hit-rate check would
-		// otherwise suggest configuring a client.
-		if strings.Contains(check.Hint, "add upstreams") || strings.Contains(check.Hint, "depsilo activate") {
-			t.Fatalf("doctor advised adding upstreams or clients before setup finished: %+v", check)
 		}
 	}
 	if !found {
-		t.Fatalf("doctor JSON omitted the Initial setup check; output=%s", output)
+		t.Fatalf("doctor JSON omitted the Administrator check; output=%s", output)
 	}
-	// An agent reading this output must be told that a human acts, not how
-	// to obtain the bootstrap token.
+	// An agent reading this output is not told how to obtain the token.
 	for _, recipe := range []string{"bootstrap", "setup token", "docker", "logs"} {
 		if strings.Contains(strings.ToLower(output), recipe) {
 			t.Fatalf("doctor output names %q while setup is pending; output=%s", recipe, output)
 		}
-	}
-
-	text, exitCode := captureCLIStdout(t, func() int { return Run("doctor", nil) })
-	if exitCode != 1 || !strings.Contains(text, "Initial setup") || strings.Contains(text, "add upstreams") {
-		t.Fatalf("doctor text output did not report pending setup: exit=%d output=%s", exitCode, text)
 	}
 }
 

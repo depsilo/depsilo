@@ -75,49 +75,28 @@ func serveDiscover(t *testing.T, handler *DiscoverHandler, path string) *httptes
 	return recorder
 }
 
-// setupHowTo lists what agent-facing text must never carry while setup is
-// pending: completing setup is a human operator's step, so neither the token
-// nor the API that consumes it is described.
-var setupHowTo = []string{"token", "bootstrap", "setup/complete", "depsilo setup", "X-Depsilo", "curl", "POST"}
-
-func TestDiscoverReportsPendingSetup(t *testing.T) {
+// setup_required follows the setup state per request; the agent guidance is
+// the same either way, because package routes serve before setup.
+func TestDiscoverReportsPendingSetupWithoutWithholdingGuidance(t *testing.T) {
 	pending := true
 	handler := NewDiscoverHandler(nil)
 	handler.SetSetupRequired(func() bool { return pending })
 
-	var catalog discoverCatalog
-	if err := json.Unmarshal(serveDiscover(t, handler, "/api/v1/discover").Body.Bytes(), &catalog); err != nil {
-		t.Fatal(err)
-	}
-	if catalog.SetupRequired == nil || !*catalog.SetupRequired {
-		t.Fatalf("setup_required = %v, want true", catalog.SetupRequired)
-	}
-	if catalog.Endpoints["setup_status"] != "/api/v1/setup/status" {
-		t.Fatalf("endpoints.setup_status = %q", catalog.Endpoints["setup_status"])
-	}
-	summary := catalog.AgentSetup.Summary
-	for _, expected := range []string{"setup is not finished", "human operator", "Portal at http://depsilo.example/"} {
-		if !strings.Contains(summary, expected) {
-			t.Errorf("pending summary omits %q: %s", expected, summary)
+	for _, want := range []bool{true, false} {
+		pending = want
+		var catalog discoverCatalog
+		if err := json.Unmarshal(serveDiscover(t, handler, "/api/v1/discover").Body.Bytes(), &catalog); err != nil {
+			t.Fatal(err)
 		}
-	}
-	for _, forbidden := range setupHowTo {
-		if strings.Contains(summary, forbidden) {
-			t.Errorf("pending summary explains how to run setup (%q): %s", forbidden, summary)
+		if catalog.SetupRequired == nil || *catalog.SetupRequired != want {
+			t.Fatalf("setup_required = %v, want %t", catalog.SetupRequired, want)
 		}
-	}
-
-	// The state is read per request, so the catalog follows setup completion.
-	pending = false
-	catalog = discoverCatalog{}
-	if err := json.Unmarshal(serveDiscover(t, handler, "/api/v1/discover").Body.Bytes(), &catalog); err != nil {
-		t.Fatal(err)
-	}
-	if catalog.SetupRequired == nil || *catalog.SetupRequired {
-		t.Fatalf("setup_required after completion = %v, want false", catalog.SetupRequired)
-	}
-	if strings.Contains(catalog.AgentSetup.Summary, "not finished") || !strings.Contains(catalog.AgentSetup.Summary, "bootstrap prompt") {
-		t.Fatalf("configured summary = %q", catalog.AgentSetup.Summary)
+		if catalog.Endpoints["setup_status"] != "/api/v1/setup/status" {
+			t.Fatalf("endpoints.setup_status = %q", catalog.Endpoints["setup_status"])
+		}
+		if !strings.Contains(catalog.AgentSetup.Summary, "bootstrap prompt") {
+			t.Fatalf("pending=%t summary = %q", want, catalog.AgentSetup.Summary)
+		}
 	}
 }
 
@@ -131,59 +110,17 @@ func TestDiscoverWithoutSetupStateDescribesAConfiguredService(t *testing.T) {
 	}
 }
 
-func TestAgentPromptSaysSetupIsPendingInsteadOfConfiguring(t *testing.T) {
+func TestAgentPromptConfiguresClientsBeforeSetup(t *testing.T) {
 	handler := NewDiscoverHandler([]string{"pypi"})
 	handler.SetSetupRequired(func() bool { return true })
 
 	prompt := serveDiscover(t, handler, "/api/v1/agent-prompt").Body.String()
-	for _, expected := range []string{"has not finished first-run setup", "human operator", "Portal at http://depsilo.example/", "Do not change package manager configuration"} {
-		if !strings.Contains(prompt, expected) {
-			t.Errorf("pending prompt omits %q:\n%s", expected, prompt)
-		}
+	if !strings.Contains(prompt, "pip config set global.index-url http://depsilo.example/pypi/simple/") {
+		t.Fatalf("pending prompt lost its instructions:\n%s", prompt)
 	}
-	for _, forbidden := range append([]string{"pip config", "npm config", "GOPROXY"}, setupHowTo...) {
+	for _, forbidden := range []string{"setup/complete", "X-Depsilo", "depsilo setup"} {
 		if strings.Contains(prompt, forbidden) {
-			t.Errorf("pending prompt contains %q:\n%s", forbidden, prompt)
-		}
-	}
-
-	handler.SetSetupRequired(func() bool { return false })
-	if configured := serveDiscover(t, handler, "/api/v1/agent-prompt").Body.String(); !strings.Contains(configured, "pip config set global.index-url http://depsilo.example/pypi/simple/") {
-		t.Fatalf("configured prompt lost its instructions:\n%s", configured)
-	}
-}
-
-// Setup is also pending on a configured instance that has lost its
-// administrator. That instance keeps serving its ecosystems, so the pending
-// texts must not claim that nothing is served.
-func TestPendingSetupTextsDoNotDenyThatPackagesAreServed(t *testing.T) {
-	handler := NewDiscoverHandler([]string{"pypi"})
-	handler.SetSetupRequired(func() bool { return true })
-
-	var catalog struct {
-		SetupRequired bool `json:"setup_required"`
-		Ecosystems    []struct {
-			Name string `json:"name"`
-		} `json:"ecosystems"`
-		AgentSetup struct {
-			Summary string `json:"summary"`
-		} `json:"agent_setup"`
-	}
-	if err := json.Unmarshal(serveDiscover(t, handler, "/api/v1/discover").Body.Bytes(), &catalog); err != nil {
-		t.Fatal(err)
-	}
-	if !catalog.SetupRequired || len(catalog.Ecosystems) != 1 || catalog.Ecosystems[0].Name != "pypi" {
-		t.Fatalf("catalog = %+v, want pending setup with pypi listed", catalog)
-	}
-	prompt := serveDiscover(t, handler, "/api/v1/agent-prompt").Body.String()
-	for name, text := range map[string]string{"discover summary": catalog.AgentSetup.Summary, "agent prompt": prompt} {
-		for _, claim := range []string{"serve packages", "not serve", "serves no", "nothing is served"} {
-			if strings.Contains(text, claim) {
-				t.Errorf("%s claims %q while pypi is listed: %s", name, claim, text)
-			}
-		}
-		if !strings.Contains(text, "human operator") || !strings.Contains(text, "Portal at http://depsilo.example/") {
-			t.Errorf("%s does not say who completes setup and where: %s", name, text)
+			t.Errorf("prompt explains how to run setup (%q):\n%s", forbidden, prompt)
 		}
 	}
 }

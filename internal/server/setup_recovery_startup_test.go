@@ -98,7 +98,7 @@ token_ttl = "1h"
 
 	// The operator's file is about to be replaced; the console must say so
 	// instead of presenting this as the first run of a blank instance.
-	if !strings.Contains(summary, "Setup reopened:") || strings.Contains(summary, "First-time setup") {
+	if !strings.Contains(summary, "Setup reopened:") || strings.Contains(summary, "No administrator yet") {
 		t.Fatalf("startup summary did not announce the reopened setup:\n%s", summary)
 	}
 

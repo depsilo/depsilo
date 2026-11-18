@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -85,21 +84,6 @@ func runInitAgent(args []string) int {
 	}
 
 	prompt, source := fetchAgentPrompt(endpoint)
-
-	// Until first-run setup is done the server's prompt is a notice that
-	// setup is pending, not instructions. Writing that into a project would
-	// outlive the state it describes, so stop instead. A server that did not
-	// answer with a prompt is not asked a second time: against an address
-	// that drops packets that would double the wait for the embedded text.
-	if source == promptSourceServer && initAgentSetupPending(endpoint) {
-		message := fmt.Sprintf("Depsilo at %s has not finished first-run setup; complete it in the Portal at %s/ and run init-agent again", endpoint, strings.TrimRight(endpoint, "/"))
-		if jsonMode {
-			printJSON(map[string]any{"ok": false, "endpoint": endpoint, "error": message})
-		} else {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", message)
-		}
-		return 1
-	}
 
 	if source == promptSourceEmbedded {
 		// Still a usable file, but not this instance's own text: say so.
@@ -379,32 +363,6 @@ func buildBlock(style, prompt, endpoint string) string {
 		"",
 		mdMarkerEnd,
 	}, "\n")
-}
-
-// initAgentSetupPending reports whether the server says its first-run setup
-// is still pending. An unreachable server, or one that predates the
-// setup_required field, counts as not pending: init-agent then behaves as it
-// always has.
-func initAgentSetupPending(endpoint string) bool {
-	req, err := http.NewRequest(http.MethodGet, endpoint+"/api/v1/discover", nil)
-	if err != nil {
-		return false
-	}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return false
-	}
-	var catalog struct {
-		SetupRequired bool `json:"setup_required"`
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&catalog); err != nil {
-		return false
-	}
-	return catalog.SetupRequired
 }
 
 // Where the prompt init-agent wrote came from; the "source" field of the

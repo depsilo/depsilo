@@ -89,46 +89,11 @@ func newInitAgentServer(t *testing.T, discover, prompt string) *httptest.Server 
 	return server
 }
 
-// While first-run setup is pending the server's prompt is a notice, not
-// instructions. init-agent must not write it into a project and report success.
-func TestInitAgentWritesNothingWhileSetupIsPending(t *testing.T) {
-	server := newInitAgentServer(t, `{"service":"depsilo","setup_required":true}`, "Depsilo has not finished first-run setup.")
-
-	for _, jsonMode := range []bool{false, true} {
-		dir := t.TempDir()
-		args := []string{"--out", dir, "--format", "all", "--endpoint", server.URL}
-		if jsonMode {
-			args = append(args, "--json")
-		}
-		stdout, stderr, code := captureStdoutStderr(t, func() int { return runInitAgent(args) })
-		if code != 1 {
-			t.Fatalf("json=%t: exit = %d, want 1; stdout = %q", jsonMode, code, stdout)
-		}
-		entries, err := os.ReadDir(dir)
-		if err != nil || len(entries) != 0 {
-			t.Fatalf("json=%t: wrote %v (err %v), want nothing", jsonMode, entries, err)
-		}
-		message := stderr
-		if jsonMode {
-			var result struct {
-				OK    *bool  `json:"ok"`
-				Error string `json:"error"`
-			}
-			if err := json.Unmarshal([]byte(stdout), &result); err != nil || result.OK == nil || *result.OK {
-				t.Fatalf("JSON result = %q (err %v), want ok=false", stdout, err)
-			}
-			message = result.Error
-		}
-		if !strings.Contains(message, "has not finished first-run setup") || !strings.Contains(message, "Portal at "+server.URL+"/") {
-			t.Fatalf("json=%t: message = %q", jsonMode, message)
-		}
-	}
-}
-
-func TestInitAgentWritesTheServerPromptOnceSetupIsDone(t *testing.T) {
+func TestInitAgentWritesTheServerPromptBeforeAndAfterSetup(t *testing.T) {
 	for name, discover := range map[string]string{
-		"setup done":   `{"service":"depsilo","setup_required":false}`,
-		"older server": `{"service":"depsilo"}`,
+		"setup pending": `{"service":"depsilo","setup_required":true}`,
+		"setup done":    `{"service":"depsilo","setup_required":false}`,
+		"older server":  `{"service":"depsilo"}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			server := newInitAgentServer(t, discover, "PROMPT-FROM-SERVER")

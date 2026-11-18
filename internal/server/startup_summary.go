@@ -109,7 +109,12 @@ func writeStartupSummary(writer io.Writer, summary startupSummary) error {
 			output.WriteString("  A configuration file exists, but no administrator can sign in.\n")
 			output.WriteString("  Finishing setup replaces config.toml and keeps the previous file beside it as a .bak copy.\n\n")
 		} else {
-			output.WriteString("\nFirst-time setup:\n")
+			output.WriteString("\nNo administrator yet:\n")
+			output.WriteString("  Package routes already work. Admin needs an administrator first.\n")
+			if summary.TokenGenerated && !summary.InContainer && loopbackURL(summary.PortalURL) {
+				output.WriteString("  Opened on this machine, Admin creates one without the token below.\n")
+			}
+			output.WriteString("\n")
 		}
 		if summary.TokenGenerated {
 			fmt.Fprintf(&output, "  Bootstrap token: %s\n\n", summary.BootstrapToken)
@@ -126,7 +131,7 @@ func writeStartupSummary(writer io.Writer, summary startupSummary) error {
 			output.WriteString("  when a configuration file exists, so they created no administrator. Finish setup\n")
 			output.WriteString("  in the Portal, or see docs/deployment.md#scripted-setup.\n\n")
 		}
-		output.WriteString("Open the Portal to finish setup.\n")
+		fmt.Fprintf(&output, "Open %s/admin to create the administrator.\n", summary.PortalURL)
 	} else if summary.GeneratedAdminPassword != "" {
 		output.WriteString("\nInitial administrator:\n")
 		fmt.Fprintf(&output, "  Username: %s\n", summary.GeneratedAdminUsername)
@@ -136,6 +141,17 @@ func writeStartupSummary(writer io.Writer, summary startupSummary) error {
 	}
 	_, err := io.WriteString(writer, output.String())
 	return err
+}
+
+// loopbackURL reports whether rawURL names a loopback host, so a browser on
+// this machine reaches it from a loopback address.
+func loopbackURL(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(parsed.Hostname())
+	return parsed.Hostname() == "localhost" || ip != nil && ip.IsLoopback()
 }
 
 func listenerPort(address net.Addr, fallback int) int {

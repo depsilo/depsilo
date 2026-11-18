@@ -115,7 +115,9 @@ Use `make stop` if the terminal is terminated without allowing cleanup to run.
 
 ## First-run and local state
 
-- Interactive first run requires a bootstrap token. Read the current token
+- Package routes and the Portal work before first-run setup; Admin needs it.
+  Setup opened directly on the machine (loopback, no proxy headers) needs no
+  token; otherwise it requires the bootstrap token. Read the current token
   from the deployment directory with `depsilo setup token`, or, for Docker
   Compose, `docker compose exec depsilo depsilo setup token`. A custom native
   configuration can use `depsilo setup token --config /path/to/config.toml`.

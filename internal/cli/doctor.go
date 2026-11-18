@@ -71,21 +71,18 @@ func runDoctor(args []string) int {
 		Message: baseURL,
 	})
 
-	// A healthy process that still waits for first-run setup has no
-	// administrator, and a blank one serves no packages. Report it as a failure
-	// so a caller does not read "healthy" as "usable". A reopened setup keeps
-	// serving the configured ecosystems, so the message does not claim
-	// otherwise. It names who must act and where, and deliberately carries no
+	// Before first-run setup the package routes already serve, from the
+	// built-in Upstreams; only Admin waits for an administrator. That is a
+	// note, not a failure. The hint names where, and deliberately carries no
 	// way to obtain the bootstrap token.
 	setupRequired := setupPending(baseURL)
 	if setupRequired {
 		checks = append(checks, doctorCheck{
-			Name:    "Initial setup",
-			Level:   levelFail,
-			Message: "not finished; no administrator can sign in yet",
-			Hint:    "an operator must open the Portal at " + baseURL + " and complete initial setup",
+			Name:    "Administrator",
+			Level:   levelInfo,
+			Message: "not created yet; package routes work, Admin needs one",
+			Hint:    "open " + baseURL + "/admin to create it",
 		})
-		hasFail = true
 	}
 
 	switch health.Status {
@@ -220,15 +217,7 @@ func runDoctor(args []string) int {
 		return finalizeDoctor(checks, jsonMode, baseURL, hasFail, setupRequired)
 	}
 
-	if len(stats.Upstreams) == 0 && setupRequired {
-		// Upstreams cannot be managed before setup finishes, so advising the
-		// caller to add them would point away from the real next step.
-		checks = append(checks, doctorCheck{
-			Name:    "Upstream health",
-			Level:   levelInfo,
-			Message: "no upstreams configured (initial setup is not finished)",
-		})
-	} else if len(stats.Upstreams) == 0 {
+	if len(stats.Upstreams) == 0 {
 		checks = append(checks, doctorCheck{
 			Name:    "Upstream health",
 			Level:   levelWarn,
@@ -291,15 +280,11 @@ func runDoctor(args []string) int {
 			Message: "service uptime < 1h, not enough data yet",
 		})
 	case stats.Today.TotalRequests == 0:
-		hint := "configure a client: depsilo activate"
-		if setupRequired {
-			hint = "" // no client can be served before setup finishes
-		}
 		checks = append(checks, doctorCheck{
 			Name:    "Cache hit rate",
 			Level:   levelInfo,
 			Message: "no traffic today",
-			Hint:    hint,
+			Hint:    "configure a client: depsilo activate",
 		})
 	default:
 		hr := stats.Today.HitRate * 100

@@ -120,7 +120,7 @@ test('setup signs the new administrator in on the same origin and continues to o
     body: JSON.stringify({ status: 'healthy' }),
   }))
 
-  await page.goto('/')
+  await page.goto('/admin')
   await page.getByLabel('Administrator password').fill('Tr0ub4dor&Correct')
   await page.getByLabel('Confirm password').fill('Tr0ub4dor&Correct')
   await page.getByRole('button', { name: 'Complete setup' }).click()
@@ -172,7 +172,7 @@ test('setup recovery resumes the Dashboard instead of starting onboarding again'
     body: JSON.stringify({ status: 'healthy' }),
   }))
 
-  await page.goto('/')
+  await page.goto('/admin')
   await page.getByLabel('Administrator password').fill('Tr0ub4dor&Correct')
   await page.getByLabel('Confirm password').fill('Tr0ub4dor&Correct')
   await page.getByRole('button', { name: 'Complete setup' }).click()

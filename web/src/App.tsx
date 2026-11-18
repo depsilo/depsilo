@@ -15,10 +15,12 @@ const queryClient = new QueryClient({
   },
 })
 
+// The Portal and package routes work before first-run setup; only Admin
+// waits for the administrator that setup creates.
 function ApplicationRoutes() {
   return (
     <Routes>
-      <Route path="/admin/*" element={<AdminApp />} />
+      <Route path="/admin/*" element={<SetupGate><AdminApp /></SetupGate>} />
       <Route path="/*" element={<PortalApp />} />
     </Routes>
   )
@@ -27,7 +29,7 @@ function ApplicationRoutes() {
 // A data router provides the shared navigation blocker used by configuration forms.
 const router = createBrowserRouter([{
   path: '*',
-  element: <SetupGate><ApplicationRoutes /></SetupGate>,
+  element: <ApplicationRoutes />,
 }])
 
 export default function App() {

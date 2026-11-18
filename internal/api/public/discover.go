@@ -88,15 +88,11 @@ func (h *DiscoverHandler) catalog(base string) contract.DiscoverResponse {
 		})
 	}
 
-	// While first-run setup is pending, say so and say who finishes it;
-	// agent-facing text never explains how. It makes no claim about package
-	// routes: setup is also reopened for a configured instance that has lost
-	// its administrator, and that instance keeps serving its ecosystems.
+	// Package routes serve before first-run setup, from the built-in
+	// Upstreams, so agents get the same instructions either way.
+	// setup_required only says that no administrator exists yet.
 	setupRequired := h.setupPending()
 	agentSummary := "Use the bootstrap prompt for local developer-machine settings or the Portal integration prompt for project build/CI edits."
-	if setupRequired {
-		agentSummary = "First-run setup is not finished. A human operator must complete it in the Portal at " + base + "/. Do not change package manager configuration for this service until setup_required is false."
-	}
 
 	return contract.DiscoverResponse{
 		Service:       "depsilo",
@@ -168,30 +164,7 @@ func (h *DiscoverHandler) AgentPrompt(c *gin.Context) {
 // service. The base remains visible to the client in every generated command,
 // and only the ecosystems this instance serves are listed.
 func (h *DiscoverHandler) agentPrompt(base string) string {
-	if h.setupPending() {
-		return setupPendingPrompt(base)
-	}
 	return prompts.Bootstrap(base, h.ecosystems, mcpToolNames())
-}
-
-// setupPendingPrompt replaces the bootstrap prompt until first-run setup is
-// done: configuration instructions are handed out only by an instance whose
-// operator has finished setting it up. It names who completes setup and
-// where, and deliberately nothing about how: that is a human operator's step.
-// It does not say whether packages are served, because setup is also pending
-// on a configured instance that has lost its administrator.
-func setupPendingPrompt(base string) string {
-	return fmt.Sprintf(`Depsilo at %[1]s has not finished first-run setup.
-
-Do not change package manager configuration for this service yet, and do not
-attempt the setup yourself: a human operator must complete it in the
-Portal at %[1]s/.
-
-Tell the user that setup is pending, then stop. After the operator has
-finished, fetch %[1]s/api/v1/agent-prompt again for the configuration
-instructions. "setup_required" in %[1]s/api/v1/discover is false once setup is
-done.
-`, base)
 }
 
 func requestBase(c *gin.Context) string {

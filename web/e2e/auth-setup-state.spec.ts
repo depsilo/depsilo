@@ -112,7 +112,7 @@ test('single-page setup explains invalid credentials without disabling the prima
     },
   })
 
-  await page.goto('/')
+  await page.goto('/admin')
   await expect(page.getByRole('region', { name: '获取初始化令牌' })).toHaveCount(0)
   await expect(page.getByLabel('初始化令牌', { exact: true })).toHaveCount(0)
   // A server that predates listen_port and config_exists: the default port
@@ -192,7 +192,7 @@ for (const labels of [
       },
     })
 
-    await page.goto('/')
+    await page.goto('/admin')
     const help = page.getByRole('region', { name: labels.help })
     await expect(help).toBeVisible()
     await expect(help).toContainText(labels.helpHint)
@@ -266,7 +266,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
         body: { code: 'BOOTSTRAP_TOKEN_REQUIRED', message: 'A valid bootstrap token is required to complete initial setup' },
       },
     })
-    await page.goto('/')
+    await page.goto('/admin')
     const token = page.getByLabel('初始化令牌', { exact: true })
     await token.fill('incorrect-token')
     await page.getByLabel('管理员密码', { exact: true }).fill('Tr0ub4dor&Correct')
@@ -289,7 +289,7 @@ test('setup explains the failures an operator can act on in the page language', 
     'POST /api/v1/setup/complete': () => failure,
   })
 
-  await page.goto('/')
+  await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('Tr0ub4dor&Correct')
   await page.getByLabel('确认密码').fill('Tr0ub4dor&Correct')
   await page.getByLabel('初始化令牌', { exact: true }).fill('bootstrap-token-from-log')
@@ -334,7 +334,7 @@ test('setup starts from the listening port and warns before replacing a configur
   })
   await page.route('**/health', route => route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }))
 
-  await page.goto('/')
+  await page.goto('/admin')
   await expect(page.getByRole('note')).toHaveText(
     '这个实例已经有配置文件。完成初始化会替换它，现有文件会作为备份保留在同一目录。',
   )
@@ -357,7 +357,7 @@ test('the local token command names a listening port other than the default', as
     'GET /api/v1/setup/status': { needs_setup: true, token_required: true, listen_port: 24646 },
   })
 
-  await page.goto('/')
+  await page.goto('/admin')
   const commands = page.getByRole('region', { name: '获取初始化令牌' }).locator('pre')
   await expect(commands).toHaveText([
     // The port inside a container stays the default.
@@ -377,7 +377,7 @@ test('the local token command names a listener that 127.0.0.1 does not reach', a
     },
   })
 
-  await page.goto('/')
+  await page.goto('/admin')
   const commands = page.getByRole('region', { name: '获取初始化令牌' }).locator('pre')
   await expect(commands).toHaveText([
     'docker exec depsilo depsilo setup token',
@@ -405,7 +405,7 @@ for (const labels of [
       'GET /api/v1/setup/status': { needs_setup: true, token_required: true, listen_port: 23333 },
     })
 
-    await page.goto('/')
+    await page.goto('/admin')
     const advanced = page.locator('summary').filter({ hasText: labels.advanced })
     await expect(page.locator('details')).not.toHaveAttribute('open', '')
     // The whole line is readable while collapsed, even on a narrow screen.
@@ -425,7 +425,7 @@ test('single-page setup passes axe with advanced settings exposed', async ({ pag
     'GET /api/v1/setup/status': { needs_setup: true, token_required: true, listen_port: 23333, config_exists: true },
   })
 
-  await page.goto('/')
+  await page.goto('/admin')
   await expect(page.getByRole('heading', { name: '初始化 Depsilo' })).toBeVisible()
   await expect(page.getByRole('note')).toBeVisible()
   await page.locator('summary').filter({ hasText: '高级设置' }).click()
@@ -488,7 +488,7 @@ test('single-page setup submits secure defaults and recovers after a reconnect t
     })
   })
 
-  await page.goto('/')
+  await page.goto('/admin')
   await expect(page.getByRole('heading', { name: '初始化 Depsilo' })).toBeVisible()
   await page.locator('summary').filter({ hasText: '高级设置' }).click()
   await page.getByLabel('端口').fill('24444')
@@ -538,7 +538,7 @@ test('setup that needs a manual restart reports success and waits for the operat
     await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"healthy"}' })
   })
 
-  await page.goto('/')
+  await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('Tr0ub4dor&Correct')
   await page.getByLabel('确认密码').fill('Tr0ub4dor&Correct')
   await page.getByRole('button', { name: '完成初始化' }).click()
@@ -574,7 +574,7 @@ test('setup over plain HTTP from another machine says that the credentials are s
     'GET /api/v1/setup/status': { needs_setup: true, token_required: true },
   })
 
-  await page.goto('http://depsilo.example.test/')
+  await page.goto('http://depsilo.example.test/admin')
   await expect(page.getByRole('heading', { name: '初始化 Depsilo' })).toBeVisible()
   await expect(page.locator('[data-setup-notice="unencrypted"]')).toHaveText(
     '此页面没有使用 HTTPS，初始化令牌和新密码会以未加密的方式发送。请在服务器本机完成初始化，或只在你信任的网络中操作。',
@@ -616,7 +616,7 @@ for (const publicOrigin of ['https://depsilo.example.test', 'https://depsilo.exa
       'POST /api/v1/auth/login': { status: 401, body: { code: 'UNAUTHORIZED' } },
     })
 
-    await page.goto(publicOrigin)
+    await page.goto(`${publicOrigin}/admin`)
     await expect(page.getByRole('heading', { name: '初始化 Depsilo' })).toBeVisible()
     await expect(page.locator('[data-setup-notice="unencrypted"]')).toHaveCount(0)
     await page.getByLabel('管理员密码').fill('Tr0ub4dor&Correct')
@@ -632,3 +632,16 @@ for (const publicOrigin of ['https://depsilo.example.test', 'https://depsilo.exa
     await expect(page.getByRole('heading', { name: 'Administrator login' })).toBeVisible()
   })
 }
+
+test('before setup the Portal opens directly and only Admin asks for the administrator', async ({ page }) => {
+  await mockAdminApi(page, {
+    'GET /api/v1/setup/status': { needs_setup: true, token_required: false },
+  })
+
+  await page.goto('/')
+  await expect(page.locator('[data-theme-toggle="portal"]')).toBeVisible()
+  await expect(page.getByRole('heading', { name: '初始化 Depsilo' })).toHaveCount(0)
+
+  await page.goto('/admin')
+  await expect(page.getByRole('heading', { name: '初始化 Depsilo' })).toBeVisible()
+})

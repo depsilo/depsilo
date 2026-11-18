@@ -6,6 +6,22 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Changed
+- First-run setup is needed only for Admin. The Portal, its client guide,
+  `GET /api/v1/agent-prompt`, and `depsilo init-agent` work before setup
+  (the prompt used to be a "setup pending" notice, and `init-agent` exited
+  `1`); the setup page opens at `/admin` instead of in front of every page.
+  `setup_required` in discover still reports that no administrator exists.
+  `depsilo doctor` reports pending setup as an informational
+  `Administrator` check instead of a failed `Initial setup` check, and
+  `depsilo status` prints `Admin:   no administrator yet; ...`. The startup
+  summary's `First-time setup:` block is now `No administrator yet:` and ends
+  with `Open <portal>/admin to create the administrator.`
+- Setup on the server itself needs no bootstrap token: a request that comes
+  directly from a loopback address with no forwarding header is accepted
+  without it, and `GET /api/v1/setup/status` answers `token_required: false`
+  to it. A token set through `DEPSILO_BOOTSTRAP_TOKEN` stays required for
+  everyone, and requests through a container's published port still need
+  the token.
 - Package routes work before first-run setup. An instance without
   `config.toml` serves every ecosystem the setup page offers, from the
   Upstreams the page proposes (regional mirrors first, then the official

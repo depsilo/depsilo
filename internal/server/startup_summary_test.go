@@ -73,10 +73,11 @@ func TestWriteStartupSummaryForFirstRun(t *testing.T) {
 		"✓ Database ready",
 		"✓ Cache ready",
 		"Portal:\n  http://127.0.0.1:23333",
-		"First-time setup:",
+		"No administrator yet:\n  Package routes already work. Admin needs an administrator first.\n",
+		"Opened on this machine, Admin creates one without the token below.",
 		"Bootstrap token: bootstrap-token",
 		"Retrieve the current bootstrap token: depsilo setup token\n",
-		"Open the Portal to finish setup.",
+		"Open http://127.0.0.1:23333/admin to create the administrator.",
 	} {
 		if !strings.Contains(got, fragment) {
 			t.Errorf("startup summary missing %q:\n%s", fragment, got)
@@ -181,10 +182,10 @@ func TestWriteStartupSummaryExplainsIgnoredAdministratorEnvironment(t *testing.T
 	}
 	got := output.String()
 	for _, fragment := range []string{
-		"First-time setup:",
+		"No administrator yet:",
 		"DEPSILO_ADMIN_USERNAME and DEPSILO_ADMIN_PASSWORD are ignored: they apply only\n  when a configuration file exists, so they created no administrator.",
 		"docs/deployment.md#scripted-setup",
-		"Open the Portal to finish setup.",
+		"/admin to create the administrator.",
 	} {
 		if !strings.Contains(got, fragment) {
 			t.Errorf("startup summary missing %q:\n%s", fragment, got)
@@ -228,13 +229,13 @@ func TestWriteStartupSummaryForReopenedSetupWarnsThatConfigIsReplaced(t *testing
 		"A configuration file exists, but no administrator can sign in.",
 		"Finishing setup replaces config.toml and keeps the previous file beside it as a .bak copy.",
 		"Bootstrap token: bootstrap-token",
-		"Open the Portal to finish setup.",
+		"/admin to create the administrator.",
 	} {
 		if !strings.Contains(got, fragment) {
 			t.Errorf("reopened startup summary missing %q:\n%s", fragment, got)
 		}
 	}
-	if strings.Contains(got, "First-time setup") {
+	if strings.Contains(got, "No administrator yet") {
 		t.Errorf("reopened setup was announced as a first run:\n%s", got)
 	}
 }
@@ -249,7 +250,7 @@ func TestWriteStartupSummaryForConfiguredServerOmitsBootstrapInstructions(t *tes
 	if !strings.Contains(got, "Depsilo dev") || !strings.Contains(got, "Portal:\n  http://127.0.0.1:23333") {
 		t.Fatalf("configured startup summary missing server details:\n%s", got)
 	}
-	for _, forbidden := range []string{"First-time setup", "Setup reopened", "Bootstrap token", "must-not-appear", "finish setup", "depsilo setup token", "Initial administrator", "Generated password"} {
+	for _, forbidden := range []string{"No administrator yet", "Setup reopened", "Bootstrap token", "must-not-appear", "finish setup", "depsilo setup token", "Initial administrator", "Generated password"} {
 		if strings.Contains(got, forbidden) {
 			t.Errorf("configured startup summary contains %q:\n%s", forbidden, got)
 		}
@@ -268,5 +269,31 @@ func TestWriteStartupSummaryDoesNotRevealConfiguredBootstrapToken(t *testing.T) 
 	}
 	if !strings.Contains(got, "Bootstrap token: configured via DEPSILO_BOOTSTRAP_TOKEN") {
 		t.Fatalf("startup summary omitted configured-token guidance:\n%s", got)
+	}
+}
+
+// A browser reaches a container through its published port, not loopback, and
+// a preset token is always required, so neither summary promises a token-free
+// Admin.
+func TestWriteStartupSummaryPromisesNoTokenFreeAdminWhereTheTokenIsRequired(t *testing.T) {
+	for name, test := range map[string]struct {
+		container bool
+		generated bool
+		host      string
+	}{
+		"container":    {container: true, generated: true, host: "0.0.0.0"},
+		"preset token": {generated: false, host: "127.0.0.1"},
+		"LAN address":  {generated: true, host: "192.0.2.10"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			stubRunningInContainer(t, test.container)
+			var output bytes.Buffer
+			if err := writeStartupSummary(&output, newStartupSummary("0.9.0", test.host, 23333, true, "bootstrap-token", test.generated)); err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(output.String(), "without the token") {
+				t.Fatalf("summary promises a token-free Admin:\n%s", output.String())
+			}
+		})
 	}
 }

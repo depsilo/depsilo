@@ -1203,7 +1203,9 @@ func TestSetupCompleteReconnectURLFollowsHowTheRequestArrived(t *testing.T) {
 	}
 }
 
-func TestSetupCompleteRequiresTokenOnLoopback(t *testing.T) {
+// A token the operator chose through DEPSILO_BOOTSTRAP_TOKEN stays required
+// even from the server itself.
+func TestSetupCompleteRequiresAPresetTokenOnLoopback(t *testing.T) {
 	handler, _, root, restarts := newSetupTestHandler(t)
 	recorder := setupRequest(handler, "127.0.0.1:4321", "", validSetupRequest(t, root))
 	if recorder.Code != http.StatusForbidden {
@@ -1607,5 +1609,74 @@ func TestSetupStatusDoesNotDiscloseTokenOrConfigPath(t *testing.T) {
 		if strings.Contains(body, cfg.BootstrapToken) || strings.Contains(body, cfg.ConfigPath) {
 			t.Fatalf("status leaked setup secrets: %s", body)
 		}
+	}
+}
+
+func setupRequestWithHeaders(handler *SetupHandler, remoteAddr string, headers map[string]string, body []byte) *httptest.ResponseRecorder {
+	router := gin.New()
+	router.POST("/setup/complete", handler.Complete)
+	router.GET("/setup/status", handler.Status)
+	method, target := http.MethodPost, "/setup/complete"
+	if body == nil {
+		method, target = http.MethodGet, "/setup/status"
+	}
+	req := httptest.NewRequest(method, target, bytes.NewReader(body))
+	req.RemoteAddr = remoteAddr
+	req.Header.Set("Content-Type", "application/json")
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+	return recorder
+}
+
+func TestSetupWaivesAGeneratedTokenForADirectLoopbackRequest(t *testing.T) {
+	for _, peer := range []string{"127.0.0.1:4321", "[::1]:4321"} {
+		t.Run(peer, func(t *testing.T) {
+			handler, cfg, root, restarts := newSetupTestHandler(t)
+			cfg.BootstrapTokenGenerated = true
+			status := setupRequestWithHeaders(handler, peer, nil, nil)
+			if !strings.Contains(status.Body.String(), `"token_required":false`) {
+				t.Fatalf("status = %s, want token_required false", status.Body.String())
+			}
+			recorder := setupRequestWithHeaders(handler, peer, nil, validSetupRequest(t, root))
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+			}
+			if *restarts != 1 {
+				t.Fatalf("restart count = %d, want 1", *restarts)
+			}
+		})
+	}
+}
+
+func TestSetupRequiresAGeneratedTokenFromAnyOtherRequest(t *testing.T) {
+	for name, test := range map[string]struct {
+		peer    string
+		headers map[string]string
+	}{
+		"remote peer":                     {peer: "203.0.113.10:4321"},
+		"container gateway":               {peer: "172.17.0.1:4321"},
+		"loopback behind X-Forwarded-For": {peer: "127.0.0.1:4321", headers: map[string]string{"X-Forwarded-For": "203.0.113.10"}},
+		"loopback behind Forwarded":       {peer: "127.0.0.1:4321", headers: map[string]string{"Forwarded": "for=203.0.113.10"}},
+		"loopback behind X-Real-IP":       {peer: "127.0.0.1:4321", headers: map[string]string{"X-Real-IP": "203.0.113.10"}},
+		"loopback behind Via":             {peer: "127.0.0.1:4321", headers: map[string]string{"Via": "1.1 proxy"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			handler, cfg, root, restarts := newSetupTestHandler(t)
+			cfg.BootstrapTokenGenerated = true
+			status := setupRequestWithHeaders(handler, test.peer, test.headers, nil)
+			if !strings.Contains(status.Body.String(), `"token_required":true`) {
+				t.Fatalf("status = %s, want token_required true", status.Body.String())
+			}
+			recorder := setupRequestWithHeaders(handler, test.peer, test.headers, validSetupRequest(t, root))
+			if recorder.Code != http.StatusForbidden {
+				t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+			}
+			if *restarts != 0 {
+				t.Fatalf("restart count = %d, want 0", *restarts)
+			}
+		})
 	}
 }

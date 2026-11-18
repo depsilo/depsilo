@@ -89,39 +89,37 @@ docker run -d --name depsilo \
 and package downloads need no sign-in, so run this on a network you trust. To
 try Depsilo on one machine only, use `-p 127.0.0.1:23333:23333`.
 
-### 2. Create your administrator
+### 2. Connect a client
 
-Print the bootstrap token:
+Open **<http://127.0.0.1:23333>**. Package downloads already work; there is
+nothing to configure first. Choose your package manager on the home page and
+apply the configuration it shows on the machine that will download
+dependencies, or pick **AI setup** to hand the client configuration to a
+coding agent.
+
+The home page writes its commands for the address in your browser. If the
+clients are other machines, open Depsilo at the server's network address, for
+example `http://<server-address>:23333`, and copy the commands from there.
+This needs the port published beyond `127.0.0.1`, as `-p 23333:23333` in
+step 1 does.
+
+For most ecosystems the built-in upstreams put a mainland-China mirror first
+and the official registry second.
+
+### 3. Create an administrator (optional)
+
+Statistics, upstreams, policy, and users live in Admin, which needs an
+administrator. Open **<http://127.0.0.1:23333/admin>** and create one; there
+is no default password. Through Docker's published port the page asks for the
+bootstrap token:
 
 ```bash
 docker exec depsilo depsilo setup token
 ```
 
-Open **<http://127.0.0.1:23333>**, enter the token, and create your
-administrator. There is no default administrator password.
-
-### 3. Connect a client
-
-Setup continues to **Connect a client**:
-
-1. Choose your package manager.
-2. Apply the generated configuration on the machine that will download
-   dependencies.
-3. Run the suggested download command, and confirm the request and cache
-   results on the same page.
-
-The guide writes its commands for the address in your browser. If the clients
-are other machines, open Depsilo at the server's network address, for example
-`http://<server-address>:23333`, and copy the commands from there. This needs
-the port published beyond `127.0.0.1`, as `-p 23333:23333` in step 1 does.
-
-The dashboard then shows the statistics. You can reopen the guide anytime, or
-pick **AI setup** on the home page to hand the client configuration to a coding
-agent.
-
-For most ecosystems the default upstreams put a mainland-China mirror first and
-the official registry second. To change them, open **Advanced settings** →
-**Configure upstreams** on the setup page, or **Upstreams** in Admin later.
+The page also lets you change the upstreams under **Advanced settings** →
+**Configure upstreams**, or later under **Upstreams** in Admin. Admin's
+**Connect a client** then confirms each client's requests and cache results.
 
 The `depsilo-data` volume preserves configuration, credentials, database, and
 cache. Shortly after the first start Depsilo downloads the list of
@@ -139,9 +137,9 @@ curl -fsSL https://depsilo.com/install.sh | bash
 depsilo serve
 ```
 
-Open <http://127.0.0.1:23333> and follow the same setup steps. The startup output
-shows the bootstrap token; retrieve it again with `depsilo setup token` in
-another terminal. The binary listens on `127.0.0.1` only; to serve other
+Open <http://127.0.0.1:23333> and connect clients as above. Opened on the same
+machine, <http://127.0.0.1:23333/admin> creates the administrator without the
+bootstrap token. The binary listens on `127.0.0.1` only; to serve other
 machines, see [binary installation](docs/deployment.md#binary-installation).
 
 If the installer download fails (`curl` reports an error such as 403), nothing

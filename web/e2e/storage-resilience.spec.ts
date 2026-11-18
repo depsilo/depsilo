@@ -55,7 +55,7 @@ test.describe('a browser that prefers English', () => {
       body: JSON.stringify({ needs_setup: true, token_required: false }),
     }))
 
-    await page.goto('/')
+    await page.goto('/admin')
     await expect(page.getByRole('heading', { name: 'Initialize Depsilo' })).toBeVisible()
     await expect(page.locator('html')).toHaveAttribute('lang', 'en')
     // Following the browser is not a choice, so nothing is stored for it.

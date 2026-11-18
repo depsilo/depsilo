@@ -88,7 +88,7 @@ for (const [name, response] of malformedSetupStatuses) {
       },
     })
 
-    await page.goto('/')
+    await page.goto('/admin')
 
     await expect(page.getByRole('alert')).toContainText('无法确认 Depsilo 是否已完成初始化')
     await expect(page.getByRole('heading', { name: '快速开始' })).toHaveCount(0)

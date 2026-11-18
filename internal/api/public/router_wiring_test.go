@@ -131,7 +131,7 @@ func TestDiscoveryFollowsFirstRunSetupState(t *testing.T) {
 		}
 
 		prompt := serveWired(router, http.MethodGet, "/api/v1/agent-prompt", "", "").Body.String()
-		if strings.Contains(prompt, "has not finished first-run setup") != pending {
+		if !strings.Contains(prompt, "This workspace has a dependency cache called Depsilo") {
 			t.Fatalf("pending = %t, agent prompt = %q", pending, prompt)
 		}
 

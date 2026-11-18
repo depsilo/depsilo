@@ -126,7 +126,7 @@ func runStatus(args []string) int {
 	fmt.Printf("Depsilo %s\n", health.Version)
 	fmt.Printf("Status:  %s\n", health.Status)
 	if setupRequired {
-		fmt.Printf("Setup:   pending; an operator must open the Portal at %s and complete initial setup\n", baseURL)
+		fmt.Printf("Admin:   no administrator yet; open %s/admin to create one\n", baseURL)
 	}
 	fmt.Printf("Uptime:  %s\n\n", health.Uptime)
 

@@ -23,9 +23,11 @@ docker run -d \
 docker logs depsilo
 ```
 
-Open <http://127.0.0.1:23333> and complete [first-run setup](#first-run-setup).
+Open <http://127.0.0.1:23333>: package routes and the client guide work
+right away. To use Admin, create the administrator at
+<http://127.0.0.1:23333/admin> ([first-run setup](#first-run-setup)).
 `docker logs depsilo` prints the startup output, which includes the bootstrap
-token.
+token that page asks for.
 
 `--publish 23333:23333` publishes the port on every interface of the Docker
 host, and package routes need no sign-in: every machine that can reach the
@@ -332,19 +334,31 @@ A generated bootstrap token changes every time Depsilo starts, until setup is
 complete; print it again after a restart. A token preset through
 `DEPSILO_BOOTSTRAP_TOKEN` stays the same across restarts.
 
-**Before setup.** Package routes already work: an instance without
+**Before setup.** Setup is needed only for Admin. An instance without
 `config.toml` serves every ecosystem the setup page offers, from the Upstreams
-the page proposes (regional mirrors first, then the official registry).
-Clients can use it right away. Admin, sign-in, and the Portal's connection
-guide wait for setup. Finishing setup replaces those Upstreams with the ones
+the page proposes (regional mirrors first, then the official registry), and
+the Portal, its client guide, the agent prompts, and `depsilo init-agent`
+work as on a configured instance. Admin and sign-in wait for setup, which
+starts when you open `/admin`. Finishing setup replaces those Upstreams with the ones
 in the form when the service restarts. Cached files stay when the cache path
 is unchanged, and the form proposes the port already in use.
 
-1. Open the Portal at the address exposed by your deployment and enter the
-   bootstrap token.
+1. Open `/admin` at the address exposed by your deployment and enter the
+   bootstrap token, unless the page does not ask for it (see below).
 2. Create the first administrator. There is no default administrator password.
 3. Continue to the client connection guide, choose a package manager, and run
    the configuration and test commands on the client machine.
+
+**No token on the server itself.** A setup request that reaches Depsilo
+directly from a loopback address (`127.0.0.1` or `::1`) and carries no
+forwarding header (`Forwarded`, `X-Forwarded-For`, `X-Forwarded-Host`,
+`X-Forwarded-Proto`, `X-Real-IP`, `Via`) needs no bootstrap token: it comes
+from someone on the server, so the page does not show the token field. This
+applies only to a generated token. Through a container's published port the
+request comes from the runtime's gateway, so the token stays required there.
+Set `DEPSILO_BOOTSTRAP_TOKEN` to require the token from everyone, for example
+on a host shared with other accounts, or behind a reverse proxy on the same
+host that forwards without any of those headers.
 
 Opened over plain HTTP from another machine, the setup page warns that the
 bootstrap token and the new password are sent unencrypted. Finish setup on the
@@ -918,15 +932,13 @@ that live in the project or apply to a single command, and to show the exact
 changes and wait for approval before it writes user-level or system-level
 configuration. To remove the section again, see [Uninstall](#uninstall).
 
-The command exits with 1 in three cases:
+The command exits with 1 in two cases:
 
 - A target file could not be read or written. Other files may still have
   been updated.
 - A file contains the start marker without the end marker. That file is left
   untouched; restore the end marker or remove the block, then run the command
   again.
-- The instance still waits for first-run setup. Nothing is written; complete
-  setup in the Portal first.
 
 When the instance cannot be reached, the command writes the prompt built into
 the binary, which lists every ecosystem, prints a warning and exits with 0.
@@ -1962,9 +1974,10 @@ the service cannot be reached or is not healthy.
 
 While first-run setup is pending, the service is healthy, `/ready`
 answers `200`, and package routes serve from the built-in Upstreams, but no
-administrator can sign in yet. `doctor` then reports a
-failed `Initial setup` check and exits with 1. `status` prints a line that
-starts with `Setup:   pending` and exits with 0. Both `--json` outputs carry
+administrator can sign in yet. `doctor` then reports an informational
+`Administrator` check that points at `/admin` and does not fail because of
+it. `status` prints a line that starts with `Admin:   no administrator yet`
+and exits with 0. Both `--json` outputs carry
 the boolean `setup_required`.
 
 When Upstreams fail and a token is configured, the Upstream health line of

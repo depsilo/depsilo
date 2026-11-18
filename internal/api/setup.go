@@ -218,7 +218,7 @@ func (h *SetupHandler) Status(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	status := contract.SetupStatusResponse{
 		NeedsSetup:    h.cfg.IsDefault,
-		TokenRequired: h.cfg.IsDefault,
+		TokenRequired: h.cfg.IsDefault && !h.tokenWaived(c.Request),
 	}
 	if h.cfg.IsDefault {
 		// The wizard writes a port into config.toml, shows the command that
@@ -256,7 +256,7 @@ func (h *SetupHandler) Complete(c *gin.Context) {
 		})
 		return
 	}
-	if !h.validBootstrapToken(c.GetHeader(BootstrapTokenHeader)) {
+	if !h.tokenWaived(c.Request) && !h.validBootstrapToken(c.GetHeader(BootstrapTokenHeader)) {
 		c.JSON(http.StatusForbidden, gin.H{
 			"code":    "BOOTSTRAP_TOKEN_REQUIRED",
 			"message": bootstrapTokenRequiredMessage(h.cfg.Server.Host, h.cfg.Server.Port),
@@ -573,6 +573,39 @@ func setupStageForConfigWrite(stage config.WriteStage) (setupStage, error) {
 	default:
 		return "", fmt.Errorf("unknown config publication stage %d", stage)
 	}
+}
+
+// forwardingHeaders mark a request that a proxy relayed; its loopback peer
+// address then says nothing about where the request came from.
+var forwardingHeaders = []string{"Forwarded", "X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto", "X-Real-Ip", "Via"}
+
+// tokenWaived reports whether request may complete setup without the bootstrap
+// token: it reached this process directly from a loopback address, so it came
+// from someone on the server itself, and the token was generated rather than
+// chosen. An operator who sets DEPSILO_BOOTSTRAP_TOKEN, for example on a host
+// shared with other accounts, keeps the token required for everyone. Through
+// a container's published port the peer is the runtime's gateway, not
+// loopback, so the token stays required there. A reverse proxy on the same
+// host that forwards without any forwarding header would be taken for a local
+// user; see docs/deployment.md.
+func (h *SetupHandler) tokenWaived(request *http.Request) bool {
+	if !h.cfg.BootstrapTokenGenerated {
+		return false
+	}
+	host, _, err := net.SplitHostPort(request.RemoteAddr)
+	if err != nil {
+		return false
+	}
+	peer := net.ParseIP(host)
+	if peer == nil || !peer.IsLoopback() {
+		return false
+	}
+	for _, header := range forwardingHeaders {
+		if request.Header.Get(header) != "" {
+			return false
+		}
+	}
+	return true
 }
 
 func (h *SetupHandler) validBootstrapToken(candidate string) bool {

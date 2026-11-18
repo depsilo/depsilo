@@ -117,8 +117,12 @@ consequence.
   three are absent once setup is complete.
   From a completed setup until the process restarts it also returns
   `"restart_pending": true`; the field is never `false` and is absent in
-  every other state. Package routes are served once a `200` answer has
-  `needs_setup` false and no `restart_pending`.
+  every other state. Package routes serve before setup too, from the
+  built-in Upstreams; once a `200` answer has `needs_setup` false and no
+  `restart_pending`, they serve from the Upstreams chosen in setup.
+  `token_required` is `false` for a request that setup would accept without
+  the bootstrap token (a direct loopback request while the token is
+  generated).
 - `reconnect_url` in the `POST /api/v1/setup/complete` response is the
   request's own scheme and `Host` with path `/` when the request carried
   `X-Forwarded-Proto` or its `Host` did not name the port Depsilo listens on,
@@ -418,11 +422,12 @@ consequence.
 - CLI `--json` output gains fields additively; consumers must tolerate unknown
   fields. Scripts can rely on these exit statuses and fields:
   - `depsilo doctor` exits non-zero when a check fails. Pending first-run
-    setup is a failed check named `Initial setup`. `depsilo doctor --json`
-    and `depsilo status --json` report that state in `setup_required`.
+    setup is an informational check named `Administrator`, not a failure.
+    `depsilo doctor --json` and `depsilo status --json` report that state in
+    `setup_required`.
   - `depsilo init-agent` exits `1` and reports `"ok": false` when a target
-    file cannot be updated. It also exits `1`, and writes nothing, while the
-    instance has not finished first-run setup. Its `--json` output names
+    file cannot be updated. It writes the instance's prompt before first-run
+    setup as well. Its `--json` output names
     where the written text came from in `source` (`server` or `embedded`).
   - `depsilo prompt --url` applies the origin rule of the integration prompt
     and exits `1` for any other value.
