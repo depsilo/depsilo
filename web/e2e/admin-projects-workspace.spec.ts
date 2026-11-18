@@ -173,6 +173,8 @@ test('free users create their first project and deletion restores the allowance'
   const tokenDialog = page.getByRole('dialog', { name: '项目 Token' })
   await expect(tokenDialog).toContainText('fixture-first-project-token')
   await tokenDialog.getByRole('button', { name: '确定', exact: true }).click()
+  // The create dialog renders its own license link while it animates closed.
+  await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(page.getByRole('button', { name: '创建项目', exact: true })).toHaveCount(0)
   await expect(page.getByRole('link', { name: '管理 Pro 授权', exact: true })).toHaveAttribute('href', '/admin/license')
   await expect(page.locator('[data-project-capacity]')).toContainText('已使用 1 个')
