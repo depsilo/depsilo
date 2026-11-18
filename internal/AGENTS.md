@@ -38,6 +38,12 @@ The runtime flow is documented in `docs/development/architecture.md`.
 Keep behavior tests beside the owning package. Use the interface as the test
 surface and avoid exporting internals only for tests.
 
+`make lint-go` runs staticcheck (`staticcheck.conf`) and fails on any function
+deadcode finds unreachable from the binaries and tests. Both tools are pinned
+in `tools/go.mod`, outside the product module. Delete unreachable code rather
+than keeping it for a hypothetical caller; suppress a staticcheck finding only
+with a `//lint:ignore <check> <reason>` directive.
+
 ```bash
 go test ./internal/<module> -run TestName -count=1
 go test -race ./internal/<module> -count=1

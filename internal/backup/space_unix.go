@@ -19,6 +19,7 @@ func filesystemFreeSpace(path string) (string, uint64, error) {
 	if err := unix.Statfs(existing, &stat); err != nil {
 		return "", 0, err
 	}
+	//lint:ignore SA4003 Bavail is unsigned on Linux and macOS but signed on other unix platforms.
 	if stat.Bsize <= 0 || stat.Bavail < 0 {
 		return "", 0, fmt.Errorf("filesystem reported invalid free-space counters")
 	}

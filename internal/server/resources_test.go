@@ -1,3 +1,5 @@
+//lint:file-ignore SA1012 these tests pin that Close must tolerate a nil context.
+
 package server
 
 import (

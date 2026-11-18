@@ -188,7 +188,7 @@ func readArchiveManifest(ctx context.Context, archivePath string) (manifest, str
 	if header.Name != "manifest.json" {
 		return manifest{}, "", fmt.Errorf("backup manifest.json must be the first entry, got %q", header.Name)
 	}
-	if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+	if header.Typeflag != tar.TypeReg {
 		return manifest{}, "", errors.New("backup manifest.json is not a regular file")
 	}
 	if header.Size < 0 || header.Size > maxManifestBytes {
@@ -278,7 +278,7 @@ func extractArchive(ctx context.Context, archivePath, workspace string, expected
 		return nil, fmt.Errorf("read backup manifest header: %w", err)
 	}
 	if manifestHeader.Name != "manifest.json" ||
-		(manifestHeader.Typeflag != tar.TypeReg && manifestHeader.Typeflag != tar.TypeRegA) ||
+		manifestHeader.Typeflag != tar.TypeReg ||
 		manifestHeader.Size < 0 || manifestHeader.Size > maxManifestBytes {
 		return nil, errors.New("backup changed while restoring: manifest.json is no longer the valid first entry")
 	}
@@ -309,7 +309,7 @@ func extractArchive(ctx context.Context, archivePath, workspace string, expected
 			return nil, fmt.Errorf("backup contains duplicate entry %q", header.Name)
 		}
 		seen[header.Name] = true
-		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+		if header.Typeflag != tar.TypeReg {
 			return nil, fmt.Errorf("backup entry %q is not a regular file", header.Name)
 		}
 		if header.Size != expectedFile.Size {

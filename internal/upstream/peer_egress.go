@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"sort"
 	"strings"
 
 	"depsilo/internal/cascade"
@@ -54,19 +53,6 @@ func (s *PeerSet) Resolve(name string) (PeerEgress, bool) {
 	}
 	peer, ok := s.peers[name]
 	return peer, ok
-}
-
-// Names returns the configured peer names in deterministic order.
-func (s *PeerSet) Names() []string {
-	if s == nil {
-		return nil
-	}
-	names := make([]string, 0, len(s.peers))
-	for name := range s.peers {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
 }
 
 // peerTransport rewrites every request for one upstream into an authenticated

@@ -80,23 +80,6 @@ func min(a, b int) int {
 	return b
 }
 
-// httpPost sends a POST request with an optional body.
-func httpPost(t *testing.T, url string, body io.Reader) *http.Response {
-	t.Helper()
-	req, err := http.NewRequest(http.MethodPost, url, body)
-	if err != nil {
-		t.Fatalf("create POST request: %v", err)
-	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("POST %s: %v", url, err)
-	}
-	return resp
-}
-
 // adminToken is the cached JWT for the test administrator.
 // It is populated lazily by loginAdmin() on first call.
 var (

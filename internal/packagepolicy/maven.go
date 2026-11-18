@@ -171,7 +171,6 @@ type mavenItem interface {
 	kind() mavenItemKind
 	isNull() bool
 	compareTo(mavenItem) int
-	canonical() string
 }
 
 // mavenNumericItem stores the normalized decimal representation instead of a
@@ -203,8 +202,6 @@ func (item mavenNumericItem) compareTo(other mavenItem) int {
 		panic("invalid Maven version item")
 	}
 }
-
-func (item mavenNumericItem) canonical() string { return item.digits }
 
 type mavenStringItem struct {
 	value string
@@ -251,8 +248,6 @@ func (item mavenStringItem) compareTo(other mavenItem) int {
 		panic("invalid Maven version item")
 	}
 }
-
-func (item mavenStringItem) canonical() string { return item.value }
 
 type mavenListItem struct {
 	items []mavenItem
@@ -318,21 +313,6 @@ func (item *mavenListItem) compareTo(other mavenItem) int {
 	default:
 		panic("invalid Maven version item")
 	}
-}
-
-func (item *mavenListItem) canonical() string {
-	var canonical strings.Builder
-	for _, child := range item.items {
-		if canonical.Len() > 0 {
-			if _, nested := child.(*mavenListItem); nested {
-				canonical.WriteByte('-')
-			} else {
-				canonical.WriteByte('.')
-			}
-		}
-		canonical.WriteString(child.canonical())
-	}
-	return canonical.String()
 }
 
 func parseMavenVersion(value string) (mavenVersion, error) {

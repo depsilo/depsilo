@@ -195,14 +195,12 @@ func policyStatusPayload(status rules.PolicyStatus) gin.H {
 			state = "healthy"
 		}
 	}
-	age := status.SnapshotAgeSeconds
+	var age float64
 	if !loaded.IsZero() {
 		age = time.Since(loaded).Seconds()
 		if age < 0 || math.IsNaN(age) || math.IsInf(age, 0) {
 			age = 0
 		}
-	} else {
-		age = 0
 	}
 	var loadedAt any
 	if !loaded.IsZero() {

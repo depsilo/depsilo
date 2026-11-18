@@ -93,8 +93,6 @@ func New(
 	}
 }
 
-func (h *Handler) Type() string { return "docker" }
-
 // SetProvenanceRequired enables first-observation provenance for manifest
 // requests. The composition root sets it when a positive docker threshold is
 // active.

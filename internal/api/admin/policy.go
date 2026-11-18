@@ -53,14 +53,12 @@ func (h *PolicyHandler) Status(c *gin.Context) {
 			state = "healthy"
 		}
 	}
-	age := status.SnapshotAgeSeconds
+	var age float64
 	if !loadedAt.IsZero() {
 		age = time.Since(loadedAt).Seconds()
 		if age < 0 || math.IsNaN(age) || math.IsInf(age, 0) {
 			age = 0
 		}
-	} else {
-		age = 0
 	}
 	var last any
 	if !loadedAt.IsZero() {

@@ -120,10 +120,8 @@ func (g *Generator) Components(ctx context.Context, projectID uint, ecosystem st
 	indexByComponent := make(map[string]int)
 	for _, entry := range rows {
 		key := entry.Ecosystem + "\x00" + entry.PackageName + "\x00" + entry.Version
-		index, found := indexByComponent[key]
-		if !found {
-			index = len(components)
-			indexByComponent[key] = index
+		if _, found := indexByComponent[key]; !found {
+			indexByComponent[key] = len(components)
 			components = append(components, profile.Annotate(Component{
 				Ecosystem: entry.Ecosystem,
 				Name:      entry.PackageName,

@@ -125,7 +125,7 @@ func extractAffectedRanges(affected []osvAffected) string {
 	var allRanges []rangeEntry
 	for _, a := range affected {
 		for _, r := range a.Ranges {
-			allRanges = append(allRanges, rangeEntry{Type: r.Type, Events: r.Events})
+			allRanges = append(allRanges, rangeEntry(r))
 		}
 	}
 	data, _ := json.Marshal(allRanges)

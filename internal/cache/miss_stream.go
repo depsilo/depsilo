@@ -124,6 +124,7 @@ func releaseMissStreamChunk(chunk []byte) {
 	if cap(chunk) < missStreamChunkSize {
 		return
 	}
+	//lint:ignore SA6002 the slice-header allocation is negligible next to reusing a 32 KiB chunk.
 	missStreamChunkPool.Put(chunk[:missStreamChunkSize])
 }
 

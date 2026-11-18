@@ -42,7 +42,7 @@ func TestAuthenticationDraftPreviewPreservesSavedSecretWithoutMutation(t *testin
 }
 
 func TestAuthenticationDraftPreviewUsesCapturedEnvironment(t *testing.T) {
-	store, path := newOIDCStoreFixture(t, strings.Replace(oidcStoreDocument, "client_secret = \"saved-provider-secret\"\n", "", 1))
+	_, path := newOIDCStoreFixture(t, strings.Replace(oidcStoreDocument, "client_secret = \"saved-provider-secret\"\n", "", 1))
 	raw, _ := os.ReadFile(path)
 	cfg, err := decodeConfigDocument(raw)
 	if err != nil {
@@ -50,7 +50,7 @@ func TestAuthenticationDraftPreviewUsesCapturedEnvironment(t *testing.T) {
 	}
 	t.Setenv("DEPSILO_AUTH_OIDC_CLIENT_SECRET", "environment-secret")
 	cfg.Auth.OIDC.ClientSecret = "environment-secret"
-	store = NewStore(path, cfg, zap.NewAtomicLevel())
+	store := NewStore(path, cfg, zap.NewAtomicLevel())
 	t.Setenv("DEPSILO_AUTH_OIDC_CLIENT_SECRET", "later-environment-secret")
 	preview, err := store.PreviewAuthenticationSourceDraft(context.Background(), AuthenticationSourceDraft{ID: "oidc", Protocol: "oidc"})
 	if err != nil {
@@ -163,13 +163,13 @@ func TestRestoreAuthenticationSourceDoesNotMaterializeEnvironment(t *testing.T) 
 }
 
 func TestRestoreRequiresReliableOriginalBaseline(t *testing.T) {
-	store, path := newOIDCStoreFixture(t, oidcStoreDocument)
+	_, path := newOIDCStoreFixture(t, oidcStoreDocument)
 	cfg, err := decodeConfigDocument([]byte(oidcStoreDocument))
 	if err != nil {
 		t.Fatal(err)
 	}
 	cfg.Auth.OIDC.ClientSecret = "runtime-secret-not-from-file"
-	store = NewStore(path, cfg, zap.NewAtomicLevel())
+	store := NewStore(path, cfg, zap.NewAtomicLevel())
 	if err := store.DeleteAuthenticationSource(context.Background(), "oidc"); err != nil {
 		t.Fatal(err)
 	}

@@ -202,7 +202,7 @@ func TestRegistryConflictRollsBackWithoutPublishing(t *testing.T) {
 }
 
 func TestRegistryCommitFailureLeavesDBPoolAndWorkersUnpublished(t *testing.T) {
-	database, registry := registryFixture(t, "pypi", 1)
+	database, _ := registryFixture(t, "pypi", 1)
 	var record db.UpstreamRecord
 	if err := database.First(&record).Error; err != nil {
 		t.Fatal(err)
@@ -287,7 +287,7 @@ func TestRegistryPublishReturnsReconcileFailureWhenReloadFails(t *testing.T) {
 }
 
 func TestRegistryIntervalUpdateStopsOldWorkerAndStartsReplacement(t *testing.T) {
-	database, registry := registryFixture(t, "pypi", 1)
+	database, _ := registryFixture(t, "pypi", 1)
 	var record db.UpstreamRecord
 	if err := database.First(&record).Error; err != nil {
 		t.Fatal(err)
@@ -317,7 +317,7 @@ func TestRegistryNameOnlyUpdateReplacesWorkerWithPublishedObject(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer server.Close()
-	database, registry := registryFixture(t, "pypi", 1)
+	database, _ := registryFixture(t, "pypi", 1)
 	var record db.UpstreamRecord
 	if err := database.First(&record).Error; err != nil {
 		t.Fatal(err)
@@ -445,7 +445,7 @@ func TestRegistryMutationRetriesAfterConcurrentHealthWriteInvalidatesSnapshot(t 
 }
 
 func TestRegistryPriorityOnlyUpdateReplacesActiveWorker(t *testing.T) {
-	database, registry := registryFixture(t, "pypi", 1)
+	database, _ := registryFixture(t, "pypi", 1)
 	var record db.UpstreamRecord
 	if err := database.First(&record).Error; err != nil {
 		t.Fatal(err)
@@ -589,7 +589,7 @@ func TestRegistryCheckPersistenceFailureLeavesPublishedHealthUnchanged(t *testin
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
-	database, registry := registryFixture(t, "pypi", 1)
+	database, _ := registryFixture(t, "pypi", 1)
 	var record db.UpstreamRecord
 	if err := database.First(&record).Error; err != nil {
 		t.Fatal(err)

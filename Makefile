@@ -61,6 +61,9 @@ LDFLAGS    := -X depsilo/internal/version.Version=$(VERSION) \
               -X depsilo/internal/version.Commit=$(COMMIT) \
               -X depsilo/internal/version.BuildDate=$(BUILD_DATE)
 GO_BUILD   := CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$(LDFLAGS)"
+# Lint tools are pinned in their own module so they never enter the product's
+# dependency graph, SBOM, or vulnerability scan.
+GO_LINT_TOOL := go tool -modfile=tools/go.mod
 
 # ─── 初始化与构建 ─────────────────────────────
 .PHONY: setup setup-ui version prepare-go frontend build build-dev-server tray app-macos install-linux uninstall-linux autostart-linux unautostart-linux
@@ -381,11 +384,15 @@ clean-all: clean                ## 额外删除本地运行数据与开发 JWT�
 
 lint: lint-go lint-web lint-i18n  ## Go/前端/i18n 静态检查
 
-lint-go: prepare-go             # 内部：检查 gofmt + go vet
+lint-go: prepare-go             # 内部：检查 gofmt、go vet、staticcheck 与不可达函数
 	@unformatted="$$(git ls-files --cached --others --exclude-standard -z -- '*.go' | \
 		xargs -0 sh -c 'for file do [ ! -f "$$file" ] || gofmt -l "$$file"; done' sh)"; \
 		test -z "$$unformatted" || { echo "gofmt required:"; echo "$$unformatted"; exit 1; }
 	go vet $(GO_TEST_PKGS)
+	$(GO_LINT_TOOL) staticcheck $(GO_PROD_PKGS)
+	$(GO_LINT_TOOL) staticcheck -tags integration ./tests/...
+	@unreachable="$$($(GO_LINT_TOOL) deadcode -test -tags integration $(GO_PROD_PKGS) ./tests/...)" || exit 1; \
+		test -z "$$unreachable" || { echo "unreachable functions (delete them or reach them from a test):"; echo "$$unreachable"; exit 1; }
 
 lint-web:                       # 内部：检查前端 ESLint 与未使用的文件、导出和依赖
 	$(NPM_RUN) lint
@@ -403,6 +410,7 @@ verify-web:                     # 内部：前端类型、浏览器契约与生�
 verify-modules:                 # 内部：校验 Go 模块完整性与 tidy 状态
 	go mod verify
 	go mod tidy -diff
+	cd tools && go mod verify && go mod tidy -diff
 
 verify-build: prepare-go        # 内部：编译正式 CLI 入口
 	@output="$$(mktemp)"; trap 'rm -f "$$output"' 0; $(GO_BUILD) -o "$$output" ./cmd/depsilo

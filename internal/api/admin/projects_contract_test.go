@@ -408,7 +408,7 @@ func TestDeleteProjectRollsBackDeleteFailure(t *testing.T) {
 }
 
 func TestDeleteProjectChecksCommitFailure(t *testing.T) {
-	r, database := newProjectsContractRouter(t)
+	_, database := newProjectsContractRouter(t)
 	project := createContractProject(t, database)
 	pkg := db.ProjectPackage{ProjectID: project.ID, Ecosystem: "pypi", PackageName: "requests", Version: "1"}
 	if err := database.Create(&pkg).Error; err != nil {
@@ -421,7 +421,7 @@ func TestDeleteProjectChecksCommitFailure(t *testing.T) {
 	failingDB := database.Session(&gorm.Session{NewDB: true})
 	failingDB.Statement.ConnPool = failingCommitPool{ConnPool: sqlDB, beginner: sqlDB}
 	h := NewProjectsHandler(failingDB, nil)
-	r = gin.New()
+	r := gin.New()
 	r.DELETE("/projects/:id", h.Delete)
 
 	rec := httptest.NewRecorder()

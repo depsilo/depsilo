@@ -69,9 +69,7 @@ func parseComposerP2Path(path string) (string, bool) {
 		return "", false
 	}
 	coordinate := strings.TrimSuffix(path, ".json")
-	if strings.HasSuffix(coordinate, "~dev") {
-		coordinate = strings.TrimSuffix(coordinate, "~dev")
-	}
+	coordinate = strings.TrimSuffix(coordinate, "~dev")
 	return composerCoordinate(coordinate)
 }
 

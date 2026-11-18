@@ -32,9 +32,9 @@ func newQuarantineAdminTestRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 }
 
 func TestQuarantineApproveRejectsWhenAgeGateUnavailable(t *testing.T) {
-	router, database := newQuarantineAdminTestRouter(t)
+	_, database := newQuarantineAdminTestRouter(t)
 	handler := NewQuarantineHandler(database, quarantine.NewStore(database), false)
-	router = gin.New()
+	router := gin.New()
 	router.POST("/approve", handler.Approve)
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/approve", strings.NewReader(`{

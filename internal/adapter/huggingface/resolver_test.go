@@ -219,8 +219,7 @@ func TestResolverForcesIdentityEncodingAcrossCacheableRedirect(t *testing.T) {
 
 func TestResolverPreservesOriginAuthorizationAcrossCanonicalRedirect(t *testing.T) {
 	var canonicalGotAuth bool
-	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/models/old-name":
 			w.Header().Set("X-Repo-Commit", "canonical-commit")
@@ -444,8 +443,7 @@ func TestResolverCrossOriginCanonicalRelocationHasFiniteHopLimit(t *testing.T) {
 
 func TestResolverHonorsRootRelativeRedirectFromBasePathOrigin(t *testing.T) {
 	var requestedPaths []string
-	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestedPaths = append(requestedPaths, r.URL.Path)
 		switch r.URL.Path {
 		case "/mirror/api/models/old-name":
@@ -483,8 +481,7 @@ func TestResolverHonorsRootRelativeRedirectFromBasePathOrigin(t *testing.T) {
 func TestResolverKeepsPaginationLinkAfterBasePathRedirectsToCanonicalRootPath(t *testing.T) {
 	const apiPath = "/api/models/acme/model/tree/main"
 
-	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/mirror" + apiPath:
 			http.Redirect(w, r, apiPath, http.StatusTemporaryRedirect)

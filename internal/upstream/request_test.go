@@ -407,8 +407,7 @@ func TestRequestURLRedirectDoesNotLeakSignedReferer(t *testing.T) {
 	}))
 	defer final.Close()
 
-	var signed *httptest.Server
-	signed = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	signed := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, final.URL+"/blob", http.StatusTemporaryRedirect)
 	}))
 	defer signed.Close()
@@ -440,8 +439,7 @@ func TestRequestURLRedirectDoesNotLeakSignedReferer(t *testing.T) {
 
 func TestRequestURLPreservesAuthorizationAcrossSameOriginRedirect(t *testing.T) {
 	var finalAuthorization string
-	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/canonical" {
 			finalAuthorization = r.Header.Get("Authorization")
 			_, _ = io.WriteString(w, "ok")

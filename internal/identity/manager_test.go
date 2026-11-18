@@ -71,7 +71,7 @@ func (f *fakeProvider) serve(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
 		client, secret, _ := r.BasicAuth()
 		if client != "test-client" || secret != "test-secret" {
-			http.Error(w, `{"error":"invalid_client"}`, 401)
+			http.Error(w, `{"error":"invalid_client"}`, http.StatusUnauthorized)
 			return
 		}
 		f.mu.Lock()
@@ -116,7 +116,7 @@ func (f *fakeProvider) serve(w http.ResponseWriter, r *http.Request) {
 		g, ok := f.tokens[r.Header.Get("Authorization")[len("Bearer "):]]
 		f.mu.Unlock()
 		if !ok {
-			http.Error(w, "{}", 401)
+			http.Error(w, "{}", http.StatusUnauthorized)
 			return
 		}
 		sub := g.subject

@@ -1,3 +1,5 @@
+//lint:file-ignore SA1012 these tests pin that CloseContext must tolerate a nil context.
+
 package upstream
 
 import (
@@ -185,6 +187,7 @@ func TestRegistryStartWaitsForConcurrentCloseGeneration(t *testing.T) {
 	}()
 	waitDone(t, cancelObserved)
 	registry.workersMu.Lock()
+	//lint:ignore SA2001 wait until the in-flight lifecycle transition releases the lock.
 	registry.workersMu.Unlock()
 
 	startReturned := make(chan struct{})
@@ -213,6 +216,7 @@ func TestRegistryConcurrentClosesJoinTheRunningGeneration(t *testing.T) {
 	go func() { registry.Close(); close(firstReturned) }()
 	waitDone(t, cancelObserved)
 	registry.workersMu.Lock()
+	//lint:ignore SA2001 wait until the in-flight lifecycle transition releases the lock.
 	registry.workersMu.Unlock()
 	go func() { registry.Close(); close(secondReturned) }()
 	select {

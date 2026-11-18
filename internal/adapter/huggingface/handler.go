@@ -148,7 +148,7 @@ func (h *Handler) handleRequest(c *gin.Context) {
 
 	var queryErr error
 	logKey, queryErr = CacheKeyForRawQuery(parsed, c.Request.URL.RawQuery)
-	cacheKey := logKey
+	var cacheKey string
 
 	// Keep the resolver's bounded Range parser and the outbound request in the
 	// same trust domain. If an unsupported request reached an upstream first,

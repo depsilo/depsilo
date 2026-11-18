@@ -1,3 +1,5 @@
+//lint:file-ignore SA1012 these tests pin that Run must treat a nil context as cancelled.
+
 package upstreamupdates
 
 import (
