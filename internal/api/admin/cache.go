@@ -20,6 +20,7 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/adapter/packagekey"
+	"depsilo/internal/api/contract"
 	"depsilo/internal/cache"
 	"depsilo/internal/db"
 	"depsilo/internal/middleware"
@@ -45,28 +46,26 @@ type cleanupPlan struct {
 	plannedBytes        int64
 }
 
-type cacheIndexItem struct {
-	ID               uint      `json:"id"`
-	Key              string    `json:"key"`
-	AdapterType      string    `json:"adapter_type"`
-	PackageName      string    `json:"package_name"`
-	Size             int64     `json:"size"`
-	HitCount         int64     `json:"hit_count"`
-	ETag             string    `json:"etag"`
-	LastModified     string    `json:"last_modified"`
-	LastAccessed     time.Time `json:"last_accessed"`
-	ExpiresAt        time.Time `json:"expires_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
-	Status           string    `json:"status"`
-	RefreshSupported bool      `json:"refresh_supported"`
+// cacheIndexSummary is the scan target of the per-ecosystem index summary.
+type cacheIndexSummary struct {
+	AdapterType string
+	Total       int64
+	Fresh       int64
+	Stale       int64
+	LastUpdated *string
 }
 
-type cacheIndexSummary struct {
-	AdapterType string  `json:"adapter_type"`
-	Total       int64   `json:"total"`
-	Fresh       int64   `json:"fresh"`
-	Stale       int64   `json:"stale"`
-	LastUpdated *string `json:"last_updated"`
+// cacheContractSlice converts each item to its contract type. A nil slice
+// stays nil, so a body field that used to encode as null still does.
+func cacheContractSlice[T, U any](items []T, convert func(T) U) []U {
+	if items == nil {
+		return nil
+	}
+	converted := make([]U, len(items))
+	for i, item := range items {
+		converted[i] = convert(item)
+	}
+	return converted
 }
 
 // ListIndexes returns mutable package-manager indexes separately from cached
@@ -124,14 +123,14 @@ func (h *CacheHandler) ListIndexes(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
 		return
 	}
-	items := make([]cacheIndexItem, len(rows))
+	items := make([]contract.CacheIndexEntry, len(rows))
 	for i, row := range rows {
 		_, refreshErr := CacheIndexPublicPath(row)
-		rowStatus := "stale"
+		rowStatus := contract.CacheIndexStatusStale
 		if row.ExpiresAt.After(now) {
-			rowStatus = "fresh"
+			rowStatus = contract.CacheIndexStatusFresh
 		}
-		items[i] = cacheIndexItem{
+		items[i] = contract.CacheIndexEntry{
 			ID: row.ID, Key: row.Key, AdapterType: row.AdapterType,
 			PackageName: row.PackageName, Size: row.Size, HitCount: row.HitCount,
 			ETag: row.ETag, LastModified: row.LastModified,
@@ -160,9 +159,15 @@ func (h *CacheHandler) ListIndexes(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"items": items, "total": total, "page": page, "page_size": pageSize,
-		"summary": summary, "ecosystems": ecosystems,
+	c.JSON(http.StatusOK, contract.CacheIndexListResponse{
+		Items: items, Total: total, Page: page, PageSize: pageSize,
+		Summary: cacheContractSlice(summary, func(row cacheIndexSummary) contract.CacheIndexSummary {
+			return contract.CacheIndexSummary{
+				AdapterType: row.AdapterType, Total: row.Total, Fresh: row.Fresh,
+				Stale: row.Stale, LastUpdated: row.LastUpdated,
+			}
+		}),
+		Ecosystems: ecosystems,
 	})
 }
 
@@ -217,7 +222,7 @@ func (h *CacheHandler) RefreshIndex(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "index refreshed", "id": entry.ID})
+	c.JSON(http.StatusOK, contract.CacheIndexRefreshResponse{Message: "index refreshed", ID: entry.ID})
 }
 
 // CacheIndexPublicPath maps a persisted cache key back to the public GET route
@@ -441,12 +446,19 @@ func (h *CacheHandler) List(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"total":      total,
-		"page":       page,
-		"page_size":  pageSize,
-		"items":      entries,
-		"ecosystems": ecosystems,
+	c.JSON(http.StatusOK, contract.CacheListResponse{
+		Total: total, Page: page, PageSize: pageSize,
+		Items: cacheContractSlice(entries, func(entry db.CacheEntry) contract.CacheEntry {
+			return contract.CacheEntry{
+				ID: entry.ID, Key: entry.Key, AdapterType: entry.AdapterType,
+				CacheKind: contract.CacheKind(entry.CacheKind), PackageName: entry.PackageName,
+				StoragePath: entry.StoragePath, Size: entry.Size, HitCount: entry.HitCount,
+				ContentType: entry.ContentType, ETag: entry.ETag, LastModified: entry.LastModified,
+				ExpiresAt: entry.ExpiresAt, LastAccessed: entry.LastAccessed,
+				CreatedAt: entry.CreatedAt, UpdatedAt: entry.UpdatedAt,
+			}
+		}),
+		Ecosystems: ecosystems,
 	})
 }
 
@@ -460,10 +472,8 @@ func (h *CacheHandler) Delete(c *gin.Context) {
 	removal, err := h.retention.Remove(c.Request.Context(), uint(id))
 	switch {
 	case err == nil:
-		c.JSON(http.StatusOK, gin.H{
-			"message":         "deleted",
-			"deleted":         1,
-			"reclaimed_bytes": removal.ReclaimedBytes,
+		c.JSON(http.StatusOK, contract.CacheDeleteResponse{
+			Message: "deleted", Deleted: 1, ReclaimedBytes: removal.ReclaimedBytes,
 		})
 	case errors.Is(err, cache.ErrCacheEntryNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "message": "cache entry not found"})
@@ -534,16 +544,11 @@ func (h *CacheHandler) Cleanup(c *gin.Context) {
 		zap.Int("deleted", report.Removed),
 		zap.Int64("reclaimed_bytes", report.ReclaimedBytes),
 	)
-	c.JSON(http.StatusOK, gin.H{
-		"message":         "cleanup completed",
-		"deleted":         report.Removed,
-		"failed":          report.Failed,
-		"reclaimed_bytes": report.ReclaimedBytes,
-		"examined":        report.Examined,
-		"expired_removed": report.ExpiredRemoved,
-		"lru_removed":     report.LRURemoved,
-		"usage_before":    report.UsageBefore,
-		"usage_after":     report.UsageAfter,
+	c.JSON(http.StatusOK, contract.CacheReclaimResponse{
+		Message: "cleanup completed", Deleted: report.Removed, Failed: report.Failed,
+		ReclaimedBytes: report.ReclaimedBytes, Examined: report.Examined,
+		ExpiredRemoved: report.ExpiredRemoved, LRURemoved: report.LRURemoved,
+		UsageBefore: report.UsageBefore, UsageAfter: report.UsageAfter,
 	})
 }
 
@@ -613,12 +618,12 @@ func (h *CacheHandler) cleanupPlan(c *gin.Context, planID string) {
 	notAttempted := 0
 	interrupted := false
 	var reclaimed int64
-	results := make([]gin.H, 0, len(plan.items))
+	results := make([]contract.CacheCleanupItemResult, 0, len(plan.items))
 	for index, candidate := range plan.items {
 		removal, attempted, err := h.retention.RemoveIfMatches(c.Request.Context(), candidate)
 		if err != nil {
 			failed++
-			results = append(results, gin.H{"id": candidate.ID, "status": "failed", "object_removed": removal.ObjectRemoved, "metadata_removed": removal.MetadataRemoved})
+			results = append(results, contract.CacheCleanupItemResult{ID: candidate.ID, Status: contract.CacheCleanupItemStatusFailed, ObjectRemoved: removal.ObjectRemoved, MetadataRemoved: removal.MetadataRemoved})
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				interrupted = true
 				notAttempted = len(plan.items) - index - 1
@@ -628,45 +633,45 @@ func (h *CacheHandler) cleanupPlan(c *gin.Context, planID string) {
 		}
 		if !attempted {
 			skipped++
-			results = append(results, gin.H{"id": candidate.ID, "status": "skipped", "object_removed": false, "metadata_removed": false})
+			results = append(results, contract.CacheCleanupItemResult{ID: candidate.ID, Status: contract.CacheCleanupItemStatusSkipped})
 			continue
 		}
 		if !removal.MetadataRemoved {
 			failed++
-			results = append(results, gin.H{"id": candidate.ID, "status": "failed", "object_removed": removal.ObjectRemoved, "metadata_removed": false})
+			results = append(results, contract.CacheCleanupItemResult{ID: candidate.ID, Status: contract.CacheCleanupItemStatusFailed, ObjectRemoved: removal.ObjectRemoved})
 			continue
 		}
 		deleted++
 		reclaimed += removal.ReclaimedBytes
-		results = append(results, gin.H{"id": candidate.ID, "status": "deleted", "object_removed": removal.ObjectRemoved, "metadata_removed": true})
+		results = append(results, contract.CacheCleanupItemResult{ID: candidate.ID, Status: contract.CacheCleanupItemStatusDeleted, ObjectRemoved: removal.ObjectRemoved, MetadataRemoved: true})
 	}
-	outcome := "succeeded"
+	outcome := contract.CacheCleanupOutcomeSucceeded
 	if failed > 0 || skipped > 0 {
-		outcome = "partial"
+		outcome = contract.CacheCleanupOutcomePartial
 		if deleted == 0 && len(plan.items) > 0 {
-			outcome = "failed"
+			outcome = contract.CacheCleanupOutcomeFailed
 		}
 	}
 	if interrupted {
-		outcome = "partial"
+		outcome = contract.CacheCleanupOutcomePartial
 		if deleted == 0 && len(plan.items) > 0 {
-			outcome = "failed"
+			outcome = contract.CacheCleanupOutcomeFailed
 		}
 	}
 	message := "cleanup completed"
 	if interrupted {
 		message = "cleanup interrupted before the plan completed"
-	} else if outcome == "partial" {
+	} else if outcome == contract.CacheCleanupOutcomePartial {
 		message = "cleanup partially completed"
-	} else if outcome == "failed" {
+	} else if outcome == contract.CacheCleanupOutcomeFailed {
 		message = "cleanup failed"
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"message": message, "outcome": outcome, "interrupted": interrupted,
-		"deleted": deleted, "skipped": skipped, "failed": failed,
-		"reclaimed_bytes": reclaimed, "planned": len(plan.items), "planned_count": len(plan.items),
-		"planned_bytes": plan.plannedBytes, "total_candidate_count": plan.totalCandidateCount,
-		"not_attempted": notAttempted, "items": results,
+	c.JSON(http.StatusOK, contract.CacheCleanupResponse{
+		Message: message, Outcome: outcome, Interrupted: interrupted,
+		Deleted: deleted, Skipped: skipped, Failed: failed,
+		ReclaimedBytes: reclaimed, Planned: len(plan.items), PlannedCount: len(plan.items),
+		PlannedBytes: plan.plannedBytes, TotalCandidateCount: plan.totalCandidateCount,
+		NotAttempted: notAttempted, Items: results,
 	})
 }
 
@@ -718,37 +723,35 @@ func (h *CacheHandler) PreviewCleanup(c *gin.Context) {
 		totalCandidateCount: preview.CandidateCount, plannedBytes: plannedBytes,
 	}
 	h.plansMu.Unlock()
-	c.JSON(http.StatusOK, gin.H{
-		"generated_at":           preview.GeneratedAt,
-		"usage_bytes":            preview.UsageBytes,
-		"threshold_bytes":        preview.ThresholdBytes,
-		"target_bytes":           preview.TargetBytes,
-		"logical_bytes":          preview.LogicalBytes,
-		"candidate_count":        preview.CandidateCount,
-		"planned_count":          len(preview.Items),
-		"planned_bytes":          plannedBytes,
-		"physical_usage_known":   preview.PhysicalUsageKnown,
-		"physical_usage_message": preview.PhysicalUsageMessage,
-		"items":                  preview.Items,
-		"page":                   page,
-		"page_size":              pageSize,
-		"plan_id":                planID,
-		"plan_expires_at":        expiresAt,
+	c.JSON(http.StatusOK, contract.CacheCleanupPreviewResponse{
+		GeneratedAt: preview.GeneratedAt, UsageBytes: preview.UsageBytes,
+		ThresholdBytes: preview.ThresholdBytes, TargetBytes: preview.TargetBytes,
+		LogicalBytes: preview.LogicalBytes, CandidateCount: preview.CandidateCount,
+		PlannedCount: len(preview.Items), PlannedBytes: plannedBytes,
+		PhysicalUsageKnown: preview.PhysicalUsageKnown, PhysicalUsageMessage: preview.PhysicalUsageMessage,
+		Items: cacheContractSlice(preview.Items, func(item cache.PreviewEntry) contract.CacheCleanupPreviewItem {
+			return contract.CacheCleanupPreviewItem{
+				ID: item.ID, Key: item.Key, AdapterType: item.AdapterType, PackageName: item.PackageName,
+				Size: item.Size, HitCount: item.HitCount, LastAccessed: item.LastAccessed,
+				ExpiresAt: item.ExpiresAt, Reason: contract.CacheCleanupReason(item.Reason),
+			}
+		}),
+		Page: page, PageSize: pageSize, PlanID: planID, PlanExpiresAt: expiresAt,
 	})
 }
 
 func (h *CacheHandler) GetDistribution(c *gin.Context) {
 	type TypeBreakdown struct {
-		Type      string `json:"type"`
-		Size      int64  `json:"size"`
-		FileCount int64  `json:"file_count"`
+		Type      string
+		Size      int64
+		FileCount int64
 	}
 
 	type PackageSize struct {
-		Name     string `json:"name"`
-		Type     string `json:"type"`
-		Size     int64  `json:"size"`
-		HitCount int64  `json:"hit_count"`
+		Name     string
+		Type     string
+		Size     int64
+		HitCount int64
 	}
 
 	var byType []TypeBreakdown
@@ -784,12 +787,14 @@ func (h *CacheHandler) GetDistribution(c *gin.Context) {
 		usagePercent = float64(totalSize) / float64(maxSize) * 100
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"total_size":    totalSize,
-		"max_size":      maxSize,
-		"usage_percent": usagePercent,
-		"by_type":       byType,
-		"top_packages":  topPackages,
+	c.JSON(http.StatusOK, contract.CacheDistributionResponse{
+		TotalSize: totalSize, MaxSize: maxSize, UsagePercent: usagePercent,
+		ByType: cacheContractSlice(byType, func(row TypeBreakdown) contract.CacheTypeBreakdown {
+			return contract.CacheTypeBreakdown{Type: row.Type, Size: row.Size, FileCount: row.FileCount}
+		}),
+		TopPackages: cacheContractSlice(topPackages, func(row PackageSize) contract.CachePackageSize {
+			return contract.CachePackageSize{Name: row.Name, Type: row.Type, Size: row.Size, HitCount: row.HitCount}
+		}),
 	})
 }
 
@@ -801,7 +806,18 @@ func (h *CacheHandler) ListTransfers(c *gin.Context) {
 	if h.transferReader != nil {
 		items = h.transferReader()
 	}
-	c.JSON(http.StatusOK, gin.H{"items": items, "limit": traffic.TransferLimit})
+	c.JSON(http.StatusOK, contract.CacheTransfersResponse{
+		Items: cacheContractSlice(items, func(transfer traffic.Transfer) contract.CacheTransfer {
+			return contract.CacheTransfer{
+				ID: transfer.ID, Name: transfer.Name, Ecosystem: transfer.Ecosystem, Upstream: transfer.Upstream,
+				Status: contract.CacheTransferStatus(transfer.Status), DownloadedBytes: transfer.DownloadedBytes,
+				TotalBytes: transfer.TotalBytes, ResumeAttempts: transfer.ResumeAttempts, ResumeOffset: transfer.ResumeOffset,
+				BytesPerSecond: transfer.BytesPerSecond, StartedAt: transfer.StartedAt, UpdatedAt: transfer.UpdatedAt,
+				FinishedAt: transfer.FinishedAt,
+			}
+		}),
+		Limit: traffic.TransferLimit,
+	})
 }
 
 func (h *CacheHandler) readError(c *gin.Context, err error) {

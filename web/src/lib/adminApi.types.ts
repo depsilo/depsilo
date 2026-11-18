@@ -2,6 +2,9 @@
 // Do not redeclare one of these names here: a local declaration would shadow it.
 export type * from './generated/apiContract'
 import type { CompileCachePermissions, CompileCacheStatus } from './generated/apiContract'
+import type { CacheIndexStatus, UpstreamUpdateResult } from './generated/apiContract'
+import type { AuditExporterKind, AuditLogCacheResult } from './generated/apiContract'
+import type { PolicyStatus } from './generated/apiContract'
 
 export type UserRole = 'admin' | 'readonly'
 export type TokenPermissions = 'readonly' | 'readwrite'
@@ -38,67 +41,6 @@ export interface LoginResponse {
 
 export interface RefreshResponse { token: string; expires_at: number }
 
-export interface NowLastActivity {
-  seconds_ago: number
-  adapter_type: string
-  hit: boolean
-  package_name?: string
-}
-
-/** Dependencies required to serve cached proxy traffic; upstreams are separate. */
-export interface ReadinessResponse {
-  status: 'ready' | 'not_ready'
-  version: string
-  checks: {
-    database: 'ready' | 'unavailable'
-    storage: 'ready' | 'unavailable'
-  }
-}
-
-export interface NowResponse {
-  status: 'healthy' | 'degraded' | 'down'
-  uptime_seconds: number
-  now_unix: number
-  version: string
-  last_activity?: NowLastActivity
-  rate: {
-    requests_per_min: number
-    has_data: boolean
-    /** True when the process meter supplied the byte rates (idle vs not-collected). */
-    measured: boolean
-    window_seconds: number
-    /** Client→Depsilo. */
-    service_requests_per_sec: number
-    service_bytes_per_sec: number
-    /** Depsilo→upstream, measured from upstream body reads. */
-    origin_requests_per_sec: number
-    origin_bytes_per_sec: number
-  }
-  upstreams: {
-    total: number
-    healthy: number
-  }
-  sparkline: Array<{ t: number; requests: number; hits: number }>
-}
-
-/**
- * Operational health of the package-rule snapshot used by the request path.
- * A degraded response is still actionable: the engine is serving a known
- * snapshot, but its last refresh failed. An unavailable response means no
- * usable snapshot has been observed yet (or the status probe itself failed).
- */
-export type PolicyStatusKind = 'healthy' | 'degraded' | 'unavailable' | 'ready' | 'unknown'
-
-export interface PolicyStatus {
-  status: PolicyStatusKind
-  degraded?: boolean
-  using_stale_snapshot: boolean
-  snapshot_loaded_at?: string | null
-  snapshot_age_seconds: number
-  refresh_failures: number
-  on_load_error: string
-}
-
 export type SecuritySeverity = 'critical' | 'high' | 'medium' | 'low' | 'unknown'
 
 export interface SecurityDashboard {
@@ -108,23 +50,6 @@ export interface SecurityDashboard {
   auto_blocked_count: number
   last_scan_at: string | null
   scan_in_progress: boolean
-}
-
-export interface CapabilityFact {
-  name: string
-  ecosystem?: string
-  support: 'supported' | 'unsupported' | 'safety_disabled' | 'unknown' | string
-  mode: 'off' | 'warn' | 'block' | 'alert_only' | string
-  data_status: 'never_synced' | 'fresh' | 'stale' | 'error' | 'unknown' | string
-  last_success_at?: string | null
-  recent_failure?: string
-}
-
-export interface CapabilitySummary {
-  version: string
-  commit: string
-  build_date: string
-  capabilities?: CapabilityFact[]
 }
 
 export interface SecurityVulnerability {
@@ -187,151 +112,10 @@ export interface SecurityImportResponse {
   rules_created: number
 }
 
-export interface AccessLog {
-  id: number
-  adapter_type: string
-  method: string
-  cache_key: string
-  package_name: string
-  version?: string
-  hit: boolean
-  cache_result?: 'hit' | 'miss' | 'unknown' | string
-  upstream: string
-  latency_ms: number
-  status_code: number
-  client_ip: string
-  bytes_sent: number
-  upstream_requests?: number
-  upstream_bytes?: number
-  created_at: string
-}
-
-export interface AccessLogAuditEvent {
-  id: number
-  ecosystem: string
-  package_name: string
-  version: string
-  action: string
-  cache_result: string
-  status_code: number
-  created_at: string
-}
-
-export interface AccessLogDetail extends AccessLog {
-  request_id: string
-  cache_result: string
-  cache_reason: string
-  policy_decision: string
-  policy_reason: string
-  delivery_result: string
-  delivery_reason: string
-  audit_events: AccessLogAuditEvent[]
-}
-
-/**
- * One entry of a list's ecosystem facet: how many rows every other filter
- * matches in that ecosystem. Lists return it so filters can show counts.
- */
-export interface EcosystemCount { id: string; count: number }
-
 /** Ecosystem filters accept several ids, sent comma-separated (`pypi,npm`). */
 export interface AccessLogQuery { page?: number; page_size?: number; search?: string; adapter_type?: string; hit?: boolean; result?: 'hit' | 'miss' | 'unknown'; start?: string; end?: string }
-export interface AccessLogListResponse { items: AccessLog[]; total: number; page: number; page_size: number; ecosystems?: EcosystemCount[] }
-
-export interface RecentDownload {
-  id: number
-  ecosystem: string
-  package_name: string
-  version: string
-  cache_result: string
-  latency_ms: number
-  bytes_sent: number
-  status_code: number
-  created_at: string
-}
-
-export interface RecentDownloadsResponse { items: RecentDownload[] }
 
 export interface CacheQuery { page?: number; page_size?: number; search?: string; adapter_type?: string; cache_kind?: 'artifact' | 'metadata' }
-export interface CacheEntry { cache_kind?: 'artifact' | 'metadata'; id: number; key: string; adapter_type: string; package_name: string; size: number; hit_count: number; last_accessed: string; expires_at: string }
-export interface CacheListResponse { items: CacheEntry[]; total: number; page: number; page_size: number; ecosystems?: EcosystemCount[] }
-export interface CacheDeleteResponse {
-  message: string
-  deleted: number
-  reclaimed_bytes: number
-}
-export interface CacheCleanupResponse {
-  message: string
-  outcome?: 'succeeded' | 'partial' | 'failed'
-  interrupted?: boolean
-  deleted: number
-  failed: number
-  reclaimed_bytes: number
-  examined: number
-  expired_removed: number
-  lru_removed: number
-  usage_before: number
-  usage_after: number
-  skipped?: number
-  planned?: number
-  planned_count?: number
-  planned_bytes?: number
-  total_candidate_count?: number
-  not_attempted?: number
-  items?: Array<{
-    id: number
-    status: 'deleted' | 'skipped' | 'failed'
-    object_removed: boolean
-    metadata_removed: boolean
-  }>
-}
-export interface CacheCleanupPreviewItem {
-  id: number
-  key: string
-  adapter_type: string
-  package_name: string
-  size: number
-  hit_count: number
-  last_accessed: string
-  expires_at: string
-  reason: 'expired' | 'lru'
-}
-export interface CacheCleanupPreviewResponse {
-  generated_at: string
-  usage_bytes: number
-  threshold_bytes: number
-  target_bytes: number
-  logical_bytes: number
-  candidate_count: number
-  planned_count: number
-  planned_bytes: number
-  physical_usage_known: boolean
-  physical_usage_message?: string
-  items: CacheCleanupPreviewItem[]
-  page: number
-  page_size: number
-  plan_id: string
-  plan_expires_at: string
-}
-export interface WarmupJobItem { package: string; status: string; detail?: string }
-export interface WarmupJobResponse {
-  job_id: string
-  ecosystem: string
-  status: string
-  created_at: string
-  updated_at: string
-  packages: number
-  items: WarmupJobItem[]
-}
-export interface CacheTypeBreakdown { type: string; size: number; file_count: number }
-export interface CachePackageSize { name: string; type: string; size: number; hit_count: number }
-export interface CacheDistributionResponse {
-  total_size: number
-  max_size: number
-  usage_percent: number
-  by_type: CacheTypeBreakdown[]
-  top_packages: CachePackageSize[]
-}
 
 /** The status body, narrowed: endpoints and stats are present exactly when enabled. */
 export type CompileCacheStatusResponse =
@@ -346,64 +130,12 @@ export interface CreateCompileCacheCredentialRequest {
   ttl_days: number
 }
 
-export type CacheIndexStatus = 'fresh' | 'stale'
 export interface CacheIndexQuery {
   page?: number
   page_size?: number
   search?: string
   adapter_type?: string
   status?: CacheIndexStatus
-}
-export interface CacheIndexEntry {
-  refresh_supported?: boolean
-  id: number
-  key: string
-  adapter_type: string
-  package_name: string
-  size: number
-  hit_count: number
-  etag: string
-  last_modified: string
-  last_accessed: string
-  expires_at: string
-  updated_at: string
-  status: CacheIndexStatus
-}
-export interface CacheIndexSummary {
-  adapter_type: string
-  total: number
-  fresh: number
-  stale: number
-  last_updated: string | null
-}
-export interface CacheIndexListResponse {
-  items: CacheIndexEntry[]
-  total: number
-  page: number
-  page_size: number
-  summary: CacheIndexSummary[]
-  ecosystems?: EcosystemCount[]
-}
-export interface CacheIndexRefreshResponse {
-  message: string
-  id: number
-  item?: CacheIndexEntry
-}
-
-export interface AuditLog {
-  id: number
-  ecosystem: string
-  package_name: string
-  version: string
-  action: string
-  cache_result: 'hit' | 'miss' | 'success' | 'error' | 'blocked'
-  client_ip: string
-  user_agent: string
-  upstream_url: string
-  latency_ms: number
-  bytes_sent: number
-  status_code: number
-  created_at: string
 }
 
 export interface AuditLogQuery {
@@ -412,37 +144,9 @@ export interface AuditLogQuery {
   ecosystem?: string
   package?: string
   ip?: string
-  result?: 'hit' | 'miss' | 'success' | 'error' | 'blocked'
+  result?: AuditLogCacheResult
   start?: string
   end?: string
-}
-export interface AuditLogListResponse { items: AuditLog[]; total: number; page: number; ecosystems?: EcosystemCount[] }
-
-export type AuditExporterKind = 'ndjson' | 'splunk_hec'
-
-/** One SIEM collector the audit stream is forwarded to. */
-export interface AuditExporter {
-  id: number
-  name: string
-  kind: AuditExporterKind
-  url: string
-  token_set: boolean
-  events: string
-  enabled: boolean
-  cursor: number
-  /** audit_log rows not yet delivered (audit head − cursor). */
-  lag: number
-  delivered_count: number
-  last_error: string
-  last_attempt_at: string | null
-  last_success_at: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface AuditExporterListResponse {
-  items: AuditExporter[]
-  audit_head: number
 }
 
 export interface AuditExporterRequest {
@@ -452,48 +156,6 @@ export interface AuditExporterRequest {
   token?: string
   events?: string
   enabled?: boolean
-}
-
-/** Result of recomputing the tamper-evident audit hash chain. */
-export interface AuditChainReport {
-  ok: boolean
-  rows_scanned: number
-  chained_rows: number
-  unchained_rows: number
-  first_chained_id?: number
-  head_id?: number
-  head_hash?: string
-  broken_at_id?: number
-  reason?: string
-  scanned_at: string
-}
-
-/** Cross-check between chain-head checkpoints and the current database. */
-export interface AuditAnchorReport {
-  configured: boolean
-  path?: string
-  checkpoints: number
-  invalid_lines?: number
-  latest_checked_at?: string
-  latest_head_id?: number
-  latest_head_hash?: string
-  ok: boolean
-  broken_at_id?: number
-  reason?: string
-}
-
-export interface AuditIntegrityResponse {
-  integrity: AuditChainReport
-  anchors: AuditAnchorReport
-  anchor_feed?: {
-    file_configured: boolean
-    file_last_success_at?: string
-    file_last_error?: string
-    remote_configured: boolean
-    remote_last_success_at?: string
-    remote_head_id?: number
-    remote_last_error?: string
-  }
 }
 
 export interface RuleRequest { ecosystem: string; package_name: string; version: string; action: 'allow' | 'deny'; reason: string }
@@ -548,204 +210,6 @@ export interface RuleTestResponse {
 
 export interface QuarantineQuery { limit?: number; offset?: number; ecosystem?: string; action?: string; package?: string }
 
-export interface DashboardWindow {
-  total_requests: number
-  hit_count?: number
-  hit_rate: number
-  bytes_served: number
-  avg_latency_ms: number
-}
-
-/** `all` covers everything still known: archived totals plus retained rollups. */
-export type DashboardRange = '1h' | '24h' | '7d' | '30d' | 'all'
-
-/**
- * One Overview period. The API reports hit_rate 0 when there is no sample;
- * callers must treat `total_requests === 0` as "—" rather than 0%.
- */
-export interface DashboardPeriod {
-  total_requests: number
-  hit_count: number
-  miss_count: number
-  hit_requests: number
-  miss_requests: number
-  hit_rate: number
-  bytes_served: number
-  hit_bytes: number
-  miss_bytes: number
-  avg_latency_ms: number
-  avg_hit_latency_ms: number
-  avg_miss_latency_ms: number
-  /**
-   * Estimated wall-clock waiting avoided by serving from cache for this
-   * period: (avg miss latency − avg hit latency) × hit requests. Zero means
-   * "no comparable hit/miss pair in the period", not a measured zero.
-   */
-  time_saved_ms: number
-  /** Measured Depsilo→upstream exchanges and bytes read in the period. */
-  upstream_requests: number
-  upstream_bytes: number
-  errors: number
-}
-
-export interface OriginCoverage {
-  measured: boolean
-  since: string | null
-  window_complete: boolean
-}
-
-export interface DashboardTopPackage { name: string; hit_count: number }
-export interface DashboardUpstream { id: number; name: string; adapter: string; healthy: boolean; avg_latency_ms: number; success_rate: number }
-/** Completed artifact GET history, independent of statistics ranges and retention.
- * "never-used" requires full lifecycle coverage; legacy uncertainty is "unknown". */
-export interface DashboardUsage {
-  state: 'never-used' | 'used' | 'unknown'
-  /** May be null even for known usage when its original timestamp is unknown. */
-  first_successful_request_at: string | null
-}
-export interface DashboardResponse {
-  last_24h: DashboardWindow
-  prev_24h: DashboardWindow
-  daily_stats: Array<{ date: string; adapter_type: string; count: number }>
-  upstreams: DashboardUpstream[]
-  top_packages: Partial<Record<AdminEcosystem, DashboardTopPackage[]>>
-  cache_usage_percent?: number
-  /**
-   * Selected Overview range. Absent on older fixture payloads. For `all`,
-   * `archived` says whether totals include expired days the trend omits.
-   */
-  range?: { key: DashboardRange; start: string; end: string; archived?: boolean }
-  window?: DashboardPeriod
-  prev?: DashboardPeriod
-  origin_coverage?: OriginCoverage
-  /** Older servers omit usage; absence cannot establish a first use. */
-  usage?: DashboardUsage
-}
-export interface DashboardTrendPoint {
-  bucket: number
-  date: string
-  requests: number
-  hits: number
-  misses: number
-  hit_rate: number
-  bytes_served: number
-  bytes_hit: number
-  bytes_miss: number
-  upstream_requests: number
-  upstream_bytes: number
-  sum_latency_ms: number
-  avg_latency_ms: number
-  errors: number
-}
-export interface DashboardTrendsResponse { points: DashboardTrendPoint[] }
-
-/** One ecosystem's share of an Overview period. The rows add up to the period block. */
-export interface DashboardBreakdownEcosystem {
-  ecosystem: string
-  hit_requests: number
-  miss_requests: number
-  hit_bytes: number
-  miss_bytes: number
-  avg_hit_latency_ms: number
-  avg_miss_latency_ms: number
-}
-/**
- * One Upstream's part in the period. `upstream_*` are measured origin exchanges,
- * the same quantity as the period's origin traffic; `miss_*` describe the client
- * requests answered through it. Names repeat across ecosystems.
- */
-export interface DashboardBreakdownUpstream {
-  ecosystem: string
-  upstream: string
-  upstream_requests: number
-  upstream_bytes: number
-  miss_requests: number
-  miss_bytes: number
-  avg_miss_latency_ms: number
-}
-export interface DashboardBreakdownPackage {
-  ecosystem: string
-  package_name: string
-  requests: number
-  total_bytes: number
-  hit_bytes: number
-}
-export interface DashboardBreakdownResponse {
-  range: { key: DashboardRange; start: string; end: string }
-  by_ecosystem: DashboardBreakdownEcosystem[]
-  by_upstream: DashboardBreakdownUpstream[]
-  top_packages: DashboardBreakdownPackage[]
-  /** `utc_day` rankings cover whole UTC days and can start before the range. */
-  top_packages_grain: 'exact' | 'utc_day'
-}
-
-export interface RuntimeCapability { supported: boolean; reason?: string }
-export interface RuntimeProcess {
-  cpu: RuntimeCapability
-  /** Single-core basis: 100% is one full core. */
-  cpu_percent?: number
-  cpu_cores?: number
-  memory: RuntimeCapability
-  rss_bytes?: number
-  rss_basis?: 'process' | 'peak'
-  memory_basis?: string
-  memory_used_bytes?: number
-  memory_limit_bytes?: number
-}
-export interface RuntimeDisk extends RuntimeCapability {
-  path?: string
-  total_bytes?: number
-  free_bytes?: number
-}
-export interface RuntimeCacheStorage {
-  storage_type: string
-  storage_path: string
-  /** SUM(cache_entries.size): the metadata view of cached bytes. */
-  logical_bytes: number
-  /** cache_entries rows. Absent until an inventory aggregate has succeeded. */
-  entries?: number | null
-  /** Distinct (ecosystem, package name) pairs behind the cache entries. */
-  packages?: number | null
-  quota_bytes: number | null
-  /** Reserved for a real on-disk occupancy figure; currently not collected. */
-  physical_bytes: number | null
-  physical_known: boolean
-}
-export interface RuntimeResponse {
-  sampled_at: string
-  interval_seconds: number
-  process: RuntimeProcess
-  go_runtime: { heap_alloc_bytes: number; sys_bytes: number }
-  cache: RuntimeCacheStorage
-  disk: RuntimeDisk
-  host: { hostname: string }
-}
-
-export interface BandwidthSummary {
-  total_bytes: number
-  hit_bytes: number
-  miss_bytes: number
-  savings_rate: number
-  total_requests: number
-  hit_requests: number
-  miss_requests: number
-  time_saved_ms: number
-  avg_hit_latency: number
-  avg_miss_latency: number
-}
-export interface BandwidthDaily { date: string; hit_bytes: number; miss_bytes: number; hit_count: number; miss_count: number }
-export interface BandwidthEcosystem { ecosystem: string; hit_bytes: number; miss_bytes: number; hit_count: number; miss_count: number; avg_hit_latency_ms: number; avg_miss_latency_ms: number }
-export interface BandwidthPackage { package_name: string; ecosystem: string; total_bytes: number; hit_bytes: number; request_count: number }
-export interface BandwidthUpstream { upstream: string; miss_bytes: number; request_count: number; avg_latency_ms: number }
-export interface BandwidthReportResponse {
-  range: { start: string; end: string }
-  summary: BandwidthSummary
-  daily: BandwidthDaily[]
-  by_ecosystem: BandwidthEcosystem[]
-  top_packages: BandwidthPackage[]
-  by_upstream: BandwidthUpstream[]
-}
-
 export interface Project {
   id: number
   name: string
@@ -788,42 +252,6 @@ export interface ComplianceProfile {
   contact: string
   signing_configured: boolean
   component_annotation_count: number
-}
-
-export interface SnapshotItem {
-  id: number
-  snapshot_id: number
-  ecosystem: string
-  package: string
-  version: string
-  cache_key: string
-  sha256: string
-  size: number
-}
-
-export interface Snapshot {
-  id: number
-  name: string
-  note: string
-  created_by: string
-  artifact_count: number
-  total_bytes: number
-  created_at: string
-  updated_at: string
-}
-
-export interface SnapshotListResponse {
-  items: Snapshot[]
-  active_snapshot_id: number
-  active_snapshot: string
-}
-
-export interface SnapshotDetailResponse {
-  snapshot: Snapshot
-  items: SnapshotItem[]
-  total: number
-  page: number
-  active: boolean
 }
 
 export interface AdminUser { permission_source?: 'local' | 'oidc' | 'ldap'; id: number; username: string; role: UserRole; enabled: boolean; last_login_at: string | null; created_at: string; updated_at: string }
@@ -882,44 +310,6 @@ export interface UpstreamMutationRequest {
   via?: string
 }
 
-export interface AdminCascadePeer {
-  name: string
-  url: string
-  forward_credentials: boolean
-}
-
-export interface AdminCascadeInfo {
-  enabled: boolean
-  instance_id: string
-  relay_path: string
-  max_hops: number
-  max_ttl_seconds: number
-  allow_insecure_http: boolean
-  peers: AdminCascadePeer[]
-}
-
-export interface AdminCascadeConfigPeer {
-  name: string
-  url: string
-  /** An explicit per-peer token override exists; the value is never returned. */
-  token_set: boolean
-  forward_credentials: boolean
-}
-
-export interface AdminCascadeConfigState {
-  enabled: boolean
-  max_hops: number
-  max_ttl: string
-  allow_insecure_http: boolean
-  /** The shared secret exists in config.toml; the value is never returned. */
-  token_set: boolean
-  peers: AdminCascadeConfigPeer[]
-  /** config.toml and its directory are writable by the service. */
-  config_writable: boolean
-  /** The running process still uses an older version of these values. */
-  pending_restart: boolean
-}
-
 export interface AdminCascadeConfigPeerPatch {
   name: string
   url: string
@@ -936,103 +326,6 @@ export interface AdminCascadeConfigPatch {
   /** Omitted keeps the stored secret; "" clears it. */
   shared_token?: string
   peers?: AdminCascadeConfigPeerPatch[]
-}
-
-export interface AdminCascadeConfigUpdateResponse {
-  state: AdminCascadeConfigState
-  changed: string[]
-  restart_required: boolean
-}
-
-export interface DockerBootstrapState {
-  configured: boolean
-  effective: boolean
-  docker_hub: boolean
-  pending_restart: boolean
-  config_writable: boolean
-  blocked_by_override: boolean
-}
-
-export interface AdminUpstream extends UpstreamMutationRequest {
-  id: number
-  healthy: boolean
-  /** Observation evidence, independent of eligibility for request selection. */
-  has_observations?: boolean
-  /** Outcomes counted by this runtime object; resets on restart/reconfiguration. */
-  runtime_sample_count?: number
-  avg_latency_ms: number
-  success_rate: number
-  last_checked_at: string | null
-  worker_running: boolean
-  /** Where the effective proxy comes from; empty for direct egress or a cascade parent. */
-  proxy_source?: UpstreamProxySource
-  /** Explanation of the newest failed check; null after a passing check. */
-  last_failure?: UpstreamFailure | null
-  created_at: string
-  updated_at: string
-}
-
-export type UpstreamProxySource = '' | 'upstream' | 'default'
-
-export type UpstreamFailureCode =
-  | 'egress_fake_ip'
-  | 'egress_shared_address'
-  | 'egress_reserved'
-  | 'egress_private'
-  | 'egress_proxy'
-  | 'dns'
-  | 'timeout'
-  | 'tls'
-  | 'connection_refused'
-  | 'http_status'
-  | 'network'
-
-/** Bounded check-failure explanation; never contains a URL or credential. */
-export interface UpstreamFailure {
-  code: UpstreamFailureCode
-  address?: string
-  range?: string
-  /** HTTP status of http_status, or the egress proxy's CONNECT answer for egress_proxy (absent when the proxy could not be reached). */
-  status?: number
-}
-
-export interface AdminUpstreamLatencyPoint {
-  time: string
-  latency_ms: number
-  healthy: boolean
-}
-
-export interface AdminUpstreamLatencySeries {
-  upstream_id: number
-  points: AdminUpstreamLatencyPoint[]
-}
-
-export interface AdminUpstreamLatenciesResponse {
-  series: AdminUpstreamLatencySeries[]
-}
-
-export type UpstreamUpdateResult = 'updated' | 'unchanged' | 'error'
-
-export interface AdminUpstreamUpdateEvent {
-  id: number
-  cache_entry_id?: number
-  ecosystem: string
-  upstream: string
-  package: string
-  result: UpstreamUpdateResult
-  detail: string
-  latency_ms: number
-  occurrence_count?: number
-  first_seen_at?: string
-  last_seen_at?: string
-  created_at: string
-}
-
-export interface AdminUpstreamUpdateListResponse {
-  items: AdminUpstreamUpdateEvent[]
-  total: number
-  next_cursor?: string | null
-  ecosystems?: EcosystemCount[]
 }
 
 export interface AdminUpstreamUpdateQuery {
@@ -1118,28 +411,8 @@ export interface OnboardingStatusQuery {
   delivery_after_id?: string
 }
 
-export interface AdminUpstreamListResponse { items: AdminUpstream[]; total: number }
-export interface DeleteUpstreamResponse { deleted_id: number; adapter_type: string }
-export interface UpstreamCheckResult { healthy: boolean; latency_ms: number; checked_at: string; error: string | null; failure?: UpstreamFailure | null }
-export interface CheckUpstreamResponse { upstream: AdminUpstream; check: UpstreamCheckResult }
 
 
-export interface CacheTransfer {
-  id: string
-  name: string
-  ecosystem: string
-  upstream: string
-  status: 'connecting' | 'downloading' | 'resuming' | 'saving' | 'cached' | 'failed'
-  downloaded_bytes: number
-  total_bytes: number
-  resume_attempts: number
-  resume_offset: number
-  bytes_per_second: number
-  started_at: string
-  updated_at: string
-  finished_at?: string
-}
-export interface CacheTransfersResponse { items: CacheTransfer[]; limit: number }
 
 export interface IdentityProvider { id: string; name: string; protocol?: 'oidc' | 'ldap' }
 export interface AuthenticationSettings {

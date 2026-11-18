@@ -3,10 +3,10 @@ package admin
 import (
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 )
 
@@ -14,24 +14,6 @@ const (
 	defaultRecentDownloadsLimit = 6
 	maxRecentDownloadsLimit     = 20
 )
-
-// recentDownloadResponse is intentionally narrower than AuditLog. The
-// dashboard needs package activity, not client identity or upstream details.
-type recentDownloadResponse struct {
-	ID          uint      `json:"id"`
-	Ecosystem   string    `json:"ecosystem"`
-	PackageName string    `json:"package_name"`
-	Version     string    `json:"version"`
-	CacheResult string    `json:"cache_result"`
-	LatencyMs   int64     `json:"latency_ms"`
-	BytesSent   int64     `json:"bytes_sent"`
-	StatusCode  int       `json:"status_code"`
-	CreatedAt   time.Time `json:"created_at"`
-}
-
-type recentDownloadsResponse struct {
-	Items []recentDownloadResponse `json:"items"`
-}
 
 func normalizeRecentDownloadsLimit(raw string) int {
 	if raw == "" {
@@ -56,7 +38,7 @@ func normalizeRecentDownloadsLimit(raw string) int {
 // by paginated logs.
 func (h *DashboardHandler) GetRecentDownloads(c *gin.Context) {
 	limit := normalizeRecentDownloadsLimit(c.Query("limit"))
-	items := make([]recentDownloadResponse, 0, limit)
+	items := make([]contract.RecentDownload, 0, limit)
 	err := h.db.WithContext(c.Request.Context()).
 		Model(&db.AuditLog{}).
 		Select("id", "ecosystem", "package_name", "version", "cache_result", "latency_ms", "bytes_sent", "status_code", "created_at").
@@ -69,5 +51,5 @@ func (h *DashboardHandler) GetRecentDownloads(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, recentDownloadsResponse{Items: items})
+	c.JSON(http.StatusOK, contract.RecentDownloadsResponse{Items: items})
 }

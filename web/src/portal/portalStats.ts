@@ -1,27 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { statsApi } from '@/lib/api'
+import type { StatsResponse } from '@/lib/adminApi.types'
 
-export interface PortalUpstream {
-  id: number
-  name: string
-  adapter: string
-  url: string
-  healthy: boolean
-  avg_latency_ms: number
-  success_rate: number
-}
-
-/** The anonymous GET /api/v1/stats payload, as far as the Portal reads it. */
-export interface PortalStats {
-  service: { status: string; version: string; uptime_seconds?: number }
-  today?: { total_requests: number; hit_count: number; hit_rate: number; bytes_served: number; bytes_saved: number }
-  week?: { total_requests: number; hit_rate: number; bytes_saved: number }
-  cache?: { total_files: number; total_size_bytes: number }
-  series?: { interval_minutes: number; points: { time_unix: number; requests: number; hits: number }[] }
-  upstreams?: PortalUpstream[]
-  extra_indexes?: { kind?: string; name?: string; path: string }[]
-}
+/** The anonymous GET /api/v1/stats payload. */
+export type PortalStats = StatsResponse
 
 /**
  * The Portal's one stats poll. The header, the Quick Start status band, and
@@ -31,7 +14,7 @@ export interface PortalStats {
 export function usePortalStats() {
   return useQuery<PortalStats>({
     queryKey: ['stats-status'],
-    queryFn: async ({ signal }) => (await statsApi.getStats({ signal })).data as PortalStats,
+    queryFn: async ({ signal }) => (await statsApi.getStats({ signal })).data,
     staleTime: 30_000,
     refetchInterval: 30_000,
     retry: false,

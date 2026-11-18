@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/audit"
 	"depsilo/internal/db"
 	"depsilo/internal/middleware"
@@ -36,10 +37,10 @@ func (h *SnapshotsHandler) List(c *gin.Context) {
 		return
 	}
 	activeID, activeName := h.store.Active()
-	c.JSON(http.StatusOK, gin.H{
-		"items":              records,
-		"active_snapshot_id": activeID,
-		"active_snapshot":    activeName,
+	c.JSON(http.StatusOK, contract.SnapshotListResponse{
+		Items:            cacheContractSlice(records, snapshotContract),
+		ActiveSnapshotID: activeID,
+		ActiveSnapshot:   activeName,
 	})
 }
 
@@ -60,12 +61,17 @@ func (h *SnapshotsHandler) Get(c *gin.Context) {
 		return
 	}
 	activeID, _ := h.store.Active()
-	c.JSON(http.StatusOK, gin.H{
-		"snapshot": record,
-		"items":    items,
-		"total":    total,
-		"page":     page,
-		"active":   activeID == record.ID,
+	c.JSON(http.StatusOK, contract.SnapshotDetailResponse{
+		Snapshot: snapshotContract(*record),
+		Items: cacheContractSlice(items, func(item db.SnapshotItem) contract.SnapshotItem {
+			return contract.SnapshotItem{
+				ID: item.ID, SnapshotID: item.SnapshotID, Ecosystem: item.Ecosystem, Package: item.Package,
+				Version: item.Version, CacheKey: item.CacheKey, SHA256: item.SHA256, Size: item.Size,
+			}
+		}),
+		Total:  total,
+		Page:   page,
+		Active: activeID == record.ID,
 	})
 }
 
@@ -86,7 +92,7 @@ func (h *SnapshotsHandler) Create(c *gin.Context) {
 		return
 	}
 	h.audit(c, "snapshot_create", record)
-	c.JSON(http.StatusCreated, record)
+	c.JSON(http.StatusCreated, snapshotContract(*record))
 }
 
 func (h *SnapshotsHandler) Delete(c *gin.Context) {
@@ -104,7 +110,7 @@ func (h *SnapshotsHandler) Delete(c *gin.Context) {
 		return
 	}
 	h.audit(c, "snapshot_delete", record)
-	c.JSON(http.StatusOK, gin.H{"deleted": record.ID})
+	c.JSON(http.StatusOK, contract.SnapshotDeleteResponse{Deleted: record.ID})
 }
 
 func (h *SnapshotsHandler) Export(c *gin.Context) {
@@ -145,7 +151,7 @@ func (h *SnapshotsHandler) Import(c *gin.Context) {
 		return
 	}
 	h.audit(c, "snapshot_import", record)
-	c.JSON(http.StatusCreated, record)
+	c.JSON(http.StatusCreated, snapshotContract(*record))
 }
 
 // maxSnapshotImportBytes bounds one uploaded manifest. The item count is
@@ -169,10 +175,18 @@ func (h *SnapshotsHandler) Activate(c *gin.Context) {
 	}
 	if record != nil {
 		h.audit(c, "snapshot_use", record)
-		c.JSON(http.StatusOK, gin.H{"active_snapshot_id": record.ID, "active_snapshot": record.Name})
+		c.JSON(http.StatusOK, contract.SnapshotActivateResponse{ActiveSnapshotID: record.ID, ActiveSnapshot: record.Name})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"active_snapshot_id": 0, "active_snapshot": ""})
+	c.JSON(http.StatusOK, contract.SnapshotActivateResponse{})
+}
+
+func snapshotContract(record db.Snapshot) contract.Snapshot {
+	return contract.Snapshot{
+		ID: record.ID, Name: record.Name, Note: record.Note, CreatedBy: record.CreatedBy,
+		ArtifactCount: record.ArtifactCount, TotalBytes: record.TotalBytes,
+		CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
+	}
 }
 
 // audit records the snapshot lifecycle change in the shared audit stream.

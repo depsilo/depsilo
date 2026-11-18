@@ -28,6 +28,7 @@ function makeUpstream(
     priority: id,
     probe_mode: 'active',
     probe_interval: '30m0s',
+    via: '',
     healthy: true,
     has_observations: true,
     runtime_sample_count: 12,
@@ -35,6 +36,8 @@ function makeUpstream(
     success_rate: 1,
     last_checked_at: timestamp,
     worker_running: true,
+    proxy_source: '',
+    last_failure: null,
     created_at: timestamp,
     updated_at: timestamp,
     ...overrides,
@@ -63,6 +66,7 @@ function checkResponse(
       latency_ms: latency,
       checked_at: timestamp,
       error: healthy ? null : 'probe returned 503',
+      failure: null,
     },
   }
 }

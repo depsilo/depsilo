@@ -29,33 +29,10 @@ import { UpstreamGroupedPanel, type UpstreamItem } from '@/components/UpstreamCa
 import { LANGUAGES } from '@/lib/ecosystemData'
 import { upstreamStatus, type MirrorStatus } from '@/lib/upstreamStatus'
 
-interface LatencyPoint {
-  time: string
-  latency_ms: number
-  healthy: boolean
-  requests: number
-}
+import type { StatsLatencyPoint as LatencyPoint, StatsLatencySeries, StatsResponse, StatsUpstream } from '@/lib/adminApi.types'
 
-interface UpstreamInfo {
-  id: number
-  name: string
-  adapter: string
-  url: string
-  healthy: boolean
-  avg_latency_ms: number
-  success_rate: number
+interface UpstreamInfo extends StatsUpstream {
   latency_series?: LatencyPoint[]
-}
-
-interface StatsData {
-  service: { status: string }
-  week?: {
-    total_requests: number
-    hit_count: number
-    hit_rate: number
-    bytes_saved: number
-  }
-  upstreams: UpstreamInfo[]
 }
 
 function formatBytes(bytes: number): { value: string; unit: string } {
@@ -252,7 +229,7 @@ export default function MonitorPage() {
   const locale = i18n.language === 'zh' ? 'zh-CN' : 'en-US'
   const [query, setQuery] = useState('')
   const [problemsOnly, setProblemsOnly] = useState(false)
-  const statsQuery = useQuery<StatsData>({
+  const statsQuery = useQuery<StatsResponse>({
     queryKey: ['stats-status'],
     queryFn: async ({ signal }) => {
       const res = await statsApi.getStats({ signal })
@@ -263,7 +240,7 @@ export default function MonitorPage() {
   })
 
   // Latency series loaded separately (heavy query, ~160KB)
-  const latencyQuery = useQuery<Record<string, LatencyPoint[]>>({
+  const latencyQuery = useQuery<StatsLatencySeries>({
     queryKey: ['latency-series'],
     queryFn: async ({ signal }) => {
       const res = await statsApi.getLatencySeries({ signal })

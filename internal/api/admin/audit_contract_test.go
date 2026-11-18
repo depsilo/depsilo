@@ -16,6 +16,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 )
 
@@ -106,7 +107,7 @@ func TestAuditPackageQueryAndDeprecatedSearchAlias(t *testing.T) {
 }
 
 func TestEncodeAuditCSVNeutralizesFormulaPrefixes(t *testing.T) {
-	items := []auditLogResponse{{
+	items := []contract.AuditLog{{
 		Ecosystem: "=ecosystem", PackageName: "+package", Version: "-version",
 		Action: "@action", CacheResult: "\tresult", ClientIP: "\rclient",
 		UpstreamURL: "\nupstream", LatencyMs: 8, BytesSent: 1200,

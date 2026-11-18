@@ -14,6 +14,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 	"depsilo/internal/upstream"
 )
@@ -95,13 +96,13 @@ func TestAllUpstreamLatencySeriesKeepsSameNamedRecordsIsolatedByID(t *testing.T)
 		if len(points) != latencyBuckets {
 			t.Fatalf("series[%q] points=%d want=%d; keys=%v", key, len(points), latencyBuckets, mapKeys(series))
 		}
-		if got := points[0]["requests"]; got != want.requests {
+		if got := points[0].Requests; got != want.requests {
 			t.Fatalf("series[%q] requests=%#v want=%d", key, got, want.requests)
 		}
-		if got := points[0]["latency_ms"]; got != want.latency {
+		if got := points[0].LatencyMs; got != want.latency {
 			t.Fatalf("series[%q] latency_ms=%#v want=%d", key, got, want.latency)
 		}
-		if got := points[0]["healthy"]; got != want.healthy {
+		if got := points[0].Healthy; got != want.healthy {
 			t.Fatalf("series[%q] healthy=%#v want=%t", key, got, want.healthy)
 		}
 	}
@@ -133,7 +134,7 @@ func TestAllUpstreamLatencySeriesUsesStableIDsAndExplicitLegacyKeys(t *testing.T
 	}
 	for key, latency := range map[string]int64{"33": 11, "44": 22, "legacy:extra-one": 33, "legacy:extra-two": 44} {
 		points, ok := series[key]
-		if !ok || len(points) != latencyBuckets || points[0]["latency_ms"] != latency {
+		if !ok || len(points) != latencyBuckets || points[0].LatencyMs != latency {
 			t.Fatalf("series[%q]=%#v; keys=%v", key, points, mapKeys(series))
 		}
 	}
@@ -209,11 +210,7 @@ func TestStatsServiceStatusReflectsUpstreamHealth(t *testing.T) {
 				ecosystems = []string{"pypi"}
 			}
 			snapshot := NewStatsHandler(database, nil, pools, ecosystems, nil, false).snapshot(time.Now())
-			service, ok := snapshot["service"].(gin.H)
-			if !ok {
-				t.Fatalf("service=%#v", snapshot["service"])
-			}
-			if got := service["status"]; got != tt.want {
+			if got := snapshot.Service.Status; string(got) != tt.want {
 				t.Fatalf("status=%#v want=%q", got, tt.want)
 			}
 		})
@@ -243,20 +240,16 @@ func TestStatsTodayIsTheCurrentUTCDayOnNonUTCHosts(t *testing.T) {
 				seedStatsDays(t, database, useRollup)
 
 				snapshot := NewStatsHandler(database, nil, nil, nil, nil, useRollup).snapshot(now)
-				today := snapshot["today"].(gin.H)
 				// 2026-11-16 UTC: 3 hits of 100 bytes and 1 miss of 50 bytes.
-				for field, want := range map[string]int64{"total_requests": 4, "hit_count": 3, "miss_count": 1, "bytes_served": 350, "bytes_saved": 300} {
-					if got := today[field]; got != want {
-						t.Errorf("today.%s = %v, want %d", field, got, want)
-					}
+				wantToday := contract.StatsToday{TotalRequests: 4, HitCount: 3, MissCount: 1, HitRate: 0.75, BytesServed: 350, BytesSaved: 300}
+				if snapshot.Today != wantToday {
+					t.Errorf("today = %+v, want %+v", snapshot.Today, wantToday)
 				}
 				// The week adds 2026-11-10 through 2026-11-15 (one hit of 10
 				// bytes each day that has data) and leaves 2026-11-09 out.
-				week := snapshot["week"].(gin.H)
-				for field, want := range map[string]int64{"total_requests": 6, "hit_count": 5, "bytes_saved": 320} {
-					if got := week[field]; got != want {
-						t.Errorf("week.%s = %v, want %d", field, got, want)
-					}
+				wantWeek := contract.StatsWeek{TotalRequests: 6, HitCount: 5, HitRate: 5.0 / 6.0, BytesSaved: 320}
+				if snapshot.Week != wantWeek {
+					t.Errorf("week = %+v, want %+v", snapshot.Week, wantWeek)
 				}
 			})
 		}
@@ -346,12 +339,12 @@ func newStatsTestDB(t *testing.T) *gorm.DB {
 	return database
 }
 
-func assertSeriesTimes(t *testing.T, points []gin.H, startBucket int64) {
+func assertSeriesTimes(t *testing.T, points []contract.StatsLatencyPoint, startBucket int64) {
 	t.Helper()
 	for i, point := range points {
 		want := time.Unix(startBucket+int64(i*latencyIntervalMin*60), 0).UTC().Format(time.RFC3339)
-		if point["time"] != want {
-			t.Fatalf("point[%d].time=%#v want=%q", i, point["time"], want)
+		if point.Time != want {
+			t.Fatalf("point[%d].time=%#v want=%q", i, point.Time, want)
 		}
 	}
 }

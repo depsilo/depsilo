@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 	"depsilo/internal/middleware"
 	"depsilo/internal/upstream"
@@ -85,7 +86,7 @@ func TestUpstreamHandlerListEnvelopeAndCreateContract(t *testing.T) {
 	if w.Code != http.StatusCreated {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
 	}
-	var created adminUpstreamResponse
+	var created contract.AdminUpstream
 	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +101,7 @@ func TestUpstreamHandlerListEnvelopeAndCreateContract(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
 	}
-	var list upstreamListResponse
+	var list contract.AdminUpstreamListResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +137,7 @@ func TestUpstreamHandlerObservationEvidenceLifecycle(t *testing.T) {
 	u := registry.Pools()["pypi"].Snapshot()[0]
 	u.Report(12*time.Millisecond, true)
 	w = performJSON(router, http.MethodGet, "/upstreams", "")
-	var listed upstreamListResponse
+	var listed contract.AdminUpstreamListResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &listed); err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +149,7 @@ func TestUpstreamHandlerObservationEvidenceLifecycle(t *testing.T) {
 	}
 
 	w = performJSON(router, http.MethodPost, "/upstreams/1/check", "")
-	var checked checkUpstreamResponse
+	var checked contract.CheckUpstreamResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &checked); err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +161,7 @@ func TestUpstreamHandlerObservationEvidenceLifecycle(t *testing.T) {
 	// request/probe counter starts from zero rather than claiming lifetime data.
 	body := fmt.Sprintf(`{"adapter_type":"pypi","name":"source-1","url":%q,"proxy":"","priority":2,"probe_mode":"passive","probe_interval":"30m"}`, server.URL)
 	w = performJSON(router, http.MethodPut, "/upstreams/1", body)
-	var updated adminUpstreamResponse
+	var updated contract.AdminUpstream
 	if err := json.Unmarshal(w.Body.Bytes(), &updated); err != nil {
 		t.Fatal(err)
 	}
@@ -305,7 +306,7 @@ func TestUpstreamHandlerCheckReturns200ForUnhealthyNetwork(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
 	}
-	var response checkUpstreamResponse
+	var response contract.CheckUpstreamResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +324,7 @@ func TestUpstreamHandlerCheckReturns200ForUnhealthyNetwork(t *testing.T) {
 func TestUpstreamHandlerMasksCredentialsForReadonlyResponses(t *testing.T) {
 	_, readonly := upstreamRouterFixtureWithPrincipal(t, 1, false, "http://source-user:source-secret@source.example", "http://proxy-user:proxy-secret@proxy.example:8080")
 	w := performJSON(readonly, http.MethodGet, "/upstreams", "")
-	var list upstreamListResponse
+	var list contract.AdminUpstreamListResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +334,7 @@ func TestUpstreamHandlerMasksCredentialsForReadonlyResponses(t *testing.T) {
 
 	createBody := `{"adapter_type":"pypi","name":"masked","url":"https://alice:secret@masked.example","proxy":"http://bob:secret@proxy.example","priority":2,"probe_mode":"passive","probe_interval":"30m"}`
 	w = performJSON(readonly, http.MethodPost, "/upstreams", createBody)
-	var created adminUpstreamResponse
+	var created contract.AdminUpstream
 	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
 		t.Fatal(err)
 	}
@@ -343,7 +344,7 @@ func TestUpstreamHandlerMasksCredentialsForReadonlyResponses(t *testing.T) {
 
 	updateBody := `{"adapter_type":"pypi","name":"masked","url":"http://carol:secret@127.0.0.1:1","proxy":"http://dave:secret@127.0.0.1:1","priority":2,"probe_mode":"passive","probe_interval":"30m"}`
 	w = performJSON(readonly, http.MethodPut, fmt.Sprintf("/upstreams/%d", created.ID), updateBody)
-	var updated adminUpstreamResponse
+	var updated contract.AdminUpstream
 	if err := json.Unmarshal(w.Body.Bytes(), &updated); err != nil {
 		t.Fatal(err)
 	}
@@ -352,7 +353,7 @@ func TestUpstreamHandlerMasksCredentialsForReadonlyResponses(t *testing.T) {
 	}
 
 	w = performJSON(readonly, http.MethodPost, fmt.Sprintf("/upstreams/%d/check", created.ID), "")
-	var checked checkUpstreamResponse
+	var checked contract.CheckUpstreamResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &checked); err != nil {
 		t.Fatal(err)
 	}
@@ -376,7 +377,7 @@ func TestUpstreamHandlerMasksCredentialsForReadonlyResponses(t *testing.T) {
 func TestWritableUpstreamCheckRetainsOperationalError(t *testing.T) {
 	_, router := upstreamRouterFixtureWithPrincipal(t, 1, true, "http://127.0.0.1:1", "")
 	recorder := performJSON(router, http.MethodPost, "/upstreams/1/check", "")
-	var response checkUpstreamResponse
+	var response contract.CheckUpstreamResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
@@ -391,11 +392,11 @@ func TestUpstreamCheckExplainsEgressDenialToEveryRole(t *testing.T) {
 	// explanation is visible even where raw error text is withheld.
 	_, readonly := upstreamRouterFixtureWithPrincipal(t, 1, false, "http://198.18.0.65", "")
 	recorder := performJSON(readonly, http.MethodPost, "/upstreams/1/check", "")
-	var checked checkUpstreamResponse
+	var checked contract.CheckUpstreamResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &checked); err != nil {
 		t.Fatal(err)
 	}
-	want := upstreamFailureResponse{Code: "egress_fake_ip", Address: "198.18.0.65", Range: "198.18.0.0/15"}
+	want := contract.UpstreamFailure{Code: "egress_fake_ip", Address: "198.18.0.65", Range: "198.18.0.0/15"}
 	if checked.Check.Healthy || checked.Check.Failure == nil || *checked.Check.Failure != want ||
 		checked.Check.Error == nil || *checked.Check.Error != "upstream check failed" {
 		t.Fatalf("check response = %s", recorder.Body.String())
@@ -405,7 +406,7 @@ func TestUpstreamCheckExplainsEgressDenialToEveryRole(t *testing.T) {
 	}
 
 	recorder = performJSON(readonly, http.MethodGet, "/upstreams", "")
-	var list upstreamListResponse
+	var list contract.AdminUpstreamListResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &list); err != nil {
 		t.Fatal(err)
 	}

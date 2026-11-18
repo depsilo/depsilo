@@ -289,7 +289,7 @@ export default function AccessLogs() {
           </Button>
         )}
       </form>
-      <EcosystemChips counts={data?.data.ecosystems} selected={ecosystems} onChange={setEcosystems} />
+      <EcosystemChips counts={data?.data.ecosystems ?? undefined} selected={ecosystems} onChange={setEcosystems} />
 
       {isPending ? (
         <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--muted-foreground)' }}>

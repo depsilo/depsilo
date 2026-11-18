@@ -16,6 +16,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 )
 
@@ -120,7 +121,7 @@ func TestDashboardRecentDownloadsQueryUsesActionOrderIndex(t *testing.T) {
 func TestDashboardRecentDownloadsPropagatesDatabaseErrors(t *testing.T) {
 	database := newRecentDownloadsTestDB(t)
 	if err := database.Callback().Query().Before("gorm:query").Register("test:fail_recent_download_query", func(tx *gorm.DB) {
-		if reflect.TypeOf(tx.Statement.Dest) == reflect.TypeOf((*[]recentDownloadResponse)(nil)) {
+		if reflect.TypeOf(tx.Statement.Dest) == reflect.TypeOf((*[]contract.RecentDownload)(nil)) {
 			tx.AddError(errors.New("forced recent download failure"))
 		}
 	}); err != nil {

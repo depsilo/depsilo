@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 	"depsilo/internal/upstreamupdates"
 	"github.com/gin-gonic/gin"
@@ -94,7 +95,7 @@ func TestCacheIndexesDescribeRefreshCapability(t *testing.T) {
 		}
 		recorder := httptest.NewRecorder()
 		router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/indexes", nil))
-		var response cacheIndexesTestResponse
+		var response contract.CacheIndexListResponse
 		if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 			t.Fatal(err)
 		}

@@ -18,6 +18,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 )
 
@@ -132,7 +133,7 @@ func TestAccessLogUnknownResultIsExplicitAndFilterable(t *testing.T) {
 		t.Fatalf("unknown filter status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	var body struct {
-		Items []accessLogResponse `json:"items"`
+		Items []contract.AccessLog `json:"items"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || len(body.Items) != 1 || body.Items[0].CacheResult != "unknown" {
 		t.Fatalf("unknown response = %#v err=%v", body.Items, err)
@@ -238,13 +239,13 @@ func TestAccessLogDetailHidesDatabaseErrorsAndMissingRows(t *testing.T) {
 }
 
 func TestEncodeAccessLogsCSVNeutralizesAllTextCells(t *testing.T) {
-	item := accessLogResponse{
+	item := contract.AccessLog{
 		Method: "=method", AdapterType: "+ecosystem", PackageName: "-package",
 		Upstream: "@upstream", ClientIP: "\tclient", CacheKey: "\rcache",
 		Hit: true, StatusCode: 200, LatencyMs: 12, BytesSent: 34,
 		CreatedAt: time.Date(2026, 7, 10, 8, 30, 0, 0, time.UTC),
 	}
-	data, err := encodeAccessLogsCSV([]accessLogResponse{item})
+	data, err := encodeAccessLogsCSV([]contract.AccessLog{item})
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}
@@ -403,7 +404,7 @@ func TestAccessLogListFiltersSeveralEcosystemsAndAWindow(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	var body accessLogListResponse
+	var body contract.AccessLogListResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -413,7 +414,7 @@ func TestAccessLogListFiltersSeveralEcosystemsAndAWindow(t *testing.T) {
 	}
 	// Counts ignore the ecosystem choice but keep the window, so cargo is a
 	// choice and the two-day-old pypi row is not counted.
-	want := []ecosystemCount{{ID: "cargo", Count: 1}, {ID: "npm", Count: 1}, {ID: "pypi", Count: 1}}
+	want := []contract.EcosystemCount{{ID: "cargo", Count: 1}, {ID: "npm", Count: 1}, {ID: "pypi", Count: 1}}
 	if !reflect.DeepEqual(body.Ecosystems, want) {
 		t.Fatalf("ecosystems = %+v, want %+v", body.Ecosystems, want)
 	}

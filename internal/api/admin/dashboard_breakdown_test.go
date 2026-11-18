@@ -13,20 +13,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 )
-
-type breakdownBody struct {
-	Range struct {
-		Key   string `json:"key"`
-		Start string `json:"start"`
-		End   string `json:"end"`
-	} `json:"range"`
-	ByEcosystem      []breakdownEcosystem `json:"by_ecosystem"`
-	ByUpstream       []breakdownUpstream  `json:"by_upstream"`
-	TopPackages      []breakdownPackage   `json:"top_packages"`
-	TopPackagesGrain string               `json:"top_packages_grain"`
-}
 
 func performBreakdownRequest(handler *DashboardHandler, query string) *httptest.ResponseRecorder {
 	router := gin.New()
@@ -36,13 +25,13 @@ func performBreakdownRequest(handler *DashboardHandler, query string) *httptest.
 	return recorder
 }
 
-func getBreakdown(t *testing.T, handler *DashboardHandler, query string) breakdownBody {
+func getBreakdown(t *testing.T, handler *DashboardHandler, query string) contract.DashboardBreakdownResponse {
 	t.Helper()
 	recorder := performBreakdownRequest(handler, query)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
-	var body breakdownBody
+	var body contract.DashboardBreakdownResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode breakdown: %v", err)
 	}
@@ -81,11 +70,11 @@ func TestBreakdownRawWindowSplitsEcosystemsUpstreamsAndPackages(t *testing.T) {
 	seedBreakdownAccessLogs(t, database, time.Now().UTC())
 
 	body := getBreakdown(t, handler, "?range=1h")
-	if body.Range.Key != "1h" || body.TopPackagesGrain != breakdownGrainExact {
+	if body.Range.Key != "1h" || body.TopPackagesGrain != contract.DashboardBreakdownGrainExact {
 		t.Fatalf("range = %+v, grain = %q, want an exact one-hour period", body.Range, body.TopPackagesGrain)
 	}
 
-	wantEcosystems := []breakdownEcosystem{
+	wantEcosystems := []contract.DashboardBreakdownEcosystem{
 		{Ecosystem: "pypi", HitRequests: 2, MissRequests: 2, HitBytes: 113, MissBytes: 800, AvgHitLatencyMs: 5, AvgMissLatencyMs: 300},
 		{Ecosystem: "apt", HitRequests: 1, MissRequests: 2, MissBytes: 57, AvgMissLatencyMs: 60},
 		{Ecosystem: "npm", HitRequests: 1, HitBytes: 11, AvgHitLatencyMs: 2},
@@ -94,7 +83,7 @@ func TestBreakdownRawWindowSplitsEcosystemsUpstreamsAndPackages(t *testing.T) {
 		t.Fatalf("by_ecosystem = %+v, want %+v", body.ByEcosystem, wantEcosystems)
 	}
 
-	wantUpstreams := []breakdownUpstream{
+	wantUpstreams := []contract.DashboardBreakdownUpstream{
 		{Ecosystem: "pypi", Upstream: "tuna", UpstreamRequests: 2, UpstreamBytes: 2300, MissRequests: 2, MissBytes: 800, AvgMissLatencyMs: 300},
 		{Ecosystem: "apt", Upstream: "tuna", UpstreamRequests: 2, UpstreamBytes: 54, MissRequests: 1, MissBytes: 50, AvgMissLatencyMs: 100},
 	}
@@ -102,7 +91,7 @@ func TestBreakdownRawWindowSplitsEcosystemsUpstreamsAndPackages(t *testing.T) {
 		t.Fatalf("by_upstream = %+v, want measured origin bytes, same-named upstreams kept apart: %+v", body.ByUpstream, wantUpstreams)
 	}
 
-	wantPackages := []breakdownPackage{
+	wantPackages := []contract.DashboardBreakdownPackage{
 		{Ecosystem: "pypi", PackageName: "scipy", Requests: 1, TotalBytes: 500},
 		{Ecosystem: "pypi", PackageName: "numpy", Requests: 2, TotalBytes: 400, HitBytes: 100},
 		{Ecosystem: "apt", PackageName: "curl", Requests: 3, TotalBytes: 57},
@@ -116,7 +105,7 @@ func TestBreakdownRawWindowSplitsEcosystemsUpstreamsAndPackages(t *testing.T) {
 	if day.ByEcosystem[0].Ecosystem != "pypi" || day.ByEcosystem[0].MissBytes != 9800 {
 		t.Fatalf("24h pypi = %+v, want the older miss included", day.ByEcosystem[0])
 	}
-	if day.ByUpstream[0] != (breakdownUpstream{Ecosystem: "pypi", Upstream: "official", UpstreamRequests: 1, UpstreamBytes: 9000, MissRequests: 1, MissBytes: 9000, AvgMissLatencyMs: 900}) {
+	if day.ByUpstream[0] != (contract.DashboardBreakdownUpstream{Ecosystem: "pypi", Upstream: "official", UpstreamRequests: 1, UpstreamBytes: 9000, MissRequests: 1, MissBytes: 9000, AvgMissLatencyMs: 900}) {
 		t.Fatalf("24h by_upstream[0] = %+v, want pypi/official first", day.ByUpstream[0])
 	}
 }
@@ -153,24 +142,24 @@ func TestBreakdownCoarseRangeReadsRollupsAndMatchesThePeriodTotals(t *testing.T)
 	}
 
 	body := getBreakdown(t, handler, "?range=7d")
-	if body.Range.Key != "7d" || body.TopPackagesGrain != breakdownGrainUTCDay {
+	if body.Range.Key != "7d" || body.TopPackagesGrain != contract.DashboardBreakdownGrainUTCDay {
 		t.Fatalf("range = %+v, grain = %q, want a day-grained package ranking", body.Range, body.TopPackagesGrain)
 	}
-	wantEcosystems := []breakdownEcosystem{
+	wantEcosystems := []contract.DashboardBreakdownEcosystem{
 		{Ecosystem: "go", MissRequests: 1, MissBytes: 1000, AvgMissLatencyMs: 50},
 		{Ecosystem: "npm", HitRequests: 2, MissRequests: 3, HitBytes: 200, MissBytes: 300, AvgHitLatencyMs: 4, AvgMissLatencyMs: 300},
 	}
 	if fmt.Sprint(body.ByEcosystem) != fmt.Sprint(wantEcosystems) {
 		t.Fatalf("by_ecosystem = %+v, want %+v", body.ByEcosystem, wantEcosystems)
 	}
-	wantUpstreams := []breakdownUpstream{
+	wantUpstreams := []contract.DashboardBreakdownUpstream{
 		{Ecosystem: "go", Upstream: "official", UpstreamRequests: 1, UpstreamBytes: 1000, MissRequests: 1, MissBytes: 1000, AvgMissLatencyMs: 50},
 		{Ecosystem: "npm", Upstream: "npmmirror", UpstreamRequests: 3, UpstreamBytes: 280, MissRequests: 3, MissBytes: 300, AvgMissLatencyMs: 300},
 	}
 	if fmt.Sprint(body.ByUpstream) != fmt.Sprint(wantUpstreams) {
 		t.Fatalf("by_upstream = %+v, want %+v", body.ByUpstream, wantUpstreams)
 	}
-	wantPackages := []breakdownPackage{
+	wantPackages := []contract.DashboardBreakdownPackage{
 		{Ecosystem: "go", PackageName: "github.com/gin-gonic/gin", Requests: 1, TotalBytes: 1000},
 		{Ecosystem: "npm", PackageName: "react", Requests: 5, TotalBytes: 500, HitBytes: 200},
 	}
@@ -193,7 +182,7 @@ func TestBreakdownCoarseRangeReadsRollupsAndMatchesThePeriodTotals(t *testing.T)
 	}
 
 	month := getBreakdown(t, handler, "?range=30d")
-	if month.ByUpstream[0] != (breakdownUpstream{Ecosystem: "npm", Upstream: "npmmirror", UpstreamRequests: 13, UpstreamBytes: 5280, MissRequests: 13, MissBytes: 5300, AvgMissLatencyMs: 1000.0 / 13}) {
+	if month.ByUpstream[0] != (contract.DashboardBreakdownUpstream{Ecosystem: "npm", Upstream: "npmmirror", UpstreamRequests: 13, UpstreamBytes: 5280, MissRequests: 13, MissBytes: 5300, AvgMissLatencyMs: 1000.0 / 13}) {
 		t.Fatalf("30d by_upstream[0] = %+v, want the older rollup included", month.ByUpstream[0])
 	}
 	if month.TopPackages[0].PackageName != "lodash" {
@@ -206,7 +195,7 @@ func TestBreakdownWithoutRollupsKeepsCoarseRangesExact(t *testing.T) {
 	seedBreakdownAccessLogs(t, database, time.Now().UTC())
 
 	body := getBreakdown(t, handler, "?range=7d")
-	if body.Range.Key != "7d" || body.TopPackagesGrain != breakdownGrainExact {
+	if body.Range.Key != "7d" || body.TopPackagesGrain != contract.DashboardBreakdownGrainExact {
 		t.Fatalf("range = %+v, grain = %q, want exact raw rows", body.Range, body.TopPackagesGrain)
 	}
 	if len(body.ByEcosystem) != 3 || body.ByEcosystem[0].MissBytes != 9800 {

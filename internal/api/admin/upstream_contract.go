@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/upstream"
 )
 
@@ -160,73 +161,16 @@ func writeBadUpstreamRequest(c *gin.Context, err error) {
 	c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": err.Error()})
 }
 
-type adminUpstreamResponse struct {
-	ID                 uint       `json:"id"`
-	AdapterType        string     `json:"adapter_type"`
-	Name               string     `json:"name"`
-	URL                string     `json:"url"`
-	Proxy              string     `json:"proxy"`
-	Priority           int        `json:"priority"`
-	ProbeMode          string     `json:"probe_mode"`
-	ProbeInterval      string     `json:"probe_interval"`
-	Via                string     `json:"via"`
-	Healthy            bool       `json:"healthy"`
-	AvgLatencyMS       int64      `json:"avg_latency_ms"`
-	SuccessRate        float64    `json:"success_rate"`
-	LastCheckedAt      *time.Time `json:"last_checked_at"`
-	HasObservations    bool       `json:"has_observations"`
-	RuntimeSampleCount int64      `json:"runtime_sample_count"`
-	WorkerRunning      bool       `json:"worker_running"`
-	// ProxySource is "upstream" for the upstream's own proxy, "default" for
-	// egress.upstream_proxy, or "" for direct egress or a cascade parent.
-	ProxySource string `json:"proxy_source"`
-	// LastFailure explains the newest failed check; null after a passing one.
-	LastFailure *upstreamFailureResponse `json:"last_failure"`
-	CreatedAt   time.Time                `json:"created_at"`
-	UpdatedAt   time.Time                `json:"updated_at"`
-}
-
-// upstreamFailureResponse is a bounded explanation of a failed check. It
-// carries no URL or credential, so every Admin role may see it.
-type upstreamFailureResponse struct {
-	Code    string `json:"code"`
-	Address string `json:"address,omitempty"`
-	Range   string `json:"range,omitempty"`
-	Status  int    `json:"status,omitempty"`
-}
-
-func mapUpstreamFailure(failure *upstream.Failure) *upstreamFailureResponse {
+func mapUpstreamFailure(failure *upstream.Failure) *contract.UpstreamFailure {
 	if failure == nil {
 		return nil
 	}
-	return &upstreamFailureResponse{Code: failure.Code, Address: failure.Address, Range: failure.Range, Status: failure.Status}
+	return &contract.UpstreamFailure{
+		Code: contract.UpstreamFailureCode(failure.Code), Address: failure.Address, Range: failure.Range, Status: failure.Status,
+	}
 }
 
-type upstreamListResponse struct {
-	Items []adminUpstreamResponse `json:"items"`
-	Total int                     `json:"total"`
-}
-
-type deleteUpstreamResponse struct {
-	DeletedID   uint   `json:"deleted_id"`
-	AdapterType string `json:"adapter_type"`
-}
-
-type checkResultResponse struct {
-	Healthy   bool      `json:"healthy"`
-	LatencyMS int64     `json:"latency_ms"`
-	CheckedAt time.Time `json:"checked_at"`
-	// Error is the raw failure text, shown only to credential viewers.
-	Error   *string                  `json:"error"`
-	Failure *upstreamFailureResponse `json:"failure"`
-}
-
-type checkUpstreamResponse struct {
-	Upstream adminUpstreamResponse `json:"upstream"`
-	Check    checkResultResponse   `json:"check"`
-}
-
-func mapAdminUpstream(item upstream.RuntimeUpstream, canViewCredentials bool) adminUpstreamResponse {
+func mapAdminUpstream(item upstream.RuntimeUpstream, canViewCredentials bool) contract.AdminUpstream {
 	urlValue, proxyValue := item.URL, item.Proxy
 	if !canViewCredentials {
 		urlValue = readableMaskedURL(urlValue)
@@ -239,14 +183,14 @@ func mapAdminUpstream(item upstream.RuntimeUpstream, canViewCredentials bool) ad
 		checkedAt = &value
 	}
 
-	return adminUpstreamResponse{
+	return contract.AdminUpstream{
 		ID:                 item.ID,
 		AdapterType:        item.AdapterType,
 		Name:               item.Name,
 		URL:                urlValue,
 		Proxy:              proxyValue,
 		Priority:           item.Priority,
-		ProbeMode:          item.ProbeMode,
+		ProbeMode:          contract.UpstreamProbeMode(item.ProbeMode),
 		ProbeInterval:      item.ProbeInterval,
 		Via:                item.Via,
 		Healthy:            item.Healthy,
@@ -256,7 +200,7 @@ func mapAdminUpstream(item upstream.RuntimeUpstream, canViewCredentials bool) ad
 		HasObservations:    item.HasObservations,
 		RuntimeSampleCount: item.RuntimeSampleCount,
 		WorkerRunning:      item.WorkerRunning,
-		ProxySource:        item.ProxySource,
+		ProxySource:        contract.UpstreamProxySource(item.ProxySource),
 		LastFailure:        mapUpstreamFailure(item.LastFailure),
 		CreatedAt:          item.CreatedAt,
 		UpdatedAt:          item.UpdatedAt,

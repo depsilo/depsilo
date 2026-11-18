@@ -251,7 +251,7 @@ export default function Dashboard() {
     policyAvailable: Boolean(policy.status),
     policyStale: policy.unavailable && Boolean(policy.status),
     policyNeedsAttention: Boolean(policy.status) && (policy.isStale || (!policyPayloadIdle
-      && policy.status?.status !== 'healthy' && policy.status?.status !== 'ready')),
+      && policy.status?.status !== 'healthy')),
     cacheUsagePercent: healthSnapshot?.data.cache_usage_percent,
   })
   const healthPending = (readinessQuery.isPending || nowPending || overviewPending || (!policy.status && !policy.unavailable))

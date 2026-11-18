@@ -187,6 +187,7 @@ const existingAdminApiDefaults: Record<string, JsonValue> = {
   },
   'GET /api/v1/admin/policy/status': {
     status: 'healthy',
+    degraded: false,
     using_stale_snapshot: false,
     snapshot_loaded_at: '2026-09-02T01:12:00Z',
     snapshot_age_seconds: 0,
@@ -265,7 +266,7 @@ const canonicalAdminApiDefaults = {
     pending_restart: false,
   } satisfies AdminCascadeConfigState,
   'GET /api/v1/admin/upstreams/latency': { series: [] } satisfies AdminUpstreamLatenciesResponse,
-  'GET /api/v1/admin/upstream-updates': { items: [], total: 0, next_cursor: null } satisfies AdminUpstreamUpdateListResponse,
+  'GET /api/v1/admin/upstream-updates': { items: [], total: 0, next_cursor: null, ecosystems: [] } satisfies AdminUpstreamUpdateListResponse,
   'GET /api/v1/admin/compile-cache/status': {
     enabled: true,
     endpoints: {
@@ -279,8 +280,8 @@ const canonicalAdminApiDefaults = {
     total: 0,
   } satisfies CompileCacheCredentialList,
   'GET /api/v1/admin/dashboard/recent-downloads': { items: [] } satisfies RecentDownloadsResponse,
-  'GET /api/v1/admin/logs': { items: [], total: 0, page: 1, page_size: 50 } satisfies AccessLogListResponse,
-  'GET /api/v1/admin/audit-logs': { items: [], total: 0, page: 1 } satisfies AuditLogListResponse,
+  'GET /api/v1/admin/logs': { items: [], total: 0, page: 1, page_size: 50, ecosystems: null } satisfies AccessLogListResponse,
+  'GET /api/v1/admin/audit-logs': { items: [], total: 0, page: 1, ecosystems: [] } satisfies AuditLogListResponse,
   'GET /api/v1/admin/security/dashboard': {
     total_vulnerabilities: 0,
     affected_packages: 0,
@@ -322,11 +323,14 @@ const canonicalAdminApiDefaults = {
     anchors: {
       configured: false,
       checkpoints: 0,
+      latest_checked_at: '0001-01-01T00:00:00Z',
       ok: true,
     },
     anchor_feed: {
       file_configured: false,
+      file_last_success_at: '0001-01-01T00:00:00Z',
       remote_configured: false,
+      remote_last_success_at: '0001-01-01T00:00:00Z',
     },
   } satisfies AuditIntegrityResponse,
 }

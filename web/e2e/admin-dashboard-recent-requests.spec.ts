@@ -14,6 +14,8 @@ function log(overrides: Partial<AccessLog> & Pick<AccessLog, 'id' | 'package_nam
     status_code: 200,
     client_ip: '192.168.1.100',
     bytes_sent: 2_097_152,
+    upstream_requests: 0,
+    upstream_bytes: 0,
     created_at: new Date(Date.now() - 120_000).toISOString(),
     ...overrides,
     id: overrides.id,

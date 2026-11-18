@@ -4,8 +4,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"depsilo/internal/upstream"
 	"github.com/gin-gonic/gin"
+
+	"depsilo/internal/api/contract"
+	"depsilo/internal/upstream"
 )
 
 type UpstreamHandler struct {
@@ -18,12 +20,12 @@ func NewUpstreamHandler(registry *upstream.Registry) *UpstreamHandler {
 
 func (h *UpstreamHandler) List(c *gin.Context) {
 	items := h.registry.List()
-	response := make([]adminUpstreamResponse, 0, len(items))
+	response := make([]contract.AdminUpstream, 0, len(items))
 	canViewCredentials := principalCanViewCredentials(c)
 	for _, item := range items {
 		response = append(response, mapAdminUpstream(item, canViewCredentials))
 	}
-	c.JSON(http.StatusOK, upstreamListResponse{Items: response, Total: len(response)})
+	c.JSON(http.StatusOK, contract.AdminUpstreamListResponse{Items: response, Total: len(response)})
 }
 
 func (h *UpstreamHandler) Create(c *gin.Context) {
@@ -77,7 +79,7 @@ func (h *UpstreamHandler) Delete(c *gin.Context) {
 		writeUpstreamError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, deleteUpstreamResponse{DeletedID: item.ID, AdapterType: item.AdapterType})
+	c.JSON(http.StatusOK, contract.DeleteUpstreamResponse{DeletedID: item.ID, AdapterType: item.AdapterType})
 }
 
 func (h *UpstreamHandler) Check(c *gin.Context) {
@@ -99,9 +101,9 @@ func (h *UpstreamHandler) Check(c *gin.Context) {
 		}
 		errorText = &text
 	}
-	c.JSON(http.StatusOK, checkUpstreamResponse{
+	c.JSON(http.StatusOK, contract.CheckUpstreamResponse{
 		Upstream: mapAdminUpstream(item, canViewCredentials),
-		Check: checkResultResponse{
+		Check: contract.UpstreamCheckResult{
 			Healthy:   result.Healthy,
 			LatencyMS: result.Latency.Milliseconds(),
 			CheckedAt: result.CheckedAt,

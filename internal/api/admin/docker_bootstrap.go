@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/config"
 )
 
@@ -22,7 +23,7 @@ func (h *DockerBootstrapHandler) Get(c *gin.Context) {
 		writeSettingsError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, state)
+	c.JSON(http.StatusOK, toDockerBootstrapState(state))
 }
 
 func (h *DockerBootstrapHandler) Enable(c *gin.Context) {
@@ -31,5 +32,13 @@ func (h *DockerBootstrapHandler) Enable(c *gin.Context) {
 		writeSettingsError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, state)
+	c.JSON(http.StatusOK, toDockerBootstrapState(state))
+}
+
+func toDockerBootstrapState(state config.DockerBootstrapState) contract.DockerBootstrapState {
+	return contract.DockerBootstrapState{
+		Configured: state.Configured, Effective: state.Effective, DockerHub: state.DockerHub,
+		PendingRestart: state.PendingRestart, ConfigWritable: state.ConfigWritable,
+		BlockedByOverride: state.BlockedByOverride,
+	}
 }

@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/accesslog"
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 	"depsilo/internal/upstream"
 )
@@ -139,12 +140,7 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 	}
 
 	// Daily stats for the last 7 days
-	type dailyStat struct {
-		Date        string `json:"date"`
-		AdapterType string `json:"adapter_type"`
-		Count       int64  `json:"count"`
-	}
-	var dailyStats []dailyStat
+	var dailyStats []contract.DashboardDailyStat
 	if h.useRollup {
 		// Read from access_log_hourly (not access_log_daily) so today's
 		// partial-hour data is included — daily lags until the nightly
@@ -168,7 +164,7 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 		return
 	}
 
-	upstreams := make([]gin.H, 0)
+	upstreams := make([]contract.DashboardUpstream, 0)
 	for _, name := range h.ecosystems {
 		pool := h.pools[name]
 		if pool == nil {
@@ -176,22 +172,18 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 		}
 		for _, u := range pool.Snapshot() {
 			health := u.HealthSnapshot()
-			upstreams = append(upstreams, gin.H{
-				"id":             u.ID,
-				"name":           u.Name,
-				"adapter":        name,
-				"healthy":        health.Healthy,
-				"avg_latency_ms": health.AvgLatency.Milliseconds(),
-				"success_rate":   health.SuccessRate,
+			upstreams = append(upstreams, contract.DashboardUpstream{
+				ID:           u.ID,
+				Name:         u.Name,
+				Adapter:      name,
+				Healthy:      health.Healthy,
+				AvgLatencyMs: health.AvgLatency.Milliseconds(),
+				SuccessRate:  health.SuccessRate,
 			})
 		}
 	}
 
 	// Top packages
-	type topPkg struct {
-		PackageName string `json:"name"`
-		HitCount    int64  `json:"hit_count"`
-	}
 	type topPkgRow struct {
 		AdapterType string
 		PackageName string
@@ -219,11 +211,11 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 		dashboardDatabaseError(c, err)
 		return
 	}
-	topPackages := make(map[string][]topPkg)
+	topPackages := make(map[string][]contract.DashboardTopPackage)
 	for _, row := range topRows {
-		topPackages[row.AdapterType] = append(topPackages[row.AdapterType], topPkg{
-			PackageName: row.PackageName,
-			HitCount:    row.HitCount,
+		topPackages[row.AdapterType] = append(topPackages[row.AdapterType], contract.DashboardTopPackage{
+			Name:     row.PackageName,
+			HitCount: row.HitCount,
 		})
 	}
 
@@ -233,47 +225,51 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 	if windowSpec.key == allTimeKey && h.useRollup {
 		coverageCompare = windowFrom.Truncate(time.Hour).Add(time.Hour - time.Nanosecond)
 	}
-	rangePayload := gin.H{
-		"key":   windowSpec.key,
-		"start": windowFrom.UTC().Format(time.RFC3339),
-		"end":   now.Format(time.RFC3339),
+	rangePayload := contract.DashboardRangeSpan{
+		Key:   contract.DashboardRange(windowSpec.key),
+		Start: windowFrom.UTC().Format(time.RFC3339),
+		End:   now.Format(time.RFC3339),
 	}
 	if windowSpec.key == allTimeKey {
-		rangePayload["archived"] = archived
+		rangePayload.Archived = &archived
 	}
-	response := gin.H{
-		"usage":  usage,
-		"range":  rangePayload,
-		"window": windowPayload(windowAgg),
-		"origin_coverage": gin.H{
-			"measured": coverageMeasured,
-			"since": func() any {
-				if !coverageMeasured {
-					return nil
-				}
-				return coverageStart.Format(time.RFC3339)
-			}(),
-			"window_complete": coverageMeasured && !coverageCompare.Before(coverageStart),
+	var coverageSince *string
+	if coverageMeasured {
+		since := coverageStart.Format(time.RFC3339)
+		coverageSince = &since
+	}
+	response := contract.DashboardResponse{
+		Usage: contract.DashboardUsage{
+			State:                    contract.DashboardUsageState(usage.State),
+			FirstSuccessfulRequestAt: usage.FirstSuccessfulRequestAt,
 		},
-		"last_24h": gin.H{
-			"total_requests": totalRequests,
-			"hit_count":      hitCount,
-			"hit_rate":       hitRate,
-			"bytes_served":   bytesSent,
-			"avg_latency_ms": avgLatency,
+		Range:  rangePayload,
+		Window: windowPayload(windowAgg),
+		OriginCoverage: contract.OriginCoverage{
+			Measured:       coverageMeasured,
+			Since:          coverageSince,
+			WindowComplete: coverageMeasured && !coverageCompare.Before(coverageStart),
 		},
-		"prev_24h": gin.H{
-			"total_requests": prev24h.Total,
-			"hit_rate":       prevHitRate,
-			"bytes_served":   prev24h.Bytes,
-			"avg_latency_ms": prevAvgLatency,
+		Last24h: contract.DashboardWindow{
+			TotalRequests: totalRequests,
+			HitCount:      &hitCount,
+			HitRate:       hitRate,
+			BytesServed:   bytesSent,
+			AvgLatencyMs:  avgLatency,
 		},
-		"daily_stats":  dailyStats,
-		"upstreams":    upstreams,
-		"top_packages": topPackages,
+		Prev24h: contract.DashboardWindow{
+			TotalRequests: prev24h.Total,
+			HitRate:       prevHitRate,
+			BytesServed:   prev24h.Bytes,
+			AvgLatencyMs:  prevAvgLatency,
+		},
+		DailyStats:  dailyStats,
+		Upstreams:   upstreams,
+		TopPackages: topPackages,
 	}
 	if windowSpec.key != allTimeKey {
-		response["prev"] = windowPayload(prevWindowAgg)
+		prev := windowPayload(prevWindowAgg)
+		response.Prev = &prev
 	}
 	if h.maxSizeGB > 0 {
 		var totalSize int64
@@ -285,7 +281,8 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 			return
 		}
 		const bytesPerGiB = 1024 * 1024 * 1024
-		response["cache_usage_percent"] = float64(totalSize) / (float64(h.maxSizeGB) * bytesPerGiB) * 100
+		percent := float64(totalSize) / (float64(h.maxSizeGB) * bytesPerGiB) * 100
+		response.CacheUsagePercent = &percent
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -419,7 +416,7 @@ func normalizeWindowRange(raw string) windowRange {
 
 // windowPayload is the single shape every Overview period block uses, so the
 // client never has to guess which fields a given range carries.
-func windowPayload(s aggSnapshot) gin.H {
+func windowPayload(s aggSnapshot) contract.DashboardPeriod {
 	misses := s.Total - s.Hits
 	avgLatency := 0.0
 	if s.Total > 0 {
@@ -436,23 +433,23 @@ func windowPayload(s aggSnapshot) gin.H {
 			timeSavedMs = int64(diff * float64(s.Hits))
 		}
 	}
-	return gin.H{
-		"total_requests":      s.Total,
-		"hit_count":           s.Hits,
-		"miss_count":          misses,
-		"hit_requests":        s.Hits,
-		"miss_requests":       misses,
-		"hit_rate":            s.hitRate(),
-		"bytes_served":        s.Bytes,
-		"hit_bytes":           s.HitBytes,
-		"miss_bytes":          s.MissBytes,
-		"avg_latency_ms":      avgLatency,
-		"avg_hit_latency_ms":  s.avgHitLatency(),
-		"avg_miss_latency_ms": s.avgMissLatency(),
-		"time_saved_ms":       timeSavedMs,
-		"upstream_requests":   s.UpstreamRequests,
-		"upstream_bytes":      s.UpstreamBytes,
-		"errors":              s.Errors,
+	return contract.DashboardPeriod{
+		TotalRequests:    s.Total,
+		HitCount:         s.Hits,
+		MissCount:        misses,
+		HitRequests:      s.Hits,
+		MissRequests:     misses,
+		HitRate:          s.hitRate(),
+		BytesServed:      s.Bytes,
+		HitBytes:         s.HitBytes,
+		MissBytes:        s.MissBytes,
+		AvgLatencyMs:     avgLatency,
+		AvgHitLatencyMs:  s.avgHitLatency(),
+		AvgMissLatencyMs: s.avgMissLatency(),
+		TimeSavedMs:      timeSavedMs,
+		UpstreamRequests: s.UpstreamRequests,
+		UpstreamBytes:    s.UpstreamBytes,
+		Errors:           s.Errors,
 	}
 }
 
@@ -502,7 +499,7 @@ func (h *DashboardHandler) GetTrends(c *gin.Context) {
 	ctx := c.Request.Context()
 	now := h.trendNow()
 	var (
-		points []trendPoint
+		points []contract.DashboardTrendPoint
 		err    error
 	)
 	if rangeParam == allTimeKey {
@@ -530,31 +527,7 @@ func (h *DashboardHandler) GetTrends(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"points": points})
-}
-
-// trendPoint is one row in the trends response. Carries every dimension the
-// frontend tabs need (requests / bandwidth / latency / errors) so a tab
-// switch is a pure render — no refetch. Bucket is unix seconds at the
-// bucket's UTC start; the frontend formats it in the browser's timezone.
-type trendPoint struct {
-	Bucket      int64   `json:"bucket"`
-	Date        string  `json:"date"` // legacy display label (UTC); prefer formatting Bucket client-side
-	Requests    int64   `json:"requests"`
-	Hits        int64   `json:"hits"`
-	Misses      int64   `json:"misses"`
-	HitRate     float64 `json:"hit_rate"`
-	BytesServed int64   `json:"bytes_served"`
-	BytesHit    int64   `json:"bytes_hit"`
-	BytesMiss   int64   `json:"bytes_miss"`
-	// UpstreamRequests/UpstreamBytes are the measured Depsilo→upstream side of
-	// the same bucket. They are independent of the client-facing byte series
-	// and are never derived from it.
-	UpstreamRequests int64   `json:"upstream_requests"`
-	UpstreamBytes    int64   `json:"upstream_bytes"`
-	SumLatencyMs     int64   `json:"sum_latency_ms"`
-	AvgLatencyMs     float64 `json:"avg_latency_ms"`
-	Errors           int64   `json:"errors"`
+	c.JSON(http.StatusOK, contract.DashboardTrendsResponse{Points: points})
 }
 
 // trendHourBucket is the common aggregate row all three sources produce.
@@ -583,8 +556,8 @@ func (b *trendHourBucket) add(other trendHourBucket) {
 	b.Errors += other.Errors
 }
 
-func (b trendHourBucket) toPoint(bucketStart time.Time) trendPoint {
-	p := trendPoint{
+func (b trendHourBucket) toPoint(bucketStart time.Time) contract.DashboardTrendPoint {
+	p := contract.DashboardTrendPoint{
 		Bucket:           bucketStart.Unix(),
 		Date:             bucketStart.Format("2006-01-02 15:04"),
 		Requests:         b.Requests,
@@ -633,13 +606,13 @@ func (h *DashboardHandler) trendNow() time.Time {
 	return h.now().UTC()
 }
 
-func buildTrendPoints(window trendWindow, rows []trendHourBucket) []trendPoint {
+func buildTrendPoints(window trendWindow, rows []trendHourBucket) []contract.DashboardTrendPoint {
 	lookup := make(map[int64]trendHourBucket, len(rows))
 	for _, row := range rows {
 		lookup[row.Bucket] = row
 	}
 
-	out := make([]trendPoint, 0, window.spec.buckets)
+	out := make([]contract.DashboardTrendPoint, 0, window.spec.buckets)
 	for i := 0; i < window.spec.buckets; i++ {
 		bucket := window.start.Add(time.Duration(i) * window.spec.interval)
 		out = append(out, lookup[bucket.Unix()].toPoint(bucket))
@@ -647,11 +620,11 @@ func buildTrendPoints(window trendWindow, rows []trendHourBucket) []trendPoint {
 	return out
 }
 
-func (h *DashboardHandler) trendsRaw(ctx context.Context, spec trendSpec, now time.Time) ([]trendPoint, error) {
+func (h *DashboardHandler) trendsRaw(ctx context.Context, spec trendSpec, now time.Time) ([]contract.DashboardTrendPoint, error) {
 	return h.trendsRawWindow(ctx, makeTrendWindow(now, spec))
 }
 
-func (h *DashboardHandler) trendsRawWindow(ctx context.Context, window trendWindow) ([]trendPoint, error) {
+func (h *DashboardHandler) trendsRawWindow(ctx context.Context, window trendWindow) ([]contract.DashboardTrendPoint, error) {
 	intervalSec := int64(window.spec.interval / time.Second)
 	var rows []trendHourBucket
 	result := h.db.WithContext(ctx).Model(&db.AccessLog{}).
@@ -674,7 +647,7 @@ func (h *DashboardHandler) trendsRawWindow(ctx context.Context, window trendWind
 	return buildTrendPoints(window, rows), nil
 }
 
-func (h *DashboardHandler) trendsFiveMinutely(ctx context.Context, spec trendSpec, now time.Time) ([]trendPoint, error) {
+func (h *DashboardHandler) trendsFiveMinutely(ctx context.Context, spec trendSpec, now time.Time) ([]contract.DashboardTrendPoint, error) {
 	window := makeTrendWindow(now, spec)
 	hasHistory, err := h.hasFiveMinuteHistory(ctx)
 	if err != nil {
@@ -686,7 +659,7 @@ func (h *DashboardHandler) trendsFiveMinutely(ctx context.Context, spec trendSpe
 	return h.trendsFiveMinutelyWindow(ctx, window)
 }
 
-func (h *DashboardHandler) trendsFiveMinutelyWindow(ctx context.Context, window trendWindow) ([]trendPoint, error) {
+func (h *DashboardHandler) trendsFiveMinutelyWindow(ctx context.Context, window trendWindow) ([]contract.DashboardTrendPoint, error) {
 	intervalSec := int64(window.spec.interval / time.Second)
 	var rows []trendHourBucket
 	result := h.db.WithContext(ctx).Table("access_log_five_minutely").
@@ -722,7 +695,7 @@ func (h *DashboardHandler) hasFiveMinuteHistory(ctx context.Context) (bool, erro
 	return exists == 1, nil
 }
 
-func (h *DashboardHandler) trendsSevenDays(ctx context.Context, spec trendSpec, now time.Time) ([]trendPoint, error) {
+func (h *DashboardHandler) trendsSevenDays(ctx context.Context, spec trendSpec, now time.Time) ([]contract.DashboardTrendPoint, error) {
 	window := makeTrendWindow(now, spec)
 	hasHistory, err := h.hasFiveMinuteHistory(ctx)
 	if err != nil {
@@ -734,11 +707,11 @@ func (h *DashboardHandler) trendsSevenDays(ctx context.Context, spec trendSpec, 
 	return h.trendsHourlyGroupedWindow(ctx, makeTrendWindow(now, sevenDayHourlyFallbackSpec))
 }
 
-func (h *DashboardHandler) trendsHourlyGrouped(ctx context.Context, spec trendSpec, now time.Time) ([]trendPoint, error) {
+func (h *DashboardHandler) trendsHourlyGrouped(ctx context.Context, spec trendSpec, now time.Time) ([]contract.DashboardTrendPoint, error) {
 	return h.trendsHourlyGroupedWindow(ctx, makeTrendWindow(now, spec))
 }
 
-func (h *DashboardHandler) trendsHourlyGroupedWindow(ctx context.Context, window trendWindow) ([]trendPoint, error) {
+func (h *DashboardHandler) trendsHourlyGroupedWindow(ctx context.Context, window trendWindow) ([]contract.DashboardTrendPoint, error) {
 	type hourlyRow struct {
 		Date             string
 		Hour             int

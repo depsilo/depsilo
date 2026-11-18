@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/blocklist"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
@@ -39,22 +40,12 @@ func NewCapabilityHandler(database *gorm.DB, cfg *config.Config, store *config.S
 	return &CapabilityHandler{db: database, config: cfg, configStore: store, ecosystems: append([]string(nil), ecosystems...), policy: policy, blocklistStore: blocklistStore, blocklistMode: blocklistMode, quarantine: quarantinePolicy}
 }
 
-type capabilityFact struct {
-	Name          string  `json:"name"`
-	Ecosystem     string  `json:"ecosystem"`
-	Support       string  `json:"support"`
-	Mode          string  `json:"mode"`
-	DataStatus    string  `json:"data_status"`
-	LastSuccessAt *string `json:"last_success_at,omitempty"`
-	RecentFailure string  `json:"recent_failure,omitempty"`
-}
-
+// capabilitySummary adds the settings state to the contract body. The settings
+// state is still a config type; it moves into the contract with the settings
+// endpoints.
 type capabilitySummary struct {
-	Version      string                `json:"version"`
-	Commit       string                `json:"commit"`
-	BuildDate    string                `json:"build_date"`
-	Capabilities []capabilityFact      `json:"capabilities"`
-	Settings     *config.SettingsState `json:"settings,omitempty"`
+	contract.CapabilitySummary
+	Settings *config.SettingsState `json:"settings,omitempty"`
 }
 
 func (h *CapabilityHandler) Summary(c *gin.Context) {
@@ -73,7 +64,7 @@ func (h *CapabilityHandler) Summary(c *gin.Context) {
 		}
 	}
 	active = uniqueSorted(active)
-	facts := make([]capabilityFact, 0, len(active)*6)
+	facts := make([]contract.CapabilityFact, 0, len(active)*6)
 	for _, name := range active {
 		definition, known := ecosystem.Lookup(name)
 		if !known {
@@ -90,24 +81,27 @@ func (h *CapabilityHandler) Summary(c *gin.Context) {
 	}
 	if h.policy != nil {
 		status := h.policy.PolicyStatus()
-		facts = append(facts, capabilityFact{Name: "policy_snapshot", Support: "supported", Mode: "block", DataStatus: policyDataStatus(status), LastSuccessAt: timePointer(status.LastSuccessfulRefresh), RecentFailure: policyFailure(status)})
+		facts = append(facts, contract.CapabilityFact{Name: "policy_snapshot", Support: contract.CapabilitySupportSupported, Mode: "block", DataStatus: policyDataStatus(status), LastSuccessAt: timePointer(status.LastSuccessfulRefresh), RecentFailure: policyFailure(status)})
 	}
 	c.Header("Cache-Control", "no-store")
-	c.JSON(http.StatusOK, capabilitySummary{Version: version.Version, Commit: version.Commit, BuildDate: version.BuildDate, Capabilities: facts, Settings: settings})
+	c.JSON(http.StatusOK, capabilitySummary{
+		CapabilitySummary: contract.CapabilitySummary{Version: version.Version, Commit: version.Commit, BuildDate: version.BuildDate, Capabilities: facts},
+		Settings:          settings,
+	})
 }
 
-func (h *CapabilityHandler) proxyFact(name string, supported bool) capabilityFact {
-	f := capabilityFact{Name: "proxy_cache", Ecosystem: name, Support: "unsupported", Mode: "off", DataStatus: "unknown"}
+func (h *CapabilityHandler) proxyFact(name string, supported bool) contract.CapabilityFact {
+	f := contract.CapabilityFact{Name: "proxy_cache", Ecosystem: name, Support: contract.CapabilitySupportUnsupported, Mode: "off", DataStatus: contract.CapabilityDataStatusUnknown}
 	if supported {
-		f.Support, f.Mode, f.DataStatus = "supported", "on", "unknown"
+		f.Support, f.Mode, f.DataStatus = contract.CapabilitySupportSupported, "on", contract.CapabilityDataStatusUnknown
 	}
 	return f
 }
 
-func (h *CapabilityHandler) rulesFact(name string, supported bool) capabilityFact {
-	f := capabilityFact{Name: "manual_rules", Ecosystem: name, Support: "unsupported", Mode: "off", DataStatus: "unknown"}
+func (h *CapabilityHandler) rulesFact(name string, supported bool) contract.CapabilityFact {
+	f := contract.CapabilityFact{Name: "manual_rules", Ecosystem: name, Support: contract.CapabilitySupportUnsupported, Mode: "off", DataStatus: contract.CapabilityDataStatusUnknown}
 	if supported {
-		f.Support, f.Mode = "supported", "block"
+		f.Support, f.Mode = contract.CapabilitySupportSupported, "block"
 	}
 	if h.policy != nil {
 		st := h.policy.PolicyStatus()
@@ -116,12 +110,12 @@ func (h *CapabilityHandler) rulesFact(name string, supported bool) capabilityFac
 	return f
 }
 
-func (h *CapabilityHandler) blocklistFact(ctx context.Context, name string, supported bool) capabilityFact {
-	f := capabilityFact{Name: "malicious_blocklist", Ecosystem: name, Support: "unsupported", Mode: "off", DataStatus: "never_synced"}
+func (h *CapabilityHandler) blocklistFact(ctx context.Context, name string, supported bool) contract.CapabilityFact {
+	f := contract.CapabilityFact{Name: "malicious_blocklist", Ecosystem: name, Support: contract.CapabilitySupportUnsupported, Mode: "off", DataStatus: contract.CapabilityDataStatusNeverSynced}
 	if !supported {
 		return f
 	}
-	f.Support = "supported"
+	f.Support = contract.CapabilitySupportSupported
 	if h.blocklistStore == nil {
 		f.Mode = "off"
 		return f
@@ -132,32 +126,32 @@ func (h *CapabilityHandler) blocklistFact(ctx context.Context, name string, supp
 	}
 	st, err := h.blocklistStore.SyncState(ctx)
 	if err != nil {
-		f.DataStatus, f.RecentFailure = "error", "sync state unavailable"
+		f.DataStatus, f.RecentFailure = contract.CapabilityDataStatusError, "sync state unavailable"
 		return f
 	}
 	f.LastSuccessAt = timePointerPtr(st.LastSuccessAt)
 	f.RecentFailure = st.LastError
 	if st.LastSuccessAt == nil {
 		if st.LastError != "" {
-			f.DataStatus = "error"
+			f.DataStatus = contract.CapabilityDataStatusError
 		}
 		return f
 	}
 	if st.LastError != "" {
-		f.DataStatus = "stale"
+		f.DataStatus = contract.CapabilityDataStatusStale
 	} else {
-		f.DataStatus = "fresh"
+		f.DataStatus = contract.CapabilityDataStatusFresh
 	}
 	return f
 }
 
-func (h *CapabilityHandler) securityFact(ctx context.Context, name string) capabilityFact {
+func (h *CapabilityHandler) securityFact(ctx context.Context, name string) contract.CapabilityFact {
 	supported := security.SupportsAutomaticVulnerabilityScanning(name)
-	f := capabilityFact{Name: "vulnerability_scanning", Ecosystem: name, Support: "unsupported", Mode: "off", DataStatus: "never_synced"}
+	f := contract.CapabilityFact{Name: "vulnerability_scanning", Ecosystem: name, Support: contract.CapabilitySupportUnsupported, Mode: "off", DataStatus: contract.CapabilityDataStatusNeverSynced}
 	if !supported || h.db == nil {
 		return f
 	}
-	f.Support = "supported"
+	f.Support = contract.CapabilitySupportSupported
 	if h.config != nil && h.config.Security.Enabled {
 		f.Mode = "alert_only"
 	}
@@ -167,20 +161,20 @@ func (h *CapabilityHandler) securityFact(ctx context.Context, name string) capab
 		if err == gorm.ErrRecordNotFound {
 			return f
 		}
-		f.DataStatus, f.RecentFailure = "error", "vulnerability state unavailable"
+		f.DataStatus, f.RecentFailure = contract.CapabilityDataStatusError, "vulnerability state unavailable"
 		return f
 	}
 	f.LastSuccessAt = timePointer(check.LastFetchedAt)
 	if !check.NextFetchAt.IsZero() && time.Now().After(check.NextFetchAt) {
-		f.DataStatus = "stale"
+		f.DataStatus = contract.CapabilityDataStatusStale
 	} else {
-		f.DataStatus = "fresh"
+		f.DataStatus = contract.CapabilityDataStatusFresh
 	}
 	return f
 }
 
-func (h *CapabilityHandler) ageFact(name string) capabilityFact {
-	f := capabilityFact{Name: "minimum_release_age", Ecosystem: name, Support: "safety_disabled", Mode: "off", DataStatus: "never_synced"}
+func (h *CapabilityHandler) ageFact(name string) contract.CapabilityFact {
+	f := contract.CapabilityFact{Name: "minimum_release_age", Ecosystem: name, Support: contract.CapabilitySupportSafetyDisabled, Mode: "off", DataStatus: contract.CapabilityDataStatusNeverSynced}
 	bound := quarantine.SupportsMinimumReleaseAge(name)
 	if h.quarantine != nil {
 		bound = bound || h.quarantine.SourceProvenanceBound(name)
@@ -188,13 +182,13 @@ func (h *CapabilityHandler) ageFact(name string) capabilityFact {
 	if !bound {
 		return f
 	}
-	f.Support = "supported"
-	f.DataStatus = "source_bound"
+	f.Support = contract.CapabilitySupportSupported
+	f.DataStatus = contract.CapabilityDataStatusSourceBound
 	if h.quarantine.ApproximateProvenance(name) {
-		f.DataStatus = "approximate"
+		f.DataStatus = contract.CapabilityDataStatusApproximate
 	}
 	if h.quarantine.ObservationProvenance(name) {
-		f.DataStatus = "observed"
+		f.DataStatus = contract.CapabilityDataStatusObserved
 	}
 	if h.quarantine.IsAgeGateEnabled() && h.quarantine.Threshold(name) > 0 {
 		if h.quarantine.Mode == quarantine.ModeWarn {
@@ -206,22 +200,22 @@ func (h *CapabilityHandler) ageFact(name string) capabilityFact {
 	return f
 }
 
-func (h *CapabilityHandler) tamperFact(name string) capabilityFact {
-	f := capabilityFact{Name: "tamper_alerts", Ecosystem: name, Support: "supported", Mode: "alert_only", DataStatus: "unknown"}
+func (h *CapabilityHandler) tamperFact(name string) contract.CapabilityFact {
+	f := contract.CapabilityFact{Name: "tamper_alerts", Ecosystem: name, Support: contract.CapabilitySupportSupported, Mode: "alert_only", DataStatus: contract.CapabilityDataStatusUnknown}
 	if h.config != nil && !h.config.SupplyChain.TamperDetection.IsEnabled() {
 		f.Mode = "off"
 	}
 	return f
 }
 
-func policyDataStatus(s rules.PolicyStatus) string {
+func policyDataStatus(s rules.PolicyStatus) contract.CapabilityDataStatus {
 	if s.LastSuccessfulRefresh.IsZero() {
-		return "never_synced"
+		return contract.CapabilityDataStatusNeverSynced
 	}
 	if s.Degraded || s.UsingStaleSnapshot {
-		return "stale"
+		return contract.CapabilityDataStatusStale
 	}
-	return "fresh"
+	return contract.CapabilityDataStatusFresh
 }
 func policyFailure(s rules.PolicyStatus) string {
 	if s.RefreshFailures > 0 && s.Degraded {

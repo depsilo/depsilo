@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/cascade"
 	"depsilo/internal/config"
 )
@@ -20,34 +21,18 @@ func NewCascadeHandler(settings config.CascadeConfig, instanceID string) *Cascad
 	return &CascadeHandler{settings: settings, instanceID: instanceID}
 }
 
-type cascadePeerResponse struct {
-	Name               string `json:"name"`
-	URL                string `json:"url"`
-	ForwardCredentials bool   `json:"forward_credentials"`
-}
-
-type cascadeInfoResponse struct {
-	Enabled           bool                  `json:"enabled"`
-	InstanceID        string                `json:"instance_id"`
-	RelayPath         string                `json:"relay_path"`
-	MaxHops           int                   `json:"max_hops"`
-	MaxTTLSeconds     int64                 `json:"max_ttl_seconds"`
-	AllowInsecureHTTP bool                  `json:"allow_insecure_http"`
-	Peers             []cascadePeerResponse `json:"peers"`
-}
-
 func (h *CascadeHandler) Info(c *gin.Context) {
-	response := cascadeInfoResponse{
+	response := contract.AdminCascadeInfo{
 		Enabled:           h.settings.Enabled,
 		InstanceID:        h.instanceID,
 		RelayPath:         cascade.RelayPath,
 		MaxHops:           h.settings.MaxHops,
 		MaxTTLSeconds:     int64(h.settings.MaxTTL.Seconds()),
 		AllowInsecureHTTP: h.settings.AllowInsecureHTTP,
-		Peers:             make([]cascadePeerResponse, 0, len(h.settings.Peers)),
+		Peers:             make([]contract.AdminCascadePeer, 0, len(h.settings.Peers)),
 	}
 	for _, peer := range h.settings.Peers {
-		response.Peers = append(response.Peers, cascadePeerResponse{
+		response.Peers = append(response.Peers, contract.AdminCascadePeer{
 			Name:               peer.Name,
 			URL:                peer.URL,
 			ForwardCredentials: peer.ForwardCredentials,

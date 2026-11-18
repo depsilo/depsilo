@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/adapter/packagekey"
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 )
 
@@ -34,58 +35,6 @@ type accessLogFilter struct {
 	Result       string
 	Page         int
 	PageSize     int
-}
-
-type accessLogResponse struct {
-	ID          uint   `json:"id"`
-	AdapterType string `json:"adapter_type"`
-	Method      string `json:"method"`
-	CacheKey    string `json:"cache_key"`
-	PackageName string `json:"package_name"`
-	Version     string `json:"version"`
-	Hit         bool   `json:"hit"`
-	CacheResult string `json:"cache_result"`
-	Upstream    string `json:"upstream"`
-	LatencyMs   int64  `json:"latency_ms"`
-	StatusCode  int    `json:"status_code"`
-	ClientIP    string `json:"client_ip"`
-	BytesSent   int64  `json:"bytes_sent"`
-	// Measured Depsilo→upstream traffic attributed to this client request.
-	UpstreamRequests int64     `json:"upstream_requests"`
-	UpstreamBytes    int64     `json:"upstream_bytes"`
-	CreatedAt        time.Time `json:"created_at"`
-}
-
-type accessLogListResponse struct {
-	Items    []accessLogResponse `json:"items"`
-	Total    int64               `json:"total"`
-	Page     int                 `json:"page"`
-	PageSize int                 `json:"page_size"`
-	// Ecosystems counts the rows every other filter matches, per ecosystem.
-	Ecosystems []ecosystemCount `json:"ecosystems"`
-}
-
-type accessLogAuditEvent struct {
-	ID          uint      `json:"id"`
-	Ecosystem   string    `json:"ecosystem"`
-	PackageName string    `json:"package_name"`
-	Version     string    `json:"version"`
-	Action      string    `json:"action"`
-	CacheResult string    `json:"cache_result"`
-	StatusCode  int       `json:"status_code"`
-	CreatedAt   time.Time `json:"created_at"`
-}
-
-type accessLogDetailResponse struct {
-	accessLogResponse
-	RequestID      string                `json:"request_id"`
-	CacheResult    string                `json:"cache_result"`
-	CacheReason    string                `json:"cache_reason"`
-	PolicyDecision string                `json:"policy_decision"`
-	PolicyReason   string                `json:"policy_reason"`
-	DeliveryResult string                `json:"delivery_result"`
-	DeliveryReason string                `json:"delivery_reason"`
-	AuditEvents    []accessLogAuditEvent `json:"audit_events"`
 }
 
 func parseAccessLogFilter(c *gin.Context) (accessLogFilter, error) {
@@ -148,10 +97,10 @@ func applyAccessLogFilter(database *gorm.DB, filter accessLogFilter) *gorm.DB {
 	return query
 }
 
-func toAccessLogResponses(items []db.AccessLog) []accessLogResponse {
-	responses := make([]accessLogResponse, len(items))
+func toAccessLogResponses(items []db.AccessLog) []contract.AccessLog {
+	responses := make([]contract.AccessLog, len(items))
 	for i, item := range items {
-		responses[i] = accessLogResponse{
+		responses[i] = contract.AccessLog{
 			ID:               item.ID,
 			AdapterType:      item.AdapterType,
 			Method:           item.Method,
@@ -173,15 +122,15 @@ func toAccessLogResponses(items []db.AccessLog) []accessLogResponse {
 	return responses
 }
 
-func normalizedAccessCacheResult(result string, legacyHit bool) string {
-	switch result {
-	case "hit", "miss", "unknown":
-		return result
+func normalizedAccessCacheResult(result string, legacyHit bool) contract.AccessLogCacheResult {
+	switch value := contract.AccessLogCacheResult(result); value {
+	case contract.AccessLogCacheResultHit, contract.AccessLogCacheResultMiss, contract.AccessLogCacheResultUnknown:
+		return value
 	default:
 		if legacyHit {
-			return "hit"
+			return contract.AccessLogCacheResultHit
 		}
-		return "unknown"
+		return contract.AccessLogCacheResultUnknown
 	}
 }
 
@@ -211,7 +160,7 @@ func (h *AccessLogHandler) List(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, accessLogListResponse{
+	c.JSON(http.StatusOK, contract.AccessLogListResponse{
 		Items:      toAccessLogResponses(logs),
 		Total:      total,
 		Page:       filter.Page,
@@ -220,14 +169,14 @@ func (h *AccessLogHandler) List(c *gin.Context) {
 	})
 }
 
-func encodeAccessLogsCSV(items []accessLogResponse) ([]byte, error) {
+func encodeAccessLogsCSV(items []contract.AccessLog) ([]byte, error) {
 	var buf bytes.Buffer
 	w := csv.NewWriter(&buf)
 	if err := w.Write([]string{"Time", "Method", "Ecosystem", "Package", "Hit", "Status", "Latency(ms)", "Bytes", "Upstream", "Client IP", "Cache Key", "Cache Result"}); err != nil {
 		return nil, err
 	}
 	for _, item := range items {
-		cacheResult := normalizedAccessCacheResult(item.CacheResult, item.Hit)
+		cacheResult := normalizedAccessCacheResult(string(item.CacheResult), item.Hit)
 		record := []string{
 			item.CreatedAt.Format(time.RFC3339),
 			item.Method,
@@ -240,7 +189,7 @@ func encodeAccessLogsCSV(items []accessLogResponse) ([]byte, error) {
 			item.Upstream,
 			item.ClientIP,
 			item.CacheKey,
-			cacheResult,
+			string(cacheResult),
 		}
 		for i := range record {
 			record[i] = neutralizeCSVCell(record[i])
@@ -294,12 +243,12 @@ func (h *AccessLogHandler) Detail(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": "could not read access log"})
 		return
 	}
-	detail := accessLogDetailResponse{
-		accessLogResponse: toAccessLogResponses([]db.AccessLog{item})[0],
-		RequestID:         item.RequestID, CacheResult: normalizedAccessCacheResult(item.CacheResult, item.Hit), CacheReason: item.CacheReason,
+	detail := contract.AccessLogDetail{
+		AccessLog: toAccessLogResponses([]db.AccessLog{item})[0],
+		RequestID: item.RequestID, CacheResult: normalizedAccessCacheResult(item.CacheResult, item.Hit), CacheReason: item.CacheReason,
 		PolicyDecision: item.PolicyDecision, PolicyReason: item.PolicyReason,
 		DeliveryResult: item.DeliveryResult, DeliveryReason: item.DeliveryReason,
-		AuditEvents: make([]accessLogAuditEvent, 0),
+		AuditEvents: make([]contract.AccessLogAuditEvent, 0),
 	}
 	if item.RequestID != "" {
 		var events []db.AuditLog
@@ -309,7 +258,7 @@ func (h *AccessLogHandler) Detail(c *gin.Context) {
 			return
 		}
 		for _, event := range events {
-			detail.AuditEvents = append(detail.AuditEvents, accessLogAuditEvent{
+			detail.AuditEvents = append(detail.AuditEvents, contract.AccessLogAuditEvent{
 				ID: event.ID, Ecosystem: event.Ecosystem, PackageName: event.PackageName,
 				Version: event.Version, Action: event.Action, CacheResult: event.CacheResult,
 				StatusCode: event.StatusCode, CreatedAt: event.CreatedAt,

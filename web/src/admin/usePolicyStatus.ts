@@ -69,7 +69,6 @@ export function usePolicyStatus(): PolicyStatusSignal {
   const isUnverified = unavailable || (!isIdle &&
     status !== undefined
     && status.status !== 'healthy'
-    && status.status !== 'ready'
     && !isStale
   )
   const refreshTime = snapshotLoadedAt

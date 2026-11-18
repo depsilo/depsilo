@@ -6,42 +6,19 @@ import (
 	"fmt"
 	"time"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/audit"
 	"depsilo/internal/db"
 )
 
-type auditLogResponse struct {
-	ID          uint      `json:"id"`
-	Ecosystem   string    `json:"ecosystem"`
-	PackageName string    `json:"package_name"`
-	Version     string    `json:"version"`
-	Action      string    `json:"action"`
-	CacheResult string    `json:"cache_result"`
-	ClientIP    string    `json:"client_ip"`
-	UserAgent   string    `json:"user_agent"`
-	UpstreamURL string    `json:"upstream_url"`
-	LatencyMs   int64     `json:"latency_ms"`
-	BytesSent   int64     `json:"bytes_sent"`
-	StatusCode  int       `json:"status_code"`
-	CreatedAt   time.Time `json:"created_at"`
-}
-
-type auditListResponse struct {
-	Items []auditLogResponse `json:"items"`
-	Total int64              `json:"total"`
-	Page  int                `json:"page"`
-	// Ecosystems counts the rows every other filter matches, per ecosystem.
-	Ecosystems []audit.EcosystemCount `json:"ecosystems"`
-}
-
-func toAuditLogResponse(item db.AuditLog, canViewCredentials bool) auditLogResponse {
+func toAuditLogResponse(item db.AuditLog, canViewCredentials bool) contract.AuditLog {
 	upstreamURL := item.UpstreamURL
 	if !canViewCredentials {
 		upstreamURL = maskCredentialURL(upstreamURL)
 	}
-	return auditLogResponse{
+	return contract.AuditLog{
 		ID: item.ID, Ecosystem: item.Ecosystem, PackageName: item.PackageName,
-		Version: item.Version, Action: item.Action, CacheResult: item.CacheResult,
+		Version: item.Version, Action: item.Action, CacheResult: contract.AuditLogCacheResult(item.CacheResult),
 		ClientIP: item.ClientIP, UserAgent: item.UserAgent, UpstreamURL: upstreamURL,
 		LatencyMs: item.LatencyMs, BytesSent: item.BytesSent, StatusCode: item.StatusCode,
 		CreatedAt: item.CreatedAt,
@@ -52,22 +29,25 @@ func maskAuditCredentialURL(raw string) string {
 	return maskCredentialURL(raw)
 }
 
-func toAuditLogResponses(rows []db.AuditLog, canViewCredentials bool) []auditLogResponse {
-	items := make([]auditLogResponse, len(rows))
+func toAuditLogResponses(rows []db.AuditLog, canViewCredentials bool) []contract.AuditLog {
+	items := make([]contract.AuditLog, len(rows))
 	for i, row := range rows {
 		items[i] = toAuditLogResponse(row, canViewCredentials)
 	}
 	return items
 }
 
-func toAuditListResponse(result *audit.QueryResult, ecosystems []audit.EcosystemCount, canViewCredentials bool) auditListResponse {
-	if ecosystems == nil {
-		ecosystems = []audit.EcosystemCount{}
+func toAuditListResponse(result *audit.QueryResult, ecosystems []audit.EcosystemCount, canViewCredentials bool) contract.AuditLogListResponse {
+	counts := make([]contract.EcosystemCount, len(ecosystems))
+	for index, count := range ecosystems {
+		counts[index] = contract.EcosystemCount{ID: count.ID, Count: count.Count}
 	}
-	return auditListResponse{Items: toAuditLogResponses(result.Items, canViewCredentials), Total: result.Total, Page: result.Page, Ecosystems: ecosystems}
+	return contract.AuditLogListResponse{
+		Items: toAuditLogResponses(result.Items, canViewCredentials), Total: result.Total, Page: result.Page, Ecosystems: counts,
+	}
 }
 
-func encodeAuditCSV(items []auditLogResponse) ([]byte, error) {
+func encodeAuditCSV(items []contract.AuditLog) ([]byte, error) {
 	var buf bytes.Buffer
 	w := csv.NewWriter(&buf)
 	if err := w.Write([]string{"Time", "Ecosystem", "Package", "Version", "Action", "Result", "Client IP", "Latency(ms)", "Bytes", "Upstream URL"}); err != nil {
@@ -76,7 +56,7 @@ func encodeAuditCSV(items []auditLogResponse) ([]byte, error) {
 	for _, item := range items {
 		record := []string{
 			item.CreatedAt.Format(time.RFC3339), item.Ecosystem, item.PackageName,
-			item.Version, item.Action, item.CacheResult, item.ClientIP,
+			item.Version, item.Action, string(item.CacheResult), item.ClientIP,
 			fmt.Sprintf("%d", item.LatencyMs), fmt.Sprintf("%d", item.BytesSent), item.UpstreamURL,
 		}
 		for i := range record {

@@ -13,16 +13,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 	"depsilo/internal/upstreamupdates"
 )
-
-type cacheIndexesTestResponse struct {
-	Items   []cacheIndexItem    `json:"items"`
-	Total   int64               `json:"total"`
-	Page    int                 `json:"page"`
-	Summary []cacheIndexSummary `json:"summary"`
-}
 
 func TestCacheIndexesListsMetadataAndSummarizesByEcosystem(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -54,7 +48,7 @@ func TestCacheIndexesListsMetadataAndSummarizesByEcosystem(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	var response cacheIndexesTestResponse
+	var response contract.CacheIndexListResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +57,7 @@ func TestCacheIndexesListsMetadataAndSummarizesByEcosystem(t *testing.T) {
 	}
 	statuses := map[string]string{}
 	for _, item := range response.Items {
-		statuses[item.PackageName] = item.Status
+		statuses[item.PackageName] = string(item.Status)
 	}
 	if statuses["av"] != "fresh" || statuses["react"] != "stale" {
 		t.Fatalf("statuses = %#v", statuses)
@@ -114,10 +108,7 @@ func TestCacheIndexesLeaveOutTheGoChecksumDatabase(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("%s status = %d, body = %s", path, rec.Code, rec.Body.String())
 		}
-		var response struct {
-			cacheIndexesTestResponse
-			Ecosystems []ecosystemCount `json:"ecosystems"`
-		}
+		var response contract.CacheIndexListResponse
 		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 			t.Fatal(err)
 		}
@@ -176,7 +167,7 @@ func TestCacheIndexesFiltersAndRejectsBadStatus(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("%s status = %d, body = %s", path, rec.Code, rec.Body.String())
 		}
-		var response cacheIndexesTestResponse
+		var response contract.CacheIndexListResponse
 		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 			t.Fatal(err)
 		}

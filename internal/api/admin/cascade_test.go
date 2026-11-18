@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/config"
 )
 
@@ -39,7 +40,7 @@ func TestCascadeHandlerReturnsTopologyWithoutSecrets(t *testing.T) {
 	if strings.Contains(body, "secret") {
 		t.Fatalf("cascade info leaked a token: %s", body)
 	}
-	var response cascadeInfoResponse
+	var response contract.AdminCascadeInfo
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}

@@ -18,6 +18,7 @@ import (
 	"gorm.io/gorm/logger"
 
 	"depsilo/internal/accesslog"
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 	"depsilo/internal/upstream"
 )
@@ -60,7 +61,7 @@ func newTrendsTestHandler(t *testing.T) (*DashboardHandler, *gin.Engine) {
 	return handler, router
 }
 
-func getTrendPoints(t *testing.T, router http.Handler, rangeParam string) []trendPoint {
+func getTrendPoints(t *testing.T, router http.Handler, rangeParam string) []contract.DashboardTrendPoint {
 	t.Helper()
 
 	recorder := httptest.NewRecorder()
@@ -70,7 +71,7 @@ func getTrendPoints(t *testing.T, router http.Handler, rangeParam string) []tren
 	}
 
 	var body struct {
-		Points []trendPoint `json:"points"`
+		Points []contract.DashboardTrendPoint `json:"points"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode trends response: %v", err)
@@ -129,7 +130,7 @@ func registerTrendRowCallback(t *testing.T, database *gorm.DB, callback func(*go
 	t.Cleanup(func() { _ = database.Callback().Row().Remove(callbackName) })
 }
 
-func assertTrendResolution(t *testing.T, points []trendPoint, wantPoints int, wantStep int64) {
+func assertTrendResolution(t *testing.T, points []contract.DashboardTrendPoint, wantPoints int, wantStep int64) {
 	t.Helper()
 	if len(points) != wantPoints {
 		t.Fatalf("points = %d, want %d", len(points), wantPoints)
@@ -147,7 +148,7 @@ func assertTrendResolution(t *testing.T, points []trendPoint, wantPoints int, wa
 	}
 }
 
-func assertAggregatePoint(t *testing.T, point trendPoint) {
+func assertAggregatePoint(t *testing.T, point contract.DashboardTrendPoint) {
 	t.Helper()
 	if point.Requests != 5 || point.Hits != 2 || point.Misses != 3 {
 		t.Errorf("request dimensions = requests:%d hits:%d misses:%d, want 5/2/3", point.Requests, point.Hits, point.Misses)
@@ -166,7 +167,7 @@ func assertAggregatePoint(t *testing.T, point trendPoint) {
 	}
 }
 
-func trendPointAt(t *testing.T, points []trendPoint, bucket time.Time) trendPoint {
+func trendPointAt(t *testing.T, points []contract.DashboardTrendPoint, bucket time.Time) contract.DashboardTrendPoint {
 	t.Helper()
 	want := bucket.Unix()
 	for _, point := range points {
@@ -175,7 +176,7 @@ func trendPointAt(t *testing.T, points []trendPoint, bucket time.Time) trendPoin
 		}
 	}
 	t.Fatalf("bucket %d not found", want)
-	return trendPoint{}
+	return contract.DashboardTrendPoint{}
 }
 
 func insertRawAggregate(t *testing.T, database *gorm.DB, bucket time.Time) {

@@ -21,8 +21,10 @@ import type {
   ApproveSuggestionResponse,
   AuditLogListResponse,
   AuditExporter,
+  AuditExporterDeleteResponse,
   AuditExporterListResponse,
   AuditExporterRequest,
+  AuditExporterTestResponse,
   AuditIntegrityResponse,
   AuditLogQuery,
   BandwidthReportResponse,
@@ -30,7 +32,9 @@ import type {
   CacheDeleteResponse,
   CacheCleanupResponse,
   CacheCleanupPreviewResponse,
+  WarmupCancelResponse,
   WarmupJobResponse,
+  WarmupStartResponse,
   CacheIndexListResponse,
   CacheIndexQuery,
   CacheIndexRefreshResponse,
@@ -77,6 +81,8 @@ import type {
   RecentDownloadsResponse,
   RuleListResponse,
   Snapshot,
+  SnapshotActivateResponse,
+  SnapshotDeleteResponse,
   SnapshotListResponse,
   SnapshotDetailResponse,
   RuleRecord,
@@ -94,6 +100,8 @@ import type {
   SecurityVulnerabilityPage,
   SetupRequest,
   SetupCompleteResponse,
+  StatsLatencySeries,
+  StatsResponse,
   UpdateProjectRequest,
   UpdateAdminSettingsRequest,
   UpdateAdminSettingsResponse,
@@ -151,9 +159,9 @@ api.interceptors.response.use(
 )
 
 export const statsApi = {
-  getStats: (options: ApiGetOptions = {}) => api.get('/stats', options),
+  getStats: (options: ApiGetOptions = {}) => api.get<StatsResponse>('/stats', options),
   getNow: (options: ApiGetOptions = {}) => api.get<NowResponse>('/now', options),
-  getLatencySeries: (options: ApiGetOptions = {}) => api.get('/latency-series', options),
+  getLatencySeries: (options: ApiGetOptions = {}) => api.get<StatsLatencySeries>('/latency-series', options),
 }
 
 export const authApi = {
@@ -187,16 +195,17 @@ export const adminApi = {
   // Cache
   listCache: (params: CacheQuery, options: ApiGetOptions = {}) => api.get<CacheListResponse>('/admin/cache', { ...options, params }),
   deleteCache: (id: number) => api.delete<CacheDeleteResponse>(`/admin/cache/${id}`),
-  cleanupCache: (planId?: string) => api.post<CacheCleanupResponse>('/admin/cache/cleanup', planId ? { plan_id: planId } : undefined),
+  // Always names a preview plan: a body-less request runs a broad reclaim (CacheReclaimResponse).
+  cleanupCache: (planId: string) => api.post<CacheCleanupResponse>('/admin/cache/cleanup', { plan_id: planId }),
   previewCacheCleanup: (params: { page?: number; page_size?: number } = {}, options: ApiGetOptions = {}) =>
     api.get<CacheCleanupPreviewResponse>('/admin/cache/cleanup/preview', { ...options, params }),
   getCacheDistribution: (options: ApiGetOptions = {}) => api.get<CacheDistributionResponse>('/admin/cache/distribution', options),
   listCacheIndexes: (params: CacheIndexQuery, options: ApiGetOptions = {}) => api.get<CacheIndexListResponse>('/admin/cache/indexes', { ...options, params }),
   refreshCacheIndex: (id: number) => api.post<CacheIndexRefreshResponse>(`/admin/cache/indexes/${id}/refresh`),
-  warmupCache: (data: { ecosystem: string; packages: string[] }) => api.post<WarmupJobResponse>('/admin/cache/warmup', data),
+  warmupCache: (data: { ecosystem: string; packages: string[] }) => api.post<WarmupStartResponse>('/admin/cache/warmup', data),
   getWarmup: (id: string, options: ApiGetOptions = {}) => api.get<WarmupJobResponse>(`/admin/cache/warmup/${id}`, options),
-  cancelWarmup: (id: string) => api.delete(`/admin/cache/warmup/${id}`),
-  retryWarmup: (id: string) => api.post<WarmupJobResponse>(`/admin/cache/warmup/${id}/retry`),
+  cancelWarmup: (id: string) => api.delete<WarmupCancelResponse>(`/admin/cache/warmup/${id}`),
+  retryWarmup: (id: string) => api.post<WarmupStartResponse>(`/admin/cache/warmup/${id}/retry`),
 
   getCacheTransfers: (options: ApiGetOptions = {}) => api.get<CacheTransfersResponse>('/admin/cache/transfers', options),
 
@@ -249,8 +258,8 @@ export const adminApi = {
   listAuditExporters: (options: ApiGetOptions = {}) => api.get<AuditExporterListResponse>(auditExportersPath, options),
   createAuditExporter: (body: AuditExporterRequest) => api.post<AuditExporter>(auditExportersPath, body),
   updateAuditExporter: (id: number, body: AuditExporterRequest) => api.put<AuditExporter>(`${auditExportersPath}/${id}`, body),
-  deleteAuditExporter: (id: number) => api.delete<{ deleted: number }>(`${auditExportersPath}/${id}`),
-  testAuditExporter: (id: number) => api.post<{ delivered: boolean }>(`${auditExportersPath}/${id}/test`),
+  deleteAuditExporter: (id: number) => api.delete<AuditExporterDeleteResponse>(`${auditExportersPath}/${id}`),
+  testAuditExporter: (id: number) => api.post<AuditExporterTestResponse>(`${auditExportersPath}/${id}/test`),
   getAuditIntegrity: (options: ApiGetOptions = {}) => api.get<AuditIntegrityResponse>('/admin/audit/integrity', options),
 
   // Package Rules (Pro)
@@ -307,8 +316,8 @@ export const adminApi = {
   listSnapshots: (options: ApiGetOptions = {}) => api.get<SnapshotListResponse>('/admin/snapshots', options),
   getSnapshot: (id: number, options: ApiGetOptions = {}) => api.get<SnapshotDetailResponse>(`/admin/snapshots/${id}`, options),
   createSnapshot: (body: { name: string; note?: string }) => api.post<Snapshot>('/admin/snapshots', body),
-  activateSnapshot: (snapshotId: number) => api.put<{ active_snapshot_id: number; active_snapshot: string }>('/admin/snapshots/active', { snapshot_id: snapshotId }),
-  deleteSnapshot: (id: number) => api.delete<{ deleted: number }>(`/admin/snapshots/${id}`),
+  activateSnapshot: (snapshotId: number) => api.put<SnapshotActivateResponse>('/admin/snapshots/active', { snapshot_id: snapshotId }),
+  deleteSnapshot: (id: number) => api.delete<SnapshotDeleteResponse>(`/admin/snapshots/${id}`),
   exportSnapshot: (id: number, options: ApiGetOptions = {}) => api.get<Blob>(`/admin/snapshots/${id}/export`, { ...options, responseType: 'blob' }),
   importSnapshot: (manifest: string, name?: string) => api.post<Snapshot>('/admin/snapshots/import', manifest, {
     params: name ? { name } : undefined,

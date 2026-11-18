@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 )
 
@@ -172,18 +173,11 @@ func (h *BandwidthHandler) GetReport(c *gin.Context) {
 			Group("date, hit").Order("date").Scan(&dailyRows)
 	}
 
-	type dailyPoint struct {
-		Date      string `json:"date"`
-		HitBytes  int64  `json:"hit_bytes"`
-		MissBytes int64  `json:"miss_bytes"`
-		HitCount  int64  `json:"hit_count"`
-		MissCount int64  `json:"miss_count"`
-	}
-	dailyMap := make(map[string]*dailyPoint)
+	dailyMap := make(map[string]*contract.BandwidthDaily)
 	var dailyOrder []string
 	for _, r := range dailyRows {
 		if dailyMap[r.Date] == nil {
-			dailyMap[r.Date] = &dailyPoint{Date: r.Date}
+			dailyMap[r.Date] = &contract.BandwidthDaily{Date: r.Date}
 			dailyOrder = append(dailyOrder, r.Date)
 		}
 		dp := dailyMap[r.Date]
@@ -195,7 +189,7 @@ func (h *BandwidthHandler) GetReport(c *gin.Context) {
 			dp.MissCount = r.Count
 		}
 	}
-	daily := make([]dailyPoint, 0, len(dailyOrder))
+	daily := make([]contract.BandwidthDaily, 0, len(dailyOrder))
 	for _, d := range dailyOrder {
 		daily = append(daily, *dailyMap[d])
 	}
@@ -221,19 +215,10 @@ func (h *BandwidthHandler) GetReport(c *gin.Context) {
 			Group("adapter_type, hit").Scan(&ecoRows)
 	}
 
-	type ecoPoint struct {
-		Ecosystem        string  `json:"ecosystem"`
-		HitBytes         int64   `json:"hit_bytes"`
-		MissBytes        int64   `json:"miss_bytes"`
-		HitCount         int64   `json:"hit_count"`
-		MissCount        int64   `json:"miss_count"`
-		AvgHitLatencyMs  float64 `json:"avg_hit_latency_ms"`
-		AvgMissLatencyMs float64 `json:"avg_miss_latency_ms"`
-	}
-	ecoPointMap := make(map[string]*ecoPoint)
+	ecoPointMap := make(map[string]*contract.BandwidthEcosystem)
 	for _, r := range ecoRows {
 		if ecoPointMap[r.AdapterType] == nil {
-			ecoPointMap[r.AdapterType] = &ecoPoint{Ecosystem: r.AdapterType}
+			ecoPointMap[r.AdapterType] = &contract.BandwidthEcosystem{Ecosystem: r.AdapterType}
 		}
 		ep := ecoPointMap[r.AdapterType]
 		if r.Hit {
@@ -246,42 +231,29 @@ func (h *BandwidthHandler) GetReport(c *gin.Context) {
 			ep.AvgMissLatencyMs = r.AvgLatency
 		}
 	}
-	byEcosystem := make([]ecoPoint, 0, len(ecoPointMap))
+	byEcosystem := make([]contract.BandwidthEcosystem, 0, len(ecoPointMap))
 	for _, ep := range ecoPointMap {
 		byEcosystem = append(byEcosystem, *ep)
 	}
 
 	// Top packages by total bytes
-	type pkgRow struct {
-		PackageName string `json:"package_name"`
-		Ecosystem   string `json:"ecosystem"`
-		TotalBytes  int64  `json:"total_bytes"`
-		HitBytes    int64  `json:"hit_bytes"`
-		Count       int64  `json:"request_count"`
-	}
-	var topPackages []pkgRow
+	var topPackages []contract.BandwidthPackage
 	if h.useRollup {
 		h.db.Table("access_log_package_daily").
-			Select("package_name, adapter_type AS ecosystem, COALESCE(SUM(total_bytes), 0) AS total_bytes, COALESCE(SUM(CASE WHEN hit = 1 THEN total_bytes ELSE 0 END), 0) AS hit_bytes, COALESCE(SUM(request_count), 0) AS count").
+			Select("package_name, adapter_type AS ecosystem, COALESCE(SUM(total_bytes), 0) AS total_bytes, COALESCE(SUM(CASE WHEN hit = 1 THEN total_bytes ELSE 0 END), 0) AS hit_bytes, COALESCE(SUM(request_count), 0) AS request_count").
 			Where("date >= ? AND date <= ? AND package_name != ''", startDateStr, endDateStr).
 			Group("package_name, adapter_type").
 			Order("total_bytes DESC").Limit(10).Scan(&topPackages)
 	} else {
 		h.db.Model(&db.AccessLog{}).
-			Select("package_name, adapter_type as ecosystem, SUM(bytes_sent) as total_bytes, SUM(CASE WHEN hit = 1 THEN bytes_sent ELSE 0 END) as hit_bytes, COUNT(*) as count").
+			Select("package_name, adapter_type as ecosystem, SUM(bytes_sent) as total_bytes, SUM(CASE WHEN hit = 1 THEN bytes_sent ELSE 0 END) as hit_bytes, COUNT(*) as request_count").
 			Where("datetime(created_at) >= datetime(?) AND datetime(created_at) <= datetime(?) AND package_name != ''", start, end).
 			Group("package_name, adapter_type").
 			Order("total_bytes DESC").Limit(10).Scan(&topPackages)
 	}
 
 	// By upstream (miss only)
-	type upstreamRow struct {
-		Upstream     string  `json:"upstream"`
-		MissBytes    int64   `json:"miss_bytes"`
-		RequestCount int64   `json:"request_count"`
-		AvgLatencyMs float64 `json:"avg_latency_ms"`
-	}
-	var byUpstream []upstreamRow
+	var byUpstream []contract.BandwidthUpstream
 	if h.useRollup {
 		h.db.Table("access_log_daily").
 			Select("upstream, COALESCE(SUM(total_bytes), 0) AS miss_bytes, COALESCE(SUM(request_count), 0) AS request_count, COALESCE(SUM(sum_latency_ms) * 1.0 / NULLIF(SUM(request_count), 0), 0) AS avg_latency_ms").
@@ -294,26 +266,23 @@ func (h *BandwidthHandler) GetReport(c *gin.Context) {
 			Group("upstream").Order("miss_bytes DESC").Scan(&byUpstream)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"range": gin.H{
-			"start": start.Format("2006-01-02"),
-			"end":   end.Format("2006-01-02"),
+	c.JSON(http.StatusOK, contract.BandwidthReportResponse{
+		Range: contract.BandwidthRange{Start: start.Format("2006-01-02"), End: end.Format("2006-01-02")},
+		Summary: contract.BandwidthSummary{
+			TotalBytes:     totalBytes,
+			HitBytes:       hitBytes,
+			MissBytes:      missBytes,
+			SavingsRate:    savingsRate,
+			TotalRequests:  totalRequests,
+			HitRequests:    hitRequests,
+			MissRequests:   missRequests,
+			TimeSavedMs:    timeSavedMs,
+			AvgHitLatency:  avgHitLatency,
+			AvgMissLatency: avgMissLatency,
 		},
-		"summary": gin.H{
-			"total_bytes":      totalBytes,
-			"hit_bytes":        hitBytes,
-			"miss_bytes":       missBytes,
-			"savings_rate":     savingsRate,
-			"total_requests":   totalRequests,
-			"hit_requests":     hitRequests,
-			"miss_requests":    missRequests,
-			"time_saved_ms":    timeSavedMs,
-			"avg_hit_latency":  avgHitLatency,
-			"avg_miss_latency": avgMissLatency,
-		},
-		"daily":        daily,
-		"by_ecosystem": byEcosystem,
-		"top_packages": topPackages,
-		"by_upstream":  byUpstream,
+		Daily:       daily,
+		ByEcosystem: byEcosystem,
+		TopPackages: topPackages,
+		ByUpstream:  byUpstream,
 	})
 }

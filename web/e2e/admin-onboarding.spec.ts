@@ -29,8 +29,9 @@ function response(overrides: Partial<OnboardingStatusResponse> = {}): Onboarding
 
 function upstream(id: number, ecosystem: string, name: string): AdminUpstream {
   return { id, adapter_type: ecosystem, name, url: 'https://packages.example.test', proxy: '', priority: 1,
-    probe_mode: 'active', probe_interval: '1m', healthy: false, avg_latency_ms: 0, success_rate: 0,
-    last_checked_at: null, worker_running: true, created_at: startedAt, updated_at: startedAt }
+    probe_mode: 'active', probe_interval: '1m', via: '', healthy: false, avg_latency_ms: 0, success_rate: 0,
+    last_checked_at: null, has_observations: false, runtime_sample_count: 0, worker_running: true,
+    proxy_source: '', last_failure: null, created_at: startedAt, updated_at: startedAt }
 }
 
 // Load the real SPA at a non-loopback HTTP address without DNS; API calls

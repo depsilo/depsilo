@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/upstreamupdates"
 )
 
@@ -75,24 +76,28 @@ func (h *UpstreamUpdateHandler) List(c *gin.Context) {
 		writeUpstreamUpdateInternalError(c)
 		return
 	}
-	if counts == nil {
-		counts = []upstreamupdates.EcosystemCount{}
-	}
 
 	var nextCursor *string
 	if page.NextCursor != "" {
 		nextCursor = &page.NextCursor
 	}
-	c.JSON(http.StatusOK, struct {
-		Items      []upstreamupdates.HistoryEvent   `json:"items"`
-		Total      int64                            `json:"total"`
-		NextCursor *string                          `json:"next_cursor"`
-		Ecosystems []upstreamupdates.EcosystemCount `json:"ecosystems"`
-	}{
-		Items:      page.Items,
+	// The facet is always a list, never null, even when nothing matches.
+	ecosystemCounts := make([]contract.EcosystemCount, len(counts))
+	for i, count := range counts {
+		ecosystemCounts[i] = contract.EcosystemCount{ID: count.ID, Count: count.Count}
+	}
+	c.JSON(http.StatusOK, contract.AdminUpstreamUpdateListResponse{
+		Items: cacheContractSlice(page.Items, func(event upstreamupdates.HistoryEvent) contract.AdminUpstreamUpdateEvent {
+			return contract.AdminUpstreamUpdateEvent{
+				ID: event.ID, CacheEntryID: event.CacheEntryID, Ecosystem: event.Ecosystem, Upstream: event.Upstream,
+				Package: event.Package, Result: contract.UpstreamUpdateResult(event.Result), Detail: event.Detail,
+				LatencyMs: event.LatencyMs, OccurrenceCount: event.OccurrenceCount, FirstSeenAt: event.FirstSeenAt,
+				LastSeenAt: event.LastSeenAt, CreatedAt: event.CreatedAt,
+			}
+		}),
 		Total:      page.Total,
 		NextCursor: nextCursor,
-		Ecosystems: counts,
+		Ecosystems: ecosystemCounts,
 	})
 }
 

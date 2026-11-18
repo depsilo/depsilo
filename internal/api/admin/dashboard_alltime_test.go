@@ -14,6 +14,7 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/accesslog"
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 )
 
@@ -153,7 +154,7 @@ func TestAllTimeBreakdownAndTrendsCoverTheSameHistory(t *testing.T) {
 	_, recent := seedAllTimeHistory(t, database, now)
 
 	body := getBreakdown(t, handler, "?range=all")
-	if body.Range.Key != "all" || body.TopPackagesGrain != breakdownGrainUTCDay {
+	if body.Range.Key != "all" || body.TopPackagesGrain != contract.DashboardBreakdownGrainUTCDay {
 		t.Fatalf("range = %+v, grain = %q", body.Range, body.TopPackagesGrain)
 	}
 	var requests int64
@@ -163,14 +164,14 @@ func TestAllTimeBreakdownAndTrendsCoverTheSameHistory(t *testing.T) {
 	if requests != 22 {
 		t.Fatalf("by_ecosystem = %+v, want 22 requests including the archive", body.ByEcosystem)
 	}
-	wantUpstreams := []breakdownUpstream{
+	wantUpstreams := []contract.DashboardBreakdownUpstream{
 		{Ecosystem: "pypi", Upstream: "tuna", UpstreamRequests: 4, UpstreamBytes: 420, MissRequests: 4, MissBytes: 400, AvgMissLatencyMs: 200},
 		{Ecosystem: "npm", Upstream: "npmmirror", UpstreamRequests: 2, UpstreamBytes: 190, MissRequests: 2, MissBytes: 200, AvgMissLatencyMs: 200},
 	}
 	if fmt.Sprint(body.ByUpstream) != fmt.Sprint(wantUpstreams) {
 		t.Fatalf("by_upstream = %+v, want %+v", body.ByUpstream, wantUpstreams)
 	}
-	wantPackages := []breakdownPackage{
+	wantPackages := []contract.DashboardBreakdownPackage{
 		{Ecosystem: "pypi", PackageName: "numpy", Requests: 10, TotalBytes: 1000, HitBytes: 1000},
 		{Ecosystem: "npm", PackageName: "react", Requests: 8, TotalBytes: 800, HitBytes: 600},
 		{Ecosystem: "pypi", PackageName: "torch", Requests: 4, TotalBytes: 400},
@@ -224,7 +225,7 @@ func TestAllTimeWithoutRollupsCoversTheRetainedRawLog(t *testing.T) {
 		t.Fatalf("range start = %q, want %s (blocked rows do not extend coverage)", body.Range.Start, first.Format(time.RFC3339))
 	}
 	breakdown := getBreakdown(t, handler, "?range=all")
-	if breakdown.TopPackagesGrain != breakdownGrainExact || len(breakdown.TopPackages) != 1 || breakdown.TopPackages[0].Requests != 2 {
+	if breakdown.TopPackagesGrain != contract.DashboardBreakdownGrainExact || len(breakdown.TopPackages) != 1 || breakdown.TopPackages[0].Requests != 2 {
 		t.Fatalf("raw all-time breakdown = %+v", breakdown)
 	}
 	router := gin.New()

@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 )
 
@@ -64,7 +65,7 @@ func TestNowSuccessfulEmptyQueryRemainsMeasuredZero(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("empty database returned %d: %s", response.Code, response.Body.String())
 	}
-	var body nowResponse
+	var body contract.NowResponse
 	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}

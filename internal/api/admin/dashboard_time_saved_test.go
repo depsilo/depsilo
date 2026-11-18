@@ -15,7 +15,7 @@ func TestWindowPayloadEstimatesTimeSavedFromPeriodAverages(t *testing.T) {
 		SumHitLatency:  8 * 20,
 		SumMissLatency: 2 * 220,
 	})
-	if got := payload["time_saved_ms"]; got != int64(1600) {
+	if got := payload.TimeSavedMs; got != 1600 {
 		t.Fatalf("time_saved_ms = %v, want 1600", got)
 	}
 }
@@ -45,7 +45,7 @@ func TestWindowPayloadWithholdsTimeSavedWithoutComparableSamples(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			payload := windowPayload(tc.in)
-			if got := payload["time_saved_ms"]; got != int64(0) {
+			if got := payload.TimeSavedMs; got != 0 {
 				// Zero is the period's own "no comparable pair" value; the
 				// client gates on hit_requests/miss_requests before showing it.
 				t.Fatalf("time_saved_ms = %v, want 0", got)

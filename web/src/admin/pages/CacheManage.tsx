@@ -115,6 +115,8 @@ export default function CacheManage() {
   const cleanupMutation = useMutation({
     mutationFn: async () => {
       const planId = cleanupPreviewQuery.data?.data.plan_id
+      // The confirm button is disabled without a plan; never fall back to a broad reclaim.
+      if (!planId) throw new Error('cleanup preview has no plan')
       return (await adminApi.cleanupCache(planId)).data
     },
     onSuccess: (result) => {

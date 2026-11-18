@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/accesslog"
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 )
 
@@ -173,7 +174,7 @@ func (h *DashboardHandler) retainedTrendStart(ctx context.Context) (time.Time, b
 	return day.UTC(), true, nil
 }
 
-func (h *DashboardHandler) trendsAllTime(ctx context.Context, now time.Time) ([]trendPoint, error) {
+func (h *DashboardHandler) trendsAllTime(ctx context.Context, now time.Time) ([]contract.DashboardTrendPoint, error) {
 	start, ok, err := h.retainedTrendStart(ctx)
 	if err != nil {
 		return nil, err
@@ -202,8 +203,8 @@ func (h *DashboardHandler) breakdownRowsArchive(ctx context.Context) ([]breakdow
 
 // breakdownPackagesAllTime ranks packages over the archive and every retained
 // package day together.
-func (h *DashboardHandler) breakdownPackagesAllTime(ctx context.Context) ([]breakdownPackage, error) {
-	packages := make([]breakdownPackage, 0, breakdownPackageLimit)
+func (h *DashboardHandler) breakdownPackagesAllTime(ctx context.Context) ([]contract.DashboardBreakdownPackage, error) {
+	packages := make([]contract.DashboardBreakdownPackage, 0, breakdownPackageLimit)
 	err := h.db.WithContext(ctx).Raw(`
 SELECT adapter_type AS ecosystem, package_name,
        COALESCE(SUM(request_count), 0) AS requests,

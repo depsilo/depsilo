@@ -22,6 +22,8 @@ function recentLog(id: number): AccessLog {
     status_code: 200,
     client_ip: '192.168.1.100',
     bytes_sent: 2_097_152,
+    upstream_requests: 0,
+    upstream_bytes: 0,
     created_at: new Date(Date.now() - id * 60_000).toISOString(),
   }
 }

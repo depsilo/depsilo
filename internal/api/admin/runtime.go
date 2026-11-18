@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 	"depsilo/internal/sysmetrics"
 )
@@ -71,39 +72,54 @@ func (h *RuntimeHandler) Get(c *gin.Context) {
 		sample = h.sampler.Snapshot()
 	}
 
-	cache := gin.H{
-		"storage_type":   h.storageType,
-		"storage_path":   h.storagePath,
-		"logical_bytes":  int64(0),
-		"entries":        nil,
-		"packages":       nil,
-		"quota_bytes":    nil,
-		"physical_bytes": nil,
-		"physical_known": false,
+	cache := contract.RuntimeCacheStorage{
+		StorageType: h.storageType,
+		StoragePath: h.storagePath,
 	}
 	if inventory, ok := h.cacheInventory(); ok {
-		cache["logical_bytes"] = inventory.LogicalBytes
-		cache["entries"] = inventory.Entries
-		cache["packages"] = inventory.Packages
+		cache.LogicalBytes = inventory.LogicalBytes
+		cache.Entries = &inventory.Entries
+		cache.Packages = &inventory.Packages
 	}
 	if h.maxSizeGB > 0 {
-		cache["quota_bytes"] = int64(h.maxSizeGB) * 1024 * 1024 * 1024
+		quota := int64(h.maxSizeGB) * 1024 * 1024 * 1024
+		cache.QuotaBytes = &quota
 	}
 
 	heapAlloc, runtimeSys := sysmetrics.GoRuntimeMemory()
 
-	c.JSON(http.StatusOK, gin.H{
-		"sampled_at":       sample.SampledAt,
-		"interval_seconds": sample.IntervalSeconds,
-		"process":          sample.Process,
-		"go_runtime": gin.H{
-			"heap_alloc_bytes": heapAlloc,
-			"sys_bytes":        runtimeSys,
+	c.JSON(http.StatusOK, contract.RuntimeResponse{
+		SampledAt:       sample.SampledAt,
+		IntervalSeconds: sample.IntervalSeconds,
+		Process:         runtimeProcess(sample.Process),
+		GoRuntime:       contract.RuntimeGoMemory{HeapAllocBytes: heapAlloc, SysBytes: runtimeSys},
+		Cache:           cache,
+		Disk: contract.RuntimeDisk{
+			RuntimeCapability: runtimeCapability(sample.Disk.Capability),
+			Path:              sample.Disk.Path,
+			TotalBytes:        sample.Disk.TotalBytes,
+			FreeBytes:         sample.Disk.FreeBytes,
 		},
-		"cache": cache,
-		"disk":  sample.Disk,
-		"host":  gin.H{"hostname": sysmetrics.Hostname()},
+		Host: contract.RuntimeHost{Hostname: sysmetrics.Hostname()},
 	})
+}
+
+func runtimeCapability(capability sysmetrics.Capability) contract.RuntimeCapability {
+	return contract.RuntimeCapability{Supported: capability.Supported, Reason: capability.Reason}
+}
+
+func runtimeProcess(process sysmetrics.Process) contract.RuntimeProcess {
+	return contract.RuntimeProcess{
+		CPU:              runtimeCapability(process.CPU),
+		CPUPercent:       process.CPUPercent,
+		CPUCores:         process.CPUCores,
+		Memory:           runtimeCapability(process.Memory),
+		RSSBytes:         process.RSSBytes,
+		RSSBasis:         contract.RuntimeRSSBasis(process.RSSBasis),
+		MemoryBasis:      process.MemoryBasis,
+		MemoryUsedBytes:  process.MemoryUsedBytes,
+		MemoryLimitBytes: process.MemoryLimitBytes,
+	}
 }
 
 // cacheInventory returns a memoized inventory. The aggregate is one indexed

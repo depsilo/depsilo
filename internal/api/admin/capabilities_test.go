@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
 	"depsilo/internal/quarantine"
@@ -48,7 +49,7 @@ func TestCapabilitySummaryKeepsSupportModeAndDataIndependent(t *testing.T) {
 	if got.Version == "" {
 		t.Fatal("version missing")
 	}
-	var pypiVuln, dockerBlock capabilityFact
+	var pypiVuln, dockerBlock contract.CapabilityFact
 	for _, fact := range got.Capabilities {
 		if fact.Name == "vulnerability_scanning" && fact.Ecosystem == "pypi" {
 			pypiVuln = fact
@@ -113,7 +114,7 @@ func TestCapabilitySummaryReportsSourceBoundMinimumReleaseAge(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	facts := map[string]capabilityFact{}
+	facts := map[string]contract.CapabilityFact{}
 	for _, fact := range got.Capabilities {
 		if fact.Name == "minimum_release_age" {
 			facts[fact.Ecosystem] = fact

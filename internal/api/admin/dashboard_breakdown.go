@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 )
 
@@ -17,49 +18,11 @@ const (
 	breakdownPackageLimit  = 10
 )
 
-// Package ranking granularity. The package rollup is day-grained, so a coarse
+// Package ranking granularity: the package rollup is day-grained, so a coarse
 // range ranks whole UTC days and can include requests from before the range
-// start on its first day. The response names the granularity so a client
-// never presents that ranking as an exact window.
-const (
-	breakdownGrainExact  = "exact"
-	breakdownGrainUTCDay = "utc_day"
-)
-
-type breakdownEcosystem struct {
-	Ecosystem        string  `json:"ecosystem"`
-	HitRequests      int64   `json:"hit_requests"`
-	MissRequests     int64   `json:"miss_requests"`
-	HitBytes         int64   `json:"hit_bytes"`
-	MissBytes        int64   `json:"miss_bytes"`
-	AvgHitLatencyMs  float64 `json:"avg_hit_latency_ms"`
-	AvgMissLatencyMs float64 `json:"avg_miss_latency_ms"`
-}
-
-// breakdownUpstream is one Upstream's part in the period. UpstreamRequests
-// and UpstreamBytes are the measured Depsilo→upstream exchanges, the same
-// quantity as the period block's origin traffic; coalesced or aborted client
-// downloads make them differ from what clients received. The miss fields
-// describe the client requests answered through this Upstream. Upstream names
-// are unique only within an ecosystem, so the ecosystem is part of the key.
-type breakdownUpstream struct {
-	Ecosystem        string  `json:"ecosystem"`
-	Upstream         string  `json:"upstream"`
-	UpstreamRequests int64   `json:"upstream_requests"`
-	UpstreamBytes    int64   `json:"upstream_bytes"`
-	MissRequests     int64   `json:"miss_requests"`
-	MissBytes        int64   `json:"miss_bytes"`
-	AvgMissLatencyMs float64 `json:"avg_miss_latency_ms"`
-}
-
-type breakdownPackage struct {
-	Ecosystem   string `json:"ecosystem"`
-	PackageName string `json:"package_name"`
-	Requests    int64  `json:"requests"`
-	TotalBytes  int64  `json:"total_bytes"`
-	HitBytes    int64  `json:"hit_bytes"`
-}
-
+// start on its first day. The response names the granularity
+// (contract.DashboardBreakdownGrain) so a client never presents that ranking
+// as an exact window.
 // breakdownRow is one (ecosystem, hit, upstream) cell of the selected period.
 // Both sources group on the same dimensions, so one fold serves either.
 type breakdownRow struct {
@@ -87,7 +50,7 @@ func (h *DashboardHandler) GetBreakdown(c *gin.Context) {
 
 	var (
 		rows     []breakdownRow
-		packages []breakdownPackage
+		packages []contract.DashboardBreakdownPackage
 		err      error
 	)
 	allTime := spec.key == allTimeKey
@@ -121,13 +84,13 @@ func (h *DashboardHandler) GetBreakdown(c *gin.Context) {
 		dashboardDatabaseError(c, err)
 		return
 	}
-	grain := breakdownGrainExact
+	grain := contract.DashboardBreakdownGrainExact
 	switch {
 	case allTime && useRollup:
-		grain = breakdownGrainUTCDay
+		grain = contract.DashboardBreakdownGrainUTCDay
 		packages, err = h.breakdownPackagesAllTime(ctx)
 	case useRollup:
-		grain = breakdownGrainUTCDay
+		grain = contract.DashboardBreakdownGrainUTCDay
 		packages, err = h.breakdownPackagesDaily(ctx, from, now)
 	case allTime:
 		packages, err = h.breakdownPackagesRaw(ctx, time.Unix(0, 0).UTC(), now)
@@ -140,16 +103,16 @@ func (h *DashboardHandler) GetBreakdown(c *gin.Context) {
 	}
 
 	byEcosystem, byUpstream := foldBreakdownRows(rows)
-	c.JSON(http.StatusOK, gin.H{
-		"range": gin.H{
-			"key":   spec.key,
-			"start": from.Format(time.RFC3339),
-			"end":   now.Format(time.RFC3339),
+	c.JSON(http.StatusOK, contract.DashboardBreakdownResponse{
+		Range: contract.DashboardRangeSpan{
+			Key:   contract.DashboardRange(spec.key),
+			Start: from.Format(time.RFC3339),
+			End:   now.Format(time.RFC3339),
 		},
-		"by_ecosystem":       byEcosystem,
-		"by_upstream":        byUpstream,
-		"top_packages":       packages,
-		"top_packages_grain": grain,
+		ByEcosystem:      byEcosystem,
+		ByUpstream:       byUpstream,
+		TopPackages:      packages,
+		TopPackagesGrain: grain,
 	})
 }
 
@@ -194,8 +157,8 @@ func (h *DashboardHandler) breakdownRowsHourly(ctx context.Context, from, to tim
 
 const breakdownPackageOrder = "total_bytes DESC, requests DESC, ecosystem ASC, package_name ASC"
 
-func (h *DashboardHandler) breakdownPackagesRaw(ctx context.Context, from, to time.Time) ([]breakdownPackage, error) {
-	packages := make([]breakdownPackage, 0, breakdownPackageLimit)
+func (h *DashboardHandler) breakdownPackagesRaw(ctx context.Context, from, to time.Time) ([]contract.DashboardBreakdownPackage, error) {
+	packages := make([]contract.DashboardBreakdownPackage, 0, breakdownPackageLimit)
 	err := h.db.WithContext(ctx).Model(&db.AccessLog{}).
 		Select(`adapter_type AS ecosystem, package_name,
 			COUNT(*) AS requests,
@@ -209,8 +172,8 @@ func (h *DashboardHandler) breakdownPackagesRaw(ctx context.Context, from, to ti
 	return packages, err
 }
 
-func (h *DashboardHandler) breakdownPackagesDaily(ctx context.Context, from, to time.Time) ([]breakdownPackage, error) {
-	packages := make([]breakdownPackage, 0, breakdownPackageLimit)
+func (h *DashboardHandler) breakdownPackagesDaily(ctx context.Context, from, to time.Time) ([]contract.DashboardBreakdownPackage, error) {
+	packages := make([]contract.DashboardBreakdownPackage, 0, breakdownPackageLimit)
 	err := h.db.WithContext(ctx).Table("access_log_package_daily").
 		Select(`adapter_type AS ecosystem, package_name,
 			COALESCE(SUM(request_count), 0) AS requests,
@@ -227,15 +190,15 @@ func (h *DashboardHandler) breakdownPackagesDaily(ctx context.Context, from, to 
 
 // foldBreakdownRows turns (ecosystem, hit, upstream) cells into the two
 // lists. Averages are sums over counts, never averages of averages.
-func foldBreakdownRows(rows []breakdownRow) ([]breakdownEcosystem, []breakdownUpstream) {
+func foldBreakdownRows(rows []breakdownRow) ([]contract.DashboardBreakdownEcosystem, []contract.DashboardBreakdownUpstream) {
 	type ecosystemSums struct {
-		breakdownEcosystem
+		contract.DashboardBreakdownEcosystem
 		sumHitLatency  int64
 		sumMissLatency int64
 	}
 	type upstreamKey struct{ ecosystem, upstream string }
 	type upstreamSums struct {
-		breakdownUpstream
+		contract.DashboardBreakdownUpstream
 		sumLatency int64
 	}
 
@@ -244,7 +207,7 @@ func foldBreakdownRows(rows []breakdownRow) ([]breakdownEcosystem, []breakdownUp
 	for _, row := range rows {
 		eco := ecosystems[row.AdapterType]
 		if eco == nil {
-			eco = &ecosystemSums{breakdownEcosystem: breakdownEcosystem{Ecosystem: row.AdapterType}}
+			eco = &ecosystemSums{DashboardBreakdownEcosystem: contract.DashboardBreakdownEcosystem{Ecosystem: row.AdapterType}}
 			ecosystems[row.AdapterType] = eco
 		}
 		if row.Hit {
@@ -264,7 +227,7 @@ func foldBreakdownRows(rows []breakdownRow) ([]breakdownEcosystem, []breakdownUp
 		key := upstreamKey{row.AdapterType, row.Upstream}
 		up := upstreams[key]
 		if up == nil {
-			up = &upstreamSums{breakdownUpstream: breakdownUpstream{Ecosystem: row.AdapterType, Upstream: row.Upstream}}
+			up = &upstreamSums{DashboardBreakdownUpstream: contract.DashboardBreakdownUpstream{Ecosystem: row.AdapterType, Upstream: row.Upstream}}
 			upstreams[key] = up
 		}
 		// A hit can still reach its Upstream (a revalidation), so measured
@@ -278,7 +241,7 @@ func foldBreakdownRows(rows []breakdownRow) ([]breakdownEcosystem, []breakdownUp
 		}
 	}
 
-	byEcosystem := make([]breakdownEcosystem, 0, len(ecosystems))
+	byEcosystem := make([]contract.DashboardBreakdownEcosystem, 0, len(ecosystems))
 	for _, eco := range ecosystems {
 		if eco.HitRequests > 0 {
 			eco.AvgHitLatencyMs = float64(eco.sumHitLatency) / float64(eco.HitRequests)
@@ -286,7 +249,7 @@ func foldBreakdownRows(rows []breakdownRow) ([]breakdownEcosystem, []breakdownUp
 		if eco.MissRequests > 0 {
 			eco.AvgMissLatencyMs = float64(eco.sumMissLatency) / float64(eco.MissRequests)
 		}
-		byEcosystem = append(byEcosystem, eco.breakdownEcosystem)
+		byEcosystem = append(byEcosystem, eco.DashboardBreakdownEcosystem)
 	}
 	sort.Slice(byEcosystem, func(i, j int) bool {
 		left := byEcosystem[i].HitBytes + byEcosystem[i].MissBytes
@@ -297,7 +260,7 @@ func foldBreakdownRows(rows []breakdownRow) ([]breakdownEcosystem, []breakdownUp
 		return byEcosystem[i].Ecosystem < byEcosystem[j].Ecosystem
 	})
 
-	byUpstream := make([]breakdownUpstream, 0, len(upstreams))
+	byUpstream := make([]contract.DashboardBreakdownUpstream, 0, len(upstreams))
 	for _, up := range upstreams {
 		if up.MissRequests > 0 {
 			up.AvgMissLatencyMs = float64(up.sumLatency) / float64(up.MissRequests)
@@ -305,7 +268,7 @@ func foldBreakdownRows(rows []breakdownRow) ([]breakdownEcosystem, []breakdownUp
 		if up.UpstreamRequests == 0 && up.MissRequests == 0 {
 			continue
 		}
-		byUpstream = append(byUpstream, up.breakdownUpstream)
+		byUpstream = append(byUpstream, up.DashboardBreakdownUpstream)
 	}
 	sort.Slice(byUpstream, func(i, j int) bool {
 		if byUpstream[i].UpstreamBytes != byUpstream[j].UpstreamBytes {

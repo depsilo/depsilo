@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 	"depsilo/internal/middleware"
 	"depsilo/internal/upstream"
@@ -80,7 +81,7 @@ func TestUpstreamListMasksCredentialsForReadonlyPrincipal(t *testing.T) {
 		t.Fatalf("registry: %v", err)
 	}
 	h := NewUpstreamHandler(registry)
-	request := func(canWrite bool) adminUpstreamResponse {
+	request := func(canWrite bool) contract.AdminUpstream {
 		r := principalTestRouter(canWrite)
 		r.GET("/upstreams", h.List)
 		rec := httptest.NewRecorder()
@@ -88,7 +89,7 @@ func TestUpstreamListMasksCredentialsForReadonlyPrincipal(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 		}
-		var response upstreamListResponse
+		var response contract.AdminUpstreamListResponse
 		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil || len(response.Items) != 1 {
 			t.Fatalf("decode: err=%v body=%s", err, rec.Body.String())
 		}

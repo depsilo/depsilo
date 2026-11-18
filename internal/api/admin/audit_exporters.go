@@ -6,11 +6,11 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/audit"
 	"depsilo/internal/db"
 )
@@ -26,24 +26,6 @@ func NewAuditExporterHandler(database *gorm.DB, forwarder *audit.Forwarder) *Aud
 	return &AuditExporterHandler{db: database, forwarder: forwarder}
 }
 
-type auditExporterResponse struct {
-	ID             uint       `json:"id"`
-	Name           string     `json:"name"`
-	Kind           string     `json:"kind"`
-	URL            string     `json:"url"`
-	TokenSet       bool       `json:"token_set"`
-	Events         string     `json:"events"`
-	Enabled        bool       `json:"enabled"`
-	Cursor         uint       `json:"cursor"`
-	Lag            int64      `json:"lag"`
-	DeliveredCount int64      `json:"delivered_count"`
-	LastError      string     `json:"last_error"`
-	LastAttemptAt  *time.Time `json:"last_attempt_at"`
-	LastSuccessAt  *time.Time `json:"last_success_at"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-}
-
 func (h *AuditExporterHandler) List(c *gin.Context) {
 	var exporters []db.AuditExporter
 	if err := h.db.Order("created_at DESC").Find(&exporters).Error; err != nil {
@@ -56,11 +38,11 @@ func (h *AuditExporterHandler) List(c *gin.Context) {
 		return
 	}
 	maskCredentials := !principalCanViewCredentials(c)
-	items := make([]auditExporterResponse, 0, len(exporters))
+	items := make([]contract.AuditExporter, 0, len(exporters))
 	for _, exporter := range exporters {
 		items = append(items, toAuditExporterResponse(exporter, head, maskCredentials))
 	}
-	c.JSON(http.StatusOK, gin.H{"items": items, "audit_head": head})
+	c.JSON(http.StatusOK, contract.AuditExporterListResponse{AuditHead: head, Items: items})
 }
 
 type auditExporterRequest struct {
@@ -176,7 +158,7 @@ func (h *AuditExporterHandler) Delete(c *gin.Context) {
 	audit.RecordManagementEvent(c.Request.Context(), h.db, audit.ManagementEvent{
 		Action: "exporter_delete", Target: strconv.FormatUint(id, 10), Success: true, ClientIP: c.ClientIP(),
 	})
-	c.JSON(http.StatusOK, gin.H{"deleted": id})
+	c.JSON(http.StatusOK, contract.AuditExporterDeleteResponse{Deleted: id})
 }
 
 func (h *AuditExporterHandler) Test(c *gin.Context) {
@@ -198,10 +180,10 @@ func (h *AuditExporterHandler) Test(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"code": "DELIVERY_FAILED", "message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"delivered": true})
+	c.JSON(http.StatusOK, contract.AuditExporterTestResponse{Delivered: true})
 }
 
-func toAuditExporterResponse(exporter db.AuditExporter, head uint, maskCredentials bool) auditExporterResponse {
+func toAuditExporterResponse(exporter db.AuditExporter, head uint, maskCredentials bool) contract.AuditExporter {
 	urlValue := exporter.URL
 	if maskCredentials {
 		urlValue = maskCredentialURL(urlValue)
@@ -210,8 +192,8 @@ func toAuditExporterResponse(exporter db.AuditExporter, head uint, maskCredentia
 	if head > exporter.Cursor {
 		lag = int64(head - exporter.Cursor)
 	}
-	return auditExporterResponse{
-		ID: exporter.ID, Name: exporter.Name, Kind: exporter.Kind, URL: urlValue,
+	return contract.AuditExporter{
+		ID: exporter.ID, Name: exporter.Name, Kind: contract.AuditExporterKind(exporter.Kind), URL: urlValue,
 		TokenSet: exporter.Token != "", Events: exporter.Events, Enabled: exporter.Enabled,
 		Cursor: exporter.Cursor, Lag: lag, DeliveredCount: exporter.DeliveredCount,
 		LastError: exporter.LastError, LastAttemptAt: exporter.LastAttemptAt,

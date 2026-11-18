@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/config"
 	"depsilo/internal/upstream"
 )
@@ -43,7 +44,7 @@ func (h *CascadeConfigHandler) Get(c *gin.Context) {
 		writeSettingsError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, state)
+	c.JSON(http.StatusOK, toCascadeConfigState(state))
 }
 
 type cascadePeerRequest struct {
@@ -60,12 +61,6 @@ type cascadeConfigRequest struct {
 	AllowInsecureHTTP *bool                 `json:"allow_insecure_http"`
 	SharedToken       *string               `json:"shared_token"`
 	Peers             *[]cascadePeerRequest `json:"peers"`
-}
-
-type cascadeConfigUpdateResponse struct {
-	State           config.CascadeConfigState `json:"state"`
-	Changed         []string                  `json:"changed"`
-	RestartRequired bool                      `json:"restart_required"`
 }
 
 func (h *CascadeConfigHandler) Update(c *gin.Context) {
@@ -89,11 +84,25 @@ func (h *CascadeConfigHandler) Update(c *gin.Context) {
 		writeSettingsError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, cascadeConfigUpdateResponse{
-		State:           result.State,
+	c.JSON(http.StatusOK, contract.AdminCascadeConfigUpdateResponse{
+		State:           toCascadeConfigState(result.State),
 		Changed:         result.Changed,
 		RestartRequired: result.State.PendingRestart,
 	})
+}
+
+func toCascadeConfigState(state config.CascadeConfigState) contract.AdminCascadeConfigState {
+	peers := make([]contract.AdminCascadeConfigPeer, len(state.Peers))
+	for index, peer := range state.Peers {
+		peers[index] = contract.AdminCascadeConfigPeer{
+			Name: peer.Name, URL: peer.URL, TokenSet: peer.TokenSet, ForwardCredentials: peer.ForwardCredentials,
+		}
+	}
+	return contract.AdminCascadeConfigState{
+		Enabled: state.Enabled, MaxHops: state.MaxHops, MaxTTL: state.MaxTTL,
+		AllowInsecureHTTP: state.AllowInsecureHTTP, TokenSet: state.TokenSet, Peers: peers,
+		ConfigWritable: state.ConfigWritable, PendingRestart: state.PendingRestart,
+	}
 }
 
 func (request cascadeConfigRequest) toPatch() config.CascadeConfigPatch {

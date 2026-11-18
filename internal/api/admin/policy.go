@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/rules"
 	"github.com/gin-gonic/gin"
 )
@@ -60,9 +61,10 @@ func (h *PolicyHandler) Status(c *gin.Context) {
 			age = 0
 		}
 	}
-	var last any
+	var last *string
 	if !loadedAt.IsZero() {
-		last = loadedAt.UTC().Format(time.RFC3339Nano)
+		formatted := loadedAt.UTC().Format(time.RFC3339Nano)
+		last = &formatted
 	}
 	mode := status.OnLoadError
 	if mode == "" {
@@ -70,13 +72,13 @@ func (h *PolicyHandler) Status(c *gin.Context) {
 	}
 
 	c.Header("Cache-Control", "no-store")
-	c.JSON(http.StatusOK, gin.H{
-		"status":               state,
-		"degraded":             status.Degraded,
-		"using_stale_snapshot": status.UsingStaleSnapshot,
-		"snapshot_loaded_at":   last,
-		"snapshot_age_seconds": age,
-		"refresh_failures":     status.RefreshFailures,
-		"on_load_error":        mode,
+	c.JSON(http.StatusOK, contract.PolicyStatus{
+		Status:             contract.PolicyStatusKind(state),
+		Degraded:           status.Degraded,
+		UsingStaleSnapshot: status.UsingStaleSnapshot,
+		SnapshotLoadedAt:   last,
+		SnapshotAgeSeconds: age,
+		RefreshFailures:    status.RefreshFailures,
+		OnLoadError:        string(mode),
 	})
 }

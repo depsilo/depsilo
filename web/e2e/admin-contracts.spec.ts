@@ -145,8 +145,9 @@ const settingsUpdate = {
 
 const upstream = {
   id: 7, adapter_type: 'pypi', name: 'primary', url: 'https://pypi.example/simple', proxy: '',
-  priority: 1, probe_mode: 'active', probe_interval: '30m', healthy: true, avg_latency_ms: 18,
-  success_rate: 0.99, last_checked_at: '2026-07-10T00:00:00Z', worker_running: true,
+  priority: 1, probe_mode: 'active', probe_interval: '30m', via: '', healthy: true, avg_latency_ms: 18,
+  success_rate: 0.99, last_checked_at: '2026-07-10T00:00:00Z', has_observations: true, runtime_sample_count: 4,
+  worker_running: true, proxy_source: '', last_failure: null,
   created_at: '2026-07-10T00:00:00Z', updated_at: '2026-07-10T00:00:00Z',
 } satisfies AdminUpstream
 const upstreamList = { items: [upstream], total: 1 } satisfies AdminUpstreamListResponse
@@ -174,11 +175,11 @@ const policy = {
 
 const logs = {
   items: [{
-    id: 21, adapter_type: 'pypi', method: 'GET', cache_key: 'pypi/requests', package_name: 'requests', hit: true,
-    upstream: 'primary', latency_ms: 12, status_code: 200, client_ip: '127.0.0.1', bytes_sent: 1024,
-    created_at: '2026-07-10T00:00:00Z',
+    id: 21, adapter_type: 'pypi', method: 'GET', cache_key: 'pypi/requests', package_name: 'requests', version: '',
+    hit: true, cache_result: 'hit', upstream: 'primary', latency_ms: 12, status_code: 200, client_ip: '127.0.0.1',
+    bytes_sent: 1024, upstream_requests: 0, upstream_bytes: 0, created_at: '2026-07-10T00:00:00Z',
   }],
-  total: 1, page: 2, page_size: 50,
+  total: 1, page: 2, page_size: 50, ecosystems: [{ id: 'pypi', count: 1 }],
 } satisfies AccessLogListResponse
 const logQuery = { page: 2, page_size: 50, search: 'requests', adapter_type: 'pypi', hit: true } satisfies AccessLogQuery
 const expectedLogQuery = { adapter_type: 'pypi', hit: 'true', page: '2', page_size: '50', search: 'requests' }
@@ -190,7 +191,7 @@ const audit = {
     client_ip: '127.0.0.1', user_agent: 'fixture-agent', upstream_url: 'https://pypi.example/simple',
     latency_ms: 12, bytes_sent: 1024, status_code: 200, created_at: '2026-07-10T00:00:00Z',
   }],
-  total: 1, page: 3,
+  total: 1, page: 3, ecosystems: [{ id: 'pypi', count: 1 }],
 } satisfies AuditLogListResponse
 
 const projects = {

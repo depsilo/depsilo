@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 )
 
@@ -18,17 +19,6 @@ type LatencyHandler struct {
 }
 
 const maxLatencyHistoryPoints = 44
-
-type latencyPoint struct {
-	Time      time.Time `json:"time"`
-	LatencyMs int64     `json:"latency_ms"`
-	Healthy   bool      `json:"healthy"`
-}
-
-type upstreamLatencySeries struct {
-	UpstreamID uint           `json:"upstream_id"`
-	Points     []latencyPoint `json:"points"`
-}
 
 const latencySeriesQuery = `
 	WITH ranked AS (
@@ -91,7 +81,7 @@ func (h *LatencyHandler) GetLatencyHistory(c *gin.Context) {
 		return
 	}
 
-	points := make([]latencyPoint, 0)
+	points := make([]contract.AdminUpstreamLatencyPoint, 0)
 	result := h.db.Model(&db.UpstreamLatencyLog{}).
 		Select("created_at as time, latency_ms, healthy").
 		Where("upstream_id = ? AND created_at >= ?", upstream.ID, since).
@@ -102,10 +92,7 @@ func (h *LatencyHandler) GetLatencyHistory(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": "failed to load latency history"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"upstream_name": upstream.Name,
-		"points":        points,
-	})
+	c.JSON(http.StatusOK, contract.AdminUpstreamLatencyHistory{UpstreamName: upstream.Name, Points: points})
 }
 
 // GetLatencySeries returns the recent history for every upstream in one
@@ -133,21 +120,21 @@ func (h *LatencyHandler) GetLatencySeries(c *gin.Context) {
 		return
 	}
 
-	series := make([]upstreamLatencySeries, 0)
+	series := make([]contract.AdminUpstreamLatencySeries, 0)
 	for _, row := range rows {
 		if len(series) == 0 || series[len(series)-1].UpstreamID != row.UpstreamID {
-			series = append(series, upstreamLatencySeries{
+			series = append(series, contract.AdminUpstreamLatencySeries{
 				UpstreamID: row.UpstreamID,
-				Points:     make([]latencyPoint, 0, maxLatencyHistoryPoints),
+				Points:     make([]contract.AdminUpstreamLatencyPoint, 0, maxLatencyHistoryPoints),
 			})
 		}
 		current := &series[len(series)-1]
-		current.Points = append(current.Points, latencyPoint{
+		current.Points = append(current.Points, contract.AdminUpstreamLatencyPoint{
 			Time:      row.Time,
 			LatencyMs: row.LatencyMs,
 			Healthy:   row.Healthy,
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"series": series})
+	c.JSON(http.StatusOK, contract.AdminUpstreamLatenciesResponse{Series: series})
 }

@@ -20,6 +20,7 @@ import (
 
 	npmadapter "depsilo/internal/adapter/npm"
 	pypiadapter "depsilo/internal/adapter/pypi"
+	"depsilo/internal/api/contract"
 	"depsilo/internal/asyncruntime"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
@@ -331,7 +332,9 @@ func (h *WarmupHandler) startWarmup(c *gin.Context, ecosystem string, packages [
 		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "SERVER_SHUTTING_DOWN", "message": "cache warmup is unavailable"})
 		return
 	}
-	c.JSON(http.StatusAccepted, gin.H{"message": "warmup started", "packages": len(packages), "job_id": job.ID, "status": "queued"})
+	c.JSON(http.StatusAccepted, contract.WarmupStartResponse{
+		Message: "warmup started", Packages: len(packages), JobID: job.ID, Status: contract.WarmupJobStatusQueued,
+	})
 }
 
 // Caller holds jobsMu, or is constructing an unpublished handler.
@@ -373,7 +376,13 @@ func (h *WarmupHandler) Status(c *gin.Context) {
 	if job == nil {
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"job_id": job.ID, "ecosystem": job.Ecosystem, "status": job.Status, "created_at": job.CreatedAt, "updated_at": job.UpdatedAt, "packages": len(job.Items), "items": job.Items})
+	c.JSON(http.StatusOK, contract.WarmupJobResponse{
+		JobID: job.ID, Ecosystem: job.Ecosystem, Status: contract.WarmupJobStatus(job.Status),
+		CreatedAt: job.CreatedAt, UpdatedAt: job.UpdatedAt, Packages: len(job.Items),
+		Items: cacheContractSlice(job.Items, func(item warmupItem) contract.WarmupJobItem {
+			return contract.WarmupJobItem{Package: item.Package, Status: contract.WarmupItemStatus(item.Status), Detail: item.Detail}
+		}),
+	})
 }
 
 func (h *WarmupHandler) ownedJobLocked(c *gin.Context, write bool) *warmupJob {
@@ -409,7 +418,7 @@ func (h *WarmupHandler) Cancel(c *gin.Context) {
 			return
 		}
 	}
-	c.JSON(http.StatusAccepted, gin.H{"job_id": job.ID, "status": job.Status})
+	c.JSON(http.StatusAccepted, contract.WarmupCancelResponse{JobID: job.ID, Status: contract.WarmupJobStatus(job.Status)})
 }
 
 // Retry uses the same admission path and only the original failed inputs.

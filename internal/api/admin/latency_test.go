@@ -16,6 +16,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 )
 
@@ -243,7 +244,7 @@ func TestLatencySeriesReturnsEmptyArrayAndDatabaseErrors(t *testing.T) {
 	database := newLatencyTestDB(t)
 	recorder := performLatencySeriesRequest(database, "/upstreams/latency")
 	var body struct {
-		Series []upstreamLatencySeries `json:"series"`
+		Series []contract.AdminUpstreamLatencySeries `json:"series"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)

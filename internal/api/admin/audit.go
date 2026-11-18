@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/audit"
 )
 
@@ -93,7 +94,25 @@ func (h *AuditHandler) Integrity(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTEGRITY_CHECK_FAILED", "message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"integrity": report, "anchors": anchors, "anchor_feed": feed})
+	c.JSON(http.StatusOK, contract.AuditIntegrityResponse{
+		AnchorFeed: contract.AuditAnchorFeed{
+			FileConfigured: feed.FileConfigured, FileLastSuccessAt: feed.FileLastSuccessAt, FileLastError: feed.FileLastError,
+			RemoteConfigured: feed.RemoteConfigured, RemoteLastSuccessAt: feed.RemoteLastSuccessAt,
+			RemoteHeadID: feed.RemoteHeadID, RemoteLastError: feed.RemoteLastError,
+		},
+		Anchors: contract.AuditAnchorReport{
+			Configured: anchors.Configured, Path: anchors.Path, Checkpoints: anchors.Checkpoints,
+			InvalidLines: anchors.InvalidLines, LatestCheckedAt: anchors.LatestCheckedAt,
+			LatestHeadID: anchors.LatestHeadID, LatestHeadHash: anchors.LatestHeadHash,
+			OK: anchors.OK, BrokenAtID: anchors.BrokenAtID, Reason: anchors.Reason,
+		},
+		Integrity: contract.AuditChainReport{
+			OK: report.OK, RowsScanned: report.RowsScanned, ChainedRows: report.ChainedRows,
+			UnchainedRows: report.UnchainedRows, FirstChainedID: report.FirstChainedID,
+			HeadID: report.HeadID, HeadHash: report.HeadHash, BrokenAtID: report.BrokenAtID,
+			Reason: report.Reason, ScannedAt: report.ScannedAt,
+		},
+	})
 }
 
 func (h *AuditHandler) parseQuery(c *gin.Context) (audit.Query, error) {

@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/api/credentialurl"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
@@ -49,7 +50,7 @@ func (h *StatsHandler) StartTime() time.Time { return h.startTime }
 
 // kpiSeries returns 12 five-minute buckets covering the last hour,
 // aggregated from the access_logs table.
-func (h *StatsHandler) kpiSeries(since time.Time) []gin.H {
+func (h *StatsHandler) kpiSeries(since time.Time) []contract.StatsSeriesPoint {
 	const buckets = 12
 	const intervalMin = 5
 
@@ -85,17 +86,10 @@ func (h *StatsHandler) kpiSeries(since time.Time) []gin.H {
 	// Compute the aligned start bucket
 	startBucket := (since.Unix() / int64(intervalMin*60)) * int64(intervalMin*60)
 
-	points := make([]gin.H, 0, buckets)
+	points := make([]contract.StatsSeriesPoint, 0, buckets)
 	for i := 0; i < buckets; i++ {
 		ts := startBucket + int64(i*intervalMin*60)
-		p := gin.H{
-			"time_unix":      ts,
-			"requests":       int64(0),
-			"hits":           int64(0),
-			"hit_rate":       float64(0),
-			"bytes_saved":    int64(0),
-			"avg_latency_ms": float64(0),
-		}
+		p := contract.StatsSeriesPoint{TimeUnix: ts}
 		if r, ok := lookup[ts]; ok {
 			var hitRate float64
 			if r.Requests > 0 {
@@ -105,11 +99,11 @@ func (h *StatsHandler) kpiSeries(since time.Time) []gin.H {
 			if r.MissCount > 0 {
 				avgLat = math.Round(float64(r.MissLatency)/float64(r.MissCount)*10) / 10
 			}
-			p["requests"] = r.Requests
-			p["hits"] = r.Hits
-			p["hit_rate"] = hitRate
-			p["bytes_saved"] = r.BytesSaved
-			p["avg_latency_ms"] = avgLat
+			p.Requests = r.Requests
+			p.Hits = r.Hits
+			p.HitRate = hitRate
+			p.BytesSaved = r.BytesSaved
+			p.AvgLatencyMs = avgLat
 		}
 		points = append(points, p)
 	}
@@ -130,7 +124,7 @@ const publicUpstreamDegradedLatency = time.Second
 // a map of stable upstream identity → 90-point series. Persisted upstreams use
 // their database ID; pre-ID legacy rows remain available under legacy:<name>.
 // This replaces N per-upstream queries without merging same-named records.
-func (h *StatsHandler) allUpstreamLatencySeries(since time.Time) (map[string][]gin.H, error) {
+func (h *StatsHandler) allUpstreamLatencySeries(since time.Time) (contract.StatsLatencySeries, error) {
 	type bucketRow struct {
 		UpstreamID uint
 		Name       string
@@ -191,22 +185,16 @@ func (h *StatsHandler) allUpstreamLatencySeries(since time.Time) (map[string][]g
 
 	startBucket := (since.Unix() / int64(latencyIntervalMin*60)) * int64(latencyIntervalMin*60)
 
-	result := make(map[string][]gin.H, len(seriesKeys))
+	result := make(contract.StatsLatencySeries, len(seriesKeys))
 	for _, seriesKey := range seriesKeys {
-		points := make([]gin.H, 0, latencyBuckets)
+		points := make([]contract.StatsLatencyPoint, 0, latencyBuckets)
 		for i := 0; i < latencyBuckets; i++ {
 			ts := startBucket + int64(i*latencyIntervalMin*60)
-			t := time.Unix(ts, 0).UTC()
-			p := gin.H{
-				"time":       t.Format(time.RFC3339),
-				"latency_ms": int64(0),
-				"healthy":    true,
-				"requests":   int64(0),
-			}
+			p := contract.StatsLatencyPoint{Time: time.Unix(ts, 0).UTC().Format(time.RFC3339), Healthy: true}
 			if aggregate, ok := lookup[bucketKey{series: seriesKey, bucket: ts}]; ok && aggregate.requests > 0 {
-				p["latency_ms"] = int64(math.Round(aggregate.latencyTotal / float64(aggregate.requests)))
-				p["healthy"] = aggregate.healthyTotal/float64(aggregate.requests) > 0.5
-				p["requests"] = aggregate.requests
+				p.LatencyMs = int64(math.Round(aggregate.latencyTotal / float64(aggregate.requests)))
+				p.Healthy = aggregate.healthyTotal/float64(aggregate.requests) > 0.5
+				p.Requests = aggregate.requests
 			}
 			points = append(points, p)
 		}
@@ -240,7 +228,7 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 // snapshot is the single in-process source for the public stats contract.
 // HTTP and MCP callers serialize this value directly; neither needs to fetch
 // the public route over the network.
-func (h *StatsHandler) snapshot(now time.Time) gin.H {
+func (h *StatsHandler) snapshot(now time.Time) contract.StatsResponse {
 	// "Today" is the current UTC day (docs/adr/0002-access-log-rollup.md):
 	// rollup rows are keyed by the request's UTC date, so the day boundary
 	// must not follow the host's time zone. Local midnight converted to UTC
@@ -340,7 +328,7 @@ func (h *StatsHandler) snapshot(now time.Time) gin.H {
 	h.db.Model(&db.CacheEntry{}).Where("adapter_type = ?", "apt").Count(&aptFiles)
 
 	// Upstream status
-	upstreams := make([]gin.H, 0)
+	upstreams := make([]contract.StatsUpstream, 0)
 	healthyUpstreams := 0
 	hasDegradedServiceCondition := false
 	for _, name := range h.ecosystems {
@@ -356,66 +344,62 @@ func (h *StatsHandler) snapshot(now time.Time) gin.H {
 			if !health.Healthy || health.AvgLatency >= publicUpstreamDegradedLatency {
 				hasDegradedServiceCondition = true
 			}
-			upstreams = append(upstreams, gin.H{
-				"id":             u.ID,
-				"name":           u.Name,
-				"adapter":        name,
-				"url":            credentialurl.PublicOrigin(u.URL),
-				"healthy":        health.Healthy,
-				"avg_latency_ms": health.AvgLatency.Milliseconds(),
-				"success_rate":   health.SuccessRate,
+			upstreams = append(upstreams, contract.StatsUpstream{
+				ID:           u.ID,
+				Name:         u.Name,
+				Adapter:      name,
+				URL:          credentialurl.PublicOrigin(u.URL),
+				Healthy:      health.Healthy,
+				AvgLatencyMs: health.AvgLatency.Milliseconds(),
+				SuccessRate:  health.SuccessRate,
 			})
 		}
 	}
-	serviceStatus := "healthy"
+	serviceStatus := contract.StatsServiceStatusHealthy
 	if len(upstreams) > 0 && hasDegradedServiceCondition {
-		serviceStatus = "degraded"
+		serviceStatus = contract.StatsServiceStatusDegraded
 		if healthyUpstreams == 0 {
-			serviceStatus = "failed"
+			serviceStatus = contract.StatsServiceStatusFailed
 		}
 	}
 
 	// Extra indexes
-	extraIdxs := make([]gin.H, 0, len(h.extraIndexes))
+	extraIdxs := make([]contract.StatsExtraIndex, 0, len(h.extraIndexes))
 	for _, idx := range h.extraIndexes {
-		extraIdxs = append(extraIdxs, gin.H{
-			"name": idx.Name,
-			"kind": idx.Kind,
-			"path": idx.Path,
-		})
+		extraIdxs = append(extraIdxs, contract.StatsExtraIndex{Name: idx.Name, Kind: idx.Kind, Path: idx.Path})
 	}
 
-	return gin.H{
-		"service": gin.H{
-			"version":        version.Version,
-			"uptime_seconds": int64(now.Sub(h.startTime).Seconds()),
-			"status":         serviceStatus,
+	return contract.StatsResponse{
+		Service: contract.StatsService{
+			Version:       version.Version,
+			UptimeSeconds: int64(now.Sub(h.startTime).Seconds()),
+			Status:        serviceStatus,
 		},
-		"today": gin.H{
-			"total_requests": totalRequests,
-			"hit_count":      hitCount,
-			"miss_count":     missCount,
-			"hit_rate":       hitRate,
-			"bytes_served":   bytesSent,
-			"bytes_saved":    bytesSaved,
+		Today: contract.StatsToday{
+			TotalRequests: totalRequests,
+			HitCount:      hitCount,
+			MissCount:     missCount,
+			HitRate:       hitRate,
+			BytesServed:   bytesSent,
+			BytesSaved:    bytesSaved,
 		},
-		"week": gin.H{
-			"total_requests": weekTotal,
-			"hit_count":      weekHits,
-			"hit_rate":       weekHitRate,
-			"bytes_saved":    weekBytesSaved,
+		Week: contract.StatsWeek{
+			TotalRequests: weekTotal,
+			HitCount:      weekHits,
+			HitRate:       weekHitRate,
+			BytesSaved:    weekBytesSaved,
 		},
-		"cache": gin.H{
-			"total_files":      totalFiles,
-			"total_size_bytes": totalSizeBytes,
-			"pypi_files":       pypiFiles,
-			"apt_files":        aptFiles,
+		Cache: contract.StatsCache{
+			TotalFiles:     totalFiles,
+			TotalSizeBytes: totalSizeBytes,
+			PypiFiles:      pypiFiles,
+			AptFiles:       aptFiles,
 		},
-		"series": gin.H{
-			"interval_minutes": 5,
-			"points":           seriesPoints,
+		Series: contract.StatsSeries{
+			IntervalMinutes: 5,
+			Points:          seriesPoints,
 		},
-		"upstreams":     upstreams,
-		"extra_indexes": extraIdxs,
+		Upstreams:    upstreams,
+		ExtraIndexes: extraIdxs,
 	}
 }

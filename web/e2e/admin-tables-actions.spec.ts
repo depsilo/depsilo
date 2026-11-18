@@ -9,19 +9,19 @@ import { expect, mockAdminApi, test, proProjectCapabilities } from './fixtures/a
 
 const populated = {
   'GET /api/v1/admin/logs': {
-    items: [{ id: 1, adapter_type: 'pypi', method: 'GET', package_name: 'requests', cache_key: 'pypi/requests', hit: true, latency_ms: 12, upstream: 'tuna', status_code: 200, client_ip: '127.0.0.1', bytes_sent: 1024, created_at: '2026-07-10T00:00:00Z' }],
-    total: 1, page: 1, page_size: 50,
+    items: [{ id: 1, adapter_type: 'pypi', method: 'GET', package_name: 'requests', cache_key: 'pypi/requests', version: '', hit: true, cache_result: 'hit', latency_ms: 12, upstream: 'tuna', status_code: 200, client_ip: '127.0.0.1', bytes_sent: 1024, upstream_requests: 0, upstream_bytes: 0, created_at: '2026-07-10T00:00:00Z' }],
+    total: 1, page: 1, page_size: 50, ecosystems: null,
   } satisfies AccessLogListResponse,
   'GET /api/v1/admin/audit-logs': {
     items: [{ id: 1, ecosystem: 'pypi', package_name: 'requests', version: '2.32.0', action: 'proxy', cache_result: 'hit', latency_ms: 12, bytes_sent: 1024, client_ip: '127.0.0.1', user_agent: 'fixture', upstream_url: 'https://pypi.example/simple', status_code: 200, created_at: '2026-07-10T00:00:00Z' }],
-    total: 1, page: 1,
+    total: 1, page: 1, ecosystems: [],
   } satisfies AuditLogListResponse,
   'GET /api/v1/admin/cache': { items: [{ id: 1, adapter_type: 'pypi', package_name: 'requests', key: 'pypi/requests', size: 1024, hit_count: 2, expires_at: '2026-07-11T00:00:00Z', last_accessed: '2026-07-10T00:00:00Z' }], total: 1 },
   'GET /api/v1/admin/quarantine/events': { items: [{ id: 1, ecosystem: 'pypi', package: 'unsafe', version: '1.0.0', action: 'blocked', reason: 'minimum age', threshold_seconds: 86400, age_at_call_seconds: 60, actor_id: 1, client_ip: '127.0.0.1', created_at: '2026-07-10T00:00:00Z' }], total: 1 },
   'GET /api/v1/admin/rules': [{ id: 1, ecosystem: 'pypi', package_name: 'unsafe', version: '*', action: 'deny', reason: 'blocked', created_at: '2026-07-10T00:00:00Z' }],
   'GET /api/v1/admin/users': [{ id: 2, username: 'operator', role: 'readonly', enabled: true, last_login_at: null, created_at: '2026-07-10T00:00:00Z' }],
   'GET /api/v1/admin/tokens': [{ id: 9, user_id: 1, name: 'ci', permissions: 'readonly', expires_at: null, last_used_at: null, created_at: '2026-07-10T00:00:00Z' }],
-  'GET /api/v1/admin/upstreams': { items: [{ id: 1, adapter_type: 'pypi', name: 'tuna', url: 'https://pypi.example/simple', proxy: '', priority: 1, probe_mode: 'active', probe_interval: '30m', healthy: true, avg_latency_ms: 12, success_rate: 1, last_checked_at: '2026-07-10T00:00:00Z', worker_running: true, created_at: '2026-07-10T00:00:00Z', updated_at: '2026-07-10T00:00:00Z' }], total: 1 } satisfies AdminUpstreamListResponse,
+  'GET /api/v1/admin/upstreams': { items: [{ id: 1, adapter_type: 'pypi', name: 'tuna', url: 'https://pypi.example/simple', proxy: '', priority: 1, probe_mode: 'active', probe_interval: '30m', via: '', healthy: true, avg_latency_ms: 12, success_rate: 1, last_checked_at: '2026-07-10T00:00:00Z', has_observations: true, runtime_sample_count: 1, worker_running: true, proxy_source: '', last_failure: null, created_at: '2026-07-10T00:00:00Z', updated_at: '2026-07-10T00:00:00Z' }], total: 1 } satisfies AdminUpstreamListResponse,
 }
 
 const cases = [
@@ -126,7 +126,7 @@ test('wide-table query states stay in the mobile canvas and only data mounts a s
   let mode: 'loading' | 'empty' | 'error' | 'populated' = 'loading'
   let releaseLoading!: () => void
   const loadingResponse = new Promise<AccessLogListResponse>((resolve) => {
-    releaseLoading = () => resolve({ items: [], total: 0, page: 1, page_size: 50 })
+    releaseLoading = () => resolve({ items: [], total: 0, page: 1, page_size: 50, ecosystems: null })
   })
 
   await page.setViewportSize({ width, height: 844 })
@@ -135,7 +135,7 @@ test('wide-table query states stay in the mobile canvas and only data mounts a s
       if (mode === 'loading') return loadingResponse
       if (mode === 'error') return { status: 500, body: { code: 'FAILED', message: 'fixture table failure' } }
       if (mode === 'populated') return populated['GET /api/v1/admin/logs']
-      return { items: [], total: 0, page: 1, page_size: 50 } satisfies AccessLogListResponse
+      return { items: [], total: 0, page: 1, page_size: 50, ecosystems: null } satisfies AccessLogListResponse
     },
   })
 
@@ -184,12 +184,15 @@ test('access log details keep the selected request explainable', async ({ page }
     method: 'GET',
     cache_key: 'pypi/requests.whl',
     package_name: 'requests',
+    version: '',
     hit: true,
     upstream: 'tuna',
     latency_ms: 12,
     status_code: 200,
     client_ip: '127.0.0.1',
     bytes_sent: 1024,
+    upstream_requests: 0,
+    upstream_bytes: 0,
     created_at: '2026-07-10T00:00:00Z',
     request_id: 'req-detail-1',
     cache_result: 'hit',

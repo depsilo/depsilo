@@ -8,19 +8,17 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+
+	"depsilo/internal/api/contract"
 )
 
 // maxFilterEcosystems bounds a multi-value ecosystem filter. There are 15
 // Ecosystems plus a few adapter aliases; anything longer is not a real filter.
 const maxFilterEcosystems = 32
 
-// ecosystemCount is one entry of a list's ecosystem facet: how many rows the
-// current filters match in that ecosystem, ignoring the ecosystem filter
-// itself so the Admin can show every choice with its count.
-type ecosystemCount struct {
-	ID    string `json:"id"`
-	Count int64  `json:"count"`
-}
+// ecosystemCount is the facet entry handlers that predate the contract package
+// still name; new code uses contract.EcosystemCount directly.
+type ecosystemCount = contract.EcosystemCount
 
 // parseEcosystemFilter reads an ecosystem filter from the first parameter
 // name that is present. Values may repeat (`?ecosystem=pypi&ecosystem=npm`)
@@ -98,9 +96,11 @@ func (w timeWindow) apply(query *gorm.DB, column string) *gorm.DB {
 }
 
 // countByEcosystem groups query by column and returns the non-empty
-// ecosystems by descending count, then id.
-func countByEcosystem(query *gorm.DB, column string) ([]ecosystemCount, error) {
-	var rows []ecosystemCount
+// ecosystems by descending count, then id: the ecosystem facet of an Admin
+// list, counted under every filter except the ecosystem filter itself. The
+// result is nil when no row matches.
+func countByEcosystem(query *gorm.DB, column string) ([]contract.EcosystemCount, error) {
+	var rows []contract.EcosystemCount
 	if err := query.Select(column + " AS id, COUNT(*) AS count").Group(column).Scan(&rows).Error; err != nil {
 		return nil, err
 	}

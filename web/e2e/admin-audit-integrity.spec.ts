@@ -14,8 +14,13 @@ function integrity(overrides: Partial<AuditChainReport>): AuditIntegrityResponse
       scanned_at: '2026-10-06T10:00:00Z',
       ...overrides,
     },
-    anchors: { configured: false, checkpoints: 0, ok: true },
-    anchor_feed: { file_configured: false, remote_configured: false },
+    anchors: { configured: false, checkpoints: 0, latest_checked_at: '0001-01-01T00:00:00Z', ok: true },
+    anchor_feed: {
+      file_configured: false,
+      file_last_success_at: '0001-01-01T00:00:00Z',
+      remote_configured: false,
+      remote_last_success_at: '0001-01-01T00:00:00Z',
+    },
   }
 }
 

@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
 	"depsilo/internal/upstream"
@@ -131,7 +132,7 @@ func TestCascadeConfigHandlerMasksTokensAndWritesPatch(t *testing.T) {
 	if strings.Contains(updated.Body.String(), "shared-secret") || strings.Contains(updated.Body.String(), "peer-secret") {
 		t.Fatalf("PUT leaked a token: %s", updated.Body.String())
 	}
-	var response cascadeConfigUpdateResponse
+	var response contract.AdminCascadeConfigUpdateResponse
 	if err := json.Unmarshal(updated.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}

@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 	"depsilo/internal/traffic"
 	"depsilo/internal/upstream"
@@ -36,57 +37,6 @@ func NewNowHandler(database *gorm.DB, pools map[string]*upstream.Pool, startTime
 	return &NowHandler{db: database, pools: pools, startTime: startTime, meter: meter}
 }
 
-// nowResponse is the JSON shape consumed by web/src/admin/components/NowStrip.tsx.
-// Fields are kept short to minimize payload bytes on the 5s poll.
-type nowResponse struct {
-	Status        string           `json:"status"` // healthy | degraded | down
-	UptimeSeconds int64            `json:"uptime_seconds"`
-	NowUnix       int64            `json:"now_unix"`
-	Version       string           `json:"version"`
-	LastActivity  *lastActivity    `json:"last_activity,omitempty"`
-	Rate          rateBlock        `json:"rate"`
-	Upstreams     upstreamRollup   `json:"upstreams"`
-	Sparkline     []sparklinePoint `json:"sparkline"`
-}
-
-type lastActivity struct {
-	SecondsAgo  int64  `json:"seconds_ago"`
-	AdapterType string `json:"adapter_type"`
-	Hit         bool   `json:"hit"`
-	PackageName string `json:"package_name,omitempty"`
-}
-
-type rateBlock struct {
-	// RequestsPerMin is the rolling 60-second client request count.
-	RequestsPerMin int64 `json:"requests_per_min"`
-	// HasData is false when the window observed zero requests; the frontend
-	// renders "—" instead of a misleading "0".
-	HasData bool `json:"has_data"`
-	// Measured is true when the process meter supplied the byte rates, letting
-	// the client distinguish "idle" from "not collected".
-	Measured bool `json:"measured"`
-
-	WindowSeconds int `json:"window_seconds"`
-
-	// Request rates follow client→Depsilo→upstream. Byte rates follow the
-	// response direction upstream→Depsilo→client. The two legs are never summed.
-	ServiceRequestsPerSec float64 `json:"service_requests_per_sec"`
-	ServiceBytesPerSec    float64 `json:"service_bytes_per_sec"`
-	OriginRequestsPerSec  float64 `json:"origin_requests_per_sec"`
-	OriginBytesPerSec     float64 `json:"origin_bytes_per_sec"`
-}
-
-type upstreamRollup struct {
-	Total   int `json:"total"`
-	Healthy int `json:"healthy"`
-}
-
-type sparklinePoint struct {
-	T        int64 `json:"t"` // unix seconds at bucket start
-	Requests int64 `json:"requests"`
-	Hits     int64 `json:"hits"`
-}
-
 func (h *NowHandler) Get(c *gin.Context) {
 	now := time.Now().UTC()
 	ctx := c.Request.Context()
@@ -105,7 +55,7 @@ func (h *NowHandler) Get(c *gin.Context) {
 		nowDatabaseError(c, err)
 		return
 	}
-	resp := nowResponse{
+	resp := contract.NowResponse{
 		UptimeSeconds: int64(time.Since(h.startTime).Seconds()),
 		NowUnix:       now.Unix(),
 		Version:       version.Version,
@@ -129,7 +79,7 @@ func nowDatabaseError(c *gin.Context, err error) {
 
 // upstreamRollup tallies healthy vs total across every wired pool. The pool
 // objects already hold this state in memory — no DB hit.
-func (h *NowHandler) upstreamRollup() upstreamRollup {
+func (h *NowHandler) upstreamRollup() contract.NowUpstreams {
 	var total, healthy int
 	for _, pool := range h.pools {
 		if pool == nil {
@@ -143,13 +93,13 @@ func (h *NowHandler) upstreamRollup() upstreamRollup {
 			}
 		}
 	}
-	return upstreamRollup{Total: total, Healthy: healthy}
+	return contract.NowUpstreams{Total: total, Healthy: healthy}
 }
 
 // lastActivity returns the most recent access_log row as a relative timestamp
 // + a tiny bit of context (which ecosystem, was it a hit). Returns nil when
 // the table is empty. Retained logs do not establish lifetime usage history.
-func (h *NowHandler) lastActivity(ctx context.Context, now time.Time) (*lastActivity, error) {
+func (h *NowHandler) lastActivity(ctx context.Context, now time.Time) (*contract.NowLastActivity, error) {
 	var row struct {
 		CreatedAt   time.Time
 		AdapterType string
@@ -171,7 +121,7 @@ func (h *NowHandler) lastActivity(ctx context.Context, now time.Time) (*lastActi
 	if secondsAgo < 0 {
 		secondsAgo = 0
 	}
-	return &lastActivity{
+	return &contract.NowLastActivity{
 		SecondsAgo:  secondsAgo,
 		AdapterType: row.AdapterType,
 		Hit:         row.Hit,
@@ -183,7 +133,7 @@ func (h *NowHandler) lastActivity(ctx context.Context, now time.Time) (*lastActi
 // bounded scan of raw access_logs; the byte and per-leg request rates come
 // from the shared meter, which counts delivered-to-client bytes and measured
 // upstream-read bytes independently. Without a meter, Measured stays false.
-func (h *NowHandler) rate(ctx context.Context, now time.Time) (rateBlock, error) {
+func (h *NowHandler) rate(ctx context.Context, now time.Time) (contract.NowRate, error) {
 	since := now.Add(-60 * time.Second)
 	var requests int64
 	err := h.db.WithContext(ctx).Model(&db.AccessLog{}).
@@ -191,10 +141,10 @@ func (h *NowHandler) rate(ctx context.Context, now time.Time) (rateBlock, error)
 		Where("created_at >= ?", since).
 		Scan(&requests).Error
 	if err != nil {
-		return rateBlock{}, err
+		return contract.NowRate{}, err
 	}
 
-	out := rateBlock{
+	out := contract.NowRate{
 		RequestsPerMin: requests,
 		HasData:        requests > 0,
 		WindowSeconds:  60,
@@ -213,7 +163,7 @@ func (h *NowHandler) rate(ctx context.Context, now time.Time) (rateBlock, error)
 // sparkline returns 30 one-minute buckets ending at the current minute.
 // Empty buckets are present in the response with zero counters so the
 // frontend can render a continuous timeline without filling holes itself.
-func (h *NowHandler) sparkline(ctx context.Context, now time.Time) ([]sparklinePoint, error) {
+func (h *NowHandler) sparkline(ctx context.Context, now time.Time) ([]contract.NowSparklinePoint, error) {
 	const buckets = 30
 	const intervalSec = 60
 
@@ -244,10 +194,10 @@ func (h *NowHandler) sparkline(ctx context.Context, now time.Time) ([]sparklineP
 	}
 
 	startBucket := (since.Unix() / int64(intervalSec)) * int64(intervalSec)
-	out := make([]sparklinePoint, 0, buckets)
+	out := make([]contract.NowSparklinePoint, 0, buckets)
 	for i := 0; i < buckets; i++ {
 		ts := startBucket + int64(i*intervalSec)
-		p := sparklinePoint{T: ts}
+		p := contract.NowSparklinePoint{T: ts}
 		if r, ok := lookup[ts]; ok {
 			p.Requests = r.Requests
 			p.Hits = r.Hits
@@ -261,15 +211,15 @@ func (h *NowHandler) sparkline(ctx context.Context, now time.Time) ([]sparklineP
 // "is anything obviously broken right now". Refinements (per-upstream
 // severity, error rate thresholds) belong on the dedicated dashboard cards,
 // not here.
-func (h *NowHandler) computeStatus(u upstreamRollup, _ rateBlock) string {
+func (h *NowHandler) computeStatus(u contract.NowUpstreams, _ contract.NowRate) contract.NowStatus {
 	if u.Total == 0 {
-		return "healthy" // no upstreams wired yet (fresh install) — not a failure
+		return contract.NowStatusHealthy // no upstreams wired yet (fresh install) — not a failure
 	}
 	if u.Healthy == 0 {
-		return "down"
+		return contract.NowStatusDown
 	}
 	if u.Healthy < u.Total {
-		return "degraded"
+		return contract.NowStatusDegraded
 	}
-	return "healthy"
+	return contract.NowStatusHealthy
 }
