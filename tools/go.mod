@@ -4,6 +4,7 @@ go 1.27.4
 
 tool (
 	golang.org/x/tools/cmd/deadcode
+	golang.org/x/tools/cmd/goimports
 	honnef.co/go/tools/cmd/staticcheck
 )
 

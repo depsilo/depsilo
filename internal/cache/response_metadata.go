@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -269,4 +270,33 @@ func decodeStoredResponseMetadata(encoded, etag, lastModified string) http.Heade
 		headers.Set("Last-Modified", lastModified)
 	}
 	return sanitizeResponseMetadata(headers)
+}
+
+// ErrNotModified lets a conditional FetchFunc report HTTP 304 without turning
+// it into an upstream failure. Manager extends the cached entry's TTL and
+// serves its existing bytes.
+var ErrNotModified = errors.New("upstream metadata not modified")
+
+// ResponseValidators are persisted with a cache entry and reused by adapters
+// for conditional metadata requests.
+type ResponseValidators struct {
+	ETag         string
+	LastModified string
+}
+
+// WithResponseValidators annotates a fetched body without changing FetchFunc's
+// public signature. Manager extracts and persists the validators while the
+// wrapped body otherwise behaves exactly like the original reader.
+func WithResponseValidators(body io.ReadCloser, etag, lastModified string) io.ReadCloser {
+	return WithResponseMetadata(body, http.Header{
+		"ETag":          {etag},
+		"Last-Modified": {lastModified},
+	})
+}
+
+func responseValidatorsFromMetadata(headers http.Header) ResponseValidators {
+	return ResponseValidators{
+		ETag:         headers.Get("ETag"),
+		LastModified: headers.Get("Last-Modified"),
+	}
 }
