@@ -18,7 +18,7 @@ the changed interface.
 | Tagged integration | `make test-integration` | No | Local Depsilo process plus mock Upstream over HTTP |
 | Normal gate | `make check` | No | Lint, fast Go, frontend unit/build/bundle, binary, UI smoke |
 | Complete gate | `make verify` | No | Full Go plus focused race coverage, integration, full Playwright, scripts, build and module checks |
-| Dependency security | `make security` | Yes | Go vulnerability data and npm audit of all frontend dependencies |
+| Dependency security | `make security` | Yes | Go vulnerability data and the npm audit gate over all frontend dependencies (see **Frontend advisory exceptions**) |
 | One real client | `make test-docker-<ecosystem>` | Yes | Native package manager against live Upstreams |
 | All real clients | `make test-e2e` | Yes | Scheduled/opt-in package-client matrix |
 | Compiler clients | `make test-compiler-cache` | Client-dependent | Installed ccache and sccache against a running service |
@@ -121,6 +121,29 @@ before a push or pull request.
 `make check` runs only the Playwright cases tagged `@smoke`. When changing UI
 copy, search `web/e2e` for the old text and run each spec that asserts it:
 `npm --prefix web run test:ui -- <spec>`.
+
+### Frontend advisory exceptions
+
+`make security` and the CI frontend job run `scripts/npm-audit-gate.py`,
+which runs `npm audit --json` in `web/` and fails on every advisory of
+moderate or higher severity, as `npm audit --audit-level=moderate` does,
+unless `web/npm-audit-allowlist.json` lists it. Info and low advisories never
+block; a severity the gate does not know does, and when npm reports one
+advisory in several records, the highest severity counts. CI runs the gate
+after the frontend tests, so a newly published advisory cannot hide their
+results; `scripts/test-release-workflow.sh` keeps the step there.
+
+An entry has exactly the keys `id` (the GHSA ID), `package` (the package the
+advisory affects), `reason` (why it cannot be fixed yet) and `expires`
+(`YYYY-MM-DD`, at most 180 days after the check, inclusive). An expired entry
+fails the gate again; an entry that is not valid, and an audit that npm cannot
+run or report, fail it with exit status 2. Add an entry only when no patched
+release exists or the update breaks the toolchain, and say in the reason
+where the package is reached, for example development tooling only, which
+`npm audit --omit=dev` confirms. Remove the entry once a fixed version is in
+`web/package-lock.json`; the gate reports an entry that matches no advisory.
+`python3 scripts/test-npm-audit-gate.py` covers the gate offline, including
+the committed allowlist.
 
 ## Placement rules
 

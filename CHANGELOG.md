@@ -59,6 +59,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   did; `config.example.toml` shows the key commented out.
 
 ### Changed
+- Development: `make security` and the CI frontend job audit frontend
+  dependencies with `scripts/npm-audit-gate.py`, which fails on advisories of
+  moderate or higher severity, as `npm audit --audit-level=moderate` did,
+  except those that `web/npm-audit-allowlist.json` lists with a reason and an
+  expiry date at most 180 days ahead. The first entry,
+  GHSA-fc5q-39xc-vjpf until 2027-01-31, covers picomatch, which has no patched
+  release and reaches the tree only through development tooling. CI now runs
+  the audit after the frontend tests, so an advisory no longer skips them.
 - `POST /mcp` answers JSON-RPC notifications (no `id`), and batches of only
   notifications, with `202 Accepted` and no body instead of `200`; a
   `notifications/*` method with an `id` gets error `-32601`. `GET /mcp` and

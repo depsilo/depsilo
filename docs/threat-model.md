@@ -524,8 +524,15 @@ instance as one trust/tenant domain.
 
 Tagged releases are built in CI with cosign keyless signing (checksums,
 archives, container images, SBOM attestations) and verified through
-`docs/release-verification.md`. `make security` runs govulncheck and npm
-audit; `make verify` is the offline gate.
+`docs/release-verification.md`. `make security` runs govulncheck and the npm
+audit gate (`scripts/npm-audit-gate.py`), which the CI and release jobs run
+too; `make verify` is the offline gate. The npm gate fails on advisories of
+moderate or higher severity, and on any severity it does not know, unless
+`web/npm-audit-allowlist.json` lists them with a reason and an expiry date
+at most 180 days ahead; info and low advisories do not block, as with
+`npm audit --audit-level=moderate`. An accepted advisory, such as a
+development-tool advisory without a patched release, therefore returns for
+review.
 
 **Residual:** build-platform trust and no bit-for-bit reproducibility claim
 for the `v0.x` line.
@@ -578,7 +585,7 @@ These are deliberate, documented, and not vulnerabilities:
 | Integration prompt `url` validation | `internal/prompts/baseurl_test.go`, `internal/api/public/integration_prompt_test.go` |
 | External login, explicit binding, and bounded sessions | `internal/identity`, `internal/api/oidc.go`, `internal/api/ldap.go`, `internal/middleware/identity_auth_test.go`; isolated fixtures under `testground/oidc-casdoor` and `testground/ldap` |
 | Audit forwarding integrity of delivery | `internal/audit/forwarder_test.go`, `internal/api/admin/audit_exporters_test.go` |
-| Dependencies and known CVEs | `make security` (govulncheck + npm audit) |
+| Dependencies and known CVEs | `make security` (govulncheck + `scripts/npm-audit-gate.py` with `web/npm-audit-allowlist.json`), `scripts/test-npm-audit-gate.py` |
 | Release artifacts | `docs/release-verification.md`, release workflow tests in `make verify` |
 
 ## 8. Open items
