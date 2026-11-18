@@ -76,7 +76,7 @@ func (s *Store) PreviewLDAPAuthenticationSourceDraft(ctx context.Context, draft 
 	if err != nil {
 		return AuthenticationSourceConfig{}, oidcStoreError(StoreConfigReadFailed, "cannot read authentication configuration")
 	}
-	configured := s.configuredSources(cfg.Auth)
+	configured := AuthenticationSources(cfg.Auth)
 	source, exists := configured[draft.ID]
 	if draft.Create {
 		if err := validateNewAuthenticationSource(draft.ID, draft.Protocol); err != nil {

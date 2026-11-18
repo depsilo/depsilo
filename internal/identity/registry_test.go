@@ -15,9 +15,9 @@ import (
 
 func testRegistry(t *testing.T) (*Registry, *fakeProvider, *fakeProvider, *gorm.DB, config.AuthConfig) {
 	t.Helper()
-	legacy, first, database := testManager(t)
+	base, first, database := testManager(t)
 	second := newFakeProvider(t)
-	a, b := legacy.Config(), legacy.Config()
+	a, b := base.Config(), base.Config()
 	a.DisplayName, a.RedirectURL = "Company", "http://127.0.0.1:18081/api/v1/auth/oidc/company/callback"
 	b.DisplayName, b.Issuer, b.RedirectURL = "Community", second.server.URL, "http://127.0.0.1:18081/api/v1/auth/oidc/community/callback"
 	auth := config.AuthConfig{Sources: map[string]config.AuthenticationSourceConfig{
@@ -197,65 +197,40 @@ func TestRegistryStartupRevocationIsSourceScoped(t *testing.T) {
 	}
 }
 
-func TestRegistryPreservesLegacySessionsAndSelection(t *testing.T) {
-	m, first, database := testManager(t)
-	// Existing direct callers may omit one mapping slice. Registry cloning
-	// preserves the configuration used by the standalone manager.
-	legacyConfig := m.Config()
-	legacyConfig.ReadonlyGroups = nil
-	var err error
-	m, err = New(database, legacyConfig)
+func TestRegistrySelectionRequiresAnEnabledExplicitSource(t *testing.T) {
+	r, _, _, database, auth := testRegistry(t)
+	if _, err := r.Select(""); !errors.Is(err, ErrSelection) {
+		t.Fatalf("ambiguous source selected: %v", err)
+	}
+	if selected, err := r.Select("company"); err != nil || selected.ID() != "company" {
+		t.Fatalf("explicit source not selected: %v", err)
+	}
+	if _, err := r.Select("missing"); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("unknown source selected: %v", err)
+	}
+	// A sole enabled source is still never implied by an empty selection.
+	delete(auth.Sources, "community")
+	sole, err := NewRegistry(database, auth)
 	if err != nil {
 		t.Fatal(err)
 	}
-	old, err := doLogin(t, m, first, "legacy", []string{"admins"}, "")
+	if _, err := sole.Select(""); !errors.Is(err, ErrSelection) {
+		t.Fatalf("empty selection picked the sole source: %v", err)
+	}
+	disabled := auth.Sources["company"]
+	disabled.Enabled = false
+	auth.Sources["company"] = disabled
+	sole, err = NewRegistry(database, auth)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second := newFakeProvider(t)
-	other := m.Config()
-	other.Issuer, other.RedirectURL = second.server.URL, "http://127.0.0.1:18081/api/v1/auth/oidc/company/callback"
-	auth := config.AuthConfig{OIDC: m.Config(), Sources: map[string]config.AuthenticationSourceConfig{"company": {Protocol: "oidc", OIDCConfig: other}}}
-	r, err := NewRegistry(database, auth)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertSessionRevoked(t, database, old.Session.ID, false)
-	if r.Manager(ProviderID).fingerprint != m.fingerprint {
-		t.Fatal("registry changed the legacy source's session fingerprint")
-	}
-	selected, err := r.Select("")
-	if err != nil || selected.ID() != ProviderID {
-		t.Fatal("legacy default changed")
-	}
-	current, err := doLogin(t, r.Manager("company"), second, "new", []string{"admins"}, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := New(database, m.Config()); err != nil {
-		t.Fatal(err)
-	}
-	assertSessionRevoked(t, database, current.Session.ID, false)
-	// A sole explicitly named source is backward compatible; multiple named
-	// sources require the caller to choose, never silently pick map order.
-	delete(auth.Sources, "company")
-	auth.OIDC = config.OIDCConfig{}
-	auth.Sources = map[string]config.AuthenticationSourceConfig{"company": {Protocol: "oidc", OIDCConfig: other}}
-	r, err = NewRegistry(database, auth)
-	if err != nil {
-		t.Fatal(err)
-	}
-	selected, err = r.Select("")
-	if err != nil || selected.ID() != "company" {
-		t.Fatal("sole source not selected")
+	if _, err := sole.Select("company"); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("disabled source selected: %v", err)
 	}
 }
 
 func TestRegistryRejectsCrossSourceCallbackCodeAndCompletion(t *testing.T) {
 	r, first, second, database, _ := testRegistry(t)
-	if _, err := r.Select(""); !errors.Is(err, ErrSelection) {
-		t.Fatalf("ambiguous source selected: %v", err)
-	}
 	a, b := r.Manager("company"), r.Manager("community")
 	startA, err := a.Begin(context.Background(), "login", "/admin", 0, 0)
 	if err != nil {

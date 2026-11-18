@@ -22,7 +22,6 @@ import (
 func newLDAPAPI(t *testing.T) (*gin.Engine, string, *OIDCHandler) {
 	t.Helper()
 	router, database, auth, token, h := newOIDCAPI(t, false)
-	auth.OIDC = config.OIDCConfig{}
 	auth.Sources = map[string]config.AuthenticationSourceConfig{"directory": {
 		Protocol: "ldap", OIDCConfig: config.OIDCConfig{Enabled: true, DisplayName: "Company directory", AdminGroups: []string{"cn=admins,ou=groups,dc=example,dc=test"}, SessionTTL: 30 * time.Minute},
 		LDAP: &config.LDAPConfig{URL: "ldaps://127.0.0.1:1", BindDN: "cn=service,dc=example,dc=test", BindPassword: "private-bind-secret", UserBaseDN: "ou=users,dc=example,dc=test", UserFilter: "(uid={username})", SubjectAttribute: "entryUUID", DisplayNameAttribute: "cn", GroupsAttribute: "memberOf"},

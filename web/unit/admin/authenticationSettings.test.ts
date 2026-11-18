@@ -14,7 +14,7 @@ describe('authentication editor request', () => {
     expect(authenticationPatch({ ...draft, client_secret: 'replacement' }, state)).toEqual({ client_secret: 'replacement' })
   })
   it('shows effective env settings without sending them back to the config file', () => {
-    const overridden: AuthenticationSettingsResponse = { ...state, effective: { ...config, issuer: 'https://identity.example', admin_groups: ['operators'] }, overrides: { issuer: 'DEPSILO_AUTH_OIDC_ISSUER', admin_groups: 'DEPSILO_AUTH_OIDC_ADMIN_GROUPS', client_secret: 'DEPSILO_AUTH_OIDC_CLIENT_SECRET' } }
+    const overridden: AuthenticationSettingsResponse = { ...state, effective: { ...config, issuer: 'https://identity.example', admin_groups: ['operators'] }, overrides: { issuer: 'DEPSILO_AUTH_SOURCES_COMPANY_ISSUER', admin_groups: 'DEPSILO_AUTH_SOURCES_COMPANY_ADMIN_GROUPS', client_secret: 'DEPSILO_AUTH_SOURCES_COMPANY_CLIENT_SECRET' } }
     const draft = authenticationDraft(overridden)
     expect(draft.issuer).toBe('https://identity.example')
     expect(draft.admin_groups).toBe('operators')
@@ -34,7 +34,7 @@ describe('authentication editor request', () => {
   })
   it('drops edits when a refreshed field becomes environment-owned', () => {
     const draft = { ...authenticationDraft(state), client_secret: 'replacement', issuer: 'https://my-edit.example' }
-    const refreshed = { ...state, effective: { ...config, issuer: 'https://managed.example' }, overrides: { client_secret: 'DEPSILO_AUTH_OIDC_CLIENT_SECRET', issuer: 'DEPSILO_AUTH_OIDC_ISSUER' } }
+    const refreshed = { ...state, effective: { ...config, issuer: 'https://managed.example' }, overrides: { client_secret: 'DEPSILO_AUTH_SOURCES_COMPANY_CLIENT_SECRET', issuer: 'DEPSILO_AUTH_SOURCES_COMPANY_ISSUER' } }
     const rebased = rebaseAuthenticationDraft(draft, state, refreshed)
     expect(rebased.client_secret).toBe('')
     expect(rebased.issuer).toBe('https://managed.example')

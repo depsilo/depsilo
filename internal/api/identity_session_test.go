@@ -53,7 +53,7 @@ func TestExternalAdminCannotManageDurableCredentialsThroughRouter(t *testing.T) 
 				{http.MethodPost, "/tokens"}, {http.MethodDelete, "/tokens/1"},
 				{http.MethodPost, "/users"}, {http.MethodPut, "/users/1"}, {http.MethodDelete, "/users/1"},
 				{http.MethodPost, "/compile-cache/credentials"}, {http.MethodDelete, "/compile-cache/credentials/1"},
-				{http.MethodPut, "/cascade/config"}, {http.MethodPut, "/authentication"},
+				{http.MethodPut, "/cascade/config"},
 				{http.MethodPost, "/authentication/check"}, {http.MethodPost, "/authentication/trial"},
 				{http.MethodPost, "/authentication/ldap/check"}, {http.MethodPost, "/authentication/ldap/trial"},
 				{http.MethodPost, "/authentication/sources"}, {http.MethodPut, "/authentication/sources/company"}, {http.MethodDelete, "/authentication/sources/company"},
@@ -192,18 +192,25 @@ func TestAuthenticationConfigurationRoleEnforcedThroughRouter(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		response := apiAuthRequest(router, http.MethodGet, "/api/v1/admin/authentication", token)
+		response := apiAuthRequest(router, http.MethodGet, "/api/v1/admin/authentication/sources", token)
 		if response.Code != test.want {
 			t.Fatalf("%s GET: %d", test.role, response.Code)
 		}
 		if test.role == "readonly" {
-			response = apiAuthRequest(router, http.MethodPut, "/api/v1/admin/authentication", token)
+			response = apiAuthRequest(router, http.MethodPost, "/api/v1/admin/authentication/sources", token)
 			if response.Code != http.StatusForbidden {
-				t.Fatalf("readonly PUT: %d", response.Code)
+				t.Fatalf("readonly POST: %d", response.Code)
 			}
 		}
+		// The singleton settings endpoint was removed with [auth.oidc].
+		if response := apiAuthRequest(router, http.MethodGet, "/api/v1/admin/authentication", token); response.Code != http.StatusNotFound {
+			t.Fatalf("%s singleton GET: %d", test.role, response.Code)
+		}
 	}
-	if response := apiAuthRequest(router, http.MethodGet, "/api/v1/admin/authentication", ""); response.Code != http.StatusUnauthorized {
+	if response := apiAuthRequest(router, http.MethodGet, "/api/v1/admin/authentication/sources", ""); response.Code != http.StatusUnauthorized {
 		t.Fatalf("anonymous GET: %d", response.Code)
+	}
+	if response := apiAuthRequest(router, http.MethodGet, "/api/v1/auth/oidc/callback", ""); response.Code != http.StatusNotFound {
+		t.Fatalf("unprefixed callback: %d", response.Code)
 	}
 }

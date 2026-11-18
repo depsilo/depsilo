@@ -231,15 +231,6 @@ token_ttl  = "168h"         # 7天
 # loaded; environment variables cannot introduce another source. Secrets remain
 # write-only in Admin; environment-only credentials are never written to TOML.
 # Browser editing requires explicit source tables, not inline/dotted-key forms.
-#
-# Legacy configurations remain supported without renaming or a schema upgrade:
-# [auth.oidc]
-# enabled = false
-# display_name = "OIDC"
-# Its callback remains /api/v1/auth/oidc/callback and its environment prefix is
-# DEPSILO_AUTH_OIDC_. The reserved source ID "oidc" cannot name a new source.
-# Keep existing legacy issuer/client/group settings when upgrading; moving them
-# to a different source ID does not migrate account bindings.
 
 [license]
 key = ""   # Leave empty for Community edition, set License Key for Pro

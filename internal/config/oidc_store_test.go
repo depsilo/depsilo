@@ -19,13 +19,14 @@ const oidcStoreDocument = `# preserve operator configuration
 log_level = "info" # keep this comment
 [auth]
 jwt_secret = "local-signing-key-stays-unchanged"
-[auth.oidc]
+[auth.sources.existing]
+protocol = "oidc"
 enabled = false
 client_secret = "saved-provider-secret"
 display_name = "Existing"
 issuer = "https://identity.example"
 client_id = "depsilo"
-redirect_url = "https://depsilo.example/api/v1/auth/oidc/callback"
+redirect_url = "https://depsilo.example/api/v1/auth/oidc/existing/callback"
 admin_groups = [
   "operators", # keep semantics even when changing the array
 ]
@@ -37,7 +38,7 @@ key = "preserve-license"
 func newOIDCStoreFixture(t *testing.T, document string) (*Store, string) {
 	t.Helper()
 	for _, field := range oidcFields {
-		t.Setenv(oidcEnvName(field), "")
+		t.Setenv(authenticationSourceEnvName("existing", field), "")
 	}
 	path := filepath.Join(t.TempDir(), "config.toml")
 	if err := os.WriteFile(path, []byte(document), 0o640); err != nil {
@@ -51,6 +52,27 @@ func newOIDCStoreFixture(t *testing.T, document string) (*Store, string) {
 }
 
 func oidcPointer[T any](value T) *T { return &value }
+
+func setSourceSecret(cfg *Config, id, secret string) {
+	source := cfg.Auth.Sources[id]
+	source.ClientSecret = secret
+	cfg.Auth.Sources[id] = source
+}
+
+func sourceSettings(t *testing.T, store *Store, id string) AuthenticationSourceState {
+	t.Helper()
+	states, err := store.AuthenticationSourceSettings(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, state := range states.Sources {
+		if state.ID == id {
+			return state
+		}
+	}
+	t.Fatalf("source %s not listed", id)
+	return AuthenticationSourceState{}
+}
 func requireOIDCStoreCode(t *testing.T, err error, code StoreErrorCode) {
 	t.Helper()
 	var storeErr *StoreError
@@ -59,16 +81,14 @@ func requireOIDCStoreCode(t *testing.T, err error, code StoreErrorCode) {
 	}
 }
 
-func TestOIDCSettingsWritePreservesSecretsAndRestartAuthority(t *testing.T) {
+func TestOIDCSourceWritePreservesSecretsAndRestartAuthority(t *testing.T) {
+	ctx := context.Background()
 	store, path := newOIDCStoreFixture(t, oidcStoreDocument)
-	initial, err := store.OIDCSettings(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	initial := sourceSettings(t, store, "existing")
 	if initial.PendingRestart || !initial.Configured.ClientSecretSet || initial.Effective.Enabled {
 		t.Fatal("unexpected initial state")
 	}
-	state, err := store.UpdateOIDCSettings(context.Background(), OIDCSettingsPatch{Enabled: oidcPointer(true), DisplayName: oidcPointer("Company Login"), AdminGroups: oidcPointer([]string{"admin-team", "ops"}), ReadonlyGroups: oidcPointer([]string{"readers"})})
+	state, err := store.UpdateAuthenticationSource(ctx, "existing", OIDCSettingsPatch{Enabled: oidcPointer(true), DisplayName: oidcPointer("Company Login"), AdminGroups: oidcPointer([]string{"admin-team", "ops"}), ReadonlyGroups: oidcPointer([]string{"readers"})})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,16 +117,15 @@ func TestOIDCSettingsWritePreservesSecretsAndRestartAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(next.Auth.OIDC.AdminGroups) != 2 || len(next.Auth.OIDC.ReadonlyGroups) != 1 {
+	if source := next.Auth.Sources["existing"]; len(source.AdminGroups) != 2 || len(source.ReadonlyGroups) != 1 {
 		t.Fatal("groups not persisted")
 	}
 	reopened := NewStore(path, next, zap.NewAtomicLevel())
-	state, err = reopened.OIDCSettings(context.Background())
-	if err != nil || state.PendingRestart || !state.Effective.Enabled {
-		t.Fatalf("restart state invalid: %v", err)
+	if state := sourceSettings(t, reopened, "existing"); state.PendingRestart || !state.Effective.Enabled {
+		t.Fatal("restart state invalid")
 	}
 	// Secret replacement must also require restart despite unchanged redacted snapshots.
-	state, err = reopened.UpdateOIDCSettings(context.Background(), OIDCSettingsPatch{ClientSecret: oidcPointer("replacement-provider-secret")})
+	state, err = reopened.UpdateAuthenticationSource(ctx, "existing", OIDCSettingsPatch{ClientSecret: oidcPointer("replacement-provider-secret")})
 	if err != nil || !state.PendingRestart {
 		t.Fatalf("secret rotation not detected: %v", err)
 	}
@@ -114,13 +133,14 @@ func TestOIDCSettingsWritePreservesSecretsAndRestartAuthority(t *testing.T) {
 	if err != nil || info.Mode().Perm() != 0o600 {
 		t.Fatal("secret update should restrict file permissions")
 	}
-	state, err = reopened.UpdateOIDCSettings(context.Background(), OIDCSettingsPatch{Enabled: oidcPointer(false), ClientSecret: oidcPointer("")})
+	state, err = reopened.UpdateAuthenticationSource(ctx, "existing", OIDCSettingsPatch{Enabled: oidcPointer(false), ClientSecret: oidcPointer("")})
 	if err != nil || state.Configured.ClientSecretSet {
 		t.Fatalf("explicit clear failed: %v", err)
 	}
 }
 
-func TestOIDCSettingsEnvironmentRemainsAuthoritativeAndPrivate(t *testing.T) {
+func TestOIDCSourceEnvironmentRemainsAuthoritativeAndPrivate(t *testing.T) {
+	ctx := context.Background()
 	_, path := newOIDCStoreFixture(t, strings.ReplaceAll(strings.ReplaceAll(oidcStoreDocument, "enabled = false", "enabled = true"), "client_secret = \"saved-provider-secret\"\n", ""))
 	document, err := os.ReadFile(path)
 	if err != nil {
@@ -130,19 +150,16 @@ func TestOIDCSettingsEnvironmentRemainsAuthoritativeAndPrivate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("DEPSILO_AUTH_OIDC_CLIENT_SECRET", "environment-only-secret")
-	cfg.Auth.OIDC.ClientSecret = "environment-only-secret"
+	t.Setenv("DEPSILO_AUTH_SOURCES_EXISTING_CLIENT_SECRET", "environment-only-secret")
+	setSourceSecret(cfg, "existing", "environment-only-secret")
 	store := NewStore(path, cfg, zap.NewAtomicLevel())
-	state, err := store.OIDCSettings(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if state.PendingRestart || state.Configured.ClientSecretSet || !state.Effective.ClientSecretSet || state.Overrides["client_secret"] != "DEPSILO_AUTH_OIDC_CLIENT_SECRET" {
+	state := sourceSettings(t, store, "existing")
+	if state.PendingRestart || state.Configured.ClientSecretSet || !state.Effective.ClientSecretSet || state.Overrides["client_secret"] != "DEPSILO_AUTH_SOURCES_EXISTING_CLIENT_SECRET" {
 		t.Fatal("incorrect environment state")
 	}
-	_, err = store.UpdateOIDCSettings(context.Background(), OIDCSettingsPatch{ClientSecret: oidcPointer("overwrite")})
+	_, err = store.UpdateAuthenticationSource(ctx, "existing", OIDCSettingsPatch{ClientSecret: oidcPointer("overwrite")})
 	requireOIDCStoreCode(t, err, StoreInvalidSetting)
-	state, err = store.UpdateOIDCSettings(context.Background(), OIDCSettingsPatch{DisplayName: oidcPointer("Updated")})
+	state, err = store.UpdateAuthenticationSource(ctx, "existing", OIDCSettingsPatch{DisplayName: oidcPointer("Updated")})
 	if err != nil || !state.PendingRestart {
 		t.Fatalf("environment-backed save failed: %v", err)
 	}
@@ -154,14 +171,15 @@ func TestOIDCSettingsEnvironmentRemainsAuthoritativeAndPrivate(t *testing.T) {
 		t.Fatal("environment secret materialized")
 	}
 	// Later process environment changes are not treated as a runtime reload.
-	t.Setenv("DEPSILO_AUTH_OIDC_CLIENT_SECRET", "different-process-value")
-	state, err = store.UpdateOIDCSettings(context.Background(), OIDCSettingsPatch{DisplayName: oidcPointer("Existing")})
+	t.Setenv("DEPSILO_AUTH_SOURCES_EXISTING_CLIENT_SECRET", "different-process-value")
+	state, err = store.UpdateAuthenticationSource(ctx, "existing", OIDCSettingsPatch{DisplayName: oidcPointer("Existing")})
 	if err != nil || state.PendingRestart {
 		t.Fatalf("startup environment capture changed: %v", err)
 	}
 }
 
-func TestOIDCSettingsRejectsInvalidOrUnwritableChanges(t *testing.T) {
+func TestOIDCSourceRejectsInvalidOrUnwritableChanges(t *testing.T) {
+	ctx := context.Background()
 	cases := []struct {
 		name  string
 		patch OIDCSettingsPatch
@@ -169,6 +187,7 @@ func TestOIDCSettingsRejectsInvalidOrUnwritableChanges(t *testing.T) {
 		{"empty", OIDCSettingsPatch{}},
 		{"invalid disabled issuer", OIDCSettingsPatch{Issuer: oidcPointer("http://identity.example")}},
 		{"invalid disabled callback", OIDCSettingsPatch{RedirectURL: oidcPointer("https://depsilo.example/other")}},
+		{"unprefixed callback", OIDCSettingsPatch{RedirectURL: oidcPointer("https://depsilo.example/api/v1/auth/oidc/callback")}},
 		{"missing enabled secret", OIDCSettingsPatch{Enabled: oidcPointer(true), ClientSecret: oidcPointer("")}},
 		{"overlapping groups", OIDCSettingsPatch{ReadonlyGroups: oidcPointer([]string{"operators"})}},
 		{"oversized secret", OIDCSettingsPatch{ClientSecret: oidcPointer(strings.Repeat("s", 4097))}},
@@ -179,7 +198,7 @@ func TestOIDCSettingsRejectsInvalidOrUnwritableChanges(t *testing.T) {
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
 			store, path := newOIDCStoreFixture(t, oidcStoreDocument)
-			_, err := store.UpdateOIDCSettings(context.Background(), test.patch)
+			_, err := store.UpdateAuthenticationSource(ctx, "existing", test.patch)
 			requireOIDCStoreCode(t, err, StoreInvalidSetting)
 			if strings.Contains(err.Error(), "private-value") {
 				t.Fatal("submitted invalid value leaked")
@@ -195,13 +214,13 @@ func TestOIDCSettingsRejectsInvalidOrUnwritableChanges(t *testing.T) {
 		if err := os.Chmod(path, 0o400); err != nil {
 			t.Fatal(err)
 		}
-		_, err := store.UpdateOIDCSettings(context.Background(), OIDCSettingsPatch{DisplayName: oidcPointer("Update")})
+		_, err := store.UpdateAuthenticationSource(ctx, "existing", OIDCSettingsPatch{DisplayName: oidcPointer("Update")})
 		requireOIDCStoreCode(t, err, StoreConfigReadOnly)
 	})
 	t.Run("failed atomic write", func(t *testing.T) {
 		store, path := newOIDCStoreFixture(t, oidcStoreDocument)
 		store.writer = &failingOIDCWriter{}
-		_, err := store.UpdateOIDCSettings(context.Background(), OIDCSettingsPatch{DisplayName: oidcPointer("Update")})
+		_, err := store.UpdateAuthenticationSource(ctx, "existing", OIDCSettingsPatch{DisplayName: oidcPointer("Update")})
 		requireOIDCStoreCode(t, err, StoreConfigWriteFailed)
 		after, _ := os.ReadFile(path)
 		if string(after) != oidcStoreDocument {
@@ -216,11 +235,13 @@ func (*failingOIDCWriter) Write(string, []byte, os.FileMode) (atomicWriteOutcome
 	return atomicWriteOutcome{}, errors.New("write failed with private details")
 }
 
-func TestOIDCSettingsAddsSectionAndPreservesDocumentShapes(t *testing.T) {
+func TestOIDCSourceAddsSectionAndPreservesDocumentShapes(t *testing.T) {
+	ctx := context.Background()
 	for _, document := range []string{"", "[auth]\ntoken_ttl = \"24h\"", "[server]\nlog_level = \"debug\"\r\n"} {
 		store, path := newOIDCStoreFixture(t, document)
-		_, err := store.UpdateOIDCSettings(context.Background(), OIDCSettingsPatch{DisplayName: oidcPointer("Generic OIDC")})
-		if err != nil {
+		create := sourceCreate("company", "https://company.example")
+		create.DisplayName = oidcPointer("Generic OIDC")
+		if _, err := store.CreateAuthenticationSource(ctx, create); err != nil {
 			t.Fatal(err)
 		}
 		raw, err := os.ReadFile(path)
@@ -231,14 +252,14 @@ func TestOIDCSettingsAddsSectionAndPreservesDocumentShapes(t *testing.T) {
 			t.Fatal("existing document changed")
 		}
 		cfg, err := decodeConfigDocument(raw)
-		if err != nil || cfg.Auth.OIDC.DisplayName != "Generic OIDC" {
+		if err != nil || cfg.Auth.Sources["company"].DisplayName != "Generic OIDC" {
 			t.Fatalf("new section invalid: %v", err)
 		}
 	}
 	// An array containing a closing bracket in a value or comment must still be
 	// replaced as one value while preserving its following inline comment.
 	store, path := newOIDCStoreFixture(t, strings.Replace(oidcStoreDocument, "  \"operators\", # keep semantics even when changing the array\n]", "  \"ops]team\", # ] ignored\n] # outer stays", 1))
-	_, err := store.UpdateOIDCSettings(context.Background(), OIDCSettingsPatch{AdminGroups: oidcPointer([]string{}), SessionTTL: oidcPointer((15 * time.Minute).String())})
+	_, err := store.UpdateAuthenticationSource(ctx, "existing", OIDCSettingsPatch{AdminGroups: oidcPointer([]string{}), SessionTTL: oidcPointer((15 * time.Minute).String())})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +269,7 @@ func TestOIDCSettingsAddsSectionAndPreservesDocumentShapes(t *testing.T) {
 	}
 }
 
-func TestOIDCSettingsDisablePreservesExistingLargeGroupMapping(t *testing.T) {
+func TestOIDCSourceDisablePreservesExistingLargeGroupMapping(t *testing.T) {
 	groups := make([]string, 101)
 	for i := range groups {
 		groups[i] = fmt.Sprintf("group-%d", i)
@@ -256,7 +277,7 @@ func TestOIDCSettingsDisablePreservesExistingLargeGroupMapping(t *testing.T) {
 	document := strings.Replace(oidcStoreDocument, "enabled = false", "enabled = true", 1)
 	document = strings.Replace(document, "admin_groups = [\n  \"operators\", # keep semantics even when changing the array\n]", "admin_groups = "+string(renderOIDCValue(groups)), 1)
 	store, path := newOIDCStoreFixture(t, document)
-	state, err := store.UpdateOIDCSettings(context.Background(), OIDCSettingsPatch{Enabled: oidcPointer(false)})
+	state, err := store.UpdateAuthenticationSource(context.Background(), "existing", OIDCSettingsPatch{Enabled: oidcPointer(false)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,48 +290,24 @@ func TestOIDCSettingsDisablePreservesExistingLargeGroupMapping(t *testing.T) {
 	}
 }
 
-func TestOIDCSettingsDisabledLegacyValuesDoNotBlockRecoveryEdits(t *testing.T) {
-	document := strings.Replace(oidcStoreDocument, "https://identity.example", "http://legacy-identity.example", 1)
+func TestOIDCSourceDisabledStaleValuesDoNotBlockRecoveryEdits(t *testing.T) {
+	ctx := context.Background()
+	document := strings.Replace(oidcStoreDocument, "https://identity.example", "http://stale-identity.example", 1)
 	store, path := newOIDCStoreFixture(t, document)
-	state, err := store.UpdateOIDCSettings(context.Background(), OIDCSettingsPatch{DisplayName: oidcPointer("Renamed")})
+	state, err := store.UpdateAuthenticationSource(ctx, "existing", OIDCSettingsPatch{DisplayName: oidcPointer("Renamed")})
 	if err != nil || state.Configured.DisplayName != "Renamed" {
 		t.Fatalf("unrelated edit rejected: %v", err)
 	}
 	raw, _ := os.ReadFile(path)
-	if !strings.Contains(string(raw), "http://legacy-identity.example") {
-		t.Fatal("legacy value was silently rewritten")
+	if !strings.Contains(string(raw), "http://stale-identity.example") {
+		t.Fatal("stale value was silently rewritten")
 	}
-	_, err = store.UpdateOIDCSettings(context.Background(), OIDCSettingsPatch{Enabled: oidcPointer(true)})
+	_, err = store.UpdateAuthenticationSource(ctx, "existing", OIDCSettingsPatch{Enabled: oidcPointer(true)})
 	requireOIDCStoreCode(t, err, StoreInvalidSetting)
-	_, err = store.UpdateOIDCSettings(context.Background(), OIDCSettingsPatch{Issuer: oidcPointer("http://different-invalid.example")})
+	_, err = store.UpdateAuthenticationSource(ctx, "existing", OIDCSettingsPatch{Issuer: oidcPointer("http://different-invalid.example")})
 	requireOIDCStoreCode(t, err, StoreInvalidSetting)
-	_, err = store.UpdateOIDCSettings(context.Background(), OIDCSettingsPatch{Issuer: oidcPointer("https://fixed.example"), Enabled: oidcPointer(true)})
+	_, err = store.UpdateAuthenticationSource(ctx, "existing", OIDCSettingsPatch{Issuer: oidcPointer("https://fixed.example"), Enabled: oidcPointer(true)})
 	if err != nil {
 		t.Fatalf("repair and enable rejected: %v", err)
-	}
-}
-
-func TestOIDCSettingsUnsupportedDocumentShapeIsReadOnly(t *testing.T) {
-	for _, document := range []string{
-		"auth.oidc.display_name = \"Existing\"\n",
-		"[auth]\noidc = { display_name = \"Existing\" }\n",
-		"auth = { oidc = { display_name = \"Existing\" } }\n",
-	} {
-		t.Run(document, func(t *testing.T) {
-			store, path := newOIDCStoreFixture(t, document)
-			state, err := store.OIDCSettings(context.Background())
-			if err != nil {
-				t.Fatal(err)
-			}
-			if state.ConfigWritable || state.Configured.DisplayName != "Existing" {
-				t.Fatal("unsupported configuration shape misrepresented")
-			}
-			_, err = store.UpdateOIDCSettings(context.Background(), OIDCSettingsPatch{DisplayName: oidcPointer("Changed")})
-			requireOIDCStoreCode(t, err, StoreConfigReadOnly)
-			raw, _ := os.ReadFile(path)
-			if string(raw) != document {
-				t.Fatal("unsupported document changed")
-			}
-		})
 	}
 }

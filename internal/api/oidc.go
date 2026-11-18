@@ -78,9 +78,6 @@ func (h *OIDCHandler) Callback(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	c.Header("Referrer-Policy", "no-referrer")
 	id := c.Param("provider_id")
-	if id == "" {
-		id = identity.ProviderID
-	}
 	// A failed callback, including a trial, must not complete an unrelated
 	// earlier browser flow and replace the current administrator session.
 	h.cookie(c, h.browserManager(), "complete", "", -1)
@@ -116,7 +113,8 @@ func (h *OIDCHandler) Complete(c *gin.Context) {
 	h.cookie(c, h.browserManager(), "complete", "", -1)
 	id, tokenKey, found := strings.Cut(key, ".")
 	if !found {
-		id, tokenKey = identity.ProviderID, key
+		oidcError(c, identity.ErrExpired)
+		return
 	}
 	manager := h.registry.Manager(id)
 	if !manager.Enabled() {
@@ -383,9 +381,6 @@ func (h *OIDCHandler) browserManager() *identity.Manager {
 }
 
 func flowCookie(manager *identity.Manager) string {
-	if manager.ID() == identity.ProviderID {
-		return "flow"
-	}
 	return "flow_" + manager.ID()
 }
 

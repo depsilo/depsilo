@@ -10,18 +10,11 @@ import (
 	"github.com/pelletier/go-toml/v2/unstable"
 )
 
-// Only explicit [auth.oidc] or [auth.sources.<id>] tables are patched.
-// Alternative TOML shapes remain readable but require operator normalization:
-// guessing at inline/dotted ownership could overwrite unrelated secrets.
-func patchOIDCDocument(document []byte, entries []oidcEntry) ([]byte, error) {
-	return patchAuthenticationDocument(document, "oidc", entries, false)
-}
-
+// Only explicit [auth.sources.<id>] tables are patched. Alternative TOML
+// shapes remain readable but require operator normalization: guessing at
+// inline/dotted ownership could overwrite unrelated secrets.
 func patchAuthenticationDocument(document []byte, id string, entries []oidcEntry, remove bool) ([]byte, error) {
-	target := "auth.oidc"
-	if id != "oidc" {
-		target = "auth.sources." + id
-	}
+	target := "auth.sources." + id
 	var removals []documentEdit
 	var parser unstable.Parser
 	parser.KeepComments = true
@@ -191,10 +184,7 @@ func authenticationSourceExplicitFields(document []byte, id string) (map[string]
 	if _, err := patchAuthenticationDocument(document, id, nil, false); err != nil {
 		return nil, err
 	}
-	target := "auth.oidc"
-	if id != "oidc" {
-		target = "auth.sources." + id
-	}
+	target := "auth.sources." + id
 	fields := map[string]bool{}
 	var parser unstable.Parser
 	parser.Reset(document)

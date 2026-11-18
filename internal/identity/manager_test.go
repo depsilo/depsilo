@@ -162,12 +162,24 @@ func testManager(t *testing.T) (*Manager, *fakeProvider, *gorm.DB) {
 	if err := database.AutoMigrate(&db.User{}, &db.ExternalIdentity{}, &db.IdentitySession{}, &db.AuditLog{}); err != nil {
 		t.Fatal(err)
 	}
-	cfg := config.OIDCConfig{Enabled: true, DisplayName: "Test login", Issuer: f.server.URL, ClientID: "test-client", ClientSecret: "test-secret", RedirectURL: "http://127.0.0.1:18081/api/v1/auth/oidc/callback", AdminGroups: []string{"admins"}, ReadonlyGroups: []string{"readers"}, GroupsClaim: "groups", SessionTTL: 30 * time.Minute, AllowInsecureLoopback: true}
-	m, err := New(database, cfg)
+	cfg := config.OIDCConfig{Enabled: true, DisplayName: "Test login", Issuer: f.server.URL, ClientID: "test-client", ClientSecret: "test-secret", RedirectURL: "http://127.0.0.1:18081/api/v1/auth/oidc/" + testSourceID + "/callback", AdminGroups: []string{"admins"}, ReadonlyGroups: []string{"readers"}, GroupsClaim: "groups", SessionTTL: 30 * time.Minute, AllowInsecureLoopback: true}
+	m, err := startTestSource(database, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return m, f, database
+}
+
+const testSourceID = "company"
+
+// startTestSource performs the startup a restart would: it builds the registry
+// for one named source and reconciles that source's sessions.
+func startTestSource(database *gorm.DB, cfg config.OIDCConfig) (*Manager, error) {
+	r, err := NewRegistry(database, config.AuthConfig{Sources: map[string]config.AuthenticationSourceConfig{testSourceID: {Protocol: "oidc", OIDCConfig: cfg}}})
+	if err != nil {
+		return nil, err
+	}
+	return r.Manager(testSourceID), nil
 }
 
 func doLogin(t *testing.T, m *Manager, f *fakeProvider, subject string, groups any, defect string) (Result, error) {
@@ -414,7 +426,7 @@ func TestOIDCConcurrentKnownLoginsAndConfigurationRevocation(t *testing.T) {
 	}
 	cfg := m.Config()
 	cfg.ClientSecret = "rotated-secret"
-	if _, err := New(database, cfg); err != nil {
+	if _, err := startTestSource(database, cfg); err != nil {
 		t.Fatal(err)
 	}
 	database.Model(&db.IdentitySession{}).Where("revoked_at IS NULL").Count(&count)
@@ -426,7 +438,7 @@ func TestOIDCConcurrentKnownLoginsAndConfigurationRevocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg.Enabled = false
-	if _, err := New(database, cfg); err != nil {
+	if _, err := startTestSource(database, cfg); err != nil {
 		t.Fatal(err)
 	}
 	var old db.IdentitySession

@@ -47,7 +47,7 @@ export function newAuthenticationSource(id: string, origin: string) {
     redirect_url: `${origin}/api/v1/auth/oidc/${id}/callback`,
     admin_groups: [], readonly_groups: [], groups_claim: 'groups', session_ttl: '30m', allow_insecure_loopback: false,
   }
-  return { id, protocol: 'oidc' as const, legacy: false, configured, effective: null, overrides: {}, pending_restart: false, config_writable: true }
+  return { id, protocol: 'oidc' as const, configured, effective: null, overrides: {}, pending_restart: false, config_writable: true }
 }
 
 /** Running labels always describe the effective config, never a pending draft. */
@@ -82,7 +82,7 @@ export function authenticationCreateSettings(draft: AuthenticationDraft): Authen
   }
 }
 
-const validationCodes = new Set(['REQUIRED', 'INVALID_VALUE', 'INVALID_URL', 'CALLBACK_PATH', 'DUPLICATE_ISSUER', 'CALLBACK_ORIGIN', 'GROUPS_OVERLAP', 'ENV_OVERRIDE', 'GROUPS_REQUIRED', 'RESERVED_ID', 'UNSUPPORTED_PROTOCOL', 'SOURCE_EXISTS'])
+const validationCodes = new Set(['REQUIRED', 'INVALID_VALUE', 'INVALID_URL', 'CALLBACK_PATH', 'DUPLICATE_ISSUER', 'CALLBACK_ORIGIN', 'GROUPS_OVERLAP', 'ENV_OVERRIDE', 'GROUPS_REQUIRED', 'UNSUPPORTED_PROTOCOL', 'SOURCE_EXISTS'])
 /** Server errors are codes, not text: never render returned configuration values or secrets. */
 export function authenticationValidationKey(code: string) {
   return `authentication.validation.${validationCodes.has(code) ? code : 'INVALID_VALUE'}`

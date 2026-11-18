@@ -73,12 +73,15 @@ them. Do not attach the private seed, credentials, database or raw traces to PRs
 | Token format / groups | `JWT-Standard` / `ID` |
 | Grant | `authorization_code` |
 | Requested scopes | `openid profile email` |
-| Depsilo integration callback | `http://127.0.0.1:18081/api/v1/auth/oidc/callback` |
+| Depsilo integration callback | `http://127.0.0.1:18081/api/v1/auth/oidc/casdoor/callback` |
 | Standalone protocol probe callback | `http://127.0.0.1:18082/callback` |
 
-The Depsilo callback is registered for the optional application integration;
-`fixture.py start` starts only the identity provider. Use the exact issuer and redirect URI, not
-`localhost` aliases. HTTP is intentional for this loopback-only fixture; a
+The Depsilo callback is registered for the optional application integration
+and belongs to the named source `casdoor`; `fixture.py start` starts only the
+identity provider. State initialized before the singleton `[auth.oidc]` source
+was removed registers only the old unprefixed callback, and the runner rejects
+it. Move that state directory aside so `start` initializes a fresh one. Use the
+exact issuer and redirect URI, not `localhost` aliases. HTTP is intentional for this loopback-only fixture; a
 remote integration needs HTTPS and an origin reachable from both browser and
 backend.
 
@@ -185,7 +188,7 @@ without creating account, binding or session rows or replacing the local token.
 The runner also checks that an unassociated login creates no account before an
 explicit choice: cancellation creates nothing, a fresh local password proof
 binds the existing account, and explicit creation yields a separate managed
-account. It then edits the compatibility source (`oidc`)
+account. It then edits the `casdoor` source
 through the source-specific system authentication form, saves a 20-minute session limit,
 checks that the running 30-minute limit remains unchanged until restart, and
 restarts only its disposable Depsilo process. After restart it verifies the new

@@ -28,7 +28,7 @@ func (s trialDraftFixture) PreviewAuthenticationSourceDraft(context.Context, con
 func trialAPI(t *testing.T) (*gin.Engine, string, *OIDCHandler) {
 	t.Helper()
 	r, _, auth, token, h := newOIDCAPI(t, false)
-	h.ConfigureDraftPreview(trialDraftFixture{auth.OIDC})
+	h.ConfigureDraftPreview(trialDraftFixture{auth.Sources[testOIDCSourceID].OIDCConfig})
 	g := r.Group("/api/v1/admin", middleware.Authenticate(auth.JWTSecret, h.db), admin.AdminRoleRequired(), middleware.CredentialManagementRequired())
 	g.POST("/authentication/check", h.Check)
 	g.POST("/authentication/trial", h.StartTrial)
@@ -52,7 +52,7 @@ func trialRequest(r *gin.Engine, path, body, token, origin string, cookies ...*h
 
 func trialCompletionCookie(t *testing.T, r *gin.Engine, token string) *http.Cookie {
 	t.Helper()
-	start := oidcRequest(r, http.MethodPost, "/api/v1/admin/authentication/trial", `{"id":"oidc","protocol":"oidc","settings":{},"create":false}`, token, "http://127.0.0.1:18081")
+	start := oidcRequest(r, http.MethodPost, "/api/v1/admin/authentication/trial", `{"id":"example","protocol":"oidc","settings":{},"create":false}`, token, "http://127.0.0.1:18081")
 	if start.Code != 200 {
 		t.Fatalf("start trial: %d %s", start.Code, start.Body)
 	}
@@ -76,7 +76,7 @@ func trialCompletionCookie(t *testing.T, r *gin.Engine, token string) *http.Cook
 			t.Fatal("wrong-source trial callback produced completion")
 		}
 	}
-	callback := oidcCookieRequest(r, http.MethodGet, "/api/v1/auth/oidc/callback?state="+u.Query().Get("state")+"&error=access_denied", "", flow)
+	callback := oidcCookieRequest(r, http.MethodGet, "/api/v1/auth/oidc/example/callback?state="+u.Query().Get("state")+"&error=access_denied", "", flow)
 	for _, cookie := range callback.Result().Cookies() {
 		if strings.HasSuffix(cookie.Name, "_complete") && cookie.MaxAge > 0 {
 			if !cookie.HttpOnly || !strings.HasPrefix(cookie.Value, "@trial.") {
@@ -119,7 +119,7 @@ func TestFailedTrialCallbackClearsUnrelatedCompletion(t *testing.T) {
 	for _, failure := range []string{"wrong-source", "missing-browser", "wrong-browser"} {
 		t.Run(failure, func(t *testing.T) {
 			r, token, h := trialAPI(t)
-			start := trialRequest(r, "/api/v1/admin/authentication/trial", `{"id":"oidc","protocol":"oidc","settings":{},"create":false}`, token, "http://127.0.0.1:18081")
+			start := trialRequest(r, "/api/v1/admin/authentication/trial", `{"id":"example","protocol":"oidc","settings":{},"create":false}`, token, "http://127.0.0.1:18081")
 			if start.Code != http.StatusOK {
 				t.Fatalf("start trial: %d", start.Code)
 			}
@@ -134,7 +134,7 @@ func TestFailedTrialCallbackClearsUnrelatedCompletion(t *testing.T) {
 				t.Fatal(err)
 			}
 			flow := start.Result().Cookies()[0]
-			path := "/api/v1/auth/oidc/callback"
+			path := "/api/v1/auth/oidc/example/callback"
 			switch failure {
 			case "wrong-source":
 				path = "/api/v1/auth/oidc/foreign/callback"
@@ -146,7 +146,7 @@ func TestFailedTrialCallbackClearsUnrelatedCompletion(t *testing.T) {
 			name := h.cookieName(h.browserManager(), "complete")
 			// A browser may still carry an ordinary login completion from an
 			// earlier tab. Failure must expire it before opening AuthComplete.
-			old := &http.Cookie{Name: name, Value: "oidc.previous-login-completion", Path: "/"}
+			old := &http.Cookie{Name: name, Value: "example.previous-login-completion", Path: "/"}
 			response := oidcCookieRequest(r, http.MethodGet, path+"?state="+authorization.Query().Get("state")+"&error=access_denied", "", flow, old)
 			cleared := false
 			for _, cookie := range response.Result().Cookies() {
@@ -204,13 +204,13 @@ func TestOIDCDraftEndpointsRejectUnknownAndOversizedInput(t *testing.T) {
 	for _, endpoint := range []string{"check", "trial"} {
 		t.Run(endpoint, func(t *testing.T) {
 			for _, body := range []string{
-				`null`, `[]`, `{"id":"oidc","protocol":"oidc","create":false,"settings":null}`,
-				`{"id":"oidc","protocol":"oidc","create":false,"settings":{"client_secret":null}}`,
-				`{"id":"oidc","protocol":"oidc","create":false,"settings":{"enabled":true,"enabled":false}}`,
-				`{"id":"oidc","protocol":"oidc","create":false,"settings":{"Enabled":false}}`,
-				`{"id":"oidc","ID":"foreign","protocol":"oidc","create":false,"settings":{}}`,
-				`{"id":"oidc","id":"foreign","protocol":"oidc","create":false,"settings":{}}`,
-				`{"id":"oidc","protocol":"oidc","unexpected":"secret-marker"}`, `{"id":"oidc","settings":{"bad":"secret-marker"}}`, `{} {}`, `{"id":"` + strings.Repeat("x", 65536) + `"}`} {
+				`null`, `[]`, `{"id":"example","protocol":"oidc","create":false,"settings":null}`,
+				`{"id":"example","protocol":"oidc","create":false,"settings":{"client_secret":null}}`,
+				`{"id":"example","protocol":"oidc","create":false,"settings":{"enabled":true,"enabled":false}}`,
+				`{"id":"example","protocol":"oidc","create":false,"settings":{"Enabled":false}}`,
+				`{"id":"example","ID":"foreign","protocol":"oidc","create":false,"settings":{}}`,
+				`{"id":"example","id":"foreign","protocol":"oidc","create":false,"settings":{}}`,
+				`{"id":"example","protocol":"oidc","unexpected":"secret-marker"}`, `{"id":"example","settings":{"bad":"secret-marker"}}`, `{} {}`, `{"id":"` + strings.Repeat("x", 65536) + `"}`} {
 				r, token, _ := trialAPI(t)
 				response := oidcRequest(r, http.MethodPost, "/api/v1/admin/authentication/"+endpoint, body, token, "http://127.0.0.1:18081")
 				if response.Code != 400 || strings.Contains(response.Body.String(), "secret-marker") {
@@ -257,7 +257,7 @@ func TestOIDCCheckRequiresJSONAndSameOriginButAllowsNonBrowserClients(t *testing
 	} {
 		t.Run(test.contentType+test.origin+test.site, func(t *testing.T) {
 			r, token, _ := trialAPI(t)
-			req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:18081/api/v1/admin/authentication/check", strings.NewReader(`{"id":"oidc","protocol":"oidc","create":false,"settings":{}}`))
+			req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:18081/api/v1/admin/authentication/check", strings.NewReader(`{"id":"example","protocol":"oidc","create":false,"settings":{}}`))
 			req.Header.Set("Authorization", "Bearer "+token)
 			req.Header.Set("Content-Type", test.contentType)
 			req.Header.Set("Origin", test.origin)
@@ -283,7 +283,7 @@ func TestOIDCCheckAllowsLocalWritableAPITokenButTrialDoesNot(t *testing.T) {
 	if err := h.db.Create(&key).Error; err != nil {
 		t.Fatal(err)
 	}
-	body := `{"id":"oidc","protocol":"oidc","create":false,"settings":{}}`
+	body := `{"id":"example","protocol":"oidc","create":false,"settings":{}}`
 	check := oidcRequest(r, http.MethodPost, "/api/v1/admin/authentication/check", body, raw, "")
 	if check.Code != 503 || !strings.Contains(check.Body.String(), "OIDC_UNAVAILABLE") {
 		t.Fatalf("API token cannot reach check: %d %s", check.Code, check.Body)

@@ -2,27 +2,13 @@ package admin
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
-	"depsilo/internal/config"
 	"depsilo/internal/middleware"
 )
-
-type authenticationStore interface {
-	OIDCSettings(context.Context) (config.OIDCSettingsState, error)
-	UpdateOIDCSettings(context.Context, config.OIDCSettingsPatch) (config.OIDCSettingsState, error)
-}
-
-type AuthenticationHandler struct{ store authenticationStore }
-
-func NewAuthenticationHandler(store authenticationStore) *AuthenticationHandler {
-	return &AuthenticationHandler{store: store}
-}
 
 // AdminRoleRequired permits viewing system configuration with the effective
 // administrator role, including read-only tokens owned by an administrator.
@@ -36,40 +22,6 @@ func AdminRoleRequired() gin.HandlerFunc {
 		}
 		c.Next()
 	}
-}
-
-func (h *AuthenticationHandler) Get(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
-	state, err := h.store.OIDCSettings(c.Request.Context())
-	if err != nil {
-		WriteAuthenticationError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, state)
-}
-
-func (h *AuthenticationHandler) Update(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
-	body, err := io.ReadAll(c.Request.Body)
-	if err != nil || !validAuthenticationObject(body) {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": "expected one authentication object with known, non-null fields"})
-		return
-	}
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.DisallowUnknownFields()
-	var patch config.OIDCSettingsPatch
-	if err := decoder.Decode(&patch); err != nil {
-		// Decoder errors can include user input. Never reflect a submitted secret.
-		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": "invalid authentication field or value"})
-		return
-	}
-	state, err := h.store.UpdateOIDCSettings(c.Request.Context(), patch)
-	if err != nil {
-		WriteAuthenticationError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, state)
 }
 
 func validAuthenticationObject(body []byte) bool {

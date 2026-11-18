@@ -325,6 +325,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   by ecosystem; set `server.log_level` to `debug` to list them.
 
 ### Removed
+- The single `[auth.oidc]` sign-in source, with its `DEPSILO_AUTH_OIDC_*`
+  environment variables. A configuration file that still has `[auth.oidc]`
+  no longer loads; configure a named Authentication Source under
+  `[auth.sources.<id>]` with `protocol = "oidc"` (variables
+  `DEPSILO_AUTH_SOURCES_<ID>_*`). `oidc` is now an ordinary source ID.
+  - The unprefixed callback `/api/v1/auth/oidc/callback` is gone; register
+    `/api/v1/auth/oidc/<id>/callback` with the identity provider.
+  - `GET` and `PUT /api/v1/admin/authentication` are gone; manage sources
+    through `/api/v1/admin/authentication/sources`.
+  - Sign-in and linking requests must name `provider_id`, even when only one
+    source is enabled.
 - Compatibility aliases in the HTTP and MCP interfaces (the interfaces are
   not stable before 1.0). Read the current fields instead:
   - License status: `key_masked` and `activated_at` are gone; read

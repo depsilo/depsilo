@@ -196,12 +196,10 @@ records the authority split.
 
 `GET /api/v1/auth/providers` is public and returns enabled sources as
 `{id,name,protocol}`. Login starts at `POST /api/v1/auth/oidc/start` with
-`provider_id` selecting the source. New callbacks are
-`GET /api/v1/auth/oidc/:provider_id/callback`; legacy source `oidc` retains
-`GET /api/v1/auth/oidc/callback`. Omitting `provider_id` selects legacy `oidc`
-when present, or the sole enabled named source when legacy is absent. Multiple
-enabled named sources require an explicit selection; a disabled legacy source
-does not silently fall through to another source. The callback redirects to
+`provider_id` selecting the source. Callbacks are
+`GET /api/v1/auth/oidc/:provider_id/callback`. Omitting `provider_id` fails with
+`PROVIDER_REQUIRED`, even when only one source is enabled; a disabled or unknown
+source never falls through to another source. The callback redirects to
 the Admin completion page without a JWT in the URL; `POST /api/v1/auth/oidc/complete` consumes a
 single-use, browser-bound completion cookie to return a login token, binding
 result, isolated test result, or an explicit first-account choice. Unknown
@@ -214,7 +212,7 @@ transactions and callbacks are source-specific; all enabled callback URLs must
 share the instance origin.
 
 `GET /api/v1/admin/authentication/sources` returns `{sources,config_writable}`.
-Each source state includes `id`, `protocol`, `legacy`, nullable `configured` and
+Each source state includes `id`, `protocol`, nullable `configured` and
 `effective` snapshots, `overrides`, `pending_restart`, `config_writable`, and
 `can_restore` for a reliable pending-removal file baseline.
 Snapshots expose `client_secret_set`, never `client_secret`. New sources have
@@ -251,12 +249,11 @@ Reads require an administrator role. Writes additionally require write and
 local credential-management authority. All writes share the settings store's
 lock and atomic file replacement. Environment-owned fields cannot be edited,
 and sources with environment overrides cannot be deleted. Explicit
-`[auth.sources.<id>]` or legacy `[auth.oidc]` tables are writable. LDAP settings
+`[auth.sources.<id>]` tables are writable. LDAP settings
 support either an inline `ldap = { ... }` value or a nested
 `[auth.sources.<id>.ldap]` table. Other unsupported inline, dotted-key, or nested
 source shapes are read-only. Changes apply only
-after restart. Legacy `GET`/`PUT /api/v1/admin/authentication` remain limited to
-`[auth.oidc]`; they never edit named sources.
+after restart.
 
 JWT sessions can call `GET /api/v1/auth/identities`,
 `POST /api/v1/auth/identities/link`, and
@@ -264,8 +261,7 @@ JWT sessions can call `GET /api/v1/auth/identities`,
 password proof and are unavailable to provider-managed accounts. The link body
 selects `provider_id`; a local account may bind one identity per source. The
 identity response includes `current_identity_id` and `current_provider_id` for
-the current external session, plus a `providers` array while retaining the legacy
-singleton `provider` field where an unambiguous compatibility value exists.
+the current external session, plus a `providers` array.
 Linking retains the current local account and role; unlinking retains its
 password and revokes only sessions created through that identity. Local
 accounts can unlink even when the source is disabled or removed. An already-bound

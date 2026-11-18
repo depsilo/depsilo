@@ -33,7 +33,7 @@ async function stopServer() {
 
 try {
   const credentials = JSON.parse(await readFile(join(state, 'credentials.json'), 'utf8'))
-  check(credentials.issuer === 'http://127.0.0.1:18000' && credentials.redirect_uris.includes(`${base}/api/v1/auth/oidc/callback`), 'Unexpected isolated fixture configuration')
+  check(credentials.issuer === 'http://127.0.0.1:18000' && credentials.redirect_uris.includes(`${base}/api/v1/auth/oidc/casdoor/callback`), 'Unexpected isolated fixture configuration')
   try { await fetch(`${base}/ready`, { signal: AbortSignal.timeout(1000) }); throw new Error('occupied') } catch (error) { check(error.message !== 'occupied', 'Port 18081 is occupied; no existing service was changed') }
   await mkdir(join(state, 'runs'), { recursive: true, mode: 0o700 })
   run = await mkdtemp(join(state, 'runs/depsilo-'))
@@ -53,12 +53,13 @@ path = ${JSON.stringify(join(run, 'cache'))}
 [auth]
 enabled = true
 token_ttl = "168h"
-[auth.oidc]
+[auth.sources.casdoor]
+protocol = "oidc"
 enabled = true
 display_name = "Casdoor"
 issuer = ${JSON.stringify(credentials.issuer)}
 client_id = ${JSON.stringify(credentials.client_id)}
-redirect_url = "${base}/api/v1/auth/oidc/callback"
+redirect_url = "${base}/api/v1/auth/oidc/casdoor/callback"
 admin_groups = ["depsilo-test/depsilo-admins"]
 readonly_groups = ["depsilo-test/depsilo-readers"]
 groups_claim = "groups"
@@ -72,7 +73,7 @@ allow_insecure_loopback = true
   async function startServer() {
     let spawnFailed = false
     server = spawn(join(root, 'bin/depsilo'), ['serve', '--config', configPath], { cwd: run,
-      env: { ...env, DEPSILO_ADMIN_USERNAME: 'recovery', DEPSILO_ADMIN_PASSWORD: password, DEPSILO_AUTH_OIDC_CLIENT_SECRET: credentials.client_secret }, stdio: ['ignore', 'pipe', 'pipe'] })
+      env: { ...env, DEPSILO_ADMIN_USERNAME: 'recovery', DEPSILO_ADMIN_PASSWORD: password, DEPSILO_AUTH_SOURCES_CASDOOR_CLIENT_SECRET: credentials.client_secret }, stdio: ['ignore', 'pipe', 'pipe'] })
     server.on('error', () => { spawnFailed = true })
     // A restart appends to the same private log; ending either pipe must not close it.
     server.stdout.pipe(log, { end: false }); server.stderr.pipe(log, { end: false })
@@ -148,7 +149,7 @@ allow_insecure_loopback = true
   const localMe = await api(local.context, 'auth/me', localToken)
   await local.page.evaluate(token => localStorage.setItem('token', token), localToken)
 
-  stage = 'protocol-based source creation and removal preserve the active legacy source'
+  stage = 'protocol-based source creation and removal preserve the active Casdoor source'
   await local.page.goto(`${base}/admin/authentication`)
   await local.page.getByRole('button', { name: '添加认证源', exact: true }).click()
   await local.page.getByRole('dialog').getByRole('button', { name: /^OIDC\b/ }).click()
@@ -167,7 +168,7 @@ allow_insecure_loopback = true
   const created = await createdResponse
   check(created.status() === 201, 'Protocol-based authentication source creation failed')
   const createdSource = await created.json()
-  check(createdSource.id === 'additional-oidc' && createdSource.protocol === 'oidc' && !createdSource.legacy && !createdSource.configured.enabled && createdSource.effective === null && createdSource.pending_restart, 'New source unexpectedly inherited legacy or active authentication state')
+  check(createdSource.id === 'additional-oidc' && createdSource.protocol === 'oidc' && !createdSource.configured.enabled && createdSource.effective === null && createdSource.pending_restart, 'New source unexpectedly inherited active authentication state')
   stage = 'open newly created source editor'
   await local.page.waitForURL(`${base}/admin/authentication?source=additional-oidc`)
   await create.waitFor({ state: 'hidden' })
@@ -176,9 +177,9 @@ allow_insecure_loopback = true
   check(await local.page.getByLabel('客户端 ID', { exact: true }).inputValue() === '', 'New source inherited another source client')
   stage = 'inspect created source metadata'
   const listedSources = await api(local.context, 'admin/authentication/sources', localToken)
-  check(listedSources.status === 200 && listedSources.body.sources.length === 2 && listedSources.body.sources.some(source => source.id === 'oidc' && source.legacy && source.effective.enabled), 'Source list lost the running legacy source')
+  check(listedSources.status === 200 && listedSources.body.sources.length === 2 && listedSources.body.sources.some(source => source.id === 'casdoor' && source.effective.enabled), 'Source list lost the running Casdoor source')
   const availableProviders = await api(local.context, 'auth/providers')
-  check(availableProviders.status === 200 && availableProviders.body.providers.length === 1 && availableProviders.body.providers[0].id === 'oidc' && availableProviders.body.providers[0].protocol === 'oidc', 'Saving an inactive source changed the available login methods')
+  check(availableProviders.status === 200 && availableProviders.body.providers.length === 1 && availableProviders.body.providers[0].id === 'casdoor' && availableProviders.body.providers[0].protocol === 'oidc', 'Saving an inactive source changed the available login methods')
   stage = 'show authentication source list'
   await local.page.goto(`${base}/admin/authentication`)
   await local.page.getByRole('heading', { name: '测试目录', exact: true }).waitFor()
@@ -191,11 +192,11 @@ allow_insecure_loopback = true
   check((await deletedResponse).status() === 204, 'Removing the inactive test source failed')
   await local.page.waitForURL(`${base}/admin/authentication`)
   const remainingSources = await api(local.context, 'admin/authentication/sources', localToken)
-  check(remainingSources.body.sources.length === 1 && remainingSources.body.sources[0].id === 'oidc', 'Removing an inactive source affected legacy authentication')
-  results.push('protocol-based source creation, independent disabled draft and removal; legacy source and available login methods unchanged')
+  check(remainingSources.body.sources.length === 1 && remainingSources.body.sources[0].id === 'casdoor', 'Removing an inactive source affected Casdoor authentication')
+  results.push('protocol-based source creation, independent disabled draft and removal; Casdoor source and available login methods unchanged')
 
   stage = 'system authentication form persists configuration without activating it'
-  await local.page.goto(`${base}/admin/authentication?source=oidc`)
+  await local.page.goto(`${base}/admin/authentication?source=casdoor`)
   stage = 'check and isolated browser trial do not create accounts or sessions'
   const beforeTrial = authenticationCounts()
   const checkedResponse = local.page.waitForResponse(response => response.url() === `${base}/api/v1/admin/authentication/check`)
@@ -213,19 +214,20 @@ allow_insecure_loopback = true
   // Start the later binding with a fresh IdP browser login; Depsilo uses the
   // unchanged localStorage JWT, so clearing fixture cookies does not log it out.
   await local.context.clearCookies()
-  await local.page.goto(`${base}/admin/authentication?source=oidc`)
+  await local.page.goto(`${base}/admin/authentication?source=casdoor`)
   const secretField = local.page.getByLabel('客户端密钥', { exact: true })
   await secretField.waitFor()
   check(await secretField.isDisabled(), 'Environment-owned client secret is editable')
   check(await secretField.inputValue() === '', 'Saved client secret was exposed in the form')
-  const initialAuthentication = await api(local.context, 'admin/authentication', localToken)
+  const initialSources = await api(local.context, 'admin/authentication/sources', localToken)
+  const initialAuthentication = { status: initialSources.status, body: initialSources.body?.sources.find(source => source.id === 'casdoor') }
   check(initialAuthentication.status === 200 && initialAuthentication.body.configured.session_ttl === '30m' && initialAuthentication.body.effective.session_ttl === '30m', 'Initial authentication state differs from the isolated fixture')
-  check(initialAuthentication.body.overrides.client_secret === 'DEPSILO_AUTH_OIDC_CLIENT_SECRET', 'Environment-owned client secret is not identified')
+  check(initialAuthentication.body.overrides.client_secret === 'DEPSILO_AUTH_SOURCES_CASDOOR_CLIENT_SECRET', 'Environment-owned client secret is not identified')
   check(!JSON.stringify(initialAuthentication.body).includes(credentials.client_secret), 'Authentication response exposed the client secret')
   await local.page.getByLabel('外部会话最长时长', { exact: true }).fill('20m')
   await local.page.getByRole('button', { name: '检查并保存', exact: true }).click()
   const review = local.page.getByRole('dialog')
-  const savedResponse = local.page.waitForResponse(response => response.url() === `${base}/api/v1/admin/authentication/sources/oidc` && response.request().method() === 'PUT')
+  const savedResponse = local.page.waitForResponse(response => response.url() === `${base}/api/v1/admin/authentication/sources/casdoor` && response.request().method() === 'PUT')
   await review.getByRole('button', { name: '保存配置', exact: true }).click()
   const savedAuthenticationResponse = await savedResponse
   check(savedAuthenticationResponse.status() === 200, 'Authentication form save failed')
@@ -250,7 +252,7 @@ allow_insecure_loopback = true
   check(await local.page.evaluate(() => localStorage.getItem('token')) === localToken, 'Link replaced local session')
   const methods = await api(local.context, 'auth/identities', localToken)
   check(methods.body.password_enabled && methods.body.identities.length === 1 && methods.body.permission_source === 'local', 'Link changed local authority')
-  check(methods.body.providers.length === 1 && methods.body.providers[0].id === 'oidc' && methods.body.identities[0].provider === 'oidc' && methods.body.identities[0].protocol === 'oidc', 'Legacy binding lost its stable source identity')
+  check(methods.body.providers.length === 1 && methods.body.providers[0].id === 'casdoor' && methods.body.identities[0].provider === 'casdoor' && methods.body.identities[0].protocol === 'oidc', 'Binding lost its stable source identity')
   await local.page.getByRole('button', { name: '解绑', exact: true }).waitFor()
   await local.page.screenshot({ path: join(run, 'account-linked-desktop.png'), fullPage: true })
   await local.page.setViewportSize({ width: 390, height: 844 })
@@ -291,7 +293,7 @@ allow_insecure_loopback = true
   const joined = await external('admin-test', '/admin/account', 'link')
   check(joined.status === 200 && !!joined.token, 'Proven existing account login failed')
   const joinedMe = await api(joined.context, 'auth/me', joined.token)
-  check(joinedMe.body.id === localMe.body.id && joinedMe.body.permission_source === 'local' && joinedMe.body.login_method === 'oidc' && joinedMe.body.current_identity_id && joinedMe.body.current_provider_id === 'oidc', 'First-login binding changed owner or lost actual identity')
+  check(joinedMe.body.id === localMe.body.id && joinedMe.body.permission_source === 'local' && joinedMe.body.login_method === 'oidc' && joinedMe.body.current_identity_id && joinedMe.body.current_provider_id === 'casdoor', 'First-login binding changed owner or lost actual identity')
   const joinedMethods = await api(joined.context, 'auth/identities', joined.token)
   check(joinedMethods.body.current_identity_id === joinedMethods.body.identities[0].id, 'Account methods did not identify this login')
   check((await api(local.context, `auth/identities/${joinedMethods.body.identities[0].id}/unlink`, localToken, { password })).status === 204, 'Could not unlink first-login binding')
@@ -350,13 +352,14 @@ allow_insecure_loopback = true
   await startServer()
   check((await api(local.context, 'auth/me', localToken)).status === 200, 'Restart invalidated the independent local recovery session')
   check((await api(beforeRestart.context, 'auth/me', beforeRestart.token)).status === 401, 'Authentication configuration change did not revoke the old external session')
-  const restartedAuthentication = await api(local.context, 'admin/authentication', localToken)
+  const restartedSources = await api(local.context, 'admin/authentication/sources', localToken)
+  const restartedAuthentication = { status: restartedSources.status, body: restartedSources.body?.sources.find(source => source.id === 'casdoor') }
   check(restartedAuthentication.status === 200 && restartedAuthentication.body.configured.session_ttl === '20m' && restartedAuthentication.body.effective.session_ttl === '20m' && !restartedAuthentication.body.pending_restart, 'Restart did not activate the saved authentication configuration')
   check(!JSON.stringify(restartedAuthentication.body).includes(credentials.client_secret), 'Restarted authentication response exposed the client secret')
   const restartedConfig = await readFile(configPath, 'utf8')
   check(!restartedConfig.includes(credentials.client_secret) && !/^\s*client_secret\s*=/m.test(restartedConfig), 'Restart materialized the environment client secret')
   await local.page.setViewportSize({ width: 1440, height: 900 })
-  await local.page.goto(`${base}/admin/authentication?source=oidc`)
+  await local.page.goto(`${base}/admin/authentication?source=casdoor`)
   await local.page.getByLabel('外部会话最长时长', { exact: true }).waitFor()
   check(await local.page.getByLabel('外部会话最长时长', { exact: true }).inputValue() === '20m', 'Restarted form did not show the effective 20m TTL')
   check(await local.page.getByText(/保存配置与运行状态不同/).count() === 0, 'Restarted form still reports a pending configuration change')
@@ -374,7 +377,7 @@ allow_insecure_loopback = true
   await local.page.getByLabel('认证源名称', { exact: true }).fill(renamedProvider)
   await local.page.getByRole('button', { name: '检查并保存', exact: true }).click()
   const renameReview = local.page.getByRole('dialog')
-  const renamedResponse = local.page.waitForResponse(response => response.url() === `${base}/api/v1/admin/authentication/sources/oidc` && response.request().method() === 'PUT')
+  const renamedResponse = local.page.waitForResponse(response => response.url() === `${base}/api/v1/admin/authentication/sources/casdoor` && response.request().method() === 'PUT')
   await renameReview.getByRole('button', { name: '保存配置', exact: true }).click()
   const renamed = await renamedResponse
   check(renamed.status() === 200, 'Renaming the authentication source failed')
@@ -382,7 +385,7 @@ allow_insecure_loopback = true
   check(pendingRename.configured.display_name === renamedProvider && pendingRename.effective.display_name === 'Casdoor' && pendingRename.pending_restart && pendingRename.sessions_will_reset === false, 'Rename-only save reported an incorrect runtime or session-reset impact')
   check((await api(afterRestart.context, 'auth/me', afterRestart.token)).status === 200, 'Saving a source name revoked the current external session')
   const pendingRenameProviders = await api(local.context, 'auth/providers')
-  check(pendingRenameProviders.body.providers.some(provider => provider.id === 'oidc' && provider.name === 'Casdoor'), 'Saving a source name changed the running login label before restart')
+  check(pendingRenameProviders.body.providers.some(provider => provider.id === 'casdoor' && provider.name === 'Casdoor'), 'Saving a source name changed the running login label before restart')
   await renameReview.waitFor({ state: 'hidden' })
   await local.page.screenshot({ path: join(run, 'authentication-rename-pending.png'), fullPage: true })
   await stopServer()
@@ -391,12 +394,12 @@ allow_insecure_loopback = true
   const afterRenameMe = await api(afterRestart.context, 'auth/me', afterRestart.token)
   check(afterRenameMe.status === 200 && afterRenameMe.body.id === beforeRenameMe.body.id && afterRenameMe.body.permission_source === beforeRenameMe.body.permission_source, 'Rename restart revoked the original external JWT or changed account authority')
   const renamedSources = await api(local.context, 'admin/authentication/sources', localToken)
-  const renamedSource = renamedSources.body.sources.find(source => source.id === 'oidc')
+  const renamedSource = renamedSources.body.sources.find(source => source.id === 'casdoor')
   check(renamedSources.status === 200 && renamedSource?.configured.display_name === renamedProvider && renamedSource.effective.display_name === renamedProvider && !renamedSource.pending_restart && renamedSource.sessions_will_reset === false, 'Rename restart did not activate the saved label and clear pending state')
   const renamedProviders = await api(local.context, 'auth/providers')
-  check(renamedProviders.status === 200 && renamedProviders.body.providers.some(provider => provider.id === 'oidc' && provider.name === renamedProvider), 'Public login methods did not receive the renamed provider label')
+  check(renamedProviders.status === 200 && renamedProviders.body.providers.some(provider => provider.id === 'casdoor' && provider.name === renamedProvider), 'Public login methods did not receive the renamed provider label')
   const renamedIdentities = await api(afterRestart.context, 'auth/identities', afterRestart.token)
-  check(renamedIdentities.status === 200 && renamedIdentities.body.identities.some(identity => identity.provider === 'oidc' && identity.provider_name === renamedProvider && identity.login_available), 'Existing account binding did not receive the active provider label')
+  check(renamedIdentities.status === 200 && renamedIdentities.body.identities.some(identity => identity.provider === 'casdoor' && identity.provider_name === renamedProvider && identity.login_available), 'Existing account binding did not receive the active provider label')
   await afterRestart.page.goto(`${base}/admin/account`)
   await afterRestart.page.getByRole('heading', { name: renamedProvider, exact: true }).waitFor()
   check(await afterRestart.page.evaluate(() => localStorage.getItem('token')) === afterRestart.token, 'Account page replaced the preserved external JWT')
@@ -404,7 +407,7 @@ allow_insecure_loopback = true
   results.push('rename-only save stays pending until restart; the original external JWT, account and authority survive while login and account labels update')
 
   stage = 'security settings still revoke the preserved external session'
-  const securityChange = await api(local.context, 'admin/authentication/sources/oidc', localToken, { session_ttl: '15m' }, 'PUT')
+  const securityChange = await api(local.context, 'admin/authentication/sources/casdoor', localToken, { session_ttl: '15m' }, 'PUT')
   check(securityChange.status === 200 && securityChange.body.configured.session_ttl === '15m' && securityChange.body.effective.session_ttl === '20m' && securityChange.body.pending_restart && securityChange.body.sessions_will_reset === true, 'Security change did not report the pending session-reset impact')
   check((await api(afterRestart.context, 'auth/me', afterRestart.token)).status === 200, 'Saving security settings activated revocation before restart')
   await stopServer()
@@ -412,7 +415,7 @@ allow_insecure_loopback = true
   check((await api(afterRestart.context, 'auth/me', afterRestart.token)).status === 401, 'A security change failed to revoke the same JWT preserved by the rename')
   check((await api(local.context, 'auth/me', localToken)).status === 200, 'Security restart invalidated independent local recovery')
   const securedSources = await api(local.context, 'admin/authentication/sources', localToken)
-  const securedSource = securedSources.body.sources.find(source => source.id === 'oidc')
+  const securedSource = securedSources.body.sources.find(source => source.id === 'casdoor')
   check(securedSources.status === 200 && securedSource?.effective.session_ttl === '15m' && securedSource.effective.display_name === renamedProvider && !securedSource.pending_restart && securedSource.sessions_will_reset === false, 'Security restart did not apply the new TTL and retain the renamed provider')
   results.push('subsequent TTL change reports session revocation, takes effect only after restart, revokes the rename-preserved JWT and retains local recovery')
 

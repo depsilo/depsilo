@@ -11,7 +11,6 @@ import (
 type AuthenticationSourceState struct {
 	ID                string                `json:"id"`
 	Protocol          string                `json:"protocol"`
-	Legacy            bool                  `json:"legacy"`
 	Configured        *OIDCSettingsSnapshot `json:"configured"`
 	Effective         *OIDCSettingsSnapshot `json:"effective"`
 	Overrides         map[string]string     `json:"overrides"`
@@ -30,15 +29,6 @@ type AuthenticationSourceCreate struct {
 	ID       string `json:"id"`
 	Protocol string `json:"protocol"`
 	OIDCSettingsPatch
-}
-
-func (s *Store) configuredSources(auth AuthConfig) map[string]AuthenticationSourceConfig {
-	// Legacy environment-only deployments remain editable without pretending the
-	// effective environment credentials were persisted in the file.
-	if len(s.oidcOverrides) > 0 {
-		auth.OIDCConfigured = true
-	}
-	return AuthenticationSources(auth)
 }
 
 func (s *Store) sourcesAfterRestart(configured map[string]AuthenticationSourceConfig) map[string]AuthenticationSourceConfig {
@@ -80,7 +70,7 @@ func authenticationDocumentWritable(document []byte, sources map[string]Authenti
 }
 
 func (s *Store) sourceState(id string, configured map[string]AuthenticationSourceConfig, document []byte) AuthenticationSourceState {
-	state := AuthenticationSourceState{ID: id, Protocol: "oidc", Legacy: id == "oidc", Overrides: map[string]string{}, ConfigWritable: configWritable(s.path) && authenticationDocumentWritable(document, configured)}
+	state := AuthenticationSourceState{ID: id, Protocol: "oidc", Overrides: map[string]string{}, ConfigWritable: configWritable(s.path) && authenticationDocumentWritable(document, configured)}
 	source, exists := configured[id]
 	if exists {
 		snapshot := authenticationSourceSnapshot(source)
@@ -113,7 +103,7 @@ func (s *Store) AuthenticationSourceSettings(ctx context.Context) (Authenticatio
 	if err != nil {
 		return AuthenticationSourcesState{}, oidcStoreError(StoreConfigReadFailed, "cannot read authentication configuration")
 	}
-	configured := s.configuredSources(cfg.Auth)
+	configured := AuthenticationSources(cfg.Auth)
 	merged := make(map[string]AuthenticationSourceConfig, len(configured)+len(s.effectiveSources))
 	for id, source := range configured {
 		merged[id] = source
@@ -144,7 +134,7 @@ func (s *Store) CreateAuthenticationSource(ctx context.Context, create Authentic
 	if err != nil {
 		return AuthenticationSourceState{}, oidcStoreError(StoreConfigReadFailed, "cannot read authentication configuration")
 	}
-	configured := s.configuredSources(cfg.Auth)
+	configured := AuthenticationSources(cfg.Auth)
 	if _, exists := configured[create.ID]; exists {
 		return AuthenticationSourceState{}, &StoreError{Code: StoreAuthenticationSourceConflict, Err: authenticationFieldError("id", "SOURCE_EXISTS", "authentication source already exists")}
 	}
@@ -168,7 +158,7 @@ func (s *Store) UpdateAuthenticationSource(ctx context.Context, id string, patch
 	if err != nil {
 		return AuthenticationSourceState{}, oidcStoreError(StoreConfigReadFailed, "cannot read authentication configuration")
 	}
-	configured := s.configuredSources(cfg.Auth)
+	configured := AuthenticationSources(cfg.Auth)
 	if _, exists := configured[id]; !exists {
 		return AuthenticationSourceState{}, oidcStoreError(StoreAuthenticationSourceNotFound, "authentication source is not configured")
 	}
@@ -237,7 +227,7 @@ func (s *Store) DeleteAuthenticationSource(ctx context.Context, id string) error
 	if err != nil {
 		return oidcStoreError(StoreConfigReadFailed, "cannot read authentication configuration")
 	}
-	configured := s.configuredSources(cfg.Auth)
+	configured := AuthenticationSources(cfg.Auth)
 	if _, exists := configured[id]; !exists {
 		return oidcStoreError(StoreAuthenticationSourceNotFound, "authentication source is not configured")
 	}

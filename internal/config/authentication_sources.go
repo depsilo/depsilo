@@ -1,10 +1,8 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
-	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -22,16 +20,11 @@ func ValidateAuthenticationSourceID(id string) error {
 	return nil
 }
 
-// AuthenticationSources returns independent copies, including the compatibility
-// source only when it was explicitly configured. Defaults alone are not a source.
+// AuthenticationSources returns independent copies of the configured sources.
 func AuthenticationSources(auth AuthConfig) map[string]AuthenticationSourceConfig {
-	result := make(map[string]AuthenticationSourceConfig, len(auth.Sources)+1)
+	result := make(map[string]AuthenticationSourceConfig, len(auth.Sources))
 	for id, source := range auth.Sources {
 		result[id] = cloneAuthenticationSource(source)
-	}
-	legacy := auth.OIDC
-	if auth.OIDCConfigured || legacy.Enabled || legacy.Issuer != "" || legacy.ClientID != "" || legacy.ClientSecret != "" || legacy.RedirectURL != "" || len(legacy.AdminGroups)+len(legacy.ReadonlyGroups) > 0 {
-		result["oidc"] = AuthenticationSourceConfig{Protocol: "oidc", OIDCConfig: cloneOIDCConfig(legacy)}
 	}
 	return result
 }
@@ -40,18 +33,7 @@ func ValidateSourceOIDCConfig(id string, cfg OIDCConfig) error {
 	if err := ValidateAuthenticationSourceID(id); err != nil {
 		return err
 	}
-	return sourceValidationError(id, validateSourceOIDCConfig(id, cfg, true))
-}
-
-func sourceValidationError(id string, err error) error {
-	if err == nil || id == "oidc" {
-		return err
-	}
-	message := strings.ReplaceAll(err.Error(), "auth.oidc", "auth.sources."+id)
-	if fields := AuthenticationFieldErrors(err); fields != nil {
-		return &AuthenticationValidationError{Fields: fields, Message: message}
-	}
-	return errors.New(message)
+	return validateSourceOIDCConfig(id, cfg, true)
 }
 
 func ValidateAuthenticationSources(auth AuthConfig) error {
@@ -59,9 +41,6 @@ func ValidateAuthenticationSources(auth AuthConfig) error {
 }
 
 func validateAuthenticationSources(auth AuthConfig, complete bool) error {
-	if _, reserved := auth.Sources["oidc"]; reserved {
-		return authenticationFieldError("id", "RESERVED_ID", "source ID oidc is reserved for legacy auth.oidc configuration")
-	}
 	sources := AuthenticationSources(auth)
 	if err := validateSourceRelationships(sources); err != nil {
 		return err
@@ -80,7 +59,7 @@ func validateAuthenticationSources(auth AuthConfig, complete bool) error {
 		if source.Protocol != "oidc" || source.LDAP != nil {
 			return authenticationFieldError("protocol", "UNSUPPORTED_PROTOCOL", "authentication source protocol must be oidc or ldap with matching settings")
 		}
-		if err := sourceValidationError(id, validateSourceOIDCConfig(id, source.OIDCConfig, complete)); err != nil {
+		if err := validateSourceOIDCConfig(id, source.OIDCConfig, complete); err != nil {
 			return err
 		}
 	}
@@ -129,9 +108,6 @@ func sortedAuthenticationSourceIDs(sources map[string]AuthenticationSourceConfig
 }
 
 func authenticationSourceEnvName(id, field string) string {
-	if id == "oidc" {
-		return oidcEnvName(field)
-	}
 	return "DEPSILO_AUTH_SOURCES_" + strings.ToUpper(strings.ReplaceAll(id, "-", "_")) + "_" + strings.ToUpper(strings.ReplaceAll(field, ".", "_"))
 }
 
@@ -162,20 +138,6 @@ func prepareAuthenticationSources(v *viper.Viper, useEnvironment bool) error {
 		}
 	}
 	return nil
-}
-
-func legacyOIDCConfigured(v *viper.Viper, useEnvironment bool) bool {
-	if v.InConfig("auth.oidc") {
-		return true
-	}
-	if useEnvironment {
-		for _, field := range oidcFields {
-			if os.Getenv(oidcEnvName(field)) != "" {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // Viper normalizes map keys, while source IDs are durable binding identifiers.

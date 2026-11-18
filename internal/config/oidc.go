@@ -19,21 +19,14 @@ func OIDCSessionConfigEqual(a, b OIDCConfig) bool {
 	return reflect.DeepEqual(a, b)
 }
 
-// ValidateOIDCConfig validates the operator's exact issuer and callback URL.
-// It performs no discovery or network requests: an unavailable identity
+// validateSourceOIDCConfig validates the operator's exact issuer and callback
+// URL. It performs no discovery or network requests: an unavailable identity
 // provider must not prevent local recovery administrators from starting Depsilo.
-func ValidateOIDCConfig(cfg OIDCConfig) error {
-	return validateOIDCConfig(cfg, true)
-}
-
-func validateOIDCConfig(cfg OIDCConfig, requireComplete bool) error {
-	return validateSourceOIDCConfig("oidc", cfg, requireComplete)
-}
-
 func validateSourceOIDCConfig(id string, cfg OIDCConfig, requireComplete bool) error {
 	if !cfg.Enabled {
 		return nil
 	}
+	prefix := "auth.sources." + id
 	for _, field := range []struct {
 		name  string
 		value string
@@ -53,12 +46,12 @@ func validateSourceOIDCConfig(id string, cfg OIDCConfig, requireComplete bool) e
 			if field.value == "" {
 				code = "REQUIRED"
 			}
-			return authenticationFieldError(field.name, code, fmt.Sprintf("auth.oidc.%s must be nonempty, at most %d bytes, and contain no control characters or surrounding whitespace", field.name, field.limit))
+			return authenticationFieldError(field.name, code, fmt.Sprintf("%s.%s must be nonempty, at most %d bytes, and contain no control characters or surrounding whitespace", prefix, field.name, field.limit))
 		}
 	}
 	if requireComplete || cfg.Issuer != "" {
-		if err := validateOIDCURL(cfg.Issuer, false, cfg.AllowInsecureLoopback); err != nil {
-			return authenticationFieldError("issuer", "INVALID_URL", fmt.Sprintf("auth.oidc.issuer %s", err))
+		if err := validateOIDCURL(cfg.Issuer, cfg.AllowInsecureLoopback); err != nil {
+			return authenticationFieldError("issuer", "INVALID_URL", fmt.Sprintf("%s.issuer %s", prefix, err))
 		}
 	}
 	if requireComplete || cfg.RedirectURL != "" {
@@ -67,29 +60,29 @@ func validateSourceOIDCConfig(id string, cfg OIDCConfig, requireComplete bool) e
 			if strings.HasPrefix(err.Error(), "must use the exact path") {
 				code = "CALLBACK_PATH"
 			}
-			return authenticationFieldError("redirect_url", code, fmt.Sprintf("auth.oidc.redirect_url %s", err))
+			return authenticationFieldError("redirect_url", code, fmt.Sprintf("%s.redirect_url %s", prefix, err))
 		}
 	}
 	if cfg.SessionTTL < 5*time.Minute || cfg.SessionTTL > time.Hour {
-		return authenticationFieldError("session_ttl", "INVALID_VALUE", "auth.oidc.session_ttl must be between 5m and 1h")
+		return authenticationFieldError("session_ttl", "INVALID_VALUE", prefix+".session_ttl must be between 5m and 1h")
 	}
 	if requireComplete && len(cfg.AdminGroups)+len(cfg.ReadonlyGroups) == 0 {
-		return &AuthenticationValidationError{Fields: map[string]string{"admin_groups": "GROUPS_REQUIRED", "readonly_groups": "GROUPS_REQUIRED"}, Message: "auth.oidc requires at least one admin_groups or readonly_groups mapping"}
+		return &AuthenticationValidationError{Fields: map[string]string{"admin_groups": "GROUPS_REQUIRED", "readonly_groups": "GROUPS_REQUIRED"}, Message: prefix + " requires at least one admin_groups or readonly_groups mapping"}
 	}
 	seen := make(map[string]bool)
 	for _, group := range append(append([]string{}, cfg.AdminGroups...), cfg.ReadonlyGroups...) {
 		if group == "" || group != strings.TrimSpace(group) || len(group) > 255 || strings.ContainsFunc(group, unicode.IsControl) {
-			return &AuthenticationValidationError{Fields: map[string]string{"admin_groups": "INVALID_VALUE", "readonly_groups": "INVALID_VALUE"}, Message: "auth.oidc group mappings must be nonempty, at most 255 bytes, and contain no control characters or surrounding whitespace"}
+			return &AuthenticationValidationError{Fields: map[string]string{"admin_groups": "INVALID_VALUE", "readonly_groups": "INVALID_VALUE"}, Message: prefix + " group mappings must be nonempty, at most 255 bytes, and contain no control characters or surrounding whitespace"}
 		}
 		if seen[group] {
-			return &AuthenticationValidationError{Fields: map[string]string{"admin_groups": "GROUPS_OVERLAP", "readonly_groups": "GROUPS_OVERLAP"}, Message: "auth.oidc admin_groups and readonly_groups must be disjoint and contain no duplicates"}
+			return &AuthenticationValidationError{Fields: map[string]string{"admin_groups": "GROUPS_OVERLAP", "readonly_groups": "GROUPS_OVERLAP"}, Message: prefix + " admin_groups and readonly_groups must be disjoint and contain no duplicates"}
 		}
 		seen[group] = true
 	}
 	return nil
 }
 
-func validateOIDCURL(raw string, callback, allowInsecureLoopback bool) error {
+func validateOIDCURL(raw string, allowInsecureLoopback bool) error {
 	u, err := url.Parse(raw)
 	if err != nil || raw == "" || len(raw) > 1024 || raw != strings.TrimSpace(raw) || strings.ContainsFunc(raw, unicode.IsSpace) ||
 		u.Scheme != "https" && u.Scheme != "http" || u.Hostname() == "" || u.Opaque != "" || u.User != nil ||
@@ -110,21 +103,15 @@ func validateOIDCURL(raw string, callback, allowInsecureLoopback bool) error {
 	if u.Scheme != "https" && (!allowInsecureLoopback || !isLoopbackHost(u.Hostname())) {
 		return errors.New("must use HTTPS; HTTP requires allow_insecure_loopback=true and a loopback host")
 	}
-	if callback && u.Path != "/api/v1/auth/oidc/callback" {
-		return errors.New("must use the exact path /api/v1/auth/oidc/callback")
-	}
 	return nil
 }
 
 func validateOIDCCallback(raw, id string, allowInsecureLoopback bool) error {
-	if err := validateOIDCURL(raw, false, allowInsecureLoopback); err != nil {
+	if err := validateOIDCURL(raw, allowInsecureLoopback); err != nil {
 		return err
 	}
 	parsed, _ := url.Parse(raw)
-	expected := "/api/v1/auth/oidc/callback"
-	if id != "oidc" {
-		expected = "/api/v1/auth/oidc/" + id + "/callback"
-	}
+	expected := "/api/v1/auth/oidc/" + id + "/callback"
 	if parsed.Path != expected {
 		return fmt.Errorf("must use the exact path %s", expected)
 	}

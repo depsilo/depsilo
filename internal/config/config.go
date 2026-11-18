@@ -299,12 +299,10 @@ type CompileCacheConfig struct {
 }
 
 type AuthConfig struct {
-	Enabled        bool                                  `mapstructure:"enabled"`
-	JWTSecret      string                                `mapstructure:"jwt_secret"`
-	TokenTTL       time.Duration                         `mapstructure:"token_ttl"`
-	OIDC           OIDCConfig                            `mapstructure:"oidc"`
-	Sources        map[string]AuthenticationSourceConfig `mapstructure:"sources"`
-	OIDCConfigured bool                                  `mapstructure:"-" json:"-"`
+	Enabled   bool                                  `mapstructure:"enabled"`
+	JWTSecret string                                `mapstructure:"jwt_secret"`
+	TokenTTL  time.Duration                         `mapstructure:"token_ttl"`
+	Sources   map[string]AuthenticationSourceConfig `mapstructure:"sources"`
 }
 
 // AuthenticationSourceConfig keeps the stable source identity separate from its

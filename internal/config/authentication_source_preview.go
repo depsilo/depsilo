@@ -20,9 +20,6 @@ func validateNewAuthenticationSource(id, protocol string) error {
 	if err := ValidateAuthenticationSourceID(id); err != nil {
 		return err
 	}
-	if id == "oidc" {
-		return authenticationFieldError("id", "RESERVED_ID", "source ID oidc is reserved for legacy configuration")
-	}
 	if protocol != "oidc" && protocol != "ldap" {
 		return authenticationFieldError("protocol", "UNSUPPORTED_PROTOCOL", "authentication source protocol must be oidc or ldap")
 	}
@@ -48,7 +45,7 @@ func (s *Store) PreviewAuthenticationSourceDraft(ctx context.Context, draft Auth
 	if err != nil {
 		return OIDCConfig{}, oidcStoreError(StoreConfigReadFailed, "cannot read authentication configuration")
 	}
-	configured := s.configuredSources(cfg.Auth)
+	configured := AuthenticationSources(cfg.Auth)
 	source, exists := configured[draft.ID]
 	if exists && source.Protocol != "oidc" || draft.Settings.LDAP != nil {
 		return OIDCConfig{}, &StoreError{Code: StoreInvalidSetting, Err: authenticationFieldError("protocol", "INVALID_VALUE", "OIDC preview requires an OIDC source")}
@@ -131,7 +128,7 @@ func (s *Store) RestoreAuthenticationSource(ctx context.Context, id string) (Aut
 	if err != nil {
 		return AuthenticationSourceState{}, oidcStoreError(StoreConfigReadFailed, "cannot read authentication configuration")
 	}
-	configured := s.configuredSources(cfg.Auth)
+	configured := AuthenticationSources(cfg.Auth)
 	if _, exists := configured[id]; exists {
 		return AuthenticationSourceState{}, oidcStoreError(StoreAuthenticationSourceConflict, "authentication source is already configured")
 	}
@@ -150,10 +147,7 @@ func (s *Store) RestoreAuthenticationSource(ctx context.Context, id string) (Aut
 	if err := validateSourceRelationships(after); err != nil {
 		return AuthenticationSourceState{}, &StoreError{Code: StoreInvalidSetting, Err: err}
 	}
-	entries := make([]oidcEntry, 0, len(oidcFields)+1)
-	if id != "oidc" {
-		entries = append(entries, oidcEntry{"protocol", source.Protocol})
-	}
+	entries := []oidcEntry{{"protocol", source.Protocol}}
 	values := authenticationSourceValues(source)
 	for _, field := range oidcFields {
 		if s.startupSourceFields[id][field] {
@@ -162,9 +156,6 @@ func (s *Store) RestoreAuthenticationSource(ctx context.Context, id string) (Aut
 	}
 	if s.startupSourceFields[id]["ldap"] && source.LDAP != nil {
 		entries = append(entries, oidcEntry{"ldap", ldapValues(source.LDAP)})
-	}
-	if len(entries) == 0 {
-		entries = append(entries, oidcEntry{"enabled", false})
 	}
 	updated, err := patchAuthenticationDocument(document, id, entries, false)
 	if err != nil {

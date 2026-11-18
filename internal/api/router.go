@@ -214,7 +214,6 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	oidcHandler.ConfigureDraftPreview(deps.ConfigStore)
 	authGroup.GET("/providers", oidcHandler.Providers)
 	authGroup.POST("/oidc/start", oidcHandler.Start)
-	authGroup.GET("/oidc/callback", oidcHandler.Callback)
 	authGroup.GET("/oidc/:provider_id/callback", oidcHandler.Callback)
 	authGroup.POST("/oidc/complete", middleware.OptionalLogoutPrincipal(deps.Config.Auth.JWTSecret, deps.DB), oidcHandler.Complete)
 	authGroup.POST("/oidc/resolve", oidcHandler.Resolve)
@@ -368,9 +367,6 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminWrite.DELETE("/tokens/:id", middleware.CredentialManagementRequired(), tokenHandler.Delete)
 
 	// System authentication configuration is visible only to administrators.
-	authenticationHandler := admin.NewAuthenticationHandler(deps.ConfigStore)
-	adminRead.GET("/authentication", admin.AdminRoleRequired(), authenticationHandler.Get)
-	adminWrite.PUT("/authentication", admin.AdminRoleRequired(), middleware.CredentialManagementRequired(), authenticationHandler.Update)
 	adminWrite.POST("/authentication/check", admin.AdminRoleRequired(), middleware.CredentialManagementRequired(), oidcHandler.Check)
 	adminWrite.POST("/authentication/trial", admin.AdminRoleRequired(), middleware.CredentialManagementRequired(), oidcHandler.StartTrial)
 	adminWrite.POST("/authentication/ldap/check", admin.AdminRoleRequired(), middleware.CredentialManagementRequired(), oidcHandler.LDAPCheck)

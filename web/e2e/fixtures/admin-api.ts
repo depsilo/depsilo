@@ -234,7 +234,6 @@ const canonicalAdminApiDefaults = {
     needs_setup: false,
     token_required: false,
   } satisfies SetupStatusResponse,
-  'GET /api/v1/admin/authentication': { configured: authenticationSettings, effective: authenticationSettings, overrides: {}, pending_restart: false, config_writable: true },
   'GET /api/v1/admin/authentication/sources': { sources: [], config_writable: true },
   'GET /api/v1/admin/settings': {
     configured: configuredSettings,

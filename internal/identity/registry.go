@@ -25,7 +25,9 @@ func NewRegistry(database *gorm.DB, auth config.AuthConfig) (*Registry, error) {
 		return nil, err
 	}
 	writes := &sync.Mutex{}
-	r := &Registry{sources: make(map[string]*Manager), accounts: &Manager{db: database, id: ProviderID, writeMu: writes}}
+	// Local-account proof and unlinking belong to no source; the ID only labels
+	// their denial audit events.
+	r := &Registry{sources: make(map[string]*Manager), accounts: &Manager{db: database, id: "account", writeMu: writes}}
 	sources := config.AuthenticationSources(auth)
 	ids := make([]string, 0, len(sources))
 	for id := range sources {
@@ -75,36 +77,16 @@ func (r *Registry) Managers() []*Manager {
 	return append([]*Manager(nil), r.ordered...)
 }
 
-// Select permits old clients only when their choice is unambiguous. A legacy
-// source retains its identity even when disabled; it never falls through to a
-// different provider without an explicit selection.
+// Select requires an explicit source; it never picks one on the caller's behalf.
 func (r *Registry) Select(id string) (*Manager, error) {
-	if id != "" {
-		m := r.Manager(id)
-		if !m.Enabled() {
-			return nil, ErrUnavailable
-		}
-		return m, nil
+	if id == "" {
+		return nil, ErrSelection
 	}
-	if legacy := r.Manager(ProviderID); legacy != nil {
-		if !legacy.Enabled() {
-			return nil, ErrUnavailable
-		}
-		return legacy, nil
-	}
-	var selected *Manager
-	for _, m := range r.Managers() {
-		if m.Enabled() {
-			if selected != nil {
-				return nil, ErrSelection
-			}
-			selected = m
-		}
-	}
-	if selected == nil {
+	m := r.Manager(id)
+	if !m.Enabled() {
 		return nil, ErrUnavailable
 	}
-	return selected, nil
+	return m, nil
 }
 
 func (r *Registry) ProvePassword(ctx context.Context, userID uint, version uint64, password string) (db.User, error) {

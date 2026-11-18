@@ -15,7 +15,7 @@ func validOIDCConfig() OIDCConfig {
 	return OIDCConfig{
 		Enabled: true, DisplayName: "Casdoor", Issuer: "https://identity.example.test",
 		ClientID: "depsilo", ClientSecret: "test-only-client-secret",
-		RedirectURL: "https://depsilo.example.test/api/v1/auth/oidc/callback",
+		RedirectURL: "https://depsilo.example.test/api/v1/auth/oidc/company/callback",
 		AdminGroups: []string{"engineering/admins"}, ReadonlyGroups: []string{"engineering/readers"},
 		GroupsClaim: "groups", SessionTTL: 30 * time.Minute,
 	}
@@ -43,9 +43,11 @@ func TestOIDCValidationFailsClosed(t *testing.T) {
 		{"missing label", func(c *OIDCConfig) { c.DisplayName = "" }},
 		{"missing claim", func(c *OIDCConfig) { c.GroupsClaim = "" }},
 		{"callback wrong path", func(c *OIDCConfig) { c.RedirectURL = "https://depsilo.example.test/admin" }},
+		{"callback without source", func(c *OIDCConfig) { c.RedirectURL = "https://depsilo.example.test/api/v1/auth/oidc/callback" }},
+		{"callback other source", func(c *OIDCConfig) { c.RedirectURL = "https://depsilo.example.test/api/v1/auth/oidc/other/callback" }},
 		{"callback query", func(c *OIDCConfig) { c.RedirectURL += "?next=/admin" }},
 		{"remote insecure callback", func(c *OIDCConfig) {
-			c.RedirectURL = "http://10.0.0.1/api/v1/auth/oidc/callback"
+			c.RedirectURL = "http://10.0.0.1/api/v1/auth/oidc/company/callback"
 			c.AllowInsecureLoopback = true
 		}},
 		{"no admission groups", func(c *OIDCConfig) { c.AdminGroups = nil; c.ReadonlyGroups = nil }},
@@ -59,7 +61,7 @@ func TestOIDCValidationFailsClosed(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := validOIDCConfig()
 			tt.change(&cfg)
-			err := ValidateOIDCConfig(cfg)
+			err := ValidateSourceOIDCConfig("company", cfg)
 			if err == nil {
 				t.Fatal("invalid provider was accepted")
 			}
@@ -72,26 +74,27 @@ func TestOIDCValidationFailsClosed(t *testing.T) {
 		cfg := validOIDCConfig()
 		cfg.Issuer = issuer
 		cfg.AllowInsecureLoopback = true
-		cfg.RedirectURL = "http://127.0.0.1:23333/api/v1/auth/oidc/callback"
-		if err := ValidateOIDCConfig(cfg); err != nil {
+		cfg.RedirectURL = "http://127.0.0.1:23333/api/v1/auth/oidc/company/callback"
+		if err := ValidateSourceOIDCConfig("company", cfg); err != nil {
 			t.Fatalf("valid exact issuer rejected: %v", err)
 		}
 	}
-	if err := ValidateOIDCConfig(OIDCConfig{}); err != nil {
+	if err := ValidateSourceOIDCConfig("company", OIDCConfig{}); err != nil {
 		t.Fatalf("disabled OIDC should preserve existing local-only configurations: %v", err)
 	}
 }
 
 func TestOIDCDefaultsAndEnvironmentPrecedence(t *testing.T) {
-	defaults, err := decodeConfigDocument(nil)
+	const document = "config_version = 1\n[auth.sources.company]\nprotocol = \"oidc\"\n"
+	defaults, err := decodeConfigDocument([]byte(document))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if defaults.Auth.OIDC.Enabled || defaults.Auth.OIDC.DisplayName != "OIDC" || defaults.Auth.OIDC.GroupsClaim != "groups" || defaults.Auth.OIDC.SessionTTL != 30*time.Minute {
-		t.Fatal("OIDC defaults changed")
+	if source := defaults.Auth.Sources["company"]; source.Enabled || source.GroupsClaim != "groups" || source.SessionTTL != 30*time.Minute {
+		t.Fatal("OIDC source defaults changed")
 	}
 	path := filepath.Join(t.TempDir(), "config.toml")
-	if err := os.WriteFile(path, []byte("config_version = 1\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(document), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("DEPSILO_CONFIG", path)
@@ -99,39 +102,40 @@ func TestOIDCDefaultsAndEnvironmentPrecedence(t *testing.T) {
 	for key, value := range map[string]string{
 		"ENABLED": "true", "DISPLAY_NAME": "Company login", "ISSUER": "https://identity.example.test",
 		"CLIENT_ID": "depsilo", "CLIENT_SECRET": "private-env-only-secret",
-		"REDIRECT_URL": "https://depsilo.example.test/api/v1/auth/oidc/callback",
+		"REDIRECT_URL": "https://depsilo.example.test/api/v1/auth/oidc/company/callback",
 		"ADMIN_GROUPS": "org/admins,org/operators", "READONLY_GROUPS": "org/readers",
 		"GROUPS_CLAIM": "roles", "SESSION_TTL": "15m", "ALLOW_INSECURE_LOOPBACK": "false",
 	} {
-		t.Setenv("DEPSILO_AUTH_OIDC_"+key, value)
+		t.Setenv("DEPSILO_AUTH_SOURCES_COMPANY_"+key, value)
 	}
 	loaded, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := loaded.Auth.OIDC
+	cfg := loaded.Auth.Sources["company"]
 	if !cfg.Enabled || cfg.DisplayName != "Company login" || cfg.GroupsClaim != "roles" || cfg.SessionTTL != 15*time.Minute ||
 		cfg.ClientSecret != "private-env-only-secret" || !reflect.DeepEqual(cfg.AdminGroups, []string{"org/admins", "org/operators"}) ||
 		!reflect.DeepEqual(cfg.ReadonlyGroups, []string{"org/readers"}) {
 		t.Fatal("OIDC environment configuration did not match")
 	}
-	t.Setenv("DEPSILO_AUTH_OIDC_SESSION_TTL", "2h")
+	t.Setenv("DEPSILO_AUTH_SOURCES_COMPANY_SESSION_TTL", "2h")
 	if _, err := Load(); err == nil {
 		t.Fatal("invalid runtime session lifetime accepted")
 	}
 }
 
-func TestOIDCSettingsUpdatePreservesProviderAndRedactsSecrets(t *testing.T) {
+func TestSettingsUpdatePreservesOIDCSourceAndRedactsSecrets(t *testing.T) {
 	clearSettingsEnvironment(t)
 	path := writeStoreFixture(t)
 	provider := `
-[auth.oidc]
+[auth.sources.company]
+protocol = "oidc"
 enabled = true
 display_name = "Company login"
 issuer = "https://identity.example.test"
 client_id = "depsilo"
-# Keep this secret outside TOML via DEPSILO_AUTH_OIDC_CLIENT_SECRET.
-redirect_url = "https://depsilo.example.test/api/v1/auth/oidc/callback"
+# Keep this secret outside TOML via DEPSILO_AUTH_SOURCES_COMPANY_CLIENT_SECRET.
+redirect_url = "https://depsilo.example.test/api/v1/auth/oidc/company/callback"
 admin_groups = ["admins"]
 readonly_groups = ["readers"]
 session_ttl = "20m"
@@ -139,8 +143,9 @@ session_ttl = "20m"
 	if err := os.WriteFile(path, []byte(storeConfigFixture+provider), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("DEPSILO_AUTH_OIDC_CLIENT_SECRET", "private-env-only-secret")
+	t.Setenv("DEPSILO_AUTH_SOURCES_COMPANY_CLIENT_SECRET", "private-env-only-secret")
 	cfg, level := loadStoreFixture(t, path)
+	source := cfg.Auth.Sources["company"]
 	store := NewStore(path, cfg, level)
 	ttl := "48h"
 	result, err := store.Update(context.Background(), SettingsPatch{Auth: &SettingsAuthPatch{TokenTTL: &ttl}})
@@ -151,20 +156,20 @@ session_ttl = "20m"
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(document), provider) || strings.Contains(string(document), cfg.Auth.OIDC.ClientSecret) {
+	if !strings.Contains(string(document), provider) || strings.Contains(string(document), source.ClientSecret) {
 		t.Fatal("settings update changed provider section or persisted environment secret")
 	}
-	for _, value := range []any{cfg.Auth.OIDC, SettingsSnapshotFromConfig(cfg), result} {
+	for _, value := range []any{source, SettingsSnapshotFromConfig(cfg), result} {
 		encoded, err := json.Marshal(value)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(string(encoded), cfg.Auth.OIDC.ClientSecret) {
+		if strings.Contains(string(encoded), source.ClientSecret) {
 			t.Fatal("JSON response exposed provider credentials")
 		}
 	}
 	reloaded, err := Load()
-	if err != nil || !reflect.DeepEqual(reloaded.Auth.OIDC, cfg.Auth.OIDC) {
+	if err != nil || source.ClientSecret != "private-env-only-secret" || !reflect.DeepEqual(reloaded.Auth.Sources["company"], source) {
 		t.Fatal("settings update changed effective OIDC configuration")
 	}
 }

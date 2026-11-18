@@ -1,6 +1,6 @@
 import type { LDAPAuthenticationPatch, LDAPPreviewRequest, LDAPConfigurationCheck } from './adminApi.types'
 import api, { type ApiGetOptions } from './api'
-import type { AuthenticationPatch, AuthenticationSettingsResponse, IdentityProvider, LoginIdentitiesResponse, OIDCCompleteResponse } from './adminApi.types'
+import type { AuthenticationPatch, IdentityProvider, LoginIdentitiesResponse, OIDCCompleteResponse } from './adminApi.types'
 import type { AuthenticationSourcesResponse, AuthenticationSourceState, CreateAuthenticationSource, AuthenticationPreviewRequest, AuthenticationCheck, AuthenticationImpact } from './adminApi.types'
 
 /** Identity transport stays with the lazily loaded login/account/system pages. */
@@ -22,8 +22,6 @@ export const authenticationApi = {
   trialSource: (data: AuthenticationPreviewRequest, options: ApiGetOptions = {}) => api.post<{ authorization_url: string }>('/admin/authentication/trial', data, options),
   sourceImpact: (id: string, options: ApiGetOptions = {}) => api.get<AuthenticationImpact>(`/admin/authentication/sources/${encodeURIComponent(id)}/impact`, options),
   restoreSource: (id: string, options: ApiGetOptions = {}) => api.post<AuthenticationSourceState>(`/admin/authentication/sources/${encodeURIComponent(id)}/restore`, {}, options),
-  settings: (options: ApiGetOptions = {}) => api.get<AuthenticationSettingsResponse>('/admin/authentication', options),
-  updateSettings: (data: AuthenticationPatch, options: ApiGetOptions = {}) => api.put<AuthenticationSettingsResponse>('/admin/authentication', data, options),
   identities: (options: ApiGetOptions = {}) => api.get<LoginIdentitiesResponse>('/auth/identities', options),
   linkIdentity: (password: string, providerId: string, options: ApiGetOptions = {}) => api.post<{ authorization_url: string }>('/auth/identities/link', { password, provider_id: providerId }, options),
   unlinkIdentity: (id: number, password: string, options: ApiGetOptions = {}) => api.post<void>(`/auth/identities/${id}/unlink`, { password }, options),

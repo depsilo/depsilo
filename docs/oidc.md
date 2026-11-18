@@ -32,7 +32,7 @@ a display name. The suggested stable source ID is editable under **Advanced
 options** before the first save. The form creates no source until you save it. IDs contain 1–32 lowercase letters, digits, or hyphens and start with
 a letter. The ID is used by callbacks and stored account bindings; it and the
 protocol are immutable in the editor. Change the display name to rename a
-source in the UI. The ID `oidc` is reserved for legacy configuration.
+source in the UI.
 
 Create a confidential application at each identity provider with Authorization
 Code flow, PKCE S256, and its exact source callback. For source `company`:
@@ -160,20 +160,15 @@ HTTP is permitted only for isolated loopback development with
 issuers or callbacks. Issuer URLs are exact: do not substitute `localhost` for
 `127.0.0.1` or add/remove an issuer path when copying provider metadata.
 
-### Existing single-source configurations
+### Removed single-source section
 
-`[auth.oidc]` remains the legacy source with stable ID `oidc`, its existing
-`DEPSILO_AUTH_OIDC_*` overrides, and callback
-`/api/v1/auth/oidc/callback`. Existing explicit display names, including Casdoor,
-are preserved; the fallback name is OIDC. This legacy source can coexist with
-new sources using different issuers. Existing account bindings need no rewrite,
-and unchanged configuration preserves existing valid session fingerprints.
-
-Do not move a legacy configuration into `[auth.sources.<another-id>]` as a
-renaming operation: a different source ID does not inherit its bindings.
-Use the display name to relabel it. The old Admin authentication GET/PUT
-endpoint remains limited to the legacy source; new management uses the source
-collection described in the [control-plane guide](admin-control-plane.md#external-operator-identities).
+The singleton `[auth.oidc]` section, its `DEPSILO_AUTH_OIDC_*` overrides, the
+unprefixed `/api/v1/auth/oidc/callback` route, and the Admin
+`GET`/`PUT /api/v1/admin/authentication` endpoint have been removed. A
+configuration that still contains `[auth.oidc]` fails to load with an
+unknown-key error. Configure a named source under `[auth.sources.<id>]` instead
+and register its `/api/v1/auth/oidc/<id>/callback` at the provider. `oidc` is
+an ordinary source ID.
 
 ## Casdoor setup and isolated test instance
 
@@ -304,11 +299,8 @@ still invalidates its sessions at startup. The editor's `sessions_will_reset`
 flag describes the saved effective change after environment precedence; a new
 unsaved security edit is shown conservatively until saved.
 
-The first upgrade from the original fingerprint algorithm preserves unrevoked,
-unexpired sessions only when the old fingerprint matches the complete current
-source configuration and issuer. Combining that upgrade with a rename cannot
-prove continuity from the old opaque fingerprint, so those sessions expire.
-Subsequent name-only edits preserve sessions. No extra schema migration is used.
+Sessions recorded under any other configuration fingerprint, including one from
+the original fingerprint algorithm, are revoked at startup.
 
 For directory username/password authentication, add an independent
 [LDAP / LDAPS source](ldap.md) rather than configuring it as OIDC.

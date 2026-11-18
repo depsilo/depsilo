@@ -34,7 +34,6 @@ var (
 	ErrSelection   = errors.New("PROVIDER_REQUIRED")
 )
 
-const ProviderID = "oidc"
 const flowTTL = 5 * time.Minute
 const completeTTL = time.Minute
 const maxPending = 1024
@@ -56,63 +55,31 @@ type completion struct {
 // bounded pending maps contain no access/refresh/ID tokens. Only opaque cookies
 // carry flow references; the provider's tokens live for the callback request.
 type Manager struct {
-	db                *gorm.DB
-	id                string
-	protocol          string
-	ldap              *config.LDAPConfig
-	cfg               config.OIDCConfig
-	fingerprint       string
-	legacyFingerprint string
-	client            *http.Client
-	remote            providerState
-	mu                sync.Mutex
-	writeMu           *sync.Mutex
-	pending           map[string]transaction
-	completed         map[string]completion
-	choices           map[string]choiceTransaction
-	trial             bool
-}
-
-// New retains the legacy source's configuration and session compatibility.
-// It only revokes legacy sessions; NewRegistry owns removal across all sources.
-func New(database *gorm.DB, cfg config.OIDCConfig) (*Manager, error) {
-	m, err := newManager(database, ProviderID, cfg, &sync.Mutex{})
-	if err != nil {
-		return nil, err
-	}
-	if database != nil {
-		if err := database.Transaction(func(tx *gorm.DB) error {
-			return m.reconcileSessions(tx, time.Now().UTC())
-		}); err != nil {
-			return nil, err
-		}
-	}
-	return m, nil
+	db          *gorm.DB
+	id          string
+	protocol    string
+	ldap        *config.LDAPConfig
+	cfg         config.OIDCConfig
+	fingerprint string
+	client      *http.Client
+	remote      providerState
+	mu          sync.Mutex
+	writeMu     *sync.Mutex
+	pending     map[string]transaction
+	completed   map[string]completion
+	choices     map[string]choiceTransaction
+	trial       bool
 }
 
 func newManager(database *gorm.DB, id string, cfg config.OIDCConfig, writes *sync.Mutex) (*Manager, error) {
 	if err := config.ValidateSourceOIDCConfig(id, cfg); err != nil {
 		return nil, err
 	}
-	m := &Manager{db: database, id: id, cfg: cfg, writeMu: writes, fingerprint: sessionFingerprint(id, cfg), legacyFingerprint: legacySessionFingerprint(id, cfg), pending: make(map[string]transaction), completed: make(map[string]completion), choices: make(map[string]choiceTransaction)}
+	m := &Manager{db: database, id: id, cfg: cfg, writeMu: writes, fingerprint: sessionFingerprint(id, cfg), pending: make(map[string]transaction), completed: make(map[string]completion), choices: make(map[string]choiceTransaction)}
 	if cfg.Enabled {
 		m.client = providerClient(cfg.Issuer)
 	}
 	return m, nil
-}
-
-// legacySessionFingerprint must remain byte-for-byte compatible with the old
-// algorithm, including the legacy source's missing ID prefix and nil slices.
-func legacySessionFingerprint(id string, cfg config.OIDCConfig) string {
-	raw, _ := json.Marshal(struct {
-		Config config.OIDCConfig
-		Secret string
-	}{cfg, cfg.ClientSecret})
-	if id != ProviderID {
-		raw = append([]byte(id+"\x00"), raw...)
-	}
-	hash := sha256.Sum256(raw)
-	return hex.EncodeToString(hash[:])
 }
 
 func sessionFingerprint(id string, cfg config.OIDCConfig) string {
@@ -128,21 +95,14 @@ func sessionFingerprint(id string, cfg config.OIDCConfig) string {
 	return hex.EncodeToString(hash[:])
 }
 
-// reconcileSessions runs inside the caller's startup transaction. Only an
-// exact old fingerprint for the current full configuration proves continuity;
-// upgrading while also renaming an old source therefore fails closed.
+// reconcileSessions runs inside the caller's startup transaction. Only the
+// exact fingerprint of the current authentication configuration proves
+// continuity; every other active session from this source is revoked.
 func (m *Manager) reconcileSessions(database *gorm.DB, now time.Time) error {
 	identities := database.Model(&db.ExternalIdentity{}).Select("id").Where("provider = ?", m.id)
 	q := database.Model(&db.IdentitySession{}).Where("revoked_at IS NULL AND identity_id IN (?)", identities)
 	if m.Enabled() {
 		matching := database.Model(&db.ExternalIdentity{}).Select("id").Where("provider = ? AND issuer = ?", m.id, m.cfg.Issuer)
-		if m.legacyFingerprint != "" {
-			if err := database.Model(&db.IdentitySession{}).
-				Where("revoked_at IS NULL AND expires_at > ? AND config_fingerprint = ? AND identity_id IN (?)", now, m.legacyFingerprint, matching).
-				Update("config_fingerprint", m.fingerprint).Error; err != nil {
-				return err
-			}
-		}
 		q = q.Where("config_fingerprint <> ? OR identity_id NOT IN (?)", m.fingerprint, matching)
 	}
 	return q.Update("revoked_at", now).Error

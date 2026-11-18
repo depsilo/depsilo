@@ -37,8 +37,6 @@ type Store struct {
 	effective           SettingsSnapshot
 	effectiveCascade    cascadeFingerprint
 	effectiveDocker     DockerConfig
-	effectiveOIDC       OIDCConfig
-	oidcOverrides       map[string]string
 	effectiveSources    map[string]AuthenticationSourceConfig
 	sourceOverrides     map[string]map[string]string
 	startupSources      map[string]AuthenticationSourceConfig
@@ -84,14 +82,6 @@ func newStore(path string, effective *Config, level zap.AtomicLevel, writer atom
 	if effective != nil {
 		store.effectiveCascade = fingerprintCascade(effective.Cascade)
 		store.effectiveDocker = effective.Docker
-		store.effectiveOIDC = cloneOIDCConfig(effective.Auth.OIDC)
-	}
-	store.oidcOverrides = make(map[string]string)
-	for _, name := range oidcFields {
-		env := oidcEnvName(name)
-		if os.Getenv(env) != "" {
-			store.oidcOverrides[name] = env
-		}
 	}
 	store.effectiveSources = make(map[string]AuthenticationSourceConfig)
 	if effective != nil {

@@ -313,9 +313,8 @@ API tokens, compiler-cache credentials, Cascade credentials/configuration, or
 authentication configuration, even when their operational role is admin. Local password administrators and
 their existing readwrite API tokens retain credential management.
 
-The authentication source collection and compatibility configuration endpoint
-require an effective administrator role for reads and local
-credential-management authority for writes. Stable IDs and protocols cannot be
+The authentication source collection requires an effective administrator
+role for reads and local credential-management authority for writes. Stable IDs and protocols cannot be
 renamed through the editor. New sources select OIDC or LDAP; no default provider
 product is trusted. File updates preserve unrelated settings and environment-owned secrets; replaced
 client secrets are saved with owner-only file permissions. Responses expose

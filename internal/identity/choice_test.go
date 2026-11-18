@@ -182,7 +182,7 @@ func TestTrialAuthenticatesWithoutCreatingOrRevokingDurableState(t *testing.T) {
 		{"provider error", "existing", "", "failed", nil, false, "server_error", "OIDC_UNAVAILABLE"},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
-			trial, err := NewTrial(ProviderID, m.Config())
+			trial, err := NewTrial(testSourceID, m.Config())
 			if err != nil {
 				t.Fatal(err)
 			}

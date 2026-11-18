@@ -158,7 +158,7 @@ func validateLDAPConfig(id string, source AuthenticationSourceConfig, complete b
 	common.Issuer, common.ClientID, common.ClientSecret, common.GroupsClaim = "https://directory.invalid", "ldap", "ldap", "groups"
 	common.RedirectURL = "https://depsilo.invalid/api/v1/auth/oidc/" + id + "/callback"
 	if err := validateSourceOIDCConfig(id, common, complete && source.Enabled); err != nil {
-		return sourceValidationError(id, err)
+		return err
 	}
 	var groups []*ldap.DN
 	for _, field := range []struct {

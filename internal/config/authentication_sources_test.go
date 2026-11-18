@@ -13,35 +13,23 @@ import (
 	"go.uber.org/zap"
 )
 
-func TestAuthenticationSourcesExplicitLegacyAndNoPhantomDefault(t *testing.T) {
-	for _, test := range []struct {
-		document string
-		count    int
-		name     string
-	}{
-		{"", 0, ""}, {"[auth.oidc]\nenabled=false\n", 1, "OIDC"}, {"[auth.oidc]\ndisplay_name=\"Casdoor\"\n", 1, "Casdoor"},
-	} {
-		cfg, err := decodeConfigDocument([]byte(test.document))
-		if err != nil {
-			t.Fatal(err)
-		}
-		sources := AuthenticationSources(cfg.Auth)
-		if len(sources) != test.count {
-			t.Fatalf("unexpected sources: %v", sources)
-		}
-		if test.count > 0 && sources["oidc"].DisplayName != test.name {
-			t.Fatal("explicit display name changed")
-		}
-	}
-	t.Setenv("DEPSILO_CONFIG", filepath.Join(t.TempDir(), "missing.toml"))
-	setTestJWTSecret(t)
-	t.Setenv("DEPSILO_AUTH_OIDC_ENABLED", "false")
-	cfg, err := Load()
+func TestAuthenticationSourcesNoPhantomDefaultAndUnknownSingletonSection(t *testing.T) {
+	cfg, err := decodeConfigDocument(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !cfg.Auth.OIDCConfigured || len(AuthenticationSources(cfg.Auth)) != 1 {
-		t.Fatal("environment-only legacy source missing")
+	if sources := AuthenticationSources(cfg.Auth); len(sources) != 0 {
+		t.Fatalf("defaults created a source: %v", sources)
+	}
+	if _, err := decodeConfigDocument([]byte("[auth.oidc]\nenabled=false\n")); err == nil {
+		t.Fatal("unprefixed [auth.oidc] section accepted")
+	}
+	cfg, err = decodeConfigDocument([]byte("[auth.sources.oidc]\nprotocol=\"oidc\"\ndisplay_name=\"Casdoor\"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sources := AuthenticationSources(cfg.Auth); len(sources) != 1 || sources["oidc"].DisplayName != "Casdoor" {
+		t.Fatal("source ID oidc is not an ordinary source")
 	}
 }
 
@@ -94,7 +82,7 @@ func TestAuthenticationSourcesDefaultsEnvironmentAndValidation(t *testing.T) {
 	requireOIDCStoreCode(t, err, StoreConfigReadOnly)
 	t.Setenv("DEPSILO_AUTH_SOURCES_COMPANY_SSO_REDIRECT_URL", "https://depsilo.example/api/v1/auth/oidc/callback")
 	if _, err := Load(); err == nil {
-		t.Fatal("legacy callback accepted for new source")
+		t.Fatal("unprefixed callback accepted for a source")
 	}
 }
 
@@ -155,19 +143,19 @@ func TestAuthenticationSourcesCRUDPreservesDocumentAndRestartLifecycle(t *testin
 	if string(after) != string(before) {
 		t.Fatalf("source removal modified unrelated file:\n%s", after)
 	}
-	if err := restarted.DeleteAuthenticationSource(ctx, "oidc"); err != nil {
+	if err := restarted.DeleteAuthenticationSource(ctx, "existing"); err != nil {
 		t.Fatal(err)
 	}
 	final, _ := os.ReadFile(path)
 	if !strings.Contains(string(final), "jwt_secret = \"local-signing-key-stays-unchanged\"") || !strings.Contains(string(final), "[license]\nkey = \"preserve-license\"") {
-		t.Fatal("legacy removal damaged unrelated settings")
+		t.Fatal("source removal damaged unrelated settings")
 	}
 	cfg, err = decodeConfigDocument(final)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(AuthenticationSources(cfg.Auth)) != 0 {
-		t.Fatal("removed legacy source came back through defaults")
+		t.Fatal("removed source came back through defaults")
 	}
 }
 
@@ -177,14 +165,13 @@ func TestAuthenticationSourcesRejectInvalidChangesAndReadOnlyShapes(t *testing.T
 		name   string
 		mutate func(*AuthenticationSourceCreate)
 	}{
-		{"reserved", func(c *AuthenticationSourceCreate) { c.ID = "oidc" }},
 		{"path", func(c *AuthenticationSourceCreate) { c.ID = "../bad" }},
 		{"uppercase", func(c *AuthenticationSourceCreate) { c.ID = "Company" }},
 		{"protocol", func(c *AuthenticationSourceCreate) { c.Protocol = "ldap" }},
 		{"wrong callback", func(c *AuthenticationSourceCreate) {
 			c.RedirectURL = oidcPointer("https://depsilo.example/api/v1/auth/oidc/other/callback")
 		}},
-		{"legacy duplicate issuer", func(c *AuthenticationSourceCreate) { c.Issuer = oidcPointer("https://identity.example") }},
+		{"duplicate issuer", func(c *AuthenticationSourceCreate) { c.Issuer = oidcPointer("https://identity.example") }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			store, _ := newOIDCStoreFixture(t, oidcStoreDocument)
@@ -241,7 +228,7 @@ func TestAuthenticationSourcesCallbackOriginAndDisabledRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("disabled recovery blocked: %v", err)
 	}
-	_, err = store.UpdateOIDCSettings(ctx, OIDCSettingsPatch{Issuer: oidcPointer("https://one.example")})
+	_, err = store.UpdateAuthenticationSource(ctx, "existing", OIDCSettingsPatch{Issuer: oidcPointer("https://one.example")})
 	requireOIDCStoreCode(t, err, StoreInvalidSetting)
 }
 
@@ -272,7 +259,7 @@ func TestAuthenticationSourcesAtomicAndConcurrentEdits(t *testing.T) {
 	}()
 	go func() {
 		defer group.Done()
-		_, err := store.UpdateOIDCSettings(ctx, OIDCSettingsPatch{DisplayName: oidcPointer("Legacy updated")})
+		_, err := store.UpdateAuthenticationSource(ctx, "existing", OIDCSettingsPatch{DisplayName: oidcPointer("Existing updated")})
 		errors <- err
 	}()
 	group.Wait()
@@ -287,7 +274,7 @@ func TestAuthenticationSourcesAtomicAndConcurrentEdits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(AuthenticationSources(cfg.Auth)) != 3 || cfg.Auth.OIDC.DisplayName != "Legacy updated" {
+	if len(AuthenticationSources(cfg.Auth)) != 3 || cfg.Auth.Sources["existing"].DisplayName != "Existing updated" {
 		t.Fatal("concurrent editor lost update")
 	}
 }
@@ -305,7 +292,6 @@ func TestAuthenticationSourceOriginalIDsAreNotNormalized(t *testing.T) {
 
 func TestAuthenticationSourcesNestedEmptyTablesAreReadOnly(t *testing.T) {
 	for _, document := range []string{
-		"[auth.oidc]\nenabled=false\n[auth.oidc.extra]\n",
 		"[auth.sources.company]\nprotocol=\"oidc\"\nenabled=false\n[auth.sources.company.extra]\n",
 	} {
 		store, path := newOIDCStoreFixture(t, document)
@@ -325,17 +311,17 @@ func TestAuthenticationSourcesNestedEmptyTablesAreReadOnly(t *testing.T) {
 	}
 }
 
-func TestLegacyAuthenticationUpdateCannotRecreatePendingRemoval(t *testing.T) {
-	store, path := newOIDCStoreFixture(t, oidcStoreDocument)
-	ctx := context.Background()
-	if err := store.DeleteAuthenticationSource(ctx, "oidc"); err != nil {
+func TestAuthenticationSourceIDOIDCIsOrdinary(t *testing.T) {
+	store, path := newOIDCStoreFixture(t, "")
+	if _, err := store.CreateAuthenticationSource(context.Background(), sourceCreate("oidc", "https://company.example")); err != nil {
 		t.Fatal(err)
 	}
-	before, _ := os.ReadFile(path)
-	_, err := store.UpdateOIDCSettings(ctx, OIDCSettingsPatch{DisplayName: oidcPointer("Recreated")})
-	requireOIDCStoreCode(t, err, StoreAuthenticationSourceConflict)
-	after, _ := os.ReadFile(path)
-	if string(before) != string(after) {
-		t.Fatal("legacy update recreated source pending removal")
+	raw, _ := os.ReadFile(path)
+	cfg, err := decodeConfigDocument(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "[auth.sources.oidc]") || cfg.Auth.Sources["oidc"].RedirectURL != "https://depsilo.example/api/v1/auth/oidc/oidc/callback" {
+		t.Fatalf("source ID oidc was not stored as an ordinary source:\n%s", raw)
 	}
 }

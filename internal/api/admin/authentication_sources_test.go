@@ -91,7 +91,7 @@ func TestAuthenticationSourceHandlersRejectAmbiguousInput(t *testing.T) {
 		`null`, `[]`, `{"id":"company","protocol":"oidc","id":"other"}`, `{"id":"company","Protocol":"oidc"}`,
 		`{"id":"company","protocol":"oidc","client_secret":null}`, `{"id":"company","protocol":"oidc","unknown":"private-value"}`,
 		`{"id":"company","protocol":"oidc","client_secret":123}`, `{"id":"company","protocol":"oidc"} {}`,
-		`{"id":"company","protocol":"saml"}`, `{"id":"oidc","protocol":"oidc"}`, `{"id":"../bad","protocol":"oidc"}`,
+		`{"id":"company","protocol":"saml"}`, `{"id":"../bad","protocol":"oidc"}`,
 	} {
 		t.Run(body[:min(40, len(body))], func(t *testing.T) {
 			router, path := authenticationSourcesFixture(t, middleware.Principal{Role: "admin", CanWrite: true, CanManageCredentials: true})

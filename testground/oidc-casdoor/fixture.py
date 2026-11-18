@@ -19,7 +19,7 @@ ORGANIZATION = "depsilo-test"
 APPLICATION = "depsilo-oidc-test"
 IMAGE = "casbin/casdoor-all-in-one:4.23.0@sha256:0a65b3cbca95ec16783e43eb7520f152de16e1eaa9b6b6547f01d7d006da6da6"
 CALLBACKS = [
-    "http://127.0.0.1:18081/api/v1/auth/oidc/callback",
+    "http://127.0.0.1:18081/api/v1/auth/oidc/casdoor/callback",
     "http://127.0.0.1:18082/callback",
 ]
 

@@ -1214,7 +1214,6 @@ export interface OIDCAuthenticationSourceState {
   can_restore?: boolean
   id: string
   protocol: 'oidc'
-  legacy: boolean
   configured: AuthenticationSettings | null
   effective: AuthenticationSettings | null
   overrides: Partial<Record<AuthenticationField, string>>
@@ -1244,7 +1243,6 @@ export type LDAPAuthenticationPatch = Partial<Omit<LDAPAuthenticationSettings, '
 export interface LDAPAuthenticationSourceState {
   id: string
   protocol: 'ldap'
-  legacy: boolean
   configured: LDAPAuthenticationSettings | null
   effective: LDAPAuthenticationSettings | null
   overrides: Record<string, string>

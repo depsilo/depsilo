@@ -6,7 +6,7 @@ import type { LDAPAuthenticationSourceState, LoginIdentity, Principal } from '..
 const principal: Principal = { id: 1, username: 'admin', enabled: true, role: 'admin', auth_method: 'jwt', token_permissions: null, can_write: true, permission_source: 'local', login_method: 'password', can_manage_credentials: true }
 const provider = { id: 'directory', name: 'Company directory', protocol: 'ldap' as const, enabled: true, can_link: true }
 const config = { enabled: false, display_name: provider.name, admin_groups: ['cn=operators,dc=example'], readonly_groups: ['cn=readers,dc=example'], session_ttl: '30m', ldap: { url: 'ldaps://directory.example:636', bind_dn: 'cn=search,dc=example', bind_password_set: true, user_base_dn: 'ou=people,dc=example', user_filter: '(uid={username})', subject_attribute: 'entryUUID', display_name_attribute: 'displayName', groups_attribute: 'memberOf', ca_cert_pem: '' } }
-const source: LDAPAuthenticationSourceState = { id: provider.id, protocol: 'ldap', legacy: false, configured: config, effective: config, overrides: {}, config_writable: true, pending_restart: false }
+const source: LDAPAuthenticationSourceState = { id: provider.id, protocol: 'ldap', configured: config, effective: config, overrides: {}, config_writable: true, pending_restart: false }
 
 async function serveInsecureOrigin(page: Page, baseURL: string | undefined) {
   await page.route('http://depsilo.example.test/**', async route => {

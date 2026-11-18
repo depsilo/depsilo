@@ -131,7 +131,7 @@ groups_attribute = "memberOf"
 	if ldap.BindPassword != "nested-fixture-secret" || ldap.UserFilter != "(mail={username})" || ldap.UserBaseDN != "ou=people,dc=example" {
 		t.Fatal("partial patch lost directory fields")
 	}
-	if _, err := store.UpdateAuthenticationSource(ctx, "oidc", OIDCSettingsPatch{DisplayName: oidcPointer("OIDC still editable")}); err != nil {
+	if _, err := store.UpdateAuthenticationSource(ctx, "existing", OIDCSettingsPatch{DisplayName: oidcPointer("OIDC still editable")}); err != nil {
 		t.Fatal("nested LDAP blocked another source's edit")
 	}
 	if err := store.DeleteAuthenticationSource(ctx, "directory"); err != nil {
@@ -187,13 +187,9 @@ func TestLDAPSourceRejectsUnsafeOrMixedSettings(t *testing.T) {
 		})
 	}
 	store, _ := newOIDCStoreFixture(t, oidcStoreDocument)
-	_, err := store.UpdateAuthenticationSource(context.Background(), "oidc", OIDCSettingsPatch{LDAP: &LDAPSettingsPatch{URL: oidcPointer("ldaps://directory.example")}})
+	_, err := store.UpdateAuthenticationSource(context.Background(), "existing", OIDCSettingsPatch{LDAP: &LDAPSettingsPatch{URL: oidcPointer("ldaps://directory.example")}})
 	if err == nil {
 		t.Fatal("LDAP settings accepted by OIDC source")
-	}
-	_, err = store.UpdateOIDCSettings(context.Background(), OIDCSettingsPatch{DisplayName: oidcPointer("Name"), LDAP: &LDAPSettingsPatch{}})
-	if err == nil {
-		t.Fatal("legacy OIDC silently ignored LDAP patch")
 	}
 }
 

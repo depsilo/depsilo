@@ -61,7 +61,7 @@ export default function AuthenticationEditor({ source, creating, configWritable,
     setChecked(null)
   }, [state])
   const canTrial = principal?.auth_method === 'jwt' && principal.login_method === 'password'
-  const callback = `${window.location.origin}/api/v1/auth/oidc/${source.legacy ? '' : `${id}/`}callback`
+  const callback = `${window.location.origin}/api/v1/auth/oidc/${id}/callback`
   const patch = authenticationPatch(draft, state)
   const changed = Object.keys(patch) as AuthenticationField[]
   const dirty = changed.length > 0 || id !== source.id

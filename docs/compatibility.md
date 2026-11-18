@@ -309,10 +309,11 @@ consequence.
   be distinct across configured sources, including disabled ones; disabled
   drafts may leave the issuer unset. Enabled callbacks
   must share one instance origin. See [OIDC configuration](oidc.md#configure-authentication-sources).
-- Existing `[auth.oidc]` remains source ID `oidc`, with its old callback path and
-  `DEPSILO_AUTH_OIDC_*` overrides. Explicit names are preserved; the fallback
-  name is OIDC. The reserved ID cannot be used by a new named source. Moving
-  configuration to another ID does not migrate account bindings.
+- The singleton `[auth.oidc]` section and its `DEPSILO_AUTH_OIDC_*` overrides
+  were removed before 1.0. A document that still contains `[auth.oidc]` fails
+  schema decoding; declare a named `[auth.sources.<id>]` source instead. `oidc`
+  is an ordinary source ID. Moving configuration to another ID does not migrate
+  account bindings.
 
 ## Operator authentication
 
@@ -326,17 +327,17 @@ consequence.
   existing Users, Settings, and License URLs are preserved. The new
   `/api/v1/admin/authentication/sources` collection supports listing, creation,
   per-source updates, and removal; reads require an administrator role and
-  writes additionally require local credential-management authority. The old
-  GET/PUT `/api/v1/admin/authentication` remains legacy-only. Client
+  writes additionally require local credential-management authority. The
+  singleton GET/PUT `/api/v1/admin/authentication` endpoint was removed. Client
   secrets are write-only, environment overrides cannot be edited, and saved
   configuration applies after restart. Removed running sources remain listed
   with null configured state until restart; removal preserves account bindings.
-- Public providers include `id`, `name`, and `protocol`; login and linking accept
-  `provider_id`. Existing legacy callback and completion paths remain. Requests
-  without a source select the legacy source, or a sole enabled named source if
-  legacy is absent; ambiguous multi-source requests require explicit selection.
-  Self-service identities add `providers` while retaining the old `provider`
-  field when a legacy or sole source supplies an unambiguous value.
+- Public providers include `id`, `name`, and `protocol`; login and linking
+  require `provider_id`. A request without one is rejected with
+  `PROVIDER_REQUIRED`, even when only one source is enabled. Callbacks use
+  `/api/v1/auth/oidc/<id>/callback`; the unprefixed
+  `/api/v1/auth/oidc/callback` was removed. Self-service identities list
+  `providers`.
 - Existing local password JWTs without an external session claim retain their
   local authentication behavior when the account is enabled, has a password,
   and its credential version and role still match. External accounts and
@@ -346,11 +347,9 @@ consequence.
   window. Existing locally owned API tokens keep their role/expiry behavior;
   provider-managed accounts cannot use API tokens to bypass that window.
   Startup invalidation is source-scoped: changing, disabling, or removing one
-  source does not revoke valid sessions for unchanged sources. An unchanged
-  legacy OIDC configuration upgrades its exact old fingerprint transactionally
-  while preserving valid sessions. Subsequent display-name-only changes also
-  preserve sessions. A simultaneous rename during that first legacy upgrade
-  cannot prove the old configuration and revokes those sessions conservatively.
+  source does not revoke valid sessions for unchanged sources. Display-name-only
+  changes preserve sessions. Sessions that carry any other configuration
+  fingerprint, including one from an earlier fingerprint algorithm, are revoked.
 - Linking and unlinking are explicit account operations and do not merge
   usernames or emails. Local accounts may bind one identity per source and
   unlink each separately. Provider-managed accounts cannot add another source;

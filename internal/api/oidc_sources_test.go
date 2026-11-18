@@ -28,12 +28,12 @@ func multipleOIDCAPI(t *testing.T) (*gin.Engine, *gorm.DB, string, *OIDCHandler)
 			_ = json.NewEncoder(w).Encode(gin.H{"issuer": provider.URL, "authorization_endpoint": provider.URL + "/authorize", "token_endpoint": provider.URL + "/token", "jwks_uri": provider.URL + "/keys", "userinfo_endpoint": provider.URL + "/userinfo"})
 		}))
 		t.Cleanup(provider.Close)
-		cfg := auth.OIDC
+		cfg := auth.Sources[testOIDCSourceID].OIDCConfig
 		cfg.DisplayName, cfg.Issuer = id+" login", provider.URL
 		cfg.RedirectURL = "http://127.0.0.1:18081/api/v1/auth/oidc/" + id + "/callback"
 		sources[id] = config.AuthenticationSourceConfig{Protocol: "oidc", OIDCConfig: cfg}
 	}
-	auth.OIDC, auth.Sources = config.OIDCConfig{}, sources
+	auth.Sources = sources
 	registry, err := identity.NewRegistry(database, auth)
 	if err != nil {
 		t.Fatal(err)
@@ -185,17 +185,17 @@ func TestOIDCMultipleSourcesShareRateLimit(t *testing.T) {
 	}
 }
 
-func TestOIDCLegacyCallbackDoesNotAcceptSourcePathAlias(t *testing.T) {
+func TestOIDCCallbackAcceptsOnlyTheSourcePath(t *testing.T) {
 	r, _, _, _, _ := newOIDCAPI(t, true)
-	flow, query := sourceStart(t, r, "oidc")
-	for _, path := range []string{"/api/v1/auth/oidc/oidc/callback", "/api/v1/auth/oidc/callback"} {
+	flow, query := sourceStart(t, r, testOIDCSourceID)
+	for _, path := range []string{"/api/v1/auth/oidc/missing/callback", "/api/v1/auth/oidc/" + testOIDCSourceID + "/callback"} {
 		response := oidcCookieRequest(r, http.MethodGet, path+"?state="+query.Get("state")+"&error=access_denied", "", flow)
 		completed := false
 		for _, cookie := range response.Result().Cookies() {
 			completed = completed || strings.HasSuffix(cookie.Name, "_complete") && cookie.MaxAge > 0
 		}
-		if completed != (path == "/api/v1/auth/oidc/callback") {
-			t.Fatal("callback accepted an unconfigured path or consumed the legacy flow")
+		if completed != strings.Contains(path, "/"+testOIDCSourceID+"/") {
+			t.Fatal("callback accepted an unconfigured path or consumed the source's flow")
 		}
 	}
 }

@@ -12,7 +12,7 @@ import (
 func TestAuthenticationDraftPreviewPreservesSavedSecretWithoutMutation(t *testing.T) {
 	store, path := newOIDCStoreFixture(t, oidcStoreDocument)
 	before, _ := os.ReadFile(path)
-	cfg, err := store.PreviewAuthenticationSourceDraft(context.Background(), AuthenticationSourceDraft{ID: "oidc", Protocol: "oidc", Settings: OIDCSettingsPatch{DisplayName: oidcPointer("Preview name")}})
+	cfg, err := store.PreviewAuthenticationSourceDraft(context.Background(), AuthenticationSourceDraft{ID: "existing", Protocol: "oidc", Settings: OIDCSettingsPatch{DisplayName: oidcPointer("Preview name")}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,18 +48,18 @@ func TestAuthenticationDraftPreviewUsesCapturedEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("DEPSILO_AUTH_OIDC_CLIENT_SECRET", "environment-secret")
-	cfg.Auth.OIDC.ClientSecret = "environment-secret"
+	t.Setenv("DEPSILO_AUTH_SOURCES_EXISTING_CLIENT_SECRET", "environment-secret")
+	setSourceSecret(cfg, "existing", "environment-secret")
 	store := NewStore(path, cfg, zap.NewAtomicLevel())
-	t.Setenv("DEPSILO_AUTH_OIDC_CLIENT_SECRET", "later-environment-secret")
-	preview, err := store.PreviewAuthenticationSourceDraft(context.Background(), AuthenticationSourceDraft{ID: "oidc", Protocol: "oidc"})
+	t.Setenv("DEPSILO_AUTH_SOURCES_EXISTING_CLIENT_SECRET", "later-environment-secret")
+	preview, err := store.PreviewAuthenticationSourceDraft(context.Background(), AuthenticationSourceDraft{ID: "existing", Protocol: "oidc"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if preview.ClientSecret != "environment-secret" {
 		t.Fatal("preview changed running environment authority")
 	}
-	_, err = store.PreviewAuthenticationSourceDraft(context.Background(), AuthenticationSourceDraft{ID: "oidc", Protocol: "oidc", Settings: OIDCSettingsPatch{ClientSecret: oidcPointer("replacement")}})
+	_, err = store.PreviewAuthenticationSourceDraft(context.Background(), AuthenticationSourceDraft{ID: "existing", Protocol: "oidc", Settings: OIDCSettingsPatch{ClientSecret: oidcPointer("replacement")}})
 	if AuthenticationFieldErrors(err)["client_secret"] != "ENV_OVERRIDE" {
 		t.Fatal("missing environment field error")
 	}
@@ -84,7 +84,7 @@ func TestAuthenticationFieldErrorsAreStableAndValueFree(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			store, _ := newOIDCStoreFixture(t, oidcStoreDocument)
-			_, err := store.PreviewAuthenticationSourceDraft(context.Background(), AuthenticationSourceDraft{ID: "oidc", Protocol: "oidc", Settings: test.patch})
+			_, err := store.PreviewAuthenticationSourceDraft(context.Background(), AuthenticationSourceDraft{ID: "existing", Protocol: "oidc", Settings: test.patch})
 			if err == nil || AuthenticationFieldErrors(err)[test.field] != test.code {
 				t.Fatalf("missing structured field error: %v %v", err, AuthenticationFieldErrors(err))
 			}
@@ -98,10 +98,10 @@ func TestAuthenticationFieldErrorsAreStableAndValueFree(t *testing.T) {
 func TestRestoreAuthenticationSourceUsesOriginalFileSnapshot(t *testing.T) {
 	store, path := newOIDCStoreFixture(t, oidcStoreDocument)
 	ctx := context.Background()
-	if _, err := store.UpdateAuthenticationSource(ctx, "oidc", OIDCSettingsPatch{DisplayName: oidcPointer("Pending change")}); err != nil {
+	if _, err := store.UpdateAuthenticationSource(ctx, "existing", OIDCSettingsPatch{DisplayName: oidcPointer("Pending change")}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.DeleteAuthenticationSource(ctx, "oidc"); err != nil {
+	if err := store.DeleteAuthenticationSource(ctx, "existing"); err != nil {
 		t.Fatal(err)
 	}
 	state, err := store.AuthenticationSourceSettings(ctx)
@@ -111,7 +111,7 @@ func TestRestoreAuthenticationSourceUsesOriginalFileSnapshot(t *testing.T) {
 	if len(state.Sources) != 1 || !state.Sources[0].CanRestore {
 		t.Fatal("pending removal cannot restore captured baseline")
 	}
-	restored, err := store.RestoreAuthenticationSource(ctx, "oidc")
+	restored, err := store.RestoreAuthenticationSource(ctx, "existing")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,9 +168,9 @@ func TestRestoreRequiresReliableOriginalBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.Auth.OIDC.ClientSecret = "runtime-secret-not-from-file"
+	setSourceSecret(cfg, "existing", "runtime-secret-not-from-file")
 	store := NewStore(path, cfg, zap.NewAtomicLevel())
-	if err := store.DeleteAuthenticationSource(context.Background(), "oidc"); err != nil {
+	if err := store.DeleteAuthenticationSource(context.Background(), "existing"); err != nil {
 		t.Fatal(err)
 	}
 	state, err := store.AuthenticationSourceSettings(context.Background())
@@ -180,6 +180,6 @@ func TestRestoreRequiresReliableOriginalBaseline(t *testing.T) {
 	if state.Sources[0].CanRestore {
 		t.Fatal("unsafe effective-to-file restoration offered")
 	}
-	_, err = store.RestoreAuthenticationSource(context.Background(), "oidc")
+	_, err = store.RestoreAuthenticationSource(context.Background(), "existing")
 	requireOIDCStoreCode(t, err, StoreAuthenticationSourceConflict)
 }

@@ -21,7 +21,7 @@ func TestAuthenticationSourceSessionImpactUsesSecuritySettings(t *testing.T) {
 		{"issuer", OIDCSettingsPatch{Issuer: oidcPointer("https://replacement.example")}, true, true},
 		{"client", OIDCSettingsPatch{ClientID: oidcPointer("replacement")}, true, true},
 		{"secret", OIDCSettingsPatch{ClientSecret: oidcPointer("replacement")}, true, true},
-		{"callback", OIDCSettingsPatch{RedirectURL: oidcPointer("https://new-depsilo.example/api/v1/auth/oidc/callback")}, true, true},
+		{"callback", OIDCSettingsPatch{RedirectURL: oidcPointer("https://new-depsilo.example/api/v1/auth/oidc/existing/callback")}, true, true},
 		{"admin groups", OIDCSettingsPatch{AdminGroups: oidcPointer([]string{"new-operators"})}, true, true},
 		{"readonly groups", OIDCSettingsPatch{ReadonlyGroups: oidcPointer([]string{"readers"})}, true, true},
 		{"groups claim", OIDCSettingsPatch{GroupsClaim: oidcPointer("roles")}, true, true},
@@ -30,7 +30,7 @@ func TestAuthenticationSourceSessionImpactUsesSecuritySettings(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			store, _ := newOIDCStoreFixture(t, strings.Replace(oidcStoreDocument, "enabled = false", "enabled = true", 1))
-			state, err := store.UpdateAuthenticationSource(context.Background(), "oidc", test.patch)
+			state, err := store.UpdateAuthenticationSource(context.Background(), "existing", test.patch)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -44,7 +44,7 @@ func TestAuthenticationSourceSessionImpactUsesSecuritySettings(t *testing.T) {
 func TestAuthenticationSourceSessionImpactRequiresRunningEnabledSource(t *testing.T) {
 	ctx := context.Background()
 	store, _ := newOIDCStoreFixture(t, oidcStoreDocument)
-	state, err := store.UpdateAuthenticationSource(ctx, "oidc", OIDCSettingsPatch{Enabled: oidcPointer(true)})
+	state, err := store.UpdateAuthenticationSource(ctx, "existing", OIDCSettingsPatch{Enabled: oidcPointer(true)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestAuthenticationSourceSessionImpactRequiresRunningEnabledSource(t *testin
 			document = strings.Replace(document, "enabled = false", "enabled = true", 1)
 		}
 		store, _ := newOIDCStoreFixture(t, document)
-		if err := store.DeleteAuthenticationSource(ctx, "oidc"); err != nil {
+		if err := store.DeleteAuthenticationSource(ctx, "existing"); err != nil {
 			t.Fatal(err)
 		}
 		states, err := store.AuthenticationSourceSettings(ctx)
@@ -84,11 +84,11 @@ func TestAuthenticationSourceSessionImpactUsesCapturedEnvironment(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("DEPSILO_AUTH_OIDC_CLIENT_SECRET", "environment-secret")
-	cfg.Auth.OIDC.ClientSecret = "environment-secret"
+	t.Setenv("DEPSILO_AUTH_SOURCES_EXISTING_CLIENT_SECRET", "environment-secret")
+	setSourceSecret(cfg, "existing", "environment-secret")
 	store := NewStore(path, cfg, zap.NewAtomicLevel())
-	t.Setenv("DEPSILO_AUTH_OIDC_CLIENT_SECRET", "changed-after-startup")
-	state, err := store.UpdateAuthenticationSource(context.Background(), "oidc", OIDCSettingsPatch{DisplayName: oidcPointer("Renamed")})
+	t.Setenv("DEPSILO_AUTH_SOURCES_EXISTING_CLIENT_SECRET", "changed-after-startup")
+	state, err := store.UpdateAuthenticationSource(context.Background(), "existing", OIDCSettingsPatch{DisplayName: oidcPointer("Renamed")})
 	if err != nil {
 		t.Fatal(err)
 	}

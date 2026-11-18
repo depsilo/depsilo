@@ -20,6 +20,8 @@ import (
 	"depsilo/internal/middleware"
 )
 
+const testOIDCSourceID = "example"
+
 func newOIDCAPI(t *testing.T, enabled bool) (*gin.Engine, *gorm.DB, config.AuthConfig, string, *OIDCHandler) {
 	t.Helper()
 	database := newAPIAuthTestDB(t)
@@ -32,7 +34,8 @@ func newOIDCAPI(t *testing.T, enabled bool) (*gin.Engine, *gorm.DB, config.AuthC
 		_ = json.NewEncoder(w).Encode(gin.H{"issuer": provider.URL, "authorization_endpoint": provider.URL + "/authorize", "token_endpoint": provider.URL + "/token", "jwks_uri": provider.URL + "/keys", "userinfo_endpoint": provider.URL + "/userinfo"})
 	}))
 	t.Cleanup(provider.Close)
-	auth := config.AuthConfig{JWTSecret: "test-secret-012345678901234567890123", TokenTTL: time.Hour, OIDC: config.OIDCConfig{Enabled: enabled, DisplayName: "Example Login", Issuer: provider.URL, ClientID: "client", ClientSecret: "never-return-this-secret", RedirectURL: "http://127.0.0.1:18081/api/v1/auth/oidc/callback", AdminGroups: []string{"admins"}, GroupsClaim: "groups", SessionTTL: 30 * time.Minute, AllowInsecureLoopback: true}}
+	source := config.OIDCConfig{Enabled: enabled, DisplayName: "Example Login", Issuer: provider.URL, ClientID: "client", ClientSecret: "never-return-this-secret", RedirectURL: "http://127.0.0.1:18081/api/v1/auth/oidc/" + testOIDCSourceID + "/callback", AdminGroups: []string{"admins"}, GroupsClaim: "groups", SessionTTL: 30 * time.Minute, AllowInsecureLoopback: true}
+	auth := config.AuthConfig{JWTSecret: "test-secret-012345678901234567890123", TokenTTL: time.Hour, Sources: map[string]config.AuthenticationSourceConfig{testOIDCSourceID: {Protocol: "oidc", OIDCConfig: source}}}
 	m, err := identity.NewRegistry(database, auth)
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +54,6 @@ func newOIDCAPI(t *testing.T, enabled bool) (*gin.Engine, *gorm.DB, config.AuthC
 	_ = r.SetTrustedProxies(nil)
 	r.GET("/api/v1/auth/providers", h.Providers)
 	r.POST("/api/v1/auth/oidc/start", h.Start)
-	r.GET("/api/v1/auth/oidc/callback", h.Callback)
 	r.GET("/api/v1/auth/oidc/:provider_id/callback", h.Callback)
 	r.POST("/api/v1/auth/oidc/complete", middleware.OptionalLogoutPrincipal(auth.JWTSecret, database), h.Complete)
 	r.POST("/api/v1/auth/oidc/resolve", h.Resolve)
@@ -96,7 +98,11 @@ func TestOIDCAPIProviderAndBrowserBoundStart(t *testing.T) {
 	if rec.Code != 400 {
 		t.Fatal("form login CSRF accepted")
 	}
-	start := oidcRequest(r, "POST", "/api/v1/auth/oidc/start", `{"return_to":"/admin/cache"}`, "", "http://127.0.0.1:18081")
+	missing := oidcRequest(r, "POST", "/api/v1/auth/oidc/start", `{"return_to":"/admin/cache"}`, "", "http://127.0.0.1:18081")
+	if missing.Code != 400 || !strings.Contains(missing.Body.String(), "PROVIDER_REQUIRED") {
+		t.Fatalf("start without a source: %d %s", missing.Code, missing.Body)
+	}
+	start := oidcRequest(r, "POST", "/api/v1/auth/oidc/start", `{"provider_id":"example","return_to":"/admin/cache"}`, "", "http://127.0.0.1:18081")
 	if start.Code != 200 {
 		t.Fatalf("start: %s", start.Body)
 	}
@@ -112,7 +118,7 @@ func TestOIDCAPIProviderAndBrowserBoundStart(t *testing.T) {
 	if len(cookies) != 1 || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteLaxMode {
 		t.Fatal("flow cookie lacks browser protections")
 	}
-	callback := oidcRequest(r, "GET", "/api/v1/auth/oidc/callback?state=invalid&code=secret-code", "", "", "")
+	callback := oidcRequest(r, "GET", "/api/v1/auth/oidc/example/callback?state=invalid&code=secret-code", "", "", "")
 	if callback.Code != 303 || callback.Header().Get("Location") != "/admin/auth/complete" || strings.Contains(callback.Body.String(), "secret-code") {
 		t.Fatal("callback leaked code or wrong redirect")
 	}
@@ -125,12 +131,12 @@ func TestOIDCAPIProviderAndBrowserBoundStart(t *testing.T) {
 func TestOIDCAPIProofErrorsDoNotLogOutAndAreBounded(t *testing.T) {
 	r, database, _, token, _ := newOIDCAPI(t, true)
 	for i := 0; i < 5; i++ {
-		rec := oidcRequest(r, "POST", "/api/v1/auth/identities/link", `{"password":"wrong"}`, token, "http://127.0.0.1:18081")
+		rec := oidcRequest(r, "POST", "/api/v1/auth/identities/link", `{"provider_id":"example","password":"wrong"}`, token, "http://127.0.0.1:18081")
 		if rec.Code != 403 || !strings.Contains(rec.Body.String(), "REAUTHENTICATION_FAILED") {
 			t.Fatalf("attempt %d: %d %s", i, rec.Code, rec.Body)
 		}
 	}
-	rec := oidcRequest(r, "POST", "/api/v1/auth/identities/link", `{"password":"correct-password"}`, token, "http://127.0.0.1:18081")
+	rec := oidcRequest(r, "POST", "/api/v1/auth/identities/link", `{"provider_id":"example","password":"correct-password"}`, token, "http://127.0.0.1:18081")
 	if rec.Code != 429 || rec.Header().Get("Retry-After") == "" {
 		t.Fatal("password proof unbounded")
 	}
@@ -149,11 +155,11 @@ func TestOIDCAPIUnlinkWorksAfterProviderRemoval(t *testing.T) {
 	r, database, _, token, h := newOIDCAPI(t, false)
 	var user db.User
 	database.Where("username = ?", "local-admin").First(&user)
-	linked := db.ExternalIdentity{UserID: user.ID, Provider: "oidc", Issuer: "https://old-provider.test", Subject: "old-sub", DisplayName: "External name"}
+	linked := db.ExternalIdentity{UserID: user.ID, Provider: testOIDCSourceID, Issuer: "https://old-provider.test", Subject: "old-sub", DisplayName: "External name"}
 	if err := database.Create(&linked).Error; err != nil {
 		t.Fatal(err)
 	}
-	h.auth.OIDC = config.OIDCConfig{} // The operator removed the configuration.
+	h.auth.Sources = nil // The operator removed the configuration.
 	var err error
 	h.registry, err = identity.NewRegistry(database, h.auth)
 	if err != nil {
@@ -181,7 +187,7 @@ func TestOIDCAPIManagedIdentityCannotBeUnlinked(t *testing.T) {
 	r, database, auth, _, _ := newOIDCAPI(t, true)
 	user := db.User{Username: "oidc-account", Role: "admin", PermissionSource: "oidc", Enabled: true, CredentialVersion: 1}
 	database.Create(&user)
-	linked := db.ExternalIdentity{UserID: user.ID, Provider: "oidc", Issuer: auth.OIDC.Issuer, Subject: "managed"}
+	linked := db.ExternalIdentity{UserID: user.ID, Provider: testOIDCSourceID, Issuer: auth.Sources[testOIDCSourceID].Issuer, Subject: "managed"}
 	database.Create(&linked)
 	session := db.IdentitySession{ID: "managed-session", UserID: user.ID, IdentityID: linked.ID, Role: "admin", ConfigFingerprint: "configured", CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(30 * time.Minute)}
 	database.Create(&session)
@@ -200,7 +206,7 @@ func TestOIDCAPIManagedIdentityCannotBeUnlinked(t *testing.T) {
 }
 
 func TestOIDCOriginUsesDefaultPortEquivalence(t *testing.T) {
-	a, _ := url.Parse("https://depsilo.example:443/api/v1/auth/oidc/callback")
+	a, _ := url.Parse("https://depsilo.example:443/api/v1/auth/oidc/example/callback")
 	b, _ := url.Parse("https://depsilo.example")
 	if !sameOIDCOrigin(a, b) {
 		t.Fatal("default TLS port rejected")
@@ -214,10 +220,10 @@ func TestOIDCAPIIdentityAvailabilityUsesBoundIssuer(t *testing.T) {
 		provider, issuerSuffix     string
 		wantMatches, wantAvailable bool
 	}{
-		{"active current issuer", true, "oidc", "", true, true},
-		{"disabled current issuer", false, "oidc", "", true, false},
-		{"issuer changed", true, "oidc", "/previous", false, false},
-		{"issuer comparison exact", true, "oidc", "/", false, false},
+		{"active current issuer", true, testOIDCSourceID, "", true, true},
+		{"disabled current issuer", false, testOIDCSourceID, "", true, false},
+		{"issuer changed", true, testOIDCSourceID, "/previous", false, false},
+		{"issuer comparison exact", true, testOIDCSourceID, "/", false, false},
 		{"provider changed", true, "previous-provider", "", false, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -227,7 +233,7 @@ func TestOIDCAPIIdentityAvailabilityUsesBoundIssuer(t *testing.T) {
 				t.Fatal(err)
 			}
 			timestamp := time.Now().UTC().Truncate(time.Second)
-			row := db.ExternalIdentity{UserID: user.ID, Provider: test.provider, Issuer: auth.OIDC.Issuer + test.issuerSuffix, Subject: "private-subject", DisplayName: "Bound User", CreatedAt: timestamp, LastLoginAt: timestamp}
+			row := db.ExternalIdentity{UserID: user.ID, Provider: test.provider, Issuer: auth.Sources[testOIDCSourceID].Issuer + test.issuerSuffix, Subject: "private-subject", DisplayName: "Bound User", CreatedAt: timestamp, LastLoginAt: timestamp}
 			if err := database.Create(&row).Error; err != nil {
 				t.Fatal(err)
 			}
@@ -259,12 +265,12 @@ func TestOIDCAPIIdentityAvailabilityUsesBoundIssuer(t *testing.T) {
 			}
 			wantName := "OIDC"
 			if test.wantMatches {
-				wantName = auth.OIDC.DisplayName
+				wantName = auth.Sources[testOIDCSourceID].DisplayName
 			}
 			if got.ProviderName != wantName || got.ID != row.ID || got.DisplayName != row.DisplayName || !got.CanUnlink || !got.CreatedAt.Equal(timestamp) || !got.LastLoginAt.Equal(timestamp) {
 				t.Fatal("historical binding details changed")
 			}
-			if strings.Contains(response.Body.String(), "private-subject") || strings.Contains(response.Body.String(), auth.OIDC.ClientSecret) {
+			if strings.Contains(response.Body.String(), "private-subject") || strings.Contains(response.Body.String(), auth.Sources[testOIDCSourceID].ClientSecret) {
 				t.Fatal("private identity information exposed")
 			}
 		})
