@@ -1,0 +1,9 @@
+# TypeScript generation for the HTTP API contract; run `make generate`.
+# See internal/api/contract/doc.go for the rules the Go types follow.
+packages:
+  - path: "depsilo/internal/api/contract"
+    output_path: "web/src/lib/generated/apiContract.ts"
+    indent: "  "
+    enum_style: "union"
+    type_mappings:
+      time.Time: "string"

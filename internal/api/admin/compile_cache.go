@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/compilecache"
 	"depsilo/internal/db"
 )
@@ -38,22 +39,11 @@ type createCompileCacheCredentialRequest struct {
 	TTLDays     *int   `json:"ttl_days"`
 }
 
-type compileCacheCredentialResponse struct {
-	ID          uint       `json:"id"`
-	Name        string     `json:"name"`
-	Namespace   string     `json:"namespace"`
-	Permissions string     `json:"permissions"`
-	ExpiresAt   *time.Time `json:"expires_at"`
-	LastUsedAt  *time.Time `json:"last_used_at"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-}
-
 // Status returns service capacity and protocol-specific client endpoints.
 func (h *CompileCacheHandler) Status(c *gin.Context) {
 	c.Header("Cache-Control", "private, no-store")
 	if !h.enabled || h.service == nil {
-		c.JSON(http.StatusOK, gin.H{"enabled": false})
+		c.JSON(http.StatusOK, contract.CompileCacheStatus{Enabled: false})
 		return
 	}
 	stats, err := h.service.Stats(c.Request.Context())
@@ -61,13 +51,16 @@ func (h *CompileCacheHandler) Status(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "STORAGE_UNAVAILABLE", "message": "compiler-cache stats are unavailable"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"enabled": true,
-		"endpoints": gin.H{
-			"ccache":  h.compileCacheEndpoint("{namespace}"),
-			"sccache": h.sccacheEndpoint("{namespace}"),
+	c.JSON(http.StatusOK, contract.CompileCacheStatus{
+		Enabled: true,
+		Endpoints: &contract.CompileCacheEndpoints{
+			CCache:  h.compileCacheEndpoint("{namespace}"),
+			SCCache: h.sccacheEndpoint("{namespace}"),
 		},
-		"stats": stats,
+		Stats: &contract.CompileCacheStats{
+			SizeBytes: stats.SizeBytes, MaxBytes: stats.MaxBytes, Entries: stats.Entries,
+			MaxEntries: stats.MaxEntries, Hits: stats.Hits, NamespaceCount: stats.NamespaceCount,
+		},
 	})
 }
 
@@ -82,15 +75,15 @@ func (h *CompileCacheHandler) ListCredentials(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": "failed to list compiler-cache credentials"})
 		return
 	}
-	items := make([]compileCacheCredentialResponse, len(credentials))
+	items := make([]contract.CompileCacheCredential, len(credentials))
 	for index, credential := range credentials {
-		items[index] = compileCacheCredentialResponse{
+		items[index] = contract.CompileCacheCredential{
 			ID: credential.ID, Name: credential.Name, Namespace: credential.Namespace,
-			Permissions: credential.Permissions, ExpiresAt: credential.ExpiresAt,
+			Permissions: contract.CompileCachePermissions(credential.Permissions), ExpiresAt: credential.ExpiresAt,
 			LastUsedAt: credential.LastUsedAt, CreatedAt: credential.CreatedAt, UpdatedAt: credential.UpdatedAt,
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"items": items, "total": len(items)})
+	c.JSON(http.StatusOK, contract.CompileCacheCredentialList{Items: items, Total: len(items)})
 }
 
 // CreateCredential creates a namespace-scoped credential and returns its
@@ -166,16 +159,13 @@ func (h *CompileCacheHandler) CreateCredential(c *gin.Context) {
 	}
 	ccacheEndpoint := h.compileCacheEndpoint(namespace)
 	sccacheEndpoint := h.sccacheEndpoint(namespace)
-	c.JSON(http.StatusCreated, gin.H{
-		"id": credential.ID, "name": credential.Name, "namespace": credential.Namespace,
-		"permissions": credential.Permissions, "expires_at": credential.ExpiresAt,
-		"token": plainToken,
-		"endpoints": gin.H{
-			"ccache":  ccacheEndpoint,
-			"sccache": sccacheEndpoint,
-		},
-		"ccache_remote_storage": compileCacheRemoteStorage(ccacheEndpoint, plainToken, credential.Permissions),
-		"sccache_config":        compileCacheSCCacheConfig(sccacheEndpoint, plainToken),
+	c.JSON(http.StatusCreated, contract.CreatedCompileCacheCredential{
+		ID: credential.ID, Name: credential.Name, Namespace: credential.Namespace,
+		Permissions: contract.CompileCachePermissions(credential.Permissions), ExpiresAt: credential.ExpiresAt,
+		Token:               plainToken,
+		Endpoints:           contract.CompileCacheEndpoints{CCache: ccacheEndpoint, SCCache: sccacheEndpoint},
+		CCacheRemoteStorage: compileCacheRemoteStorage(ccacheEndpoint, plainToken, credential.Permissions),
+		SCCacheConfig:       compileCacheSCCacheConfig(sccacheEndpoint, plainToken),
 	})
 }
 
@@ -252,7 +242,10 @@ func (h *CompileCacheHandler) Cleanup(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "STORAGE_UNAVAILABLE", "message": "compiler-cache cleanup failed"})
 		return
 	}
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, contract.CompileCacheCleanup{
+		RemovedEntries: result.RemovedEntries, ReclaimedBytes: result.ReclaimedBytes,
+		SizeBytes: result.SizeBytes, Entries: result.Entries,
+	})
 }
 
 func (h *CompileCacheHandler) compileCacheEndpoint(namespace string) string {

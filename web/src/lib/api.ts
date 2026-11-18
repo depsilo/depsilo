@@ -39,13 +39,13 @@ import type {
   CacheTransfersResponse,
   CapabilitySummary,
   CheckUpstreamResponse,
-  CompileCacheCleanupResponse,
-  CompileCacheCredentialListResponse,
+  CompileCacheCleanup,
+  CompileCacheCredentialList,
   CompileCacheStatusResponse,
   CreateAPITokenRequest,
   CreateAPITokenResponse,
   CreateCompileCacheCredentialRequest,
-  CreateCompileCacheCredentialResponse,
+  CreatedCompileCacheCredential,
   CreateProjectRequest,
   CreateProjectResponse,
   CreateUserRequest,
@@ -202,11 +202,11 @@ export const adminApi = {
 
   // Compiler cache
   getCompileCacheStatus: (options: ApiGetOptions = {}) => api.get<CompileCacheStatusResponse>('/admin/compile-cache/status', options),
-  listCompileCacheCredentials: (options: ApiGetOptions = {}) => api.get<CompileCacheCredentialListResponse>('/admin/compile-cache/credentials', options),
+  listCompileCacheCredentials: (options: ApiGetOptions = {}) => api.get<CompileCacheCredentialList>('/admin/compile-cache/credentials', options),
   createCompileCacheCredential: (data: CreateCompileCacheCredentialRequest) =>
-    api.post<CreateCompileCacheCredentialResponse>('/admin/compile-cache/credentials', data),
+    api.post<CreatedCompileCacheCredential>('/admin/compile-cache/credentials', data),
   deleteCompileCacheCredential: (id: number) => api.delete(`/admin/compile-cache/credentials/${id}`),
-  cleanupCompileCache: () => api.post<CompileCacheCleanupResponse>('/admin/compile-cache/cleanup'),
+  cleanupCompileCache: () => api.post<CompileCacheCleanup>('/admin/compile-cache/cleanup'),
 
   // Upstreams
   listUpstreams: (options: ApiGetOptions = {}) => api.get<AdminUpstreamListResponse>('/admin/upstreams', options),

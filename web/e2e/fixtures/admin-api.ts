@@ -12,7 +12,7 @@ import type {
   AuditIntegrityResponse,
   AuditLogListResponse,
   CapabilitySummary,
-  CompileCacheCredentialListResponse,
+  CompileCacheCredentialList,
   CompileCacheStatusResponse,
   ComplianceProfile,
   DashboardBreakdownResponse,
@@ -277,7 +277,7 @@ const canonicalAdminApiDefaults = {
   'GET /api/v1/admin/compile-cache/credentials': {
     items: [],
     total: 0,
-  } satisfies CompileCacheCredentialListResponse,
+  } satisfies CompileCacheCredentialList,
   'GET /api/v1/admin/dashboard/recent-downloads': { items: [] } satisfies RecentDownloadsResponse,
   'GET /api/v1/admin/logs': { items: [], total: 0, page: 1, page_size: 50 } satisfies AccessLogListResponse,
   'GET /api/v1/admin/audit-logs': { items: [], total: 0, page: 1 } satisfies AuditLogListResponse,

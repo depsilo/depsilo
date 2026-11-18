@@ -38,6 +38,9 @@ The runtime flow is documented in `docs/development/architecture.md`.
 Keep behavior tests beside the owning package. Use the interface as the test
 surface and avoid exporting internals only for tests.
 
+An HTTP response body is a type in `internal/api/contract` (rules in its
+`doc.go`), not a `gin.H` map; run `make generate` after changing one.
+
 `make lint-go` runs staticcheck (`staticcheck.conf`) and fails on any function
 deadcode finds unreachable from the binaries and tests. Both tools are pinned
 in `tools/go.mod`, outside the product module. Delete unreachable code rather

@@ -61,9 +61,10 @@ LDFLAGS    := -X depsilo/internal/version.Version=$(VERSION) \
               -X depsilo/internal/version.Commit=$(COMMIT) \
               -X depsilo/internal/version.BuildDate=$(BUILD_DATE)
 GO_BUILD   := CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$(LDFLAGS)"
-# Lint tools are pinned in their own module so they never enter the product's
-# dependency graph, SBOM, or vulnerability scan.
-GO_LINT_TOOL := go tool -modfile=tools/go.mod
+# Development tools (linters, generators) are pinned in their own module so they
+# never enter the product's dependency graph, SBOM, or vulnerability scan.
+GO_DEV_TOOL := go tool -modfile=tools/go.mod
+API_CONTRACT_TS := web/src/lib/generated/apiContract.ts
 
 # ─── 初始化与构建 ─────────────────────────────
 .PHONY: setup setup-ui version prepare-go frontend build build-dev-server tray app-macos install-linux uninstall-linux autostart-linux unautostart-linux
@@ -372,7 +373,7 @@ release-check:                   ## 检查 goreleaser 配置是否正确
 	goreleaser check
 
 # ─── 清理 ─────────────────────────────────────
-.PHONY: clean clean-all lint lint-go lint-web lint-i18n check verify verify-modules verify-build verify-web verify-ui security verify-scripts help
+.PHONY: clean clean-all generate lint lint-go lint-web lint-i18n check verify verify-modules verify-build verify-web verify-ui security verify-scripts help
 
 clean: stop docker-stop         ## 清理构建产物（保留运行数据与开发 JWT）
 	rm -rf $(BIN_DIR) $(DIST_DIR) $(WEB_DIST) $(DEV_LOG) $(PID_FILE)
@@ -384,15 +385,21 @@ clean-all: clean                ## 额外删除本地运行数据与开发 JWT�
 
 lint: lint-go lint-web lint-i18n  ## Go/前端/i18n 静态检查
 
-lint-go: prepare-go             # 内部：检查 gofmt、go vet、staticcheck 与不可达函数
+generate:                       ## 由 internal/api/contract 重新生成前端 API 类型
+	$(GO_DEV_TOOL) tygo generate
+
+lint-go: prepare-go             # 内部：检查 gofmt、go vet、staticcheck、不可达函数与生成的 API 类型
 	@unformatted="$$(git ls-files --cached --others --exclude-standard -z -- '*.go' | \
 		xargs -0 sh -c 'for file do [ ! -f "$$file" ] || gofmt -l "$$file"; done' sh)"; \
 		test -z "$$unformatted" || { echo "gofmt required:"; echo "$$unformatted"; exit 1; }
 	go vet $(GO_TEST_PKGS)
-	$(GO_LINT_TOOL) staticcheck $(GO_PROD_PKGS)
-	$(GO_LINT_TOOL) staticcheck -tags integration ./tests/...
-	@unreachable="$$($(GO_LINT_TOOL) deadcode -test -tags integration $(GO_PROD_PKGS) ./tests/...)" || exit 1; \
+	$(GO_DEV_TOOL) staticcheck $(GO_PROD_PKGS)
+	$(GO_DEV_TOOL) staticcheck -tags integration ./tests/...
+	@unreachable="$$($(GO_DEV_TOOL) deadcode -test -tags integration $(GO_PROD_PKGS) ./tests/...)" || exit 1; \
 		test -z "$$unreachable" || { echo "unreachable functions (delete them or reach them from a test):"; echo "$$unreachable"; exit 1; }
+	@before="$$(mktemp)"; trap 'rm -f "$$before"' 0; cp $(API_CONTRACT_TS) "$$before"; \
+		$(GO_DEV_TOOL) tygo generate || exit 1; cmp -s "$$before" $(API_CONTRACT_TS) || \
+		{ echo "$(API_CONTRACT_TS) was stale and has been regenerated; review and commit it"; exit 1; }
 
 lint-web:                       # 内部：检查前端 ESLint 与未使用的文件、导出和依赖
 	$(NPM_RUN) lint

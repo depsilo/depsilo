@@ -1,3 +1,8 @@
+// Response bodies generated from internal/api/contract (`make generate`).
+// Do not redeclare one of these names here: a local declaration would shadow it.
+export type * from './generated/apiContract'
+import type { CompileCachePermissions, CompileCacheStatus } from './generated/apiContract'
+
 export type UserRole = 'admin' | 'readonly'
 export type TokenPermissions = 'readonly' | 'readwrite'
 
@@ -328,41 +333,10 @@ export interface CacheDistributionResponse {
   top_packages: CachePackageSize[]
 }
 
-export type CompileCachePermissions = 'readonly' | 'readwrite'
-
-export interface CompileCacheStats {
-  size_bytes: number
-  max_bytes: number
-  entries: number
-  max_entries: number
-  hits: number
-  namespace_count: number
-}
-
-export interface CompileCacheEndpoints {
-  ccache: string
-  sccache: string
-}
-
+/** The status body, narrowed: endpoints and stats are present exactly when enabled. */
 export type CompileCacheStatusResponse =
-  | { enabled: false }
-  | { enabled: true; endpoints: CompileCacheEndpoints; stats: CompileCacheStats }
-
-export interface CompileCacheCredential {
-  id: number
-  name: string
-  namespace: string
-  permissions: CompileCachePermissions
-  expires_at: string | null
-  last_used_at: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface CompileCacheCredentialListResponse {
-  items: CompileCacheCredential[]
-  total: number
-}
+  | (CompileCacheStatus & { enabled: false })
+  | (Required<CompileCacheStatus> & { enabled: true })
 
 export interface CreateCompileCacheCredentialRequest {
   name: string
@@ -370,25 +344,6 @@ export interface CreateCompileCacheCredentialRequest {
   permissions: CompileCachePermissions
   /** Zero creates a credential that does not expire. */
   ttl_days: number
-}
-
-export interface CreateCompileCacheCredentialResponse {
-  id: number
-  name: string
-  namespace: string
-  permissions: CompileCachePermissions
-  expires_at: string | null
-  token: string
-  endpoints: CompileCacheEndpoints
-  ccache_remote_storage: string
-  sccache_config: string
-}
-
-export interface CompileCacheCleanupResponse {
-  removed_entries: number
-  reclaimed_bytes: number
-  size_bytes: number
-  entries: number
 }
 
 export type CacheIndexStatus = 'fresh' | 'stale'
