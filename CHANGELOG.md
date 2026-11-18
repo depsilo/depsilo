@@ -5,6 +5,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-18
+
 ### Added
 - `depsilo reset-password [--config PATH] [<username>]` sets a local
   account's password in the SQLite database. Stop Depsilo first: it refuses
