@@ -79,65 +79,20 @@ func (l *captureAuditLogger) Log(entry db.AuditLog) {
 	l.calls.mu.Unlock()
 }
 
-func TestInstallAccessHooksReleaseIsOwnerAwareAndLogUsesOneSnapshot(t *testing.T) {
-	accessHooks.Store(nil)
-	t.Cleanup(func() { accessHooks.Store(nil) })
-
-	calls := newCapturedHookCalls()
-	secondRecorder := &captureAccessRecorder{owner: 2, calls: calls}
-	secondAudit := &captureAuditLogger{owner: 2, calls: calls}
-
-	var releaseFirst func()
-	var releaseSecond func()
-	firstRecorder := &captureAccessRecorder{owner: 1, calls: calls}
-	firstAudit := &captureAuditLogger{owner: 1, calls: calls}
-	firstRecorder.onRecord = func() {
-		releaseSecond = InstallAccessHooks(secondRecorder, secondAudit)
-		// The first owner no longer owns the installed snapshot, so its release
-		// must not clear the replacement.
-		releaseFirst()
-	}
-	releaseFirst = InstallAccessHooks(firstRecorder, firstAudit)
-
-	LogAccess(context.Background(), nil, "pypi", "GET", "pypi/files/pkg.whl", true, "upstream", time.Millisecond, 200, "first", 10)
-	LogAccess(context.Background(), nil, "pypi", "GET", "pypi/files/pkg.whl", true, "upstream", time.Millisecond, 200, "second", 10)
-
-	calls.mu.Lock()
-	firstRecorderOwner := calls.recorder["first"]
-	firstAuditOwner := calls.audit["first"]
-	secondRecorderOwner := calls.recorder["second"]
-	secondAuditOwner := calls.audit["second"]
-	calls.mu.Unlock()
-	if firstRecorderOwner != 1 {
-		t.Fatalf("first call recorder owner = %d, want 1", firstRecorderOwner)
-	}
-	if firstAuditOwner != 1 {
-		t.Fatalf("first call audit owner = %d, want the same immutable snapshot owner 1", firstAuditOwner)
-	}
-	if secondRecorderOwner != 2 {
-		t.Fatalf("second call recorder owner = %d, want replacement owner 2", secondRecorderOwner)
-	}
-	if secondAuditOwner != 2 {
-		t.Fatalf("second call audit owner = %d, want replacement owner 2", secondAuditOwner)
-	}
-	releaseFirst() // idempotent and still must not clear owner 2
-	if accessHooks.Load() == nil {
-		t.Fatal("releasing replaced owner cleared the current snapshot")
-	}
-	releaseSecond()
-	releaseSecond()
-	if accessHooks.Load() != nil {
-		t.Fatal("current owner release did not clear its snapshot")
-	}
+// scopedContext returns base as a handler behind scope.Wrap sees it, the same
+// way the server attaches its RequestScope to every request.
+func scopedContext(base context.Context, scope *RequestScope) context.Context {
+	var ctx context.Context
+	scope.Wrap(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+		ctx = request.Context()
+	})).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil).WithContext(base))
+	return ctx
 }
 
 func TestLogAccessUsesCanonicalCacheKindForAuditAction(t *testing.T) {
-	accessHooks.Store(nil)
-	t.Cleanup(func() { accessHooks.Store(nil) })
-
 	calls := newCapturedHookCalls()
 	audit := &captureAuditEntries{}
-	InstallAccessHooks(&captureAccessRecorder{owner: 1, calls: calls}, audit)
+	ctx := scopedContext(context.Background(), NewRequestScope(&captureAccessRecorder{owner: 1, calls: calls}, audit, nil, nil))
 
 	tests := []struct {
 		ecosystem string
@@ -153,7 +108,7 @@ func TestLogAccessUsesCanonicalCacheKindForAuditAction(t *testing.T) {
 	}
 
 	for index, test := range tests {
-		LogAccess(context.Background(), nil, test.ecosystem, "GET", test.cacheKey, false, "upstream", time.Millisecond, 200, fmt.Sprintf("classification-%d", index), 10)
+		LogAccess(ctx, nil, test.ecosystem, "GET", test.cacheKey, false, "upstream", time.Millisecond, 200, fmt.Sprintf("classification-%d", index), 10)
 	}
 	if len(audit.entries) != len(tests) {
 		t.Fatalf("audit entries = %d, want %d", len(audit.entries), len(tests))
@@ -200,12 +155,9 @@ func TestGoChecksumDatabaseKeysAreMetadataToEveryClassifier(t *testing.T) {
 }
 
 func TestLogAccessRecordsCorrelatedDiagnosticFacts(t *testing.T) {
-	accessHooks.Store(nil)
-	t.Cleanup(func() { accessHooks.Store(nil) })
 	recorder := &timestampAccessRecorder{}
 	audit := &captureAuditEntries{}
-	InstallAccessHooks(recorder, audit)
-	ctx := requestid.With(context.Background(), "req-facts-1")
+	ctx := scopedContext(requestid.With(context.Background(), "req-facts-1"), NewRequestScope(recorder, audit, nil, nil))
 	LogAccess(ctx, nil, "npm", "GET", "npm/react", false, "npmjs", time.Millisecond, http.StatusBadGateway, "127.0.0.1", 0)
 	if recorder.event.RequestID != "req-facts-1" || recorder.event.CacheResult != "unknown" ||
 		recorder.event.CacheReason != "not_recorded" || recorder.event.PolicyDecision != "unknown" ||
@@ -218,15 +170,11 @@ func TestLogAccessRecordsCorrelatedDiagnosticFacts(t *testing.T) {
 }
 
 func TestLogAccessPrefersAuthenticatedArtifactCoordinate(t *testing.T) {
-	accessHooks.Store(nil)
-	t.Cleanup(func() { accessHooks.Store(nil) })
-
 	recorder := &timestampAccessRecorder{}
 	audit := &captureAuditEntries{}
-	InstallAccessHooks(recorder, audit)
-
 	ginContext, _ := gin.CreateTestContext(httptest.NewRecorder())
-	ginContext.Request = httptest.NewRequest(http.MethodGet, "/npm/fixture/-/opaque/pkg-custom.tgz", nil)
+	request := httptest.NewRequest(http.MethodGet, "/npm/fixture/-/opaque/pkg-custom.tgz", nil)
+	ginContext.Request = request.WithContext(scopedContext(request.Context(), NewRequestScope(recorder, audit, nil, nil)))
 	BindAuthenticatedArtifactCoordinate(ginContext, "npm", "fixture", "1.0.0")
 	LogAccess(
 		ginContext.Request.Context(), nil, "npm", http.MethodGet,
@@ -244,16 +192,13 @@ func TestLogAccessPrefersAuthenticatedArtifactCoordinate(t *testing.T) {
 }
 
 func TestLogRefusedAccessRecordsTheRequestWithoutAVersion(t *testing.T) {
-	accessHooks.Store(nil)
-	t.Cleanup(func() { accessHooks.Store(nil) })
-
 	recorder := &timestampAccessRecorder{}
 	audit := &captureAuditEntries{}
-	InstallAccessHooks(recorder, audit)
+	ctx := scopedContext(context.Background(), NewRequestScope(recorder, audit, nil, nil))
 
 	// The same key through LogAccess would put version 9.9.9 in the audit log.
 	const key = "npm-exact-v1/fixture/-/fixture-9.9.9.tgz"
-	LogRefusedAccess(context.Background(), nil, "npm", http.MethodGet, key, time.Millisecond, http.StatusNotFound, "192.0.2.10")
+	LogRefusedAccess(ctx, nil, "npm", http.MethodGet, key, time.Millisecond, http.StatusNotFound, "192.0.2.10")
 
 	event := recorder.event
 	if event.AdapterType != "npm" || event.CacheKey != key || event.PackageName != "fixture" ||
@@ -272,13 +217,10 @@ func TestLogRefusedAccessRecordsTheRequestWithoutAVersion(t *testing.T) {
 }
 
 func TestLogPolicyBlockUsesUnifiedAuditOutcome(t *testing.T) {
-	accessHooks.Store(nil)
-	t.Cleanup(func() { accessHooks.Store(nil) })
-
 	audit := &captureAuditEntries{}
-	InstallAccessHooks(nil, audit)
-	LogPolicyBlock(context.Background(), "pypi", "requests", "", http.StatusForbidden, "192.0.2.1")
-	LogPolicyBlock(context.Background(), "npm", "blocked-package", "1.0.0", http.StatusUnavailableForLegalReasons, "192.0.2.2")
+	ctx := scopedContext(context.Background(), NewRequestScope(nil, audit, nil, nil))
+	LogPolicyBlock(ctx, "pypi", "requests", "", http.StatusForbidden, "192.0.2.1")
+	LogPolicyBlock(ctx, "npm", "blocked-package", "1.0.0", http.StatusUnavailableForLegalReasons, "192.0.2.2")
 
 	if len(audit.entries) != 2 {
 		t.Fatalf("audit entries = %d, want 2", len(audit.entries))
@@ -297,15 +239,12 @@ func TestLogPolicyBlockUsesUnifiedAuditOutcome(t *testing.T) {
 }
 
 func TestLogAccessAttributesAuditEventToRequestStart(t *testing.T) {
-	accessHooks.Store(nil)
-	t.Cleanup(func() { accessHooks.Store(nil) })
-
 	recorder := &timestampAccessRecorder{}
 	audit := &captureAuditEntries{}
-	InstallAccessHooks(recorder, audit)
+	ctx := scopedContext(context.Background(), NewRequestScope(recorder, audit, nil, nil))
 	const latency = 2750 * time.Millisecond
 	before := time.Now().UTC()
-	LogAccess(context.Background(), nil, "npm", "GET", "npm/is-number/metadata.json", false, "primary", latency, http.StatusBadGateway, "192.0.2.8", 0)
+	LogAccess(ctx, nil, "npm", "GET", "npm/is-number/metadata.json", false, "primary", latency, http.StatusBadGateway, "192.0.2.8", 0)
 	after := time.Now().UTC()
 
 	if len(audit.entries) != 1 {
@@ -323,105 +262,9 @@ func TestLogAccessAttributesAuditEventToRequestStart(t *testing.T) {
 	}
 }
 
-func TestAccessHooksConcurrentReplacementAndLogging(t *testing.T) {
-	accessHooks.Store(nil)
-	t.Cleanup(func() { accessHooks.Store(nil) })
-
-	calls := newCapturedHookCalls()
-	InstallAccessHooks(
-		&captureAccessRecorder{owner: 0, calls: calls},
-		&captureAuditLogger{owner: 0, calls: calls},
-	)
-
-	const (
-		installers = 8
-		installs   = 200
-		loggers    = 800
-	)
-	start := make(chan struct{})
-	var wg sync.WaitGroup
-	for installer := range installers {
-		wg.Add(1)
-		go func(ownerBase int) {
-			defer wg.Done()
-			<-start
-			for offset := range installs {
-				owner := ownerBase*installs + offset + 1
-				InstallAccessHooks(
-					&captureAccessRecorder{owner: owner, calls: calls},
-					&captureAuditLogger{owner: owner, calls: calls},
-				)
-			}
-		}(installer)
-	}
-	for index := range loggers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			<-start
-			clientIP := fmt.Sprintf("client-%d", index)
-			LogAccess(context.Background(), nil, "npm", "GET", "npm/pkg", false, "upstream", time.Millisecond, 200, clientIP, 10)
-		}()
-	}
-	close(start)
-	wg.Wait()
-
-	calls.mu.Lock()
-	defer calls.mu.Unlock()
-	if len(calls.recorder) != loggers || len(calls.audit) != loggers {
-		t.Fatalf("captured recorder/audit calls = %d/%d, want %d/%d", len(calls.recorder), len(calls.audit), loggers, loggers)
-	}
-	for clientIP, recorderOwner := range calls.recorder {
-		if auditOwner := calls.audit[clientIP]; auditOwner != recorderOwner {
-			t.Fatalf("%s mixed hook owners: recorder=%d audit=%d", clientIP, recorderOwner, auditOwner)
-		}
-	}
-}
-
-func TestCompatibilityAccessHookSettersAreConcurrentSafe(t *testing.T) {
-	accessHooks.Store(nil)
-	t.Cleanup(func() { accessHooks.Store(nil) })
-
-	calls := newCapturedHookCalls()
-	SetRecorder(&captureAccessRecorder{owner: 0, calls: calls})
-	SetAuditLogger(&captureAuditLogger{owner: 0, calls: calls})
-
-	const iterations = 300
-	start := make(chan struct{})
-	var wg sync.WaitGroup
-	for index := range iterations {
-		wg.Add(3)
-		go func() {
-			defer wg.Done()
-			<-start
-			SetRecorder(&captureAccessRecorder{owner: index + 1, calls: calls})
-		}()
-		go func() {
-			defer wg.Done()
-			<-start
-			SetAuditLogger(&captureAuditLogger{owner: index + 1, calls: calls})
-		}()
-		go func() {
-			defer wg.Done()
-			<-start
-			clientIP := fmt.Sprintf("compat-%d", index)
-			LogAccess(context.Background(), nil, "npm", "GET", "npm/pkg", false, "upstream", time.Millisecond, 200, clientIP, 10)
-		}()
-	}
-	close(start)
-	wg.Wait()
-}
-
-func TestLogAccessScopedNilHooksUseRawDatabaseWithoutGlobalFallback(t *testing.T) {
-	accessHooks.Store(nil)
-	t.Cleanup(func() { accessHooks.Store(nil) })
-
-	calls := newCapturedHookCalls()
-	InstallAccessHooks(
-		&captureAccessRecorder{owner: 9, calls: calls},
-		&captureAuditLogger{owner: 9, calls: calls},
-	)
-
+// A RequestScope is the only source of access hooks. A scope that binds no
+// recorder, and a request with no scope at all, both write the raw access row.
+func TestLogAccessWithoutScopedRecorderWritesRawRow(t *testing.T) {
 	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "scoped-access.db"))
 	if err != nil {
 		t.Fatalf("open database: %v", err)
@@ -439,39 +282,31 @@ func TestLogAccessScopedNilHooksUseRawDatabaseWithoutGlobalFallback(t *testing.T
 		}
 	})
 
-	emptyScope := NewRequestScope(nil, nil, nil, nil)
-	handler := emptyScope.Wrap(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
-		LogAccess(request.Context(), database, "npm", "GET", "npm/scoped-package", false, "upstream", time.Millisecond, 200, "scoped-raw", 12)
-	}))
-	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/package", nil))
+	logRaw := http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+		clientIP := request.URL.Query().Get("client")
+		LogAccess(request.Context(), database, "npm", "GET", "npm/scoped-package", false, "upstream", time.Millisecond, 200, clientIP, 12)
+	})
+	NewRequestScope(nil, nil, nil, nil).Wrap(logRaw).
+		ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/package?client=scoped-raw", nil))
+	logRaw.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/package?client=unscoped-raw", nil))
 
-	var count int64
-	if err := database.Model(&db.AccessLog{}).Where("client_ip = ?", "scoped-raw").Count(&count).Error; err != nil {
-		t.Fatalf("count raw access logs: %v", err)
-	}
-	if count != 1 {
-		t.Fatalf("raw access log count = %d, want 1", count)
-	}
-	calls.mu.Lock()
-	recorderOwner, recorded := calls.recorder["scoped-raw"]
-	auditOwner, audited := calls.audit["scoped-raw"]
-	calls.mu.Unlock()
-	if recorded || recorderOwner != 0 {
-		t.Fatalf("scoped nil recorder fell back to global owner %d", recorderOwner)
-	}
-	if audited || auditOwner != 0 {
-		t.Fatalf("scoped nil audit logger fell back to global owner %d", auditOwner)
+	for _, clientIP := range []string{"scoped-raw", "unscoped-raw"} {
+		var count int64
+		if err := database.Model(&db.AccessLog{}).Where("client_ip = ?", clientIP).Count(&count).Error; err != nil {
+			t.Fatalf("count raw access logs: %v", err)
+		}
+		if count != 1 {
+			t.Fatalf("%s raw access log count = %d, want 1", clientIP, count)
+		}
 	}
 }
 
-func TestSuppressAccessLoggingSkipsRawAndInstalledHooks(t *testing.T) {
-	accessHooks.Store(nil)
-	t.Cleanup(func() { accessHooks.Store(nil) })
-
+func TestSuppressAccessLoggingSkipsRawAndScopedHooks(t *testing.T) {
 	calls := newCapturedHookCalls()
-	InstallAccessHooks(
+	scope := NewRequestScope(
 		&captureAccessRecorder{owner: 9, calls: calls},
 		&captureAuditLogger{owner: 9, calls: calls},
+		nil, nil,
 	)
 	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "suppressed-access.db"))
 	if err != nil {
@@ -481,9 +316,9 @@ func TestSuppressAccessLoggingSkipsRawAndInstalledHooks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := SuppressAccessLogging(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+	handler := scope.Wrap(SuppressAccessLogging(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
 		LogAccess(request.Context(), database, "pypi", "GET", "pypi/simple/pillow/index.html", false, "primary", time.Millisecond, 200, "internal-refresh", 12)
-	}))
+	})))
 	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/internal-refresh", nil))
 
 	var rawRows int64
@@ -496,15 +331,13 @@ func TestSuppressAccessLoggingSkipsRawAndInstalledHooks(t *testing.T) {
 	calls.mu.Lock()
 	defer calls.mu.Unlock()
 	if len(calls.recorder) != 0 || len(calls.audit) != 0 {
-		t.Fatalf("suppressed request reached installed hooks: recorder=%v audit=%v", calls.recorder, calls.audit)
+		t.Fatalf("suppressed request reached scoped hooks: recorder=%v audit=%v", calls.recorder, calls.audit)
 	}
 }
 
 func TestLogAccessDeliveryCarriesArtifactKindAndActualCompletion(t *testing.T) {
-	accessHooks.Store(nil)
-	t.Cleanup(func() { accessHooks.Store(nil) })
 	recorder := &timestampAccessRecorder{}
-	InstallAccessHooks(recorder, nil)
+	ctx := scopedContext(context.Background(), NewRequestScope(recorder, nil, nil, nil))
 	for _, test := range []struct {
 		key    string
 		err    error
@@ -515,7 +348,7 @@ func TestLogAccessDeliveryCarriesArtifactKindAndActualCompletion(t *testing.T) {
 		{"npm/pkg/-/pkg-1.0.0.tgz", fmt.Errorf("client disconnected"), db.CacheKindArtifact, "failed"},
 		{"npm/pkg/metadata.json", nil, db.CacheKindMetadata, "completed"},
 	} {
-		LogAccessDelivery(context.Background(), nil, "npm", "GET", test.key, false, "npmjs", time.Millisecond, http.StatusOK, "127.0.0.1", 100, test.err)
+		LogAccessDelivery(ctx, nil, "npm", "GET", test.key, false, "npmjs", time.Millisecond, http.StatusOK, "127.0.0.1", 100, test.err)
 		if recorder.event.DependencyKind != test.kind || recorder.event.DeliveryResult != test.result {
 			t.Fatalf("event = %+v, want kind %s result %s", recorder.event, test.kind, test.result)
 		}

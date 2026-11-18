@@ -84,12 +84,6 @@ func (checker *requestScopeChecker) Check(_ context.Context, _, pkg, _, _ string
 
 func TestRequestScopesCanServeConcurrentlyWithoutMixingOwners(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	accessHooks.Store(nil)
-	quarantineHooks.Store(nil)
-	t.Cleanup(func() {
-		accessHooks.Store(nil)
-		quarantineHooks.Store(nil)
-	})
 
 	calls := newRequestScopeCalls()
 	handler := requestScopeExerciseHandler(nil, nil)
@@ -136,21 +130,10 @@ func TestRequestScopesCanServeConcurrentlyWithoutMixingOwners(t *testing.T) {
 	assertRequestScopeOwner(t, calls, "scope-two", 2)
 }
 
-func TestRequestScopeRemainsFixedDuringLegacyAndOtherScopeReplacement(t *testing.T) {
+func TestRequestScopeRemainsFixedWhileAnotherScopeServes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	accessHooks.Store(nil)
-	quarantineHooks.Store(nil)
-	t.Cleanup(func() {
-		accessHooks.Store(nil)
-		quarantineHooks.Store(nil)
-	})
 
 	calls := newRequestScopeCalls()
-	InstallAccessHooks(
-		&requestScopeRecorder{owner: 9, calls: calls},
-		&requestScopeAudit{owner: 9, calls: calls},
-	)
-	InstallQuarantineChecker(&requestScopeChecker{owner: 9, calls: calls})
 	entered := make(chan struct{})
 	release := make(chan struct{})
 	firstHandler := NewRequestScope(
@@ -174,23 +157,10 @@ func TestRequestScopeRemainsFixedDuringLegacyAndOtherScopeReplacement(t *testing
 	}()
 	awaitRequestScopeSignal(t, entered, "long request entry")
 
-	InstallAccessHooks(
-		&requestScopeRecorder{owner: 3, calls: calls},
-		&requestScopeAudit{owner: 3, calls: calls},
-	)
-	InstallQuarantineChecker(&requestScopeChecker{owner: 3, calls: calls})
 	secondRecorder := httptest.NewRecorder()
 	secondHandler.ServeHTTP(secondRecorder, httptest.NewRequest(http.MethodGet, "/artifact?client=other-scope", nil))
 	if secondRecorder.Code != http.StatusNoContent {
 		t.Fatalf("other scope status = %d, want 204", secondRecorder.Code)
-	}
-	legacyRecorder := httptest.NewRecorder()
-	requestScopeExerciseHandler(nil, nil).ServeHTTP(
-		legacyRecorder,
-		httptest.NewRequest(http.MethodGet, "/artifact?client=legacy-replacement", nil),
-	)
-	if legacyRecorder.Code != http.StatusNoContent {
-		t.Fatalf("legacy replacement status = %d, want 204", legacyRecorder.Code)
 	}
 
 	close(release)
@@ -205,25 +175,6 @@ func TestRequestScopeRemainsFixedDuringLegacyAndOtherScopeReplacement(t *testing
 
 	assertRequestScopeOwner(t, calls, "long-request", 1)
 	assertRequestScopeOwner(t, calls, "other-scope", 2)
-	assertLegacyRequestScopeOwner(t, calls, "legacy-replacement", 3)
-}
-
-func assertLegacyRequestScopeOwner(t *testing.T, calls *requestScopeCalls, key string, want int) {
-	t.Helper()
-	calls.mu.Lock()
-	defer calls.mu.Unlock()
-	if got := calls.recorder[key]; got != want {
-		t.Errorf("%s recorder owner = %d, want %d", key, got, want)
-	}
-	if got := calls.audit[key]; got != want {
-		t.Errorf("%s audit owner = %d, want %d", key, got, want)
-	}
-	if got := calls.checker[key]; got != want {
-		t.Errorf("%s checker owner = %d, want %d", key, got, want)
-	}
-	if got, exists := calls.rules[key]; exists {
-		t.Errorf("%s unscoped request reached package-rule owner %d", key, got)
-	}
 }
 
 func requestScopeExerciseHandler(entered chan<- struct{}, release <-chan struct{}) http.Handler {

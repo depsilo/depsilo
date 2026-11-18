@@ -817,8 +817,7 @@ func TestMiddlewareRecordsPolicyBlockAsHandledRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	audit := &ruleAuditCapture{}
-	release := adapter.InstallAccessHooks(nil, audit)
-	t.Cleanup(release)
+	scope := adapter.NewRequestScope(nil, audit, nil, nil)
 
 	router := gin.New()
 	router.Use(Middleware(NewEngine(store, nil)))
@@ -826,7 +825,7 @@ func TestMiddlewareRecordsPolicyBlockAsHandledRequest(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/pypi/files/requests-1.9.0.tar.gz", nil)
 	request.RemoteAddr = "192.0.2.20:4321"
 	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
+	scope.Wrap(router).ServeHTTP(response, request)
 
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, body=%s", response.Code, response.Body.String())

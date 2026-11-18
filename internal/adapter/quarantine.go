@@ -3,7 +3,6 @@ package adapter
 import (
 	"context"
 	"net/http"
-	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -34,8 +33,8 @@ type QuarantineDecision struct {
 	Allowed bool
 	// Code distinguishes WHY the request was refused: "QUARANTINED"
 	// (too young, retry later or ask for approval) vs
-	// "MALICIOUS_BLOCKED" (known malware, do not retry). Empty
-	// defaults to QUARANTINED for backward compatibility.
+	// "MALICIOUS_BLOCKED" (known malware, do not retry). A checker must
+	// set it whenever Allowed is false; the gate sends it verbatim.
 	Code   string
 	Reason string
 	// Warned is true when the checker observed a policy violation but
@@ -69,38 +68,6 @@ type provenanceQuarantineChecker interface {
 	) QuarantineDecision
 }
 
-// quarantineCheckerSnapshot is the compatibility representation for unscoped
-// callers. Scoped production requests never consult this process-global value.
-type quarantineCheckerSnapshot struct {
-	checker QuarantineChecker
-}
-
-var quarantineHooks atomic.Pointer[quarantineCheckerSnapshot]
-
-// InstallQuarantineChecker atomically installs a compatibility checker for
-// unscoped callers and returns an idempotent release function. A replaced
-// owner's release cannot clear the checker installed by a newer owner.
-func InstallQuarantineChecker(checker QuarantineChecker) func() {
-	owned := &quarantineCheckerSnapshot{checker: checker}
-	quarantineHooks.Store(owned)
-	return func() {
-		quarantineHooks.CompareAndSwap(owned, nil)
-	}
-}
-
-// SetQuarantineChecker installs (or replaces) the checker the
-// adapter helper uses. Pass nil to disable quarantine entirely
-// (useful in tests; the default state is nil so unit tests that
-// don't wire one get pass-through behavior).
-// Deprecated: production servers should use NewRequestScope.
-func SetQuarantineChecker(c QuarantineChecker) {
-	if c == nil {
-		quarantineHooks.Store(nil)
-		return
-	}
-	quarantineHooks.Store(&quarantineCheckerSnapshot{checker: c})
-}
-
 // QuarantineGate evaluates the configured policy for
 // (ecosystem, pkg, version) and writes a 451 response when the
 // decision is Block. Returns true when the handler must stop
@@ -108,7 +75,10 @@ func SetQuarantineChecker(c QuarantineChecker) {
 // proceed with its normal fetch flow.
 //
 // Semantics:
-//   - No checker configured → return false (allow)
+//   - No checker configured → return false (allow). The checker comes only
+//     from the request's RequestScope; a request without one (an isolated
+//     handler test, or an in-process call that bypasses the server's scope
+//     wrapper) is never quarantine-checked, same as a scoped nil checker.
 //   - Empty package or version → return false (allow; the checker
 //     itself logs the inconsistency but adapters shouldn't be
 //     forced to differentiate "metadata request" vs "missing
@@ -144,12 +114,7 @@ func quarantineGate(
 	provenance *QuarantineProvenance,
 ) bool {
 	var checker QuarantineChecker
-	if hooks := quarantineHooks.Load(); hooks != nil {
-		checker = hooks.checker
-	}
 	if scope, ok := requestScopeFromContext(c.Request.Context()); ok {
-		// A scoped nil checker explicitly disables quarantine for this owner; it
-		// must never inherit another server's process-wide compatibility hook.
 		checker = scope.checker
 	}
 	if checker == nil {
@@ -184,10 +149,6 @@ func quarantineGate(
 	if d.Allowed {
 		return false
 	}
-	code := d.Code
-	if code == "" {
-		code = "QUARANTINED"
-	}
 	LogPolicyBlock(
 		c.Request.Context(),
 		ecosystem,
@@ -197,7 +158,7 @@ func quarantineGate(
 		c.ClientIP(),
 	)
 	c.JSON(http.StatusUnavailableForLegalReasons, gin.H{
-		"code":      code,
+		"code":      d.Code,
 		"message":   d.Reason,
 		"ecosystem": ecosystem,
 		"package":   pkg,

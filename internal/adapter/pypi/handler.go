@@ -76,7 +76,8 @@ type Options struct {
 	// Keep it stable across restarts for as long as cached index pages may live.
 	ArtifactSigningKey []byte
 	// ArtifactSelector chooses the egress client for signed artifact downloads.
-	// Nil falls back to the metadata selector for backward compatibility.
+	// Nil uses the metadata selector; the built-in PyPI adapter (New) relies on
+	// this when signed artifact references point at an external file host.
 	ArtifactSelector upstream.Selector
 	// ProvenanceRequired negotiates the PEP 691 JSON simple index and carries
 	// upload-time in signed artifact references. Requires ArtifactSigningKey.

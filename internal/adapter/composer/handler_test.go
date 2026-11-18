@@ -57,8 +57,7 @@ func TestPackageUpstreamFailuresAreRecordedAsAuditErrors(t *testing.T) {
 		}
 	})
 	audit := &auditCapture{}
-	release := adapter.InstallAccessHooks(nil, audit)
-	t.Cleanup(release)
+	scope := adapter.NewRequestScope(nil, audit, nil, nil)
 
 	handler := New(manager, unavailableSelector{}, config.CacheConfig{TTLIndex: time.Hour, TTLBlob: 72 * time.Hour}, database)
 	router := gin.New()
@@ -69,7 +68,7 @@ func TestPackageUpstreamFailuresAreRecordedAsAuditErrors(t *testing.T) {
 	} {
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodGet, target, nil)
-		router.ServeHTTP(response, request)
+		scope.Wrap(router).ServeHTTP(response, request)
 		if response.Code != http.StatusBadGateway {
 			t.Fatalf("GET %s status = %d, body=%s", target, response.Code, response.Body.String())
 		}

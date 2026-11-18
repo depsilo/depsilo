@@ -13,8 +13,9 @@ import (
 type requestScopeContextKey struct{}
 
 // RequestScope is an immutable snapshot of the adapter hooks owned by one
-// server instance. A field may intentionally be nil; once attached to a
-// request, that nil is authoritative and must not fall back to process globals.
+// server instance and is the only way adapters reach them. A nil field
+// disables that hook for the owner's requests, which is also what a request
+// without any RequestScope gets.
 type RequestScope struct {
 	access       accessHookSnapshot
 	checker      QuarantineChecker

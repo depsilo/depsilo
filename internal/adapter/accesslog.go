@@ -3,7 +3,6 @@ package adapter
 import (
 	"context"
 	"net/http"
-	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -21,15 +20,12 @@ type AuditLogger interface {
 	Log(entry db.AuditLog)
 }
 
-// accessHookSnapshot is immutable after publication. RequestScope stores one
-// by value; the atomic pointer below exists only for unscoped compatibility
-// callers.
+// accessHookSnapshot is the immutable recorder/audit pair a RequestScope
+// carries by value, so one request always reports to one server owner.
 type accessHookSnapshot struct {
 	recorder accesslog.Recorder
 	audit    AuditLogger
 }
-
-var accessHooks atomic.Pointer[accessHookSnapshot]
 
 type suppressAccessLoggingContextKey struct{}
 
@@ -43,50 +39,8 @@ func SuppressAccessLogging(next http.Handler) http.Handler {
 	})
 }
 
-// InstallAccessHooks atomically installs compatibility hooks for unscoped
-// callers and returns an idempotent release function. Releasing an older owner
-// cannot clear a snapshot installed by a newer owner.
-func InstallAccessHooks(recorder accesslog.Recorder, audit AuditLogger) func() {
-	owned := &accessHookSnapshot{recorder: recorder, audit: audit}
-	accessHooks.Store(owned)
-	return func() {
-		accessHooks.CompareAndSwap(owned, nil)
-	}
-}
-
-// SetAuditLogger sets the audit logger used by LogAccess.
-// Deprecated: production servers should bind both hooks with NewRequestScope.
-// This compatibility setter remains concurrency-safe.
-func SetAuditLogger(l AuditLogger) {
-	updateAccessHooks(func(next *accessHookSnapshot) { next.audit = l })
-}
-
-// SetRecorder wires the rollup recorder. Pass nil to fall back to the
-// raw-only legacy path (useful for tests and emergency disable).
-// Deprecated: production servers should use NewRequestScope.
-func SetRecorder(r accesslog.Recorder) {
-	updateAccessHooks(func(next *accessHookSnapshot) { next.recorder = r })
-}
-
-func updateAccessHooks(update func(*accessHookSnapshot)) {
-	for {
-		current := accessHooks.Load()
-		next := &accessHookSnapshot{}
-		if current != nil {
-			*next = *current
-		}
-		update(next)
-		if next.recorder == nil && next.audit == nil {
-			next = nil
-		}
-		if accessHooks.CompareAndSwap(current, next) {
-			return
-		}
-	}
-}
-
 // LogAccess submits an access log entry to the request's recorder snapshot.
-// When ctx has no RequestScope, the process-wide compatibility hooks are used.
+// See accessHooksFor for a ctx without a RequestScope.
 func LogAccess(ctx context.Context, database *gorm.DB, adapterType, method, cacheKey string, hit bool, upstreamName string, latency time.Duration, statusCode int, clientIP string, bytesSent int64) {
 	logAccess(ctx, database, adapterType, method, cacheKey, hit, upstreamName, latency, statusCode, clientIP, bytesSent, "unknown", "response_completion_not_recorded", true)
 }
@@ -132,13 +86,7 @@ func logAccess(ctx context.Context, database *gorm.DB, adapterType, method, cach
 	requestID := requestid.FromContext(ctx)
 	cacheResult, cacheReason := accessCacheOutcome(hit, statusCode)
 	originRequests, originBytes := traffic.AttributionFromContext(ctx).OriginTotals()
-	hooks := accessHooks.Load()
-	var observer RequestObserver
-	if scope, ok := requestScopeFromContext(ctx); ok {
-		// A scoped nil recorder/audit pair is intentional and authoritative.
-		hooks = &scope.access
-		observer = scope.observer
-	}
+	hooks, observer := accessHooksFor(ctx)
 	if observer != nil {
 		observer.ObserveAccess(AccessObservation{
 			AdapterType: adapterType,
@@ -176,8 +124,8 @@ func logAccess(ctx context.Context, database *gorm.DB, adapterType, method, cach
 			At:               now,
 		})
 	} else {
-		// Fallback: recorder not initialized yet (e.g. isolated adapter tests).
-		// Keep this synchronous: spawning an unowned database goroutine here can
+		// No recorder in the request's scope (or no scope at all): write the raw
+		// row directly. Keep this synchronous: spawning an unowned database goroutine here can
 		// outlive the test/server resource that supplied database.
 		entry := db.AccessLog{
 			RequestID:        requestID,
@@ -245,11 +193,7 @@ func LogPolicyBlock(ctx context.Context, ecosystem, packageName, version string,
 			return
 		}
 	}
-	hooks := accessHooks.Load()
-	if scope, ok := requestScopeFromContext(ctx); ok {
-		// A scoped nil audit logger is authoritative for its server owner.
-		hooks = &scope.access
-	}
+	hooks, _ := accessHooksFor(ctx)
 	action := "metadata"
 	if version != "" {
 		action = "download"
@@ -265,6 +209,20 @@ func LogPolicyBlock(ctx context.Context, ecosystem, packageName, version string,
 		StatusCode:  statusCode,
 		CreatedAt:   time.Now().UTC(),
 	})
+}
+
+// accessHooksFor returns the hooks bound by the request's RequestScope. The
+// scope is the only source: a request without one (an isolated handler test,
+// or an in-process call that bypasses the server's scope wrapper) gets no
+// recorder, no audit logger, and no observer, so LogAccess falls back to the
+// raw database row and audit/policy outcomes are not recorded. A scoped nil
+// field means the same thing for that server owner.
+func accessHooksFor(ctx context.Context) (*accessHookSnapshot, RequestObserver) {
+	scope, ok := requestScopeFromContext(ctx)
+	if !ok {
+		return nil, nil
+	}
+	return &scope.access, scope.observer
 }
 
 func logAuditOutcome(hooks *accessHookSnapshot, entry db.AuditLog) {

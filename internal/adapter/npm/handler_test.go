@@ -57,15 +57,14 @@ func TestMetadataUpstreamFailureIsRecordedAsAuditError(t *testing.T) {
 		}
 	})
 	audit := &auditCapture{}
-	release := adapter.InstallAccessHooks(nil, audit)
-	t.Cleanup(release)
+	scope := adapter.NewRequestScope(nil, audit, nil, nil)
 
 	handler := New(manager, unavailableSelector{}, config.CacheConfig{TTLIndex: time.Hour}, database, testNPMTarballSigningKey)
 	router := gin.New()
 	handler.Register(router.Group("/npm"))
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/npm/is-number", nil)
-	router.ServeHTTP(response, request)
+	scope.Wrap(router).ServeHTTP(response, request)
 
 	if response.Code != http.StatusBadGateway {
 		t.Fatalf("status = %d, body=%s", response.Code, response.Body.String())
