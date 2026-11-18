@@ -22,7 +22,10 @@ function AppToastController({ children }: { children: ReactNode }) {
   const closeLabel = t('common.close')
   const api = useMemo<AppToastApi>(() => ({
     show: ({ tone, message }) => {
-      const notify = tone === 'danger' ? toast.error : tone === 'warning' ? toast.warning : toast.success
+      // Errors stay until dismissed so they are not missed; success and
+      // warning notices are routine and time out.
+      if (tone === 'danger') return String(toast.error(message, { duration: Infinity }))
+      const notify = tone === 'warning' ? toast.warning : toast.success
       return String(notify(message))
     },
     close: (id) => {
