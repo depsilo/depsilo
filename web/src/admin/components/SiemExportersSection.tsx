@@ -139,7 +139,7 @@ export default function SiemExportersSection() {
           </Field>
           <Field>
             <FieldLabel>{t('siem.token')}</FieldLabel>
-            <Input type="password" value={form.token} onChange={event => setForm(value => ({ ...value, token: event.target.value }))} placeholder={t('siem.tokenOptional')} />
+            <Input type="password" autoComplete="new-password" value={form.token} onChange={event => setForm(value => ({ ...value, token: event.target.value }))} placeholder={t('siem.tokenOptional')} />
           </Field>
           <Field>
             <FieldLabel>{t('siem.events')}</FieldLabel>
@@ -186,7 +186,7 @@ export default function SiemExportersSection() {
               <TableBody>
                 {exporters.map(exporter => (
                   <TableRow key={exporter.id} style={{ borderTop: '1px solid var(--border)' }}>
-                    <TableCell className="px-2 py-3">
+                    <TableCell rowHeader className="px-2 py-3">
                       <div className="flex min-w-0 flex-col">
                         <span className="min-w-0 truncate" style={{ color: 'var(--foreground)' }}>{exporter.name}</span>
                         <span className="min-w-0 truncate font-mono text-[12px] text-[var(--muted-foreground)]" title={exporter.url}>{exporter.url}</span>

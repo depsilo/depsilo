@@ -368,6 +368,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   event. A webhook saved with them keeps the values, which match nothing.
 
 ### Fixed
+- Admin: the password fields for adding or editing a user and the SIEM
+  exporter token no longer invite the browser to fill in, or offer to save,
+  the signed-in administrator's own password.
 - Admin's audit integrity notice no longer reports the remote anchor as
   synced when it has never succeeded. `GET /api/v1/admin/audit/integrity`
   now sends `null`, not `0001-01-01T00:00:00Z`, for a sink or checkpoint

@@ -340,11 +340,11 @@ export default function Users() {
               {editUserId && <p className="text-[13px] leading-5 text-[var(--muted-foreground)]">{t(editUserId === principal?.id ? 'users.selfCredentialImpact' : 'users.credentialImpact')}</p>}
               <Field disabled={!!editUserId}>
                 <FieldLabel>{t('login.username')}</FieldLabel>
-                <Input value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} disabled={!!editUserId} required={!editUserId} />
+                <Input value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} disabled={!!editUserId} required={!editUserId} autoComplete="off" />
               </Field>
               <Field>
                 <FieldLabel>{editUserId ? t('users.newPasswordHint') : t('login.password')}</FieldLabel>
-                <Input type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required={!editUserId} />
+                <Input type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required={!editUserId} autoComplete="new-password" />
                 {(t('users.passwordPolicy')) && <FieldDescription>{t('users.passwordPolicy')}</FieldDescription>}
               </Field>
               <Field disabled={editUserId === principal?.id}>
