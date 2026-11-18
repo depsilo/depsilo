@@ -254,23 +254,3 @@ func userIDFromContext(c *gin.Context) uint {
 	}
 	return 0
 }
-
-// parseIntParam reads ?key=<n> from the request with bounds. Used
-// for limit/offset across the list endpoints.
-func parseIntParam(c *gin.Context, key string, def, min, max int) int {
-	raw := c.Query(key)
-	if raw == "" {
-		return def
-	}
-	n, err := strconv.Atoi(raw)
-	if err != nil {
-		return def
-	}
-	if n < min {
-		return min
-	}
-	if n > max {
-		return max
-	}
-	return n
-}

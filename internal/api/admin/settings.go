@@ -10,7 +10,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 
 	"depsilo/internal/api/contract"
 	"depsilo/internal/config"
@@ -215,17 +214,6 @@ func settingsPatchIsEmpty(patch config.SettingsPatch) bool {
 	return patch.Server == nil && patch.Cache == nil && patch.Auth == nil
 }
 
-func requireJSONEOF(decoder *json.Decoder) error {
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return errors.New("request body must contain exactly one JSON value")
-		}
-		return err
-	}
-	return nil
-}
-
 func adminSettingsResponse(state config.SettingsState) contract.AdminSettingsResponse {
 	var overrides map[contract.SettingPath]string
 	if state.Overrides != nil {
@@ -290,34 +278,4 @@ func editableSettingPaths(paths []config.SettingPath) []contract.EditableSetting
 
 func writeBadSettingsRequest(c *gin.Context, err error) {
 	c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": err.Error()})
-}
-
-func writeSettingsError(c *gin.Context, err error) {
-	var storeErr *config.StoreError
-	if !errors.As(err, &storeErr) {
-		writeInternalSettingsError(c, err)
-		return
-	}
-
-	status := http.StatusInternalServerError
-	switch storeErr.Code {
-	case config.StoreInvalidSetting:
-		status = http.StatusUnprocessableEntity
-	case config.StoreAuthenticationSourceNotFound:
-		status = http.StatusNotFound
-	case config.StoreAuthenticationSourceConflict:
-		status = http.StatusConflict
-	case config.StoreConfigReadOnly:
-		status = http.StatusConflict
-	case config.StoreConfigReadFailed, config.StoreConfigWriteFailed:
-	default:
-		writeInternalSettingsError(c, err)
-		return
-	}
-	c.JSON(status, gin.H{"code": string(storeErr.Code), "message": storeErr.Error()})
-}
-
-func writeInternalSettingsError(c *gin.Context, err error) {
-	zap.L().Error("settings request failed", zap.Error(err))
-	c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL_ERROR", "message": "internal server error"})
 }

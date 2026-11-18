@@ -14,7 +14,6 @@ import (
 	"depsilo/internal/api/contract"
 	"depsilo/internal/audit"
 	"depsilo/internal/db"
-	"depsilo/internal/middleware"
 	"depsilo/internal/snapshot"
 )
 
@@ -217,27 +216,6 @@ func snapshotID(c *gin.Context) (uint, bool) {
 		return 0, false
 	}
 	return uint(id), true
-}
-
-func requestUsername(c *gin.Context) string {
-	if value, ok := c.Get(middleware.ContextKeyUsername); ok {
-		if name, ok := value.(string); ok && name != "" {
-			return name
-		}
-	}
-	return "admin"
-}
-
-func paginationParams(c *gin.Context, defaultPerPage, maxPerPage int) (page, perPage int) {
-	page, _ = strconv.Atoi(c.DefaultQuery("page", "1"))
-	if page < 1 {
-		page = 1
-	}
-	perPage, _ = strconv.Atoi(c.DefaultQuery("per_page", strconv.Itoa(defaultPerPage)))
-	if perPage < 1 || perPage > maxPerPage {
-		perPage = defaultPerPage
-	}
-	return page, perPage
 }
 
 func sanitizeSnapshotFilename(name string) string {
