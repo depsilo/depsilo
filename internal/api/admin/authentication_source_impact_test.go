@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
 	"depsilo/internal/identity"
@@ -110,7 +111,7 @@ func TestAuthenticationSourceImpactUsesRealCompleteCounts(t *testing.T) {
 	if response.Code != 200 {
 		t.Fatalf("impact %d: %s", response.Code, response.Body)
 	}
-	var impact AuthenticationSourceImpact
+	var impact contract.AuthenticationImpact
 	if err := json.Unmarshal(response.Body.Bytes(), &impact); err != nil {
 		t.Fatal(err)
 	}

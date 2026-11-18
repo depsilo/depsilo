@@ -18,6 +18,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 	"depsilo/internal/middleware"
 )
@@ -210,7 +211,7 @@ func TestUserListCreateAndUpdateUseSafeDTO(t *testing.T) {
 	actor := createUserForMutationTest(t, database, "owner", "admin", true)
 	target := createUserForMutationTest(t, database, "reader", "readonly", true)
 
-	var _ userResponse = toUserResponse(target)
+	var _ contract.AdminUser = toUserResponse(target)
 
 	listRec := userMutationRequest(r, http.MethodGet, "/users", "", actor.ID)
 	if listRec.Code != http.StatusOK {

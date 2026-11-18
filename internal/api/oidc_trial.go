@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"depsilo/internal/api/admin"
+	"depsilo/internal/api/contract"
 	"depsilo/internal/audit"
 	"depsilo/internal/config"
 	"depsilo/internal/identity"
@@ -120,7 +121,7 @@ func (h *OIDCHandler) Check(c *gin.Context) {
 		oidcError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"checked_at": time.Now().UTC(), "configuration_valid": true, "discovery_valid": true, "jwks_readable": true})
+	c.JSON(http.StatusOK, contract.AuthenticationCheck{CheckedAt: time.Now().UTC(), ConfigurationValid: true, DiscoveryValid: true, JWKSReadable: true})
 }
 
 func (h *OIDCHandler) StartTrial(c *gin.Context) {
@@ -162,7 +163,7 @@ func (h *OIDCHandler) StartTrial(c *gin.Context) {
 	h.trialMu.Unlock()
 	h.cookie(c, m, "trial_flow_"+m.ID(), start.BrowserToken, 300)
 	h.auditTrial(c, m.ID(), "identity.trial.start", true)
-	c.JSON(http.StatusOK, gin.H{"authorization_url": start.AuthorizationURL})
+	c.JSON(http.StatusOK, contract.IdentityAuthorizationStart{AuthorizationURL: start.AuthorizationURL})
 }
 
 func (h *OIDCHandler) pruneTrialsLocked() {
@@ -247,8 +248,23 @@ func (h *OIDCHandler) completeTrial(c *gin.Context) bool {
 		return true
 	}
 	h.auditTrial(c, m.ID(), "identity.trial.complete", result.Trial.Outcome == "success")
-	c.JSON(http.StatusOK, gin.H{"mode": "test", "provider": gin.H{"id": m.ID(), "name": sourceName(m), "protocol": "oidc"}, "outcome": result.Trial.Outcome, "authenticated": result.Trial.Authenticated, "mapped_role": result.Trial.MappedRole, "display_name": result.Trial.DisplayName, "code": result.Trial.Code, "checked_at": result.Trial.CheckedAt, "return_to": result.ReturnTo})
+	c.JSON(http.StatusOK, identityTrialResult(m, contract.IdentityProtocolOIDC, *result.Trial, result.ReturnTo))
 	return true
+}
+
+// identityTrialResult names the protocol the trial ran rather than the
+// manager's, so a trial reports the flow the administrator started.
+func identityTrialResult(m *identity.Manager, protocol contract.IdentityProtocol, trial identity.TrialResult, returnTo string) contract.IdentityTrialResult {
+	var role *contract.IdentityRole
+	if trial.MappedRole != nil {
+		value := contract.IdentityRole(*trial.MappedRole)
+		role = &value
+	}
+	return contract.IdentityTrialResult{
+		Mode: contract.IdentityCompletionModeTest, Provider: contract.IdentityProvider{ID: m.ID(), Name: sourceName(m), Protocol: protocol},
+		Outcome: contract.IdentityTrialOutcome(trial.Outcome), Authenticated: trial.Authenticated, MappedRole: role,
+		DisplayName: trial.DisplayName, Code: trial.Code, CheckedAt: trial.CheckedAt, ReturnTo: returnTo,
+	}
 }
 
 func (h *OIDCHandler) auditTrial(c *gin.Context, source, action string, success bool) {

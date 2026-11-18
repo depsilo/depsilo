@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/entitlement"
 	"depsilo/internal/license"
 	"depsilo/internal/trial"
@@ -26,7 +27,7 @@ func NewLicenseHandler(lic *license.Manager, t *trial.Manager, c *entitlement.Ch
 
 // GetStatus returns the unified entitlement status.
 func (h *LicenseHandler) GetStatus(c *gin.Context) {
-	c.JSON(http.StatusOK, h.checker.Status())
+	c.JSON(http.StatusOK, entitlementStatus(h.checker.Status()))
 }
 
 // Revalidate triggers a paid-license re-validation in the background.
@@ -34,7 +35,7 @@ func (h *LicenseHandler) Revalidate(c *gin.Context) {
 	err := h.lic.Revalidate()
 	switch {
 	case err == nil:
-		c.JSON(http.StatusAccepted, gin.H{"message": "revalidation started"})
+		c.JSON(http.StatusAccepted, contract.LicenseRevalidateResponse{Message: "revalidation started"})
 	case errors.Is(err, license.ErrNoLicenseKey):
 		c.JSON(http.StatusConflict, gin.H{"code": "LICENSE_KEY_MISSING", "message": err.Error()})
 	case errors.Is(err, license.ErrRevalidationRunning):
@@ -69,7 +70,7 @@ func (h *LicenseHandler) ActivateTrial(c *gin.Context) {
 	case err != nil:
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
 	default:
-		c.JSON(http.StatusOK, h.checker.Status())
+		c.JSON(http.StatusOK, entitlementStatus(h.checker.Status()))
 	}
 }
 
@@ -102,7 +103,7 @@ func (h *LicenseHandler) SetKey(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, h.checker.Status())
+	c.JSON(http.StatusOK, entitlementStatus(h.checker.Status()))
 }
 
 // ClearKey deletes the DB-stored key (if any) and resets state.
@@ -117,5 +118,13 @@ func (h *LicenseHandler) ClearKey(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, h.checker.Status())
+	c.JSON(http.StatusOK, entitlementStatus(h.checker.Status()))
+}
+
+func entitlementStatus(s entitlement.Status) contract.EntitlementStatus {
+	return contract.EntitlementStatus{
+		IsPro: s.IsPro, Source: contract.EntitlementSource(s.Source), ExpiresAt: s.ExpiresAt,
+		DaysLeft: s.DaysLeft, TrialUsed: s.TrialUsed, TrialAvailable: s.TrialAvailable,
+		LicenseKeyMasked: s.LicenseKeyMasked, LicenseError: s.LicenseError, LastChecked: s.LastChecked,
+	}
 }

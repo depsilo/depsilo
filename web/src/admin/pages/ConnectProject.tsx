@@ -176,7 +176,7 @@ function ConnectionWorkspace({ connection, restored, managerName, selectors, onR
     if (!mounted.current) return
     queryClient.setQueryData<OnboardingStatusResponse>(ONBOARDING_GATE_QUERY_KEY, previous => previous
       ? { ...previous, status }
-      : { status, started_at: new Date().toISOString(), next_after_id: 0, events: [], has_more: false })
+      : { status, started_at: new Date().toISOString(), next_after_id: 0, events: [], has_more: false, delivery_events: [], next_delivery_after_id: '', deliveries_has_more: false })
     for (const area of ['overview', 'trends', 'now', 'dashboard']) {
       void queryClient.invalidateQueries({ queryKey: ['admin', area], refetchType: 'none' })
     }

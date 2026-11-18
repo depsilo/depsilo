@@ -5,7 +5,7 @@ import type { AuthenticationImpact, AuthenticationSourceState, Principal } from 
 
 const localAdmin: Principal = { id: 1, username: 'admin', enabled: true, role: 'admin', auth_method: 'jwt', token_permissions: null, can_write: true, can_manage_credentials: true, permission_source: 'local', login_method: 'password' }
 const config = { ...authenticationSettings, display_name: 'Company login', enabled: true, issuer: 'https://identity.example', client_id: 'depsilo', redirect_url: 'https://depsilo.example/api/v1/auth/oidc/company/callback', admin_groups: ['operators'], readonly_groups: ['readers'], client_secret_set: true }
-const state: AuthenticationSourceState = { id: 'company', protocol: 'oidc', configured: config, effective: config, overrides: {}, pending_restart: false, config_writable: true }
+const state: AuthenticationSourceState = { id: 'company', protocol: 'oidc', configured: config, effective: config, overrides: {}, pending_restart: false, sessions_will_reset: true, config_writable: true, can_restore: false }
 const labConfig = { ...config, display_name: 'Homelab', issuer: 'https://lab.example', redirect_url: 'https://depsilo.example/api/v1/auth/oidc/lab/callback' }
 const labSource: AuthenticationSourceState = { ...state, id: 'lab', configured: labConfig, effective: labConfig }
 

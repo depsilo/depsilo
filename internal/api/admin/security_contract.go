@@ -5,59 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"math/big"
-	"time"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 )
-
-type securityDashboardResponse struct {
-	TotalVulnerabilities int64            `json:"total_vulnerabilities"`
-	AffectedPackages     int64            `json:"affected_packages"`
-	BySeverity           map[string]int64 `json:"by_severity"`
-	AutoBlockedCount     int64            `json:"auto_blocked_count"`
-	LastScanAt           *string          `json:"last_scan_at"`
-	ScanInProgress       bool             `json:"scan_in_progress"`
-}
-
-type vulnerabilityResponse struct {
-	ID             uint      `json:"id"`
-	OSVID          string    `json:"osv_id"`
-	Ecosystem      string    `json:"ecosystem"`
-	PackageName    string    `json:"package_name"`
-	AffectedRanges string    `json:"affected_ranges"`
-	Severity       string    `json:"severity"`
-	CVSSScore      float32   `json:"cvss_score"`
-	Summary        string    `json:"summary"`
-	Details        string    `json:"details"`
-	Aliases        string    `json:"aliases"`
-	References     string    `json:"references"`
-	PublishedAt    time.Time `json:"published_at"`
-	ModifiedAt     time.Time `json:"modified_at"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-}
-
-type vulnerabilityCheckResponse struct {
-	ID                 uint      `json:"id"`
-	Ecosystem          string    `json:"ecosystem"`
-	PackageName        string    `json:"package_name"`
-	HasVulnerabilities bool      `json:"has_vulnerabilities"`
-	VulnerabilityCount int       `json:"vulnerability_count"`
-	LastFetchedAt      time.Time `json:"last_fetched_at"`
-	NextFetchAt        time.Time `json:"next_fetch_at"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
-}
-
-type securityPolicyResponse struct {
-	ID               uint      `json:"id"`
-	Ecosystem        string    `json:"ecosystem"`
-	AutoBlockEnabled bool      `json:"auto_block_enabled"`
-	MinCVSSScore     float32   `json:"min_cvss_score"`
-	CreatedBy        string    `json:"created_by"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
-}
 
 type updateSecurityPolicyRequest struct {
 	AutoBlockEnabled bool               `json:"auto_block_enabled"`
@@ -99,33 +50,27 @@ func (r updateSecurityPolicyRequest) validatedMinCVSSScore() (float32, bool) {
 	return value, true
 }
 
-type securityPage[T any] struct {
-	Items []T   `json:"items"`
-	Total int64 `json:"total"`
-	Page  int   `json:"page"`
-}
-
-func toVulnerabilityResponse(v db.Vulnerability) vulnerabilityResponse {
-	return vulnerabilityResponse{
+func toVulnerabilityResponse(v db.Vulnerability) contract.SecurityVulnerability {
+	return contract.SecurityVulnerability{
 		ID: v.ID, OSVID: v.OSVID, Ecosystem: v.Ecosystem, PackageName: v.PackageName,
-		AffectedRanges: v.AffectedRanges, Severity: v.Severity, CVSSScore: v.CVSSScore,
+		AffectedRanges: v.AffectedRanges, Severity: contract.SecuritySeverity(v.Severity), CVSSScore: v.CVSSScore,
 		Summary: v.Summary, Details: v.Details, Aliases: v.Aliases, References: v.References,
 		PublishedAt: v.PublishedAt, ModifiedAt: v.ModifiedAt, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt,
 	}
 }
 
-func toVulnerabilityResponses(items []db.Vulnerability) []vulnerabilityResponse {
-	responses := make([]vulnerabilityResponse, len(items))
+func toVulnerabilityResponses(items []db.Vulnerability) []contract.SecurityVulnerability {
+	responses := make([]contract.SecurityVulnerability, len(items))
 	for i, item := range items {
 		responses[i] = toVulnerabilityResponse(item)
 	}
 	return responses
 }
 
-func toVulnerabilityCheckResponses(items []db.VulnerabilityCheck) []vulnerabilityCheckResponse {
-	responses := make([]vulnerabilityCheckResponse, len(items))
+func toVulnerabilityCheckResponses(items []db.VulnerabilityCheck) []contract.SecurityVulnerabilityCheck {
+	responses := make([]contract.SecurityVulnerabilityCheck, len(items))
 	for i, item := range items {
-		responses[i] = vulnerabilityCheckResponse{
+		responses[i] = contract.SecurityVulnerabilityCheck{
 			ID: item.ID, Ecosystem: item.Ecosystem, PackageName: item.PackageName,
 			HasVulnerabilities: item.HasVulnerabilities, VulnerabilityCount: item.VulnerabilityCount,
 			LastFetchedAt: item.LastFetchedAt, NextFetchAt: item.NextFetchAt,
@@ -135,16 +80,16 @@ func toVulnerabilityCheckResponses(items []db.VulnerabilityCheck) []vulnerabilit
 	return responses
 }
 
-func toSecurityPolicyResponse(policy db.SecurityPolicy) securityPolicyResponse {
-	return securityPolicyResponse{
+func toSecurityPolicyResponse(policy db.SecurityPolicy) contract.SecurityPolicy {
+	return contract.SecurityPolicy{
 		ID: policy.ID, Ecosystem: policy.Ecosystem, AutoBlockEnabled: policy.AutoBlockEnabled,
 		MinCVSSScore: policy.MinCVSSScore, CreatedBy: policy.CreatedBy,
 		CreatedAt: policy.CreatedAt, UpdatedAt: policy.UpdatedAt,
 	}
 }
 
-func toSecurityPolicyResponses(items []db.SecurityPolicy) []securityPolicyResponse {
-	responses := make([]securityPolicyResponse, len(items))
+func toSecurityPolicyResponses(items []db.SecurityPolicy) []contract.SecurityPolicy {
+	responses := make([]contract.SecurityPolicy, len(items))
 	for i, item := range items {
 		responses[i] = toSecurityPolicyResponse(item)
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 	"depsilo/internal/middleware"
 )
@@ -30,7 +31,14 @@ func (h *TokenHandler) List(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": "failed to read API tokens"})
 		return
 	}
-	c.JSON(http.StatusOK, tokens)
+	items := make([]contract.APITokenSummary, len(tokens))
+	for i, token := range tokens {
+		items[i] = contract.APITokenSummary{
+			ID: token.ID, UserID: token.UserID, Name: token.Name, Permissions: contract.APITokenPermissions(token.Permissions),
+			ExpiresAt: token.ExpiresAt, LastUsedAt: token.LastUsedAt, CreatedAt: token.CreatedAt,
+		}
+	}
+	c.JSON(http.StatusOK, items)
 }
 
 type createTokenRequest struct {
@@ -101,13 +109,13 @@ func (h *TokenHandler) Create(c *gin.Context) {
 	}
 
 	// Return plain token ONCE — it cannot be retrieved again
-	c.JSON(http.StatusCreated, gin.H{
-		"id":          apiToken.ID,
-		"name":        apiToken.Name,
-		"token":       plainToken,
-		"permissions": apiToken.Permissions,
-		"expires_at":  apiToken.ExpiresAt,
-		"warning":     "save this token now — it will not be shown again",
+	c.JSON(http.StatusCreated, contract.CreateAPITokenResponse{
+		ID:          apiToken.ID,
+		Name:        apiToken.Name,
+		Token:       plainToken,
+		Permissions: contract.APITokenPermissions(apiToken.Permissions),
+		ExpiresAt:   apiToken.ExpiresAt,
+		Warning:     "save this token now — it will not be shown again",
 	})
 }
 
@@ -127,5 +135,5 @@ func (h *TokenHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "message": "token not found"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "token revoked"})
+	c.JSON(http.StatusOK, contract.APITokenRevokeResponse{Message: "token revoked"})
 }

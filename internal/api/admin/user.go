@@ -7,12 +7,12 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/credential"
 	"depsilo/internal/db"
 	"depsilo/internal/middleware"
@@ -75,32 +75,21 @@ func (h *UserHandler) signalInvariantRead() {
 	}
 }
 
-type userResponse struct {
-	ID               uint       `json:"id"`
-	Username         string     `json:"username"`
-	Role             string     `json:"role"`
-	Enabled          bool       `json:"enabled"`
-	LastLoginAt      *time.Time `json:"last_login_at"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
-	PermissionSource string     `json:"permission_source"`
-}
-
-func toUserResponse(user db.User) userResponse {
-	return userResponse{
+func toUserResponse(user db.User) contract.AdminUser {
+	return contract.AdminUser{
 		ID:               user.ID,
 		Username:         user.Username,
-		Role:             user.Role,
+		Role:             contract.AdminUserRole(user.Role),
 		Enabled:          user.Enabled,
 		LastLoginAt:      user.LastLoginAt,
 		CreatedAt:        user.CreatedAt,
 		UpdatedAt:        user.UpdatedAt,
-		PermissionSource: user.PermissionSource,
+		PermissionSource: contract.AdminUserPermissionSource(user.PermissionSource),
 	}
 }
 
-func toUserResponses(users []db.User) []userResponse {
-	items := make([]userResponse, len(users))
+func toUserResponses(users []db.User) []contract.AdminUser {
+	items := make([]contract.AdminUser, len(users))
 	for i, user := range users {
 		items[i] = toUserResponse(user)
 	}
@@ -392,5 +381,5 @@ func (h *UserHandler) Delete(c *gin.Context) {
 		writeUserMutationError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
+	c.JSON(http.StatusOK, contract.AdminUserDeleteResponse{Message: "deleted"})
 }

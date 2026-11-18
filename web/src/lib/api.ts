@@ -16,6 +16,8 @@ import type {
   AdminUpstreamUpdateListResponse,
   AdminUpstreamUpdateQuery,
   AdminUser,
+  AdminUserDeleteResponse,
+  APITokenRevokeResponse,
   APITokenSummary,
   ApproveSuggestionRequest,
   ApproveSuggestionResponse,
@@ -60,11 +62,15 @@ import type {
   DashboardBreakdownResponse,
   DashboardTrendsResponse,
   DismissSuggestionResponse,
+  EntitlementStatus,
+  LicenseRevalidateResponse,
   LoginResponse,
+  LogoutResponse,
   NowResponse,
   OnboardingStatusQuery,
   OnboardingStatusResponse,
   OnboardingTerminalStatus,
+  OnboardingUpdateResponse,
   ComplianceProfile,
   Principal,
   PolicyStatus,
@@ -74,7 +80,16 @@ import type {
   ProjectPackageQuery,
   ProjectPackagesResponse,
   ProjectSBOMQuery,
+  QuarantineApprovalListResponse,
+  QuarantineApproveResponse,
+  QuarantineEventListResponse,
   QuarantineQuery,
+  QuarantineRevokeResponse,
+  BlocklistOverridesResponse,
+  BlocklistRevokeOverrideResponse,
+  BlocklistStatusResponse,
+  BlocklistSyncResponse,
+  CreatedMalwareOverride,
   RefreshResponse,
   RegenerateProjectTokenResponse,
   RuntimeResponse,
@@ -107,6 +122,8 @@ import type {
   UpdateAdminSettingsResponse,
   UpdateSecurityPolicyRequest,
   UpdateUserRequest,
+  WebhookAck,
+  WebhookConfig,
   UpstreamMutationRequest,
 } from './adminApi.types'
 
@@ -167,7 +184,7 @@ export const statsApi = {
 export const authApi = {
   login: (data: { username: string; password: string }, options: ApiGetOptions = {}) =>
     api.post<LoginResponse>('/auth/login', data, options),
-  logout: () => api.post<{ message: string }>('/auth/logout'),
+  logout: () => api.post<LogoutResponse>('/auth/logout'),
   me: (options: ApiGetOptions = {}) => api.get<Principal>('/auth/me', options),
   refresh: () => api.post<RefreshResponse>('/auth/refresh'),
 }
@@ -182,7 +199,8 @@ export const adminApi = {
   getOnboardingStatus: (params: OnboardingStatusQuery = {}, options: ApiGetOptions = {}) =>
     api.get<OnboardingStatusResponse>('/admin/onboarding/status', { ...options, params }),
   updateOnboardingStatus: (status: OnboardingTerminalStatus) =>
-    api.put<{ status: OnboardingTerminalStatus }>('/admin/onboarding', { status }),
+    // The stored status after a terminal update is itself always terminal.
+    api.put<OnboardingUpdateResponse & { status: OnboardingTerminalStatus }>('/admin/onboarding', { status }),
   getDockerBootstrap: (options: ApiGetOptions = {}) => api.get<DockerBootstrapState>('/admin/docker/bootstrap', options),
   enableDockerHub: () => api.post<DockerBootstrapState>('/admin/docker/bootstrap'),
   getRecentDownloads: (limit: number = 3, options: ApiGetOptions = {}) =>
@@ -241,12 +259,12 @@ export const adminApi = {
   listUsers: (options: ApiGetOptions = {}) => api.get<AdminUser[]>('/admin/users', options),
   createUser: (data: CreateUserRequest) => api.post<AdminUser>('/admin/users', data),
   updateUser: (id: number, data: UpdateUserRequest) => api.put<AdminUser>(`/admin/users/${id}`, data),
-  deleteUser: (id: number) => api.delete(`/admin/users/${id}`),
+  deleteUser: (id: number) => api.delete<AdminUserDeleteResponse>(`/admin/users/${id}`),
 
   // Tokens
   listTokens: (options: ApiGetOptions = {}) => api.get<APITokenSummary[]>('/admin/tokens', options),
   createToken: (data: CreateAPITokenRequest) => api.post<CreateAPITokenResponse>('/admin/tokens', data),
-  deleteToken: (id: number) => api.delete(`/admin/tokens/${id}`),
+  deleteToken: (id: number) => api.delete<APITokenRevokeResponse>(`/admin/tokens/${id}`),
 
   // Settings
   getSettings: (options: ApiGetOptions = {}) => api.get<AdminSettingsResponse>('/admin/settings', options),
@@ -287,21 +305,21 @@ export const adminApi = {
   updateSecurityPolicy: (ecosystem: string, data: UpdateSecurityPolicyRequest) => api.put<SecurityPolicy>(`/admin/security/policies/${ecosystem}`, data),
 
   // Supply-chain quarantine (open-source wedge — NOT Pro)
-  listQuarantineEvents: (params: QuarantineQuery, options: ApiGetOptions = {}) => api.get('/admin/quarantine/events', { ...options, params }),
-  listQuarantineApprovals: (params: QuarantineQuery, options: ApiGetOptions = {}) => api.get('/admin/quarantine/approvals', { ...options, params }),
+  listQuarantineEvents: (params: QuarantineQuery, options: ApiGetOptions = {}) => api.get<QuarantineEventListResponse>('/admin/quarantine/events', { ...options, params }),
+  listQuarantineApprovals: (params: QuarantineQuery, options: ApiGetOptions = {}) => api.get<QuarantineApprovalListResponse>('/admin/quarantine/approvals', { ...options, params }),
   approveQuarantine: (data: { ecosystem: string; package: string; version: string; reason: string }) =>
-    api.post('/admin/quarantine/approve', data),
+    api.post<QuarantineApproveResponse>('/admin/quarantine/approve', data),
   revokeQuarantineApproval: (id: number, data: { reason: string }) =>
-    api.delete(`/admin/quarantine/approvals/${id}`, { data }),
+    api.delete<QuarantineRevokeResponse>(`/admin/quarantine/approvals/${id}`, { data }),
 
   // Known-malicious blocklist (open-source, DIRECTION Task 2)
-  getBlocklistStatus: (options: ApiGetOptions = {}) => api.get('/admin/blocklist/status', options),
-  triggerBlocklistSync: () => api.post('/admin/blocklist/sync'),
-  listBlocklistOverrides: (options: ApiGetOptions = {}) => api.get('/admin/blocklist/overrides', options),
+  getBlocklistStatus: (options: ApiGetOptions = {}) => api.get<BlocklistStatusResponse>('/admin/blocklist/status', options),
+  triggerBlocklistSync: () => api.post<BlocklistSyncResponse>('/admin/blocklist/sync'),
+  listBlocklistOverrides: (options: ApiGetOptions = {}) => api.get<BlocklistOverridesResponse>('/admin/blocklist/overrides', options),
   createBlocklistOverride: (data: { ecosystem: string; package: string; version: string; reason: string }) =>
-    api.post('/admin/blocklist/overrides', data),
+    api.post<CreatedMalwareOverride>('/admin/blocklist/overrides', data),
   revokeBlocklistOverride: (id: number, data: { reason: string }) =>
-    api.delete(`/admin/blocklist/overrides/${id}`, { data }),
+    api.delete<BlocklistRevokeOverrideResponse>(`/admin/blocklist/overrides/${id}`, { data }),
 
   // Projects (Pro)
   listProjects: (options: ApiGetOptions = {}) => api.get<ProjectListResponse>('/admin/projects', options),
@@ -378,49 +396,20 @@ export const setupApi = {
   }),
 }
 
-// License / entitlement types
-export type EntitlementSource = 'none' | 'trial' | 'paid'
-
-export interface EntitlementStatus {
-  is_pro: boolean
-  source: EntitlementSource
-  expires_at?: string
-  days_left: number
-  trial_used: boolean
-  trial_available: boolean
-  license_key_masked?: string
-  license_error?: string
-  last_checked: string
-}
-
 export const licenseApi = {
   status:        (options: ApiGetOptions = {}) => api.get<EntitlementStatus>('/admin/license/status', options),
-  revalidate:    () => api.post('/admin/license/revalidate'),
+  revalidate:    () => api.post<LicenseRevalidateResponse>('/admin/license/revalidate'),
   activateTrial: () => api.post<EntitlementStatus>('/admin/license/trial/activate'),
   setKey:        (key: string) => api.put<EntitlementStatus>('/admin/license/key', { key }),
   clearKey:      () => api.delete<EntitlementStatus>('/admin/license/key'),
 }
 
-// Webhook notification types
-export interface WebhookConfig {
-  id: number
-  name: string
-  platform: 'slack' | 'dingtalk' | 'wecom' | 'feishu' | 'generic'
-  url: string
-  enabled: boolean
-  events: string
-  cooldown_minutes: number
-  last_sent_at: string | null
-  created_at: string
-  updated_at: string
-}
-
 export const webhookApi = {
   list:   (options: ApiGetOptions = {}) => api.get<WebhookConfig[]>('/admin/webhooks', options),
   create: (data: Partial<WebhookConfig>) => api.post<WebhookConfig>('/admin/webhooks', data),
-  update: (id: number, data: Partial<WebhookConfig>) => api.put(`/admin/webhooks/${id}`, data),
-  delete: (id: number) => api.delete(`/admin/webhooks/${id}`),
-  test:   (id: number) => api.post(`/admin/webhooks/${id}/test`),
+  update: (id: number, data: Partial<WebhookConfig>) => api.put<WebhookAck>(`/admin/webhooks/${id}`, data),
+  delete: (id: number) => api.delete<WebhookAck>(`/admin/webhooks/${id}`),
+  test:   (id: number) => api.post<WebhookAck>(`/admin/webhooks/${id}/test`),
 }
 
 export default api

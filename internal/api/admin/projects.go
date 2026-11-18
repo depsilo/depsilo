@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
 	"depsilo/internal/entitlement"
@@ -37,12 +38,12 @@ func NewProjectsHandler(database *gorm.DB, checker *entitlement.Checker) *Projec
 
 const freeProjectLimit = 1
 
-func (h *ProjectsHandler) capabilities(projectCount int) projectCapabilitiesResponse {
+func (h *ProjectsHandler) capabilities(projectCount int) contract.ProjectCapabilities {
 	if h.entitlement.IsPro() {
-		return projectCapabilitiesResponse{CanCreate: true, CanExportSBOM: true}
+		return contract.ProjectCapabilities{CanCreate: true, CanExportSBOM: true}
 	}
 	limit := freeProjectLimit
-	return projectCapabilitiesResponse{ProjectLimit: &limit, CanCreate: projectCount < limit, CanExportSBOM: true}
+	return contract.ProjectCapabilities{ProjectLimit: &limit, CanCreate: projectCount < limit, CanExportSBOM: true}
 }
 
 // SetCompliance supplies the operator-declared CRA facts used by SBOM
@@ -99,7 +100,7 @@ func (h *ProjectsHandler) List(c *gin.Context) {
 		return
 	}
 
-	items := make([]projectSummaryResponse, len(projects))
+	items := make([]contract.ProjectSummary, len(projects))
 	for i, project := range projects {
 		var count int64
 		if err := h.db.Model(&db.ProjectPackage{}).Where("project_id = ?", project.ID).Count(&count).Error; err != nil {
@@ -114,13 +115,13 @@ func (h *ProjectsHandler) List(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
 			return
 		}
-		items[i] = projectSummaryResponse{
+		items[i] = contract.ProjectSummary{
 			ID: project.ID, Name: project.Name, Slug: project.Slug, Description: project.Description,
 			PackageCount: count, LastActivityAt: lastActivity, CreatedAt: project.CreatedAt, UpdatedAt: project.UpdatedAt,
 		}
 	}
 
-	c.JSON(http.StatusOK, projectListResponse{Items: items, Total: len(items), Capabilities: h.capabilities(len(items))})
+	c.JSON(http.StatusOK, contract.ProjectListResponse{Items: items, Total: len(items), Capabilities: h.capabilities(len(items))})
 }
 
 // Create creates a new project and returns its token (shown once).
@@ -176,7 +177,7 @@ func (h *ProjectsHandler) Create(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, createProjectResponse{
+	c.JSON(http.StatusCreated, contract.CreateProjectResponse{
 		ID: project.ID, Name: project.Name, Slug: project.Slug, Description: project.Description,
 		Token: token, ProxyURL: projectProxyURL(c.Request, project.Slug), CreatedAt: project.CreatedAt,
 	})
@@ -226,7 +227,7 @@ func (h *ProjectsHandler) Detail(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, projectDetailResponse{
+	c.JSON(http.StatusOK, contract.ProjectDetail{
 		ID: project.ID, Name: project.Name, Slug: project.Slug, Description: project.Description,
 		ProxyURL: projectProxyURL(c.Request, project.Slug), PackageCount: totalPackages,
 		EcosystemBreakdown: ecoMap, LastActivityAt: lastActivity,
@@ -267,9 +268,9 @@ func (h *ProjectsHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"id": project.ID, "name": project.Name, "slug": project.Slug, "description": project.Description,
-		"created_at": project.CreatedAt, "updated_at": project.UpdatedAt,
+	c.JSON(http.StatusOK, contract.Project{
+		ID: project.ID, Name: project.Name, Slug: project.Slug, Description: project.Description,
+		CreatedAt: project.CreatedAt, UpdatedAt: project.UpdatedAt,
 	})
 }
 
@@ -294,7 +295,7 @@ func (h *ProjectsHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "deleted"})
+	c.JSON(http.StatusOK, contract.DeleteProjectResponse{Status: "deleted"})
 }
 
 // ListPackages returns packages recorded for a project.
@@ -338,7 +339,7 @@ func (h *ProjectsHandler) ListPackages(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, projectPackagesResponse{Items: toProjectPackageResponses(packages), Total: total, Page: page})
+	c.JSON(http.StatusOK, contract.ProjectPackagesResponse{Items: toProjectPackageResponses(packages), Total: total, Page: page})
 }
 
 // ExportSBOM generates and downloads an SBOM for a project.
@@ -457,5 +458,5 @@ func (h *ProjectsHandler) RegenerateToken(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, regenerateProjectTokenResponse{Token: token, ProxyURL: projectProxyURL(c.Request, project.Slug)})
+	c.JSON(http.StatusOK, contract.RegenerateProjectTokenResponse{Token: token, ProxyURL: projectProxyURL(c.Request, project.Slug)})
 }

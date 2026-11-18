@@ -11,8 +11,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/asyncruntime"
 	"depsilo/internal/blocklist"
+	"depsilo/internal/db"
 )
 
 // BlocklistHandler serves the known-malicious blocklist admin
@@ -43,7 +45,7 @@ func NewBlocklistHandler(tasks asyncruntime.Submitter, store *blocklist.Store, s
 // with an explicit state instead of a panic or a misleading 500.
 func (h *BlocklistHandler) disabled(c *gin.Context) bool {
 	if h.store == nil {
-		c.JSON(http.StatusOK, gin.H{"enabled": false})
+		c.JSON(http.StatusOK, contract.BlocklistDisabled{Enabled: false})
 		return true
 	}
 	return false
@@ -77,22 +79,19 @@ func (h *BlocklistHandler) Status(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
 		return
 	}
-	resp := gin.H{
-		"enabled":         true,
-		"mode":            h.mode,
-		"last_sync_at":    st.LastSyncAt,
-		"last_success_at": st.LastSuccessAt,
-		"last_error":      st.LastError,
-		"duration_ms":     st.DurationMs,
-		"entry_count":     total,
-		"per_ecosystem":   perEco,
-		"ecosystems":      blocklist.SyncedEcosystems(),
+	resp := contract.BlocklistStatus{
+		Enabled: true, Mode: h.mode,
+		LastSyncAt: st.LastSyncAt, LastSuccessAt: st.LastSuccessAt, LastError: st.LastError,
+		DurationMs: st.DurationMs, EntryCount: total, PerEcosystem: perEco,
+		Ecosystems: blocklist.SyncedEcosystems(),
 	}
 	if h.syncer != nil {
-		resp["running"] = h.syncer.Running()
-		resp["sync_interval_seconds"] = int64(h.syncer.Interval().Seconds())
+		running := h.syncer.Running()
+		interval := int64(h.syncer.Interval().Seconds())
+		resp.Running, resp.SyncIntervalSeconds = &running, &interval
 		if st.LastSyncAt != nil {
-			resp["next_sync_at"] = st.LastSyncAt.Add(h.syncer.Interval())
+			next := st.LastSyncAt.Add(h.syncer.Interval())
+			resp.NextSyncAt = &next
 		}
 	}
 	c.JSON(http.StatusOK, resp)
@@ -127,7 +126,7 @@ func (h *BlocklistHandler) TriggerSync(c *gin.Context) {
 		return
 	}
 	zap.L().Info("blocklist: manual sync triggered", zap.Uint("actor", userIDFromContext(c)))
-	c.JSON(http.StatusAccepted, gin.H{"status": "sync started"})
+	c.JSON(http.StatusAccepted, contract.BlocklistSyncResponse{Status: "sync started"})
 }
 
 // ── GET /admin/blocklist/overrides ────────────────────────────────
@@ -141,7 +140,11 @@ func (h *BlocklistHandler) ListOverrides(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"items": items, "now": time.Now().UTC()})
+	overrides := make([]contract.MalwareOverride, len(items))
+	for i, item := range items {
+		overrides[i] = toMalwareOverride(item)
+	}
+	c.JSON(http.StatusOK, contract.BlocklistOverrideListResponse{Items: overrides, Now: time.Now().UTC()})
 }
 
 // ── POST /admin/blocklist/overrides ───────────────────────────────
@@ -201,12 +204,7 @@ func (h *BlocklistHandler) CreateOverride(c *gin.Context) {
 	if mErr != nil {
 		zap.L().Warn("blocklist: HasEntries", zap.Error(mErr))
 	}
-	c.JSON(http.StatusCreated, gin.H{
-		"id": ov.ID, "ecosystem": ov.Ecosystem, "package": ov.Package,
-		"version": ov.Version, "reason": ov.Reason, "actor_id": ov.ActorID,
-		"created_at": ov.CreatedAt, "expires_at": ov.ExpiresAt,
-		"matches_blocklist": matches,
-	})
+	c.JSON(http.StatusCreated, contract.CreatedMalwareOverride{MalwareOverride: toMalwareOverride(*ov), MatchesBlocklist: matches})
 }
 
 // ── DELETE /admin/blocklist/overrides/:id ─────────────────────────
@@ -237,5 +235,13 @@ func (h *BlocklistHandler) RevokeOverride(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"revoked": id})
+	c.JSON(http.StatusOK, contract.BlocklistRevokeOverrideResponse{Revoked: id})
+}
+
+func toMalwareOverride(override db.MalwareOverride) contract.MalwareOverride {
+	return contract.MalwareOverride{
+		ID: override.ID, Ecosystem: override.Ecosystem, Package: override.Package,
+		Version: override.Version, Reason: override.Reason, ActorID: override.ActorID,
+		CreatedAt: override.CreatedAt, ExpiresAt: override.ExpiresAt,
+	}
 }

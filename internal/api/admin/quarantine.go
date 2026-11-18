@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 	"depsilo/internal/quarantine"
 )
@@ -36,13 +37,6 @@ func NewQuarantineHandler(database *gorm.DB, store *quarantine.Store, approvalsE
 // recently." Pagination uses the same offset/limit shape as the other
 // admin list endpoints (audit-logs, access-logs) for consistency in
 // the frontend.
-
-type quarantineEventResp struct {
-	Items []db.QuarantineEvent `json:"items"`
-	Total int64                `json:"total"`
-	// Ecosystems counts the events every other filter matches, per ecosystem.
-	Ecosystems []ecosystemCount `json:"ecosystems"`
-}
 
 func (h *QuarantineHandler) ListEvents(c *gin.Context) {
 	limit := parseIntParam(c, "limit", 50, 1, 500)
@@ -86,7 +80,7 @@ func (h *QuarantineHandler) ListEvents(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, quarantineEventResp{Items: items, Total: total, Ecosystems: counts})
+	c.JSON(http.StatusOK, contract.QuarantineEventListResponse{Items: toQuarantineEvents(items), Total: total, Ecosystems: counts})
 }
 
 // ── GET /admin/quarantine/approvals ───────────────────────────────
@@ -95,11 +89,6 @@ func (h *QuarantineHandler) ListEvents(c *gin.Context) {
 // table). Persistent — no expiry — per the option-A locked-in
 // decision; an admin who regrets an approval revokes it via the
 // DELETE handler.
-
-type quarantineApprovalsResp struct {
-	Items []db.ApprovedVersion `json:"items"`
-	Total int64                `json:"total"`
-}
 
 func (h *QuarantineHandler) ListApprovals(c *gin.Context) {
 	limit := parseIntParam(c, "limit", 50, 1, 500)
@@ -118,7 +107,7 @@ func (h *QuarantineHandler) ListApprovals(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, quarantineApprovalsResp{Items: items, Total: total})
+	c.JSON(http.StatusOK, contract.QuarantineApprovalListResponse{Items: toQuarantineApprovals(items), Total: total})
 }
 
 // ── POST /admin/quarantine/approve ────────────────────────────────
@@ -163,13 +152,9 @@ func (h *QuarantineHandler) Approve(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"ecosystem":   coordinate.Ecosystem,
-		"package":     coordinate.Package,
-		"version":     coordinate.Version,
-		"reason":      req.Reason,
-		"approved_by": actorID,
-		"created_at":  time.Now().UTC(),
+	c.JSON(http.StatusOK, contract.QuarantineApproveResponse{
+		Ecosystem: coordinate.Ecosystem, Package: coordinate.Package, Version: coordinate.Version,
+		Reason: req.Reason, ApprovedBy: actorID, CreatedAt: time.Now().UTC(),
 	})
 }
 
@@ -225,13 +210,34 @@ func (h *QuarantineHandler) Revoke(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"ecosystem":  coordinate.Ecosystem,
-		"package":    coordinate.Package,
-		"version":    coordinate.Version,
-		"revoked_by": actorID,
-		"reason":     req.Reason,
+	c.JSON(http.StatusOK, contract.QuarantineRevokeResponse{
+		Ecosystem: coordinate.Ecosystem, Package: coordinate.Package, Version: coordinate.Version,
+		RevokedBy: actorID, Reason: req.Reason,
 	})
+}
+
+func toQuarantineEvents(rows []db.QuarantineEvent) []contract.QuarantineEvent {
+	events := make([]contract.QuarantineEvent, len(rows))
+	for i, row := range rows {
+		events[i] = contract.QuarantineEvent{
+			ID: row.ID, Ecosystem: row.Ecosystem, Package: row.Package, Version: row.Version,
+			Action: row.Action, Reason: row.Reason, ThresholdSeconds: row.Threshold,
+			AgeAtCallSeconds: row.AgeAtCall, ActorID: row.ActorID, ClientIP: row.ClientIP,
+			CreatedAt: row.CreatedAt,
+		}
+	}
+	return events
+}
+
+func toQuarantineApprovals(rows []db.ApprovedVersion) []contract.QuarantineApproval {
+	approvals := make([]contract.QuarantineApproval, len(rows))
+	for i, row := range rows {
+		approvals[i] = contract.QuarantineApproval{
+			ID: row.ID, Ecosystem: row.Ecosystem, Package: row.Package, Version: row.Version,
+			Reason: row.Reason, ApprovedBy: row.ApprovedBy, CreatedAt: row.CreatedAt,
+		}
+	}
+	return approvals
 }
 
 // userIDFromContext extracts the admin's user id from the auth

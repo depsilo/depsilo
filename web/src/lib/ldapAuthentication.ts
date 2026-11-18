@@ -1,7 +1,7 @@
 import type { LDAPAuthenticationPatch, LDAPAuthenticationSettings, LDAPAuthenticationSourceState } from './adminApi.types'
 
 export function newLDAPAuthenticationSource(id: string): LDAPAuthenticationSourceState {
-  return { id, protocol: 'ldap', pending_restart: false, config_writable: true, overrides: {}, effective: null, configured: {
+  return { id, protocol: 'ldap', pending_restart: false, sessions_will_reset: false, config_writable: true, can_restore: false, overrides: {}, effective: null, configured: {
     enabled: false, display_name: '', admin_groups: [], readonly_groups: [], session_ttl: '30m',
     ldap: { url: '', bind_dn: '', bind_password_set: false, user_base_dn: '', user_filter: '(uid={username})', subject_attribute: 'entryUUID', display_name_attribute: 'displayName', groups_attribute: 'memberOf', ca_cert_pem: '' },
   } }

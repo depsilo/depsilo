@@ -367,14 +367,14 @@ type CapabilityFact struct {
 
 // CapabilitySummary answers GET /admin/capabilities/summary: the build
 // identity and every capability fact, with support, mode, and data freshness
-// kept independent. The handler also attaches the settings state under
-// "settings" when the config store can provide it; that field is not modelled
-// here until the settings bodies are contract types.
+// kept independent. Settings is the GET /admin/settings body, absent when the
+// config store cannot provide it.
 type CapabilitySummary struct {
-	Version      string           `json:"version"`
-	Commit       string           `json:"commit"`
-	BuildDate    string           `json:"build_date"`
-	Capabilities []CapabilityFact `json:"capabilities"`
+	Version      string                 `json:"version"`
+	Commit       string                 `json:"commit"`
+	BuildDate    string                 `json:"build_date"`
+	Capabilities []CapabilityFact       `json:"capabilities"`
+	Settings     *AdminSettingsResponse `json:"settings,omitempty"`
 }
 
 // BandwidthRange is the report's inclusive UTC date range (YYYY-MM-DD).

@@ -7,26 +7,18 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
 	"depsilo/internal/identity"
 )
 
-type AuthenticationSourceImpactUser struct {
-	ID               uint   `json:"id"`
-	Username         string `json:"username"`
-	PermissionSource string `json:"permission_source"`
-	Enabled          bool   `json:"enabled"`
-}
-
-type AuthenticationSourceImpact struct {
-	SourceID                  string                           `json:"source_id"`
-	BoundUserCount            int64                            `json:"bound_user_count"`
-	DependentManagedUserCount int64                            `json:"dependent_managed_user_count"`
-	ActiveSessionCount        int64                            `json:"active_session_count"`
-	ObservedAt                time.Time                        `json:"observed_at"`
-	Users                     []AuthenticationSourceImpactUser `json:"users"`
-	UsersTruncated            bool                             `json:"users_truncated"`
+// authenticationImpactUserRow is one bound account as the impact query reads it.
+type authenticationImpactUserRow struct {
+	ID               uint
+	Username         string
+	PermissionSource string
+	Enabled          bool
 }
 
 type AuthenticationSourceImpactHandler struct {
@@ -62,7 +54,8 @@ func (h *AuthenticationSourceImpactHandler) Get(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"code": "AUTH_SOURCE_NOT_FOUND", "message": "authentication source is not configured or running"})
 		return
 	}
-	result := AuthenticationSourceImpact{SourceID: id, ObservedAt: time.Now().UTC(), Users: []AuthenticationSourceImpactUser{}}
+	result := contract.AuthenticationImpact{SourceID: id, ObservedAt: time.Now().UTC(), Users: []contract.AuthenticationImpactUser{}}
+	var boundUsers []authenticationImpactUserRow
 	if h.database == nil {
 		writeImpactUnavailable(c)
 		return
@@ -77,7 +70,7 @@ func (h *AuthenticationSourceImpactHandler) Get(c *gin.Context) {
 		if err := users().Where("permission_source IN ? AND id NOT IN (?)", []string{"oidc", "ldap"}, otherIdentities).Count(&result.DependentManagedUserCount).Error; err != nil {
 			return err
 		}
-		if err := users().Select("id, username, permission_source, enabled").Order("id ASC").Limit(20).Scan(&result.Users).Error; err != nil {
+		if err := users().Select("id, username, permission_source, enabled").Order("id ASC").Limit(20).Scan(&boundUsers).Error; err != nil {
 			return err
 		}
 		// Count eligible durable session records, not browser tabs or issued JWTs.
@@ -99,10 +92,12 @@ func (h *AuthenticationSourceImpactHandler) Get(c *gin.Context) {
 		writeImpactUnavailable(c)
 		return
 	}
-	for i := range result.Users {
-		if result.Users[i].PermissionSource == "" {
-			result.Users[i].PermissionSource = "local"
+	for _, user := range boundUsers {
+		source := contract.IdentityPermissionSource(user.PermissionSource)
+		if source == "" {
+			source = contract.IdentityPermissionSourceLocal
 		}
+		result.Users = append(result.Users, contract.AuthenticationImpactUser{ID: user.ID, Username: user.Username, PermissionSource: source, Enabled: user.Enabled})
 	}
 	result.UsersTruncated = result.BoundUserCount > int64(len(result.Users))
 	c.JSON(http.StatusOK, result)

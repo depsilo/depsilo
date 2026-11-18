@@ -17,6 +17,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/config"
 	"depsilo/internal/credential"
 	"depsilo/internal/db"
@@ -138,16 +139,6 @@ type loginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
-type loginResponse struct {
-	Token     string `json:"token"`
-	ExpiresAt int64  `json:"expires_at"`
-	User      struct {
-		ID       uint   `json:"id"`
-		Username string `json:"username"`
-		Role     string `json:"role"`
-	} `json:"user"`
-}
-
 func (h *AuthHandler) Login(c *gin.Context) {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxLoginRequestBody)
 	var req loginRequest
@@ -196,13 +187,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	now := time.Now()
 	h.db.Model(&user).Update("last_login_at", &now)
 
-	resp := loginResponse{
+	resp := contract.LoginResponse{
 		Token:     token,
 		ExpiresAt: time.Now().Add(h.cfg.TokenTTL).Unix(),
+		User:      contract.LoginUser{ID: user.ID, Username: user.Username, Role: contract.IdentityRole(user.Role)},
 	}
-	resp.User.ID = user.ID
-	resp.User.Username = user.Username
-	resp.User.Role = user.Role
 
 	zap.L().Info("user logged in", zap.String("username", user.Username))
 	c.JSON(http.StatusOK, resp)
@@ -217,7 +206,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		}
 	}
 	// Legacy local JWTs retain their existing client-discard semantics.
-	c.JSON(http.StatusOK, gin.H{"message": "logged out"})
+	c.JSON(http.StatusOK, contract.LogoutResponse{Message: "logged out"})
 }
 
 func (h *AuthHandler) Me(c *gin.Context) {
@@ -226,7 +215,24 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"code": "UNAUTHORIZED", "message": "principal unavailable"})
 		return
 	}
-	c.JSON(http.StatusOK, principal)
+	c.JSON(http.StatusOK, principalResponse(principal))
+}
+
+func principalResponse(principal middleware.Principal) contract.Principal {
+	var permissions *contract.PrincipalTokenPermissions
+	if principal.TokenPermissions != nil {
+		value := contract.PrincipalTokenPermissions(*principal.TokenPermissions)
+		permissions = &value
+	}
+	return contract.Principal{
+		ID: principal.ID, Username: principal.Username, Role: contract.IdentityRole(principal.Role),
+		Enabled: principal.Enabled, AuthMethod: contract.PrincipalAuthMethod(principal.AuthMethod),
+		TokenPermissions: permissions, CanWrite: principal.CanWrite,
+		PermissionSource:     contract.IdentityPermissionSource(principal.PermissionSource),
+		LoginMethod:          contract.PrincipalLoginMethod(principal.LoginMethod),
+		CanManageCredentials: principal.CanManageCredentials,
+		CurrentIdentityID:    principal.CurrentIdentityID, CurrentProviderID: principal.CurrentProviderID,
+	}
 }
 
 func (h *AuthHandler) Refresh(c *gin.Context) {
@@ -259,7 +265,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL_ERROR", "message": "failed to generate token"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"token": token, "expires_at": expiresAt.Unix()})
+	c.JSON(http.StatusOK, contract.RefreshResponse{Token: token, ExpiresAt: expiresAt.Unix()})
 }
 
 // ValidateInitialAdminCredentials combines the stricter first-run username

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"depsilo/internal/api/admin"
+	"depsilo/internal/api/contract"
 	"depsilo/internal/api/credentialurl"
 	"depsilo/internal/config"
 	"depsilo/internal/identity"
@@ -248,7 +249,7 @@ func (h *OIDCHandler) LDAPCheck(c *gin.Context) {
 		ldapError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"checked_at": time.Now().UTC(), "configuration_valid": true, "tls_valid": true, "bind_valid": true, "directory_readable": true})
+	c.JSON(http.StatusOK, contract.LDAPConfigurationCheck{CheckedAt: time.Now().UTC(), ConfigurationValid: true, TLSValid: true, BindValid: true, DirectoryReadable: true})
 }
 
 func (h *OIDCHandler) LDAPTrial(c *gin.Context) {
@@ -274,7 +275,7 @@ func (h *OIDCHandler) LDAPTrial(c *gin.Context) {
 		return
 	}
 	h.auditTrial(c, m.ID(), "identity.trial.complete", result.Trial.Outcome == "success")
-	c.JSON(http.StatusOK, gin.H{"mode": "test", "provider": gin.H{"id": m.ID(), "name": sourceName(m), "protocol": "ldap"}, "outcome": result.Trial.Outcome, "authenticated": result.Trial.Authenticated, "mapped_role": result.Trial.MappedRole, "display_name": result.Trial.DisplayName, "code": result.Trial.Code, "checked_at": result.Trial.CheckedAt, "return_to": result.ReturnTo})
+	c.JSON(http.StatusOK, identityTrialResult(m, contract.IdentityProtocolLDAP, *result.Trial, result.ReturnTo))
 }
 
 func ldapError(c *gin.Context, err error) {

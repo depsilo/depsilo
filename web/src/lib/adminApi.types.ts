@@ -4,7 +4,11 @@ export type * from './generated/apiContract'
 import type { CompileCachePermissions, CompileCacheStatus } from './generated/apiContract'
 import type { CacheIndexStatus, UpstreamUpdateResult } from './generated/apiContract'
 import type { AuditExporterKind, AuditLogCacheResult } from './generated/apiContract'
-import type { PolicyStatus } from './generated/apiContract'
+import type { RuleAction, SecuritySeverity } from './generated/apiContract'
+import type { BlocklistDisabled, BlocklistOverrideListResponse, BlocklistStatus } from './generated/apiContract'
+import type { AdminSettingsLogLevel } from './generated/apiContract'
+import type { AuthenticationSource, AuthenticationSourceList, AuthenticationSourceSettings, LDAPDirectorySettings, OnboardingStatus } from './generated/apiContract'
+import type { IdentityChoiceResult, IdentityLinkResult, IdentityLoginResult, IdentityTrialResult } from './generated/apiContract'
 
 export type UserRole = 'admin' | 'readonly'
 export type TokenPermissions = 'readonly' | 'readwrite'
@@ -20,97 +24,10 @@ export function isAdminEcosystem(value: string): value is AdminEcosystem {
   return ADMIN_ECOSYSTEM_SET.has(value)
 }
 
-export interface Principal {
-  id: number
-  username: string
-  role: UserRole
-  enabled: true
-  auth_method: 'jwt' | 'api_token'
-  token_permissions: TokenPermissions | null
-  can_write: boolean
-  permission_source?: 'local' | 'oidc' | 'ldap'
-  login_method?: 'password' | 'oidc' | 'ldap' | 'api_token'
-  can_manage_credentials?: boolean
-}
-
-export interface LoginResponse {
-  token: string
-  expires_at: number
-  user: { id: number; username: string; role: UserRole }
-}
-
-export interface RefreshResponse { token: string; expires_at: number }
-
-export type SecuritySeverity = 'critical' | 'high' | 'medium' | 'low' | 'unknown'
-
-export interface SecurityDashboard {
-  total_vulnerabilities: number
-  affected_packages: number
-  by_severity: Partial<Record<SecuritySeverity, number>>
-  auto_blocked_count: number
-  last_scan_at: string | null
-  scan_in_progress: boolean
-}
-
-export interface SecurityVulnerability {
-  id: number
-  osv_id: string
-  ecosystem: string
-  package_name: string
-  affected_ranges: string
-  severity: SecuritySeverity
-  cvss_score: number
-  summary: string
-  details: string
-  aliases: string
-  references: string
-  published_at: string
-  modified_at: string
-  created_at: string
-  updated_at: string
-}
-
-export interface SecurityVulnerabilityCheck {
-  id: number
-  ecosystem: string
-  package_name: string
-  has_vulnerabilities: boolean
-  vulnerability_count: number
-  last_fetched_at: string
-  next_fetch_at: string
-  created_at: string
-  updated_at: string
-}
-
-export interface SecurityPolicy {
-  id: number
-  ecosystem: string
-  auto_block_enabled: boolean
-  min_cvss_score: number
-  created_by: string
-  created_at: string
-  updated_at: string
-}
-
-export interface SecurityPage<T> { items: T[]; total: number; page: number }
-export type SecurityVulnerabilityPage = SecurityPage<SecurityVulnerability>
-export type SecuritySuggestionPage = SecurityPage<SecurityVulnerability>
-export type SecurityPackagePage = SecurityPage<SecurityVulnerabilityCheck>
 export interface SecurityBaseQuery { page?: number; per_page?: number; ecosystem?: string }
 export interface SecurityQuery extends SecurityBaseQuery { severity?: SecuritySeverity; package?: string }
 export interface UpdateSecurityPolicyRequest { auto_block_enabled: boolean; min_cvss_score: number }
 export interface ApproveSuggestionRequest { version: string; reason?: string }
-export interface ApproveSuggestionResponse { rule_id: number }
-export interface DismissSuggestionResponse { status: 'dismissed' }
-export interface SecurityScanResponse { status: 'scan_started' }
-export interface SecurityImportResponse {
-  imported: number
-  received: number
-  packages: number
-  duplicates: number
-  skipped: number
-  rules_created: number
-}
 
 /** Ecosystem filters accept several ids, sent comma-separated (`pypi,npm`). */
 export interface AccessLogQuery { page?: number; page_size?: number; search?: string; adapter_type?: string; hit?: boolean; result?: 'hit' | 'miss' | 'unknown'; start?: string; end?: string }
@@ -158,84 +75,19 @@ export interface AuditExporterRequest {
   enabled?: boolean
 }
 
-export interface RuleRequest { ecosystem: string; package_name: string; version: string; action: 'allow' | 'deny'; reason: string }
-export interface RuleRecord extends RuleRequest { id: number; created_by: string; created_at: string; updated_at: string }
-export type RuleListResponse = RuleRecord[] | { items: RuleRecord[]; total?: number }
+export interface RuleRequest { ecosystem: string; package_name: string; version: string; action: RuleAction; reason: string }
 export interface RuleTestRequest { ecosystem: string; package: string; version: string }
-export interface RuleTestSpecificity {
-  priority: number
-  ecosystem: number
-  package: number
-  version: number
-  action: number
-  id: number
-}
-
-export type RuleTestEcosystemMatchLevel = 'exact' | 'wildcard'
-export type RuleTestPackageMatchLevel = 'exact' | 'prefix' | 'wildcard'
-export type RuleTestVersionMatchLevel = 'exact' | 'range' | 'wildcard'
-
-export interface RuleTestMatchLevels {
-  ecosystem: RuleTestEcosystemMatchLevel
-  package: RuleTestPackageMatchLevel
-  version: RuleTestVersionMatchLevel
-}
-
-/** A persisted rule that matched the test coordinate, with its ranking. */
-export interface RuleTestCandidate {
-  rule: RuleRecord
-  specificity: RuleTestSpecificity
-  match_levels: RuleTestMatchLevels
-  matched: boolean
-  selected: boolean
-  explanation?: string
-}
-
-/** Result returned by the Admin "test policy" endpoint. */
-export interface RuleTestResponse {
-  allowed: boolean
-  matched_rule: RuleRecord | null
-  reason?: string
-  winning_rule?: RuleRecord | null
-  winner_reason?: string
-  /** Stable tuple dimension that selected the winner, when candidates exist. */
-  precedence_reason?: string
-  /** Full selected candidate, useful to clients that need its ranking details. */
-  winner?: RuleTestCandidate | null
-  /** Always an array; no-match decisions return an empty array. */
-  candidates: RuleTestCandidate[]
-  /** Optional status metadata when evaluation used a stale/fallback snapshot. */
-  policy_status?: PolicyStatus
-}
 
 export interface QuarantineQuery { limit?: number; offset?: number; ecosystem?: string; action?: string; package?: string }
 
-export interface Project {
-  id: number
-  name: string
-  slug: string
-  description: string
-  created_at: string
-  updated_at: string
-}
+/** The blocklist read bodies, narrowed: a disabled blocklist answers only `{ enabled: false }`. */
+type BlocklistDisabledResponse = BlocklistDisabled & { enabled: false }
+export type BlocklistStatusResponse = (BlocklistStatus & { enabled: true }) | BlocklistDisabledResponse
+export type BlocklistOverridesResponse = BlocklistOverrideListResponse | BlocklistDisabledResponse
 
-export interface ProjectSummary extends Project { package_count: number; last_activity_at: string | null }
-export interface ProjectCapabilities {
-  /** null means the active entitlement does not limit project count. */
-  project_limit: number | null
-  can_create: boolean
-  can_export_sbom: boolean
-}
-export interface ProjectListResponse { items: ProjectSummary[]; total: number; capabilities: ProjectCapabilities }
 export interface CreateProjectRequest { name: string; description: string }
 export interface UpdateProjectRequest { name?: string; description?: string }
-export interface CreateProjectResponse { id: number; name: string; slug: string; description: string; token: string; proxy_url: string; created_at: string }
-export interface ProjectDetail extends ProjectSummary { proxy_url: string; ecosystem_breakdown: Record<string, number> }
-export interface ProjectPackage { ecosystem: string; package_name: string; version: string; first_seen_at: string; last_seen_at: string; download_count: number }
 export interface ProjectPackageQuery { page?: number; per_page?: number; ecosystem?: string; search?: string }
-export interface ProjectPackagesResponse { items: ProjectPackage[]; total: number; page: number }
-export interface RegenerateProjectTokenResponse { token: string; proxy_url: string }
-export interface DeleteProjectResponse { status: 'deleted' }
 export type ProjectSBOMFormat = 'spdx' | 'cyclonedx'
 export type ProjectSBOMPreset = 'technical-file'
 export interface ProjectSBOMQuery {
@@ -247,55 +99,14 @@ export interface ProjectSBOMQuery {
   sign?: boolean
 }
 
-export interface ComplianceProfile {
-  organization: string
-  contact: string
-  signing_configured: boolean
-  component_annotation_count: number
-}
-
-export interface AdminUser { permission_source?: 'local' | 'oidc' | 'ldap'; id: number; username: string; role: UserRole; enabled: boolean; last_login_at: string | null; created_at: string; updated_at: string }
 export interface CreateUserRequest { username: string; password: string; role: UserRole }
 export interface UpdateUserRequest { password?: string; role?: UserRole; enabled?: boolean }
-export interface APITokenSummary { id: number; user_id: number; name: string; permissions: TokenPermissions; expires_at: string | null; last_used_at: string | null; created_at: string }
 export interface CreateAPITokenRequest { name: string; permissions: TokenPermissions; ttl: '7d' | '30d' | '90d' | 'never' }
-export interface CreateAPITokenResponse { id: number; name: string; token: string; permissions: TokenPermissions; expires_at: string | null; warning: string }
 
-export interface AdminSettingsSnapshot {
-  server: { host: string; port: number; log_level: 'debug' | 'info' | 'warn' | 'error' }
-  database: { driver: string }
-  storage: { type: string; path: string }
-  cache: { max_size_gb: number; ttl_index: string; ttl_blob: string; lru_threshold: number }
-  auth: { token_ttl: string }
-}
-export type SettingPath =
-  | 'server.host' | 'server.port' | 'server.log_level'
-  | 'database.driver' | 'storage.type' | 'storage.path'
-  | 'cache.max_size_gb' | 'cache.ttl_index' | 'cache.ttl_blob'
-  | 'cache.lru_threshold' | 'auth.token_ttl'
-export type EditableSettingPath =
-  | 'server.log_level' | 'cache.max_size_gb' | 'cache.ttl_index'
-  | 'cache.ttl_blob' | 'cache.lru_threshold' | 'auth.token_ttl'
-export type SettingSource = 'default' | 'file' | 'env'
-export interface AdminSettingsResponse {
-  configured: AdminSettingsSnapshot
-  effective: AdminSettingsSnapshot
-  pending_restart: EditableSettingPath[]
-  overrides: Partial<Record<SettingPath, string>>
-  sources: Record<SettingPath, SettingSource>
-  editable: EditableSettingPath[]
-  config_writable: boolean
-}
 export interface UpdateAdminSettingsRequest {
-  server?: { log_level?: AdminSettingsSnapshot['server']['log_level'] }
+  server?: { log_level?: AdminSettingsLogLevel }
   cache?: { max_size_gb?: number; ttl_index?: string; ttl_blob?: string; lru_threshold?: number }
   auth?: { token_ttl?: string }
-}
-export interface UpdateAdminSettingsResponse extends AdminSettingsResponse {
-  changed: EditableSettingPath[]
-  applied_now: EditableSettingPath[]
-  restart_required: EditableSettingPath[]
-  blocked_by_override: EditableSettingPath[]
 }
 
 export interface UpstreamMutationRequest {
@@ -347,63 +158,7 @@ export interface SetupRequest {
   ecosystems: Record<string, { enabled: boolean; upstreams: Array<{ name: string; url: string; priority: number }> }>
 }
 
-export interface SetupStatusResponse {
-  needs_setup: boolean
-  token_required: boolean
-  /** The port the server listens on. Sent only while setup is pending. */
-  listen_port?: number
-  /**
-   * The command that prints the bootstrap token on this server, with the
-   * --port and --host it needs. Sent only while setup is pending.
-   */
-  token_command?: string
-  /** Whether a configuration file already exists. Sent only while setup is pending. */
-  config_exists?: boolean
-}
-
-export interface SetupCompleteResponse {
-  status: 'ok'
-  message: string
-  reconnect_url: string
-  restart_strategy: 'exec' | 'supervisor_required'
-}
-
-export type OnboardingStatus = 'not_started' | 'completed' | 'skipped'
 export type OnboardingTerminalStatus = Exclude<OnboardingStatus, 'not_started'>
-
-export interface OnboardingEvent {
-  id: number
-  request_id?: string
-  action?: string
-  ecosystem: string
-  package_name: string
-  version: string
-  outcome: 'hit' | 'miss' | 'blocked' | 'error' | string
-  status_code: number
-  created_at: string
-}
-
-export interface OnboardingDeliveryEvent extends OnboardingEvent {
-  request_id: string
-  cache_key: string
-  method: string
-  dependency_kind: string
-  delivery_result: string
-  bytes_sent: number
-  successful_artifact_download: boolean
-}
-
-export interface OnboardingStatusResponse {
-  status: OnboardingStatus
-  started_at: string
-  next_after_id: number
-  events: OnboardingEvent[]
-  has_more: boolean
-  /** Optional for compatibility with servers predating delivery evidence. */
-  next_delivery_after_id?: string
-  delivery_events?: OnboardingDeliveryEvent[]
-  deliveries_has_more?: boolean
-}
 
 export interface OnboardingStatusQuery {
   after_id?: number
@@ -414,20 +169,8 @@ export interface OnboardingStatusQuery {
 
 
 
-export interface IdentityProvider { id: string; name: string; protocol?: 'oidc' | 'ldap' }
-export interface AuthenticationSettings {
-  enabled: boolean
-  display_name: string
-  issuer: string
-  client_id: string
-  client_secret_set: boolean
-  redirect_url: string
-  admin_groups: string[]
-  readonly_groups: string[]
-  groups_claim: string
-  session_ttl: string
-  allow_insecure_loopback: boolean
-}
+/** An OIDC source's settings: every source also carries these fields, and only LDAP adds `ldap`. */
+export type AuthenticationSettings = Omit<AuthenticationSourceSettings, 'ldap'>
 export type AuthenticationField = Exclude<keyof AuthenticationSettings, 'client_secret_set'> | 'client_secret'
 export type AuthenticationPatch = Partial<Omit<AuthenticationSettings, 'client_secret_set'> & { client_secret: string }>
 export interface AuthenticationSettingsResponse {
@@ -437,101 +180,37 @@ export interface AuthenticationSettingsResponse {
   pending_restart: boolean
   config_writable: boolean
 }
-export interface OIDCAuthenticationSourceState {
-  sessions_will_reset?: boolean
-  can_restore?: boolean
-  id: string
+/** A source state narrowed by protocol: an OIDC source's settings carry no `ldap` block. */
+export type OIDCAuthenticationSourceState = Omit<AuthenticationSource, 'protocol' | 'configured' | 'effective' | 'overrides'> & {
   protocol: 'oidc'
   configured: AuthenticationSettings | null
   effective: AuthenticationSettings | null
   overrides: Partial<Record<AuthenticationField, string>>
-  pending_restart: boolean
-  config_writable: boolean
 }
-export interface LDAPDirectorySettings {
-  url: string
-  bind_dn: string
-  bind_password_set: boolean
-  user_base_dn: string
-  user_filter: string
-  subject_attribute: string
-  display_name_attribute: string
-  groups_attribute: string
-  ca_cert_pem: string
-}
-export interface LDAPAuthenticationSettings {
-  enabled: boolean
-  display_name: string
-  admin_groups: string[]
-  readonly_groups: string[]
-  session_ttl: string
-  ldap: LDAPDirectorySettings
-}
+/** The fields an LDAP source uses; the server also sends the empty OIDC fields. */
+export type LDAPAuthenticationSettings = Pick<AuthenticationSourceSettings, 'enabled' | 'display_name' | 'admin_groups' | 'readonly_groups' | 'session_ttl'> & { ldap: LDAPDirectorySettings }
 export type LDAPAuthenticationPatch = Partial<Omit<LDAPAuthenticationSettings, 'ldap'>> & { ldap?: Partial<Omit<LDAPDirectorySettings, 'bind_password_set'> & { bind_password: string }> }
-export interface LDAPAuthenticationSourceState {
-  id: string
+/** A source state narrowed by protocol: an LDAP source's settings always carry `ldap`. */
+export type LDAPAuthenticationSourceState = Omit<AuthenticationSource, 'protocol' | 'configured' | 'effective'> & {
   protocol: 'ldap'
   configured: LDAPAuthenticationSettings | null
   effective: LDAPAuthenticationSettings | null
-  overrides: Record<string, string>
-  pending_restart: boolean
-  config_writable: boolean
-  can_restore?: boolean
-  sessions_will_reset?: boolean
 }
 export type AuthenticationSourceState = OIDCAuthenticationSourceState | LDAPAuthenticationSourceState
 export interface LDAPPreviewRequest { id: string; protocol: 'ldap'; create: boolean; settings: LDAPAuthenticationPatch }
-export interface LDAPConfigurationCheck { checked_at: string; configuration_valid: boolean; tls_valid: boolean; bind_valid: boolean; directory_readable: boolean }
-export interface AuthenticationSourcesResponse {
-  sources: AuthenticationSourceState[]
-  config_writable: boolean
-}
+/** The source list with each source narrowed by protocol. */
+export type AuthenticationSourcesResponse = Omit<AuthenticationSourceList, 'sources'> & { sources: AuthenticationSourceState[] }
 export type CreateAuthenticationSource = (AuthenticationPatch & { id: string; protocol: 'oidc'; display_name: string }) | (LDAPAuthenticationPatch & { id: string; protocol: 'ldap'; display_name: string })
-export interface LoginIdentity {
-  id: number
-  provider: string
-  provider_name: string
-  protocol?: 'oidc' | 'ldap'
-  provider_matches?: boolean
-  login_available?: boolean
-  display_name: string
-  created_at: string
-  last_login_at: string | null
-  can_unlink: boolean
-}
-export interface LoginIdentitiesResponse {
-  permission_source: 'local' | 'oidc' | 'ldap'
-  password_enabled: boolean
-  can_link: boolean
-  current_identity_id?: number | null
-  current_provider_id?: string | null
-  identities: LoginIdentity[]
-  providers: (IdentityProvider & { enabled: boolean; can_link: boolean; session_ttl_seconds?: number })[]
-}
+/** Identity completion bodies, discriminated by mode. */
 export type OIDCCompleteResponse =
-  | { mode: 'login'; token: string; expires_at: number; return_to: string }
-  | { mode: 'link'; return_to: string; result: 'linked' }
-  | { mode: 'choice'; provider: IdentityProvider; display_name: string; role: 'admin' | 'readonly'; return_to: string; expires_at: number }
-  | { mode: 'test'; provider: IdentityProvider; outcome: 'success' | 'denied' | 'failed'; authenticated: boolean; mapped_role: 'admin' | 'readonly' | null; display_name?: string; code?: string; checked_at: string; return_to: string }
+  | (IdentityLoginResult & { mode: 'login' })
+  | (IdentityLinkResult & { mode: 'link' })
+  | (IdentityChoiceResult & { mode: 'choice' })
+  | (IdentityTrialResult & { mode: 'test' })
 
 export interface AuthenticationPreviewRequest {
   id: string
   protocol: 'oidc'
   create: boolean
   settings: AuthenticationPatch
-}
-export interface AuthenticationCheck {
-  checked_at: string
-  configuration_valid: boolean
-  discovery_valid: boolean
-  jwks_readable: boolean
-}
-export interface AuthenticationImpact {
-  source_id: string
-  bound_user_count: number
-  dependent_managed_user_count: number
-  active_session_count: number
-  observed_at: string
-  users: { id: number; username: string; permission_source: 'local' | 'oidc' | 'ldap'; enabled: boolean }[]
-  users_truncated: boolean
 }

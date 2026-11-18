@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/asyncruntime"
 	"depsilo/internal/db"
 	"depsilo/internal/notify"
@@ -27,19 +28,6 @@ type WebhookHandler struct {
 	Notifier WebhookNotifier
 }
 
-type webhookListResponse struct {
-	ID              uint       `json:"id"`
-	Name            string     `json:"name"`
-	Platform        string     `json:"platform"`
-	URL             string     `json:"url"`
-	Enabled         bool       `json:"enabled"`
-	Events          string     `json:"events"`
-	CooldownMinutes int        `json:"cooldown_minutes"`
-	LastSentAt      *time.Time `json:"last_sent_at"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
-}
-
 // NewWebhookHandler creates a new WebhookHandler.
 func NewWebhookHandler(database *gorm.DB, n WebhookNotifier) *WebhookHandler {
 	return &WebhookHandler{DB: database, Notifier: n}
@@ -53,16 +41,11 @@ func (h *WebhookHandler) List(c *gin.Context) {
 		return
 	}
 	canViewCredentials := principalCanViewCredentials(c)
-	items := make([]webhookListResponse, len(configs))
+	items := make([]contract.WebhookConfig, len(configs))
 	for i, config := range configs {
-		urlValue := config.URL
+		items[i] = webhookConfigContract(config)
 		if !canViewCredentials {
-			urlValue = maskWebhookURL(urlValue)
-		}
-		items[i] = webhookListResponse{
-			ID: config.ID, Name: config.Name, Platform: config.Platform, URL: urlValue,
-			Enabled: config.Enabled, Events: config.Events, CooldownMinutes: config.CooldownMinutes,
-			LastSentAt: config.LastSentAt, CreatedAt: config.CreatedAt, UpdatedAt: config.UpdatedAt,
+			items[i].URL = maskWebhookURL(config.URL)
 		}
 	}
 	c.JSON(http.StatusOK, items)
@@ -113,7 +96,7 @@ func (h *WebhookHandler) Create(c *gin.Context) {
 		return
 	}
 	h.reloadNotifier(c.Request.Context())
-	c.JSON(http.StatusCreated, cfg)
+	c.JSON(http.StatusCreated, webhookConfigContract(cfg))
 }
 
 // Update modifies an existing webhook configuration.
@@ -171,7 +154,7 @@ func (h *WebhookHandler) Update(c *gin.Context) {
 		return
 	}
 	h.reloadNotifier(c.Request.Context())
-	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	c.JSON(http.StatusOK, contract.WebhookAck{Status: contract.WebhookAckStatusOK})
 }
 
 // Delete removes a webhook configuration.
@@ -187,7 +170,7 @@ func (h *WebhookHandler) Delete(c *gin.Context) {
 		return
 	}
 	h.reloadNotifier(c.Request.Context())
-	c.JSON(http.StatusOK, gin.H{"status": "deleted"})
+	c.JSON(http.StatusOK, contract.WebhookAck{Status: contract.WebhookAckStatusDeleted})
 }
 
 // Test sends a test notification to the specified webhook.
@@ -233,7 +216,7 @@ func (h *WebhookHandler) Test(c *gin.Context) {
 	}
 
 	zap.L().Info("webhook test queued", zap.String("name", cfg.Name), zap.String("platform", cfg.Platform))
-	c.JSON(http.StatusAccepted, gin.H{"status": "test queued"})
+	c.JSON(http.StatusAccepted, contract.WebhookAck{Status: contract.WebhookAckStatusTestQueued})
 }
 
 func (h *WebhookHandler) reloadNotifier(ctx context.Context) {
@@ -241,5 +224,13 @@ func (h *WebhookHandler) reloadNotifier(ctx context.Context) {
 		if err := h.Notifier.LoadConfigs(ctx); err != nil {
 			zap.L().Warn("failed to reload webhook configs", zap.Error(err))
 		}
+	}
+}
+
+func webhookConfigContract(config db.WebhookConfig) contract.WebhookConfig {
+	return contract.WebhookConfig{
+		ID: config.ID, Name: config.Name, Platform: contract.WebhookPlatform(config.Platform), URL: config.URL,
+		Enabled: config.Enabled, Events: config.Events, CooldownMinutes: config.CooldownMinutes,
+		LastSentAt: config.LastSentAt, CreatedAt: config.CreatedAt, UpdatedAt: config.UpdatedAt,
 	}
 }

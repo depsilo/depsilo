@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+
+	"depsilo/internal/api/contract"
 )
 
 func TestDiscoverUsesCanonicalEcosystemRoutes(t *testing.T) {
@@ -21,14 +23,14 @@ func TestDiscoverUsesCanonicalEcosystemRoutes(t *testing.T) {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 	var response struct {
-		Ecosystems             []ecosystemInfo   `json:"ecosystems"`
-		Endpoints              map[string]string `json:"endpoints"`
-		EndpointAuthentication map[string]string `json:"endpoint_authentication"`
+		Ecosystems             []contract.DiscoverEcosystem `json:"ecosystems"`
+		Endpoints              map[string]string            `json:"endpoints"`
+		EndpointAuthentication map[string]string            `json:"endpoint_authentication"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	want := []ecosystemInfo{
+	want := []contract.DiscoverEcosystem{
 		{Name: "cargo", Path: "/crates/", Purpose: ecosystemPurposes["cargo"]},
 		{Name: "docker", Path: "/v2/", Purpose: ecosystemPurposes["docker"]},
 		{Name: "custom", Path: "/custom/", Purpose: "custom"},

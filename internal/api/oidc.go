@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
 	"depsilo/internal/identity"
@@ -35,13 +36,13 @@ func NewOIDCHandler(registry *identity.Registry, database *gorm.DB, auth config.
 
 func (h *OIDCHandler) Providers(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
-	providers := []gin.H{}
+	providers := []contract.IdentityProvider{}
 	for _, manager := range h.registry.Managers() {
 		if manager.Enabled() {
-			providers = append(providers, gin.H{"id": manager.ID(), "name": sourceName(manager), "protocol": manager.Protocol()})
+			providers = append(providers, identityProvider(manager))
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"providers": providers})
+	c.JSON(http.StatusOK, contract.IdentityProviderListResponse{Providers: providers})
 }
 
 func (h *OIDCHandler) Start(c *gin.Context) {
@@ -71,7 +72,7 @@ func (h *OIDCHandler) Start(c *gin.Context) {
 		return
 	}
 	h.cookie(c, manager, flowCookie(manager), start.BrowserToken, 300)
-	c.JSON(http.StatusOK, gin.H{"authorization_url": start.AuthorizationURL})
+	c.JSON(http.StatusOK, contract.IdentityAuthorizationStart{AuthorizationURL: start.AuthorizationURL})
 }
 
 func (h *OIDCHandler) Callback(c *gin.Context) {
@@ -136,7 +137,7 @@ func (h *OIDCHandler) respondIdentityResult(c *gin.Context, manager *identity.Ma
 		return
 	}
 	if result.Mode == "link" {
-		c.JSON(http.StatusOK, gin.H{"mode": "link", "result": "linked", "return_to": "/admin/account"})
+		c.JSON(http.StatusOK, contract.IdentityLinkResult{Mode: contract.IdentityCompletionModeLink, Result: "linked", ReturnTo: "/admin/account"})
 		return
 	}
 	token, err := middleware.GenerateIdentityJWT(h.auth.JWTSecret, result.User, result.Session, h.auth.TokenTTL)
@@ -148,7 +149,7 @@ func (h *OIDCHandler) respondIdentityResult(c *gin.Context, manager *identity.Ma
 	if result.Session.ExpiresAt.Before(expires) {
 		expires = result.Session.ExpiresAt
 	}
-	c.JSON(http.StatusOK, gin.H{"mode": "login", "token": token, "expires_at": expires.Unix(), "return_to": result.ReturnTo})
+	c.JSON(http.StatusOK, contract.IdentityLoginResult{Mode: contract.IdentityCompletionModeLogin, Token: token, ExpiresAt: expires.Unix(), ReturnTo: result.ReturnTo})
 }
 
 func (h *OIDCHandler) Identities(c *gin.Context) {
@@ -169,7 +170,7 @@ func (h *OIDCHandler) Identities(c *gin.Context) {
 		return
 	}
 	local := (user.PermissionSource == "local" || user.PermissionSource == "") && user.PasswordHash != ""
-	items := make([]gin.H, 0, len(rows))
+	items := make([]contract.LoginIdentity, 0, len(rows))
 	bound := make(map[string]bool)
 	for _, row := range rows {
 		manager := h.registry.Manager(row.Provider)
@@ -180,27 +181,32 @@ func (h *OIDCHandler) Identities(c *gin.Context) {
 			name = sourceName(manager)
 		}
 		bound[row.Provider] = true
-		items = append(items, gin.H{"id": row.ID, "provider": row.Provider, "protocol": protocol, "provider_name": name, "provider_matches": matches, "login_available": matches && manager.Enabled(), "display_name": row.DisplayName, "created_at": row.CreatedAt, "last_login_at": row.LastLoginAt, "can_unlink": local})
+		items = append(items, contract.LoginIdentity{
+			ID: row.ID, Provider: row.Provider, Protocol: contract.IdentityProtocol(protocol), ProviderName: name,
+			ProviderMatches: matches, LoginAvailable: matches && manager.Enabled(), DisplayName: row.DisplayName,
+			CreatedAt: row.CreatedAt, LastLoginAt: row.LastLoginAt, CanUnlink: local,
+		})
 	}
 	source := user.PermissionSource
 	if source == "" {
 		source = "local"
 	}
-	providers := make([]gin.H, 0)
+	providers := make([]contract.LoginIdentityProvider, 0)
 	canLink := false
 	for _, manager := range h.registry.Managers() {
 		cfg := manager.Config()
 		allowed := local && manager.Enabled() && !bound[manager.ID()]
-		provider := gin.H{"id": manager.ID(), "protocol": manager.Protocol(), "name": sourceName(manager), "enabled": manager.Enabled(), "can_link": allowed}
+		provider := contract.LoginIdentityProvider{ID: manager.ID(), Protocol: contract.IdentityProtocol(manager.Protocol()), Name: sourceName(manager), Enabled: manager.Enabled(), CanLink: allowed}
 		if cfg.SessionTTL > 0 {
-			provider["session_ttl_seconds"] = int64(cfg.SessionTTL / time.Second)
+			seconds := int64(cfg.SessionTTL / time.Second)
+			provider.SessionTTLSeconds = &seconds
 		}
 		providers = append(providers, provider)
 		canLink = canLink || allowed
 	}
-	response := gin.H{"permission_source": source, "password_enabled": local, "can_link": canLink, "identities": items, "providers": providers}
+	response := contract.LoginIdentitiesResponse{PermissionSource: contract.IdentityPermissionSource(source), PasswordEnabled: local, CanLink: canLink, Identities: items, Providers: providers}
 	if principal.CurrentIdentityID != 0 {
-		response["current_identity_id"], response["current_provider_id"] = principal.CurrentIdentityID, principal.CurrentProviderID
+		response.CurrentIdentityID, response.CurrentProviderID = principal.CurrentIdentityID, principal.CurrentProviderID
 	}
 	c.JSON(http.StatusOK, response)
 }
@@ -244,7 +250,7 @@ func (h *OIDCHandler) Link(c *gin.Context) {
 		return
 	}
 	h.cookie(c, manager, flowCookie(manager), start.BrowserToken, 300)
-	c.JSON(http.StatusOK, gin.H{"authorization_url": start.AuthorizationURL})
+	c.JSON(http.StatusOK, contract.IdentityAuthorizationStart{AuthorizationURL: start.AuthorizationURL})
 }
 
 func (h *OIDCHandler) Unlink(c *gin.Context) {
@@ -352,6 +358,10 @@ func (h *OIDCHandler) reserve(c *gin.Context, key string) bool {
 		return false
 	}
 	return true
+}
+
+func identityProvider(manager *identity.Manager) contract.IdentityProvider {
+	return contract.IdentityProvider{ID: manager.ID(), Name: sourceName(manager), Protocol: contract.IdentityProtocol(manager.Protocol())}
 }
 
 func sourceName(manager *identity.Manager) string {

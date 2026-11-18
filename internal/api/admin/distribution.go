@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/audit"
 	"depsilo/internal/db"
 	"depsilo/internal/distribution"
@@ -83,18 +84,17 @@ func (h *DistributionHandler) List(c *gin.Context) {
 		writeDistributionError(c, err)
 		return
 	}
-	// List metadata stays small even when each manifest declares thousands of
-	// objects. The full immutable declaration is available through Get.
-	summaries := make([]gin.H, 0, len(items))
+	summaries := make([]contract.DistributionSetSummary, 0, len(items))
 	for _, item := range items {
-		summaries = append(summaries, gin.H{"id": item.ID, "name": item.Name, "revision": item.Revision,
-			"created_at": item.CreatedAt, "verified_at": item.VerifiedAt, "checked_at": item.CheckedAt,
-			"content_status": item.ContentStatus, "provenance_status": item.ProvenanceStatus,
-			"install_validation": item.InstallValidation, "serving": item.Serving,
-			"target": item.Manifest.Target, "object_count": len(item.Manifest.Objects)})
+		summaries = append(summaries, toDistributionSetSummary(item))
 	}
-	c.JSON(http.StatusOK, gin.H{"items": summaries, "total": total, "page": page, "per_page": size,
-		"usage": usage, "scope": "catalog_only", "serving": false})
+	c.JSON(http.StatusOK, contract.DistributionSetListResponse{
+		Items: summaries, Total: total, Page: page, PerPage: size,
+		Usage: contract.DistributionStorageUsage{
+			Bytes: usage.Bytes, QuotaBytes: usage.QuotaBytes, Objects: usage.Objects, Sets: usage.Sets,
+		},
+		Scope: "catalog_only", Serving: false,
+	})
 }
 
 func (h *DistributionHandler) Get(c *gin.Context) {
@@ -106,7 +106,7 @@ func (h *DistributionHandler) Get(c *gin.Context) {
 		writeDistributionError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, record)
+	c.JSON(http.StatusOK, toDistributionSet(record))
 }
 
 func (h *DistributionHandler) Stage(c *gin.Context) {
@@ -125,7 +125,7 @@ func (h *DistributionHandler) Stage(c *gin.Context) {
 		return
 	}
 	h.audit(c, "dist_stage", record.ID)
-	c.JSON(http.StatusCreated, record)
+	c.JSON(http.StatusCreated, toDistributionSet(record))
 }
 
 func (h *DistributionHandler) Put(c *gin.Context) {
@@ -140,7 +140,7 @@ func (h *DistributionHandler) Put(c *gin.Context) {
 		return
 	}
 	h.audit(c, "dist_upload", c.Param("id"))
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, contract.DistributionUploadResult{SHA256: result.SHA256, Size: result.Size, Reused: result.Reused})
 }
 
 func (h *DistributionHandler) Verify(c *gin.Context) {
@@ -153,7 +153,7 @@ func (h *DistributionHandler) Verify(c *gin.Context) {
 		return
 	}
 	h.audit(c, "dist_verify", c.Param("id"))
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, toDistributionVerification(result))
 }
 
 func (h *DistributionHandler) Delete(c *gin.Context) {
@@ -178,7 +178,9 @@ func (h *DistributionHandler) Prune(c *gin.Context) {
 		return
 	}
 	h.audit(c, "dist_prune", fmt.Sprintf("removed_bytes:%d", removed))
-	c.JSON(http.StatusOK, gin.H{"removed_bytes": removed, "scope": "catalog_only", "serving": false})
+	c.JSON(http.StatusOK, contract.DistributionPruneResponse{
+		RemovedBytes: removed, Scope: "catalog_only", Serving: false,
+	})
 }
 
 // Export streams a signed full bundle with an exact Content-Length. If content
@@ -239,7 +241,7 @@ func (h *DistributionHandler) Usage(c *gin.Context) {
 		return
 	}
 	if h.quota == nil {
-		c.JSON(http.StatusOK, distribution.ExportUsage{Unlimited: true})
+		c.JSON(http.StatusOK, contract.DistributionExportUsage{Unlimited: true})
 		return
 	}
 	usage, err := h.quota.Usage(c.Request.Context())
@@ -247,7 +249,7 @@ func (h *DistributionHandler) Usage(c *gin.Context) {
 		writeDistributionError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, usage)
+	c.JSON(http.StatusOK, toDistributionExportUsage(usage))
 }
 
 func writeExportLimit(c *gin.Context, refusal *distribution.ExportLimitError) {
@@ -292,14 +294,14 @@ func (h *DistributionHandler) Import(c *gin.Context) {
 		if result != nil {
 			// The signed identity is known and Stage may already have created a
 			// catalog entry, so the attempt is audited and returned for retry.
-			body["import"] = result
+			body["import"] = toDistributionImportResult(result)
 			h.auditStatus(c, "dist_import_failed", result.SetID, status)
 		}
 		c.JSON(status, body)
 		return
 	}
 	h.audit(c, "dist_import", result.SetID)
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, toDistributionImportResult(result))
 }
 
 // Storage and archive errors can contain paths; log only the error class.

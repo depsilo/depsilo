@@ -1,7 +1,6 @@
 import { test, expect, mockAdminApi, adminApiDefaults } from './fixtures/admin-api'
 import type { Request } from '@playwright/test'
-import type { AdminSettingsResponse, UpdateAdminSettingsRequest } from '../src/lib/adminApi.types'
-import type { EntitlementStatus, WebhookConfig } from '../src/lib/api'
+import type { AdminSettingsResponse, EntitlementStatus, UpdateAdminSettingsRequest, WebhookConfig } from '../src/lib/adminApi.types'
 
 test('webhooks remain accessible when configuration cannot be read', async ({ page }) => {
   await mockAdminApi(page, { 'GET /api/v1/admin/settings': { status: 500, body: { code: 'CONFIG_READ_FAILED', message: 'config unavailable' } } })

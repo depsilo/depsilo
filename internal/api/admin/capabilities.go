@@ -40,20 +40,13 @@ func NewCapabilityHandler(database *gorm.DB, cfg *config.Config, store *config.S
 	return &CapabilityHandler{db: database, config: cfg, configStore: store, ecosystems: append([]string(nil), ecosystems...), policy: policy, blocklistStore: blocklistStore, blocklistMode: blocklistMode, quarantine: quarantinePolicy}
 }
 
-// capabilitySummary adds the settings state to the contract body. The settings
-// state is still a config type; it moves into the contract with the settings
-// endpoints.
-type capabilitySummary struct {
-	contract.CapabilitySummary
-	Settings *config.SettingsState `json:"settings,omitempty"`
-}
-
 func (h *CapabilityHandler) Summary(c *gin.Context) {
 	ctx := c.Request.Context()
-	settings := (*config.SettingsState)(nil)
+	var settings *contract.AdminSettingsResponse
 	if h.configStore != nil {
 		if state, err := h.configStore.Snapshot(ctx); err == nil {
-			settings = &state
+			response := adminSettingsResponse(state)
+			settings = &response
 		}
 	}
 
@@ -84,9 +77,9 @@ func (h *CapabilityHandler) Summary(c *gin.Context) {
 		facts = append(facts, contract.CapabilityFact{Name: "policy_snapshot", Support: contract.CapabilitySupportSupported, Mode: "block", DataStatus: policyDataStatus(status), LastSuccessAt: timePointer(status.LastSuccessfulRefresh), RecentFailure: policyFailure(status)})
 	}
 	c.Header("Cache-Control", "no-store")
-	c.JSON(http.StatusOK, capabilitySummary{
-		CapabilitySummary: contract.CapabilitySummary{Version: version.Version, Commit: version.Commit, BuildDate: version.BuildDate, Capabilities: facts},
-		Settings:          settings,
+	c.JSON(http.StatusOK, contract.CapabilitySummary{
+		Version: version.Version, Commit: version.Commit, BuildDate: version.BuildDate, Capabilities: facts,
+		Settings: settings,
 	})
 }
 

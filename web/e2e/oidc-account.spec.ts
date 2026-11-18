@@ -4,7 +4,7 @@ import type { Request } from '@playwright/test'
 import type { LoginIdentitiesResponse, OIDCCompleteResponse, Principal } from '../src/lib/adminApi.types'
 
 const localPrincipal: Principal = { id: 1, username: 'admin', enabled: true, role: 'admin', auth_method: 'jwt', token_permissions: null, can_write: true, permission_source: 'local', login_method: 'password', can_manage_credentials: true }
-const provider = { id: 'oidc', name: 'Casdoor', enabled: true, can_link: true, session_ttl_seconds: 1800 }
+const provider = { id: 'oidc', name: 'Casdoor', protocol: 'oidc' as const, enabled: true, can_link: true, session_ttl_seconds: 1800 }
 const identity = { id: 7, provider: 'oidc', provider_name: 'Casdoor', display_name: 'Test operator', created_at: '2026-10-22T08:00:00Z', last_login_at: null, can_unlink: true }
 const localIdentities: LoginIdentitiesResponse = { permission_source: 'local', password_enabled: true, can_link: true, identities: [], providers: [provider] }
 const teamSource = { id: 'team', name: 'Team login', protocol: 'oidc' as const, enabled: true, can_link: true, session_ttl_seconds: 1800 }

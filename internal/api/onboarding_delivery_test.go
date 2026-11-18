@@ -12,10 +12,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 )
 
-func onboardingDeliveryPollURL(previous onboardingStatusResponse) string {
+func onboardingDeliveryPollURL(previous contract.OnboardingStatusResponse) string {
 	return onboardingPollURL(previous.NextAfterID, previous.StartedAt) +
 		"&delivery_after_id=" + url.QueryEscape(previous.NextDeliveryAfterID)
 }
@@ -212,7 +213,7 @@ func TestOnboardingDeliveryPagesKeepLateAssociations(t *testing.T) {
 		t.Fatalf("late paired evidence disappeared: %+v", third)
 	}
 	seen := map[uint]bool{}
-	for _, page := range []onboardingStatusResponse{first, second, third} {
+	for _, page := range []contract.OnboardingStatusResponse{first, second, third} {
 		for _, event := range page.DeliveryEvents {
 			if seen[event.ID] {
 				t.Errorf("duplicate access ID %d", event.ID)

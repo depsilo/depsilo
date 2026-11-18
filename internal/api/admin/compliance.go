@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/config"
 )
 
@@ -19,10 +20,10 @@ func NewComplianceHandler(compliance config.ComplianceConfig) *ComplianceHandler
 }
 
 func (h *ComplianceHandler) Profile(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"organization":               h.config.Organization,
-		"contact":                    h.config.Contact,
-		"signing_configured":         h.config.SigningKeyFile != "",
-		"component_annotation_count": len(h.config.Components),
+	c.JSON(http.StatusOK, contract.ComplianceProfile{
+		Organization:             h.config.Organization,
+		Contact:                  h.config.Contact,
+		SigningConfigured:        h.config.SigningKeyFile != "",
+		ComponentAnnotationCount: len(h.config.Components),
 	})
 }

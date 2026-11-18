@@ -21,6 +21,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
 	"depsilo/internal/requestorigin"
@@ -126,11 +127,6 @@ func bootstrapTokenRequiredMessage(bindHost string, port int) string {
 		`run "` + SetupTokenCommand(bindHost, port, runningInContainer()) + `" on the server to print the current one.`
 }
 
-const (
-	setupRestartExec               = "exec"
-	setupRestartSupervisorRequired = "supervisor_required"
-)
-
 // setupStage identifies a durable boundary in the first-run setup protocol.
 // The hook is nil in production; tests use it to model an abrupt process stop
 // at a boundary without terminating the test process itself.
@@ -220,9 +216,9 @@ func (h *SetupHandler) Status(c *gin.Context) {
 	defer h.mu.Unlock()
 
 	c.Header("Cache-Control", "no-store")
-	status := gin.H{
-		"needs_setup":    h.cfg.IsDefault,
-		"token_required": h.cfg.IsDefault,
+	status := contract.SetupStatusResponse{
+		NeedsSetup:    h.cfg.IsDefault,
+		TokenRequired: h.cfg.IsDefault,
 	}
 	if h.cfg.IsDefault {
 		// The wizard writes a port into config.toml, shows the command that
@@ -231,19 +227,19 @@ func (h *SetupHandler) Status(c *gin.Context) {
 		// this unauthenticated route discloses nothing else. The command names
 		// the listen host only when 127.0.0.1 does not reach it, so a wildcard
 		// or loopback bind sends no address.
-		status["listen_port"] = h.cfg.Server.Port
-		status["token_command"] = SetupTokenCommand(h.cfg.Server.Host, h.cfg.Server.Port, false)
+		listenPort := h.cfg.Server.Port
+		tokenCommand := SetupTokenCommand(h.cfg.Server.Host, h.cfg.Server.Port, false)
 		configExists := config.SetupReplacesConfig(h.cfg)
 		if h.configBackedUp {
 			configExists = h.previousConfigKept
 		}
-		status["config_exists"] = configExists
+		status.ListenPort, status.TokenCommand, status.ConfigExists = &listenPort, &tokenCommand, &configExists
 	}
 	if h.restartPending {
 		// needs_setup is already false, but this process serves no package
 		// route and is about to be replaced. A script that waits for setup
 		// must wait for this field to go away as well.
-		status["restart_pending"] = true
+		status.RestartPending = true
 	}
 	c.JSON(http.StatusOK, status)
 }
@@ -405,17 +401,17 @@ func (h *SetupHandler) Complete(c *gin.Context) {
 
 	restartStrategy := setupRestartStrategy(runtime.GOOS)
 	message := "Configuration saved. Server restarting..."
-	if restartStrategy == setupRestartSupervisorRequired {
+	if restartStrategy == contract.SetupRestartStrategySupervisorRequired {
 		message = "Configuration saved. Restart the server process to apply it."
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"status":           "ok",
-		"message":          message,
-		"reconnect_url":    setupReconnectURL(c.Request, h.cfg.Server.Port, req.Server.Port),
-		"restart_strategy": restartStrategy,
+	c.JSON(http.StatusOK, contract.SetupCompleteResponse{
+		Status:          "ok",
+		Message:         message,
+		ReconnectURL:    setupReconnectURL(c.Request, h.cfg.Server.Port, req.Server.Port),
+		RestartStrategy: restartStrategy,
 	})
 
-	if restartStrategy == setupRestartExec {
+	if restartStrategy == contract.SetupRestartStrategyExec {
 		h.scheduleRestart()
 	}
 }
@@ -588,11 +584,11 @@ func (h *SetupHandler) validBootstrapToken(candidate string) bool {
 	return subtle.ConstantTimeCompare(expectedDigest[:], candidateDigest[:]) == 1
 }
 
-func setupRestartStrategy(goos string) string {
+func setupRestartStrategy(goos string) contract.SetupRestartStrategy {
 	if goos == "windows" {
-		return setupRestartSupervisorRequired
+		return contract.SetupRestartStrategySupervisorRequired
 	}
-	return setupRestartExec
+	return contract.SetupRestartStrategyExec
 }
 
 // setupReconnectURL returns where the client finds this service after the

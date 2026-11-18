@@ -511,6 +511,534 @@ export interface CompileCacheCleanup {
 }
 
 //////////
+// source: distribution.go
+
+/**
+ * DistributionContentStatus is what the last integrity check found for a
+ * dependency set's declared objects. It is not a provenance or install claim.
+ */
+export const DistributionContentStatusStaged = "staged";
+export const DistributionContentStatusContentVerified = "content_verified";
+export const DistributionContentStatusIncomplete = "incomplete";
+export type DistributionContentStatus = typeof DistributionContentStatusStaged | typeof DistributionContentStatusContentVerified | typeof DistributionContentStatusIncomplete;
+/**
+ * DistributionProvenanceStatus says who vouches for a dependency set: the
+ * local operator, or a trusted preparer whose signed bundle delivered it.
+ */
+export const DistributionProvenanceStatusOperatorDeclared = "operator_declared";
+export const DistributionProvenanceStatusPreparerAttested = "preparer_attested";
+export type DistributionProvenanceStatus = typeof DistributionProvenanceStatusOperatorDeclared | typeof DistributionProvenanceStatusPreparerAttested;
+/**
+ * DistributionObjectKind is the kind of a declared dependency-set object.
+ */
+export const DistributionObjectKindWheel = "wheel";
+export const DistributionObjectKindMetadata = "metadata";
+export type DistributionObjectKind = typeof DistributionObjectKindWheel | typeof DistributionObjectKindMetadata;
+/**
+ * DistributionIssueCode is why a declared object failed verification.
+ */
+export const DistributionIssueCodeMissing = "missing";
+export const DistributionIssueCodeSizeMismatch = "size_mismatch";
+export const DistributionIssueCodeHashMismatch = "hash_mismatch";
+export type DistributionIssueCode = typeof DistributionIssueCodeMissing | typeof DistributionIssueCodeSizeMismatch | typeof DistributionIssueCodeHashMismatch;
+/**
+ * DistributionTarget is a declared preparation environment, not a
+ * qualification result.
+ */
+export interface DistributionTarget {
+  os: string;
+  architecture: string;
+  python_version: string;
+  python_abi: string;
+  pip_version: string;
+  client_image: string;
+}
+/**
+ * DistributionObject is one content-addressed object a set declares.
+ */
+export interface DistributionObject {
+  sha256: string;
+  size: number /* int64 */;
+  kind: DistributionObjectKind;
+  filename: string;
+  package: string;
+  version: string;
+  source_url?: string;
+}
+/**
+ * DistributionManifest is a set's immutable declaration; the set ID is the
+ * SHA-256 of its exact bytes.
+ */
+export interface DistributionManifest {
+  format: string;
+  name: string;
+  revision: string;
+  ecosystem: string;
+  target: DistributionTarget;
+  objects: DistributionObject[];
+}
+/**
+ * DistributionProvenance identifies the trusted preparer whose signed
+ * transfer bundle delivered a set, as decided at import time.
+ */
+export interface DistributionProvenance {
+  origin: string;
+  signer_key_id: string;
+  imported_by: string;
+  imported_at: string;
+}
+/**
+ * DistributionSet answers GET /admin/distribution/sets/:id and set staging.
+ * Provenance is present only for an imported set. No install qualification
+ * runs yet, so InstallValidation is always "not_run" and Serving is false.
+ */
+export interface DistributionSet {
+  id: string;
+  name: string;
+  revision: string;
+  created_at: string;
+  verified_at: string | null;
+  checked_at: string | null;
+  manifest: DistributionManifest;
+  content_status: DistributionContentStatus;
+  provenance_status: DistributionProvenanceStatus;
+  install_validation: 'not_run';
+  serving: boolean;
+  provenance?: DistributionProvenance;
+}
+/**
+ * DistributionSetSummary is one set in the catalog list, without its object
+ * declarations.
+ */
+export interface DistributionSetSummary {
+  id: string;
+  name: string;
+  revision: string;
+  created_at: string;
+  verified_at: string | null;
+  checked_at: string | null;
+  content_status: DistributionContentStatus;
+  provenance_status: DistributionProvenanceStatus;
+  install_validation: 'not_run';
+  serving: boolean;
+  target: DistributionTarget;
+  object_count: number /* int */;
+}
+/**
+ * DistributionStorageUsage is the catalog's retained content against its
+ * storage quota.
+ */
+export interface DistributionStorageUsage {
+  bytes: number /* int64 */;
+  quota_bytes: number /* int64 */;
+  objects: number /* int64 */;
+  sets: number /* int64 */;
+}
+/**
+ * DistributionSetListResponse answers GET /admin/distribution/sets. The
+ * catalog prepares sets but serves no package routes: Scope is always
+ * "catalog_only" and Serving is false.
+ */
+export interface DistributionSetListResponse {
+  items: DistributionSetSummary[];
+  total: number /* int64 */;
+  page: number /* int */;
+  per_page: number /* int */;
+  usage: DistributionStorageUsage;
+  scope: 'catalog_only';
+  serving: boolean;
+}
+/**
+ * DistributionUploadResult answers PUT
+ * /admin/distribution/sets/:id/objects/:digest. Reused means the verified
+ * object was already stored.
+ */
+export interface DistributionUploadResult {
+  sha256: string;
+  size: number /* int64 */;
+  reused: boolean;
+}
+/**
+ * DistributionIssue is one declared object that failed verification.
+ */
+export interface DistributionIssue {
+  sha256: string;
+  code: DistributionIssueCode;
+}
+/**
+ * DistributionVerification answers POST /admin/distribution/sets/:id/verify.
+ */
+export interface DistributionVerification {
+  set_id: string;
+  content_status: DistributionContentStatus;
+  verified_objects: number /* int */;
+  issues: DistributionIssue[];
+  checked_at: string;
+  provenance_status: DistributionProvenanceStatus;
+  install_validation: 'not_run';
+  serving: boolean;
+}
+/**
+ * DistributionPruneResponse answers POST /admin/distribution/prune.
+ */
+export interface DistributionPruneResponse {
+  removed_bytes: number /* int64 */;
+  scope: 'catalog_only';
+  serving: boolean;
+}
+/**
+ * DistributionExportUsage answers GET /admin/distribution/usage: the current
+ * UTC month's transfer-bundle export allowance. The limits are absent when
+ * exports are unlimited; ResetsAt is the zero time when exports are not
+ * metered at all.
+ */
+export interface DistributionExportUsage {
+  unlimited: boolean;
+  bundle_limit_bytes?: number /* int64 */;
+  monthly_limit_bytes?: number /* int64 */;
+  used_bytes: number /* int64 */;
+  resets_at: string;
+}
+/**
+ * DistributionImportResult answers POST /admin/distribution/import. A failed
+ * import whose signed identity is known carries it under the error body's
+ * "import" key, so the attempt can be inspected and retried.
+ */
+export interface DistributionImportResult {
+  set_id: string;
+  name: string;
+  revision: string;
+  signer_key_id: string;
+  object_count: number /* int */;
+  written_objects: number /* int */;
+  reused_objects: number /* int */;
+  verification?: DistributionVerification;
+  set?: DistributionSet;
+}
+
+//////////
+// source: identity.go
+
+/**
+ * IdentityRole is the role a Depsilo account, session, or mapped identity
+ * carries.
+ */
+export const IdentityRoleAdmin = "admin";
+export const IdentityRoleReadonly = "readonly";
+export type IdentityRole = typeof IdentityRoleAdmin | typeof IdentityRoleReadonly;
+/**
+ * IdentityPermissionSource is the authority that owns an account's role.
+ */
+export const IdentityPermissionSourceLocal = "local";
+export const IdentityPermissionSourceOIDC = "oidc";
+export const IdentityPermissionSourceLDAP = "ldap";
+export type IdentityPermissionSource = typeof IdentityPermissionSourceLocal | typeof IdentityPermissionSourceOIDC | typeof IdentityPermissionSourceLDAP;
+/**
+ * IdentityProtocol is the login protocol of an external authentication
+ * source.
+ */
+export const IdentityProtocolOIDC = "oidc";
+export const IdentityProtocolLDAP = "ldap";
+export type IdentityProtocol = typeof IdentityProtocolOIDC | typeof IdentityProtocolLDAP;
+/**
+ * PrincipalAuthMethod is how the current request authenticated.
+ */
+export const PrincipalAuthMethodJWT = "jwt";
+export const PrincipalAuthMethodAPIToken = "api_token";
+export type PrincipalAuthMethod = typeof PrincipalAuthMethodJWT | typeof PrincipalAuthMethodAPIToken;
+/**
+ * PrincipalLoginMethod is how the session behind the current request began.
+ */
+export const PrincipalLoginMethodPassword = "password";
+export const PrincipalLoginMethodOIDC = "oidc";
+export const PrincipalLoginMethodLDAP = "ldap";
+export const PrincipalLoginMethodAPIToken = "api_token";
+export type PrincipalLoginMethod = typeof PrincipalLoginMethodPassword | typeof PrincipalLoginMethodOIDC | typeof PrincipalLoginMethodLDAP | typeof PrincipalLoginMethodAPIToken;
+/**
+ * PrincipalTokenPermissions is what an API token permits.
+ */
+export const PrincipalTokenPermissionsReadOnly = "readonly";
+export const PrincipalTokenPermissionsReadWrite = "readwrite";
+export type PrincipalTokenPermissions = typeof PrincipalTokenPermissionsReadOnly | typeof PrincipalTokenPermissionsReadWrite;
+/**
+ * Principal answers GET /auth/me: the authenticated caller and what it may do.
+ * TokenPermissions is null for a JWT session. The current identity fields are
+ * present only for a session that began with an external identity.
+ */
+export interface Principal {
+  id: number /* uint */;
+  username: string;
+  role: IdentityRole;
+  enabled: boolean;
+  auth_method: PrincipalAuthMethod;
+  token_permissions: PrincipalTokenPermissions | null;
+  can_write: boolean;
+  permission_source: IdentityPermissionSource;
+  login_method: PrincipalLoginMethod;
+  can_manage_credentials: boolean;
+  current_identity_id?: number /* uint */;
+  current_provider_id?: string;
+}
+/**
+ * LoginUser is the account a password login signed in.
+ */
+export interface LoginUser {
+  id: number /* uint */;
+  username: string;
+  role: IdentityRole;
+}
+/**
+ * LoginResponse answers POST /auth/login. ExpiresAt is Unix seconds.
+ */
+export interface LoginResponse {
+  token: string;
+  expires_at: number /* int64 */;
+  user: LoginUser;
+}
+/**
+ * RefreshResponse answers POST /auth/refresh. ExpiresAt is Unix seconds.
+ */
+export interface RefreshResponse {
+  token: string;
+  expires_at: number /* int64 */;
+}
+/**
+ * LogoutResponse answers POST /auth/logout.
+ */
+export interface LogoutResponse {
+  message: string;
+}
+/**
+ * IdentityProvider names one external authentication source.
+ */
+export interface IdentityProvider {
+  id: string;
+  name: string;
+  protocol: IdentityProtocol;
+}
+/**
+ * IdentityProviderListResponse answers GET /auth/providers with the enabled
+ * sources a browser may sign in with.
+ */
+export interface IdentityProviderListResponse {
+  providers: IdentityProvider[];
+}
+/**
+ * IdentityAuthorizationStart answers a request that begins an OIDC browser
+ * flow: OIDC start, identity link, and an administrator's source trial.
+ */
+export interface IdentityAuthorizationStart {
+  authorization_url: string;
+}
+/**
+ * IdentityCompletionMode tells which identity flow a completion finished.
+ */
+export const IdentityCompletionModeLogin = "login";
+export const IdentityCompletionModeLink = "link";
+export const IdentityCompletionModeChoice = "choice";
+export const IdentityCompletionModeTest = "test";
+export type IdentityCompletionMode = typeof IdentityCompletionModeLogin | typeof IdentityCompletionModeLink | typeof IdentityCompletionModeChoice | typeof IdentityCompletionModeTest;
+/**
+ * IdentityLoginResult is a completed external login. ExpiresAt is Unix
+ * seconds.
+ */
+export interface IdentityLoginResult {
+  mode: IdentityCompletionMode;
+  token: string;
+  expires_at: number /* int64 */;
+  return_to: string;
+}
+/**
+ * IdentityLinkResult is an external identity linked to the signed-in account.
+ */
+export interface IdentityLinkResult {
+  mode: IdentityCompletionMode;
+  result: 'linked';
+  return_to: string;
+}
+/**
+ * IdentityChoiceResult asks the browser whether a new external identity
+ * creates an account or links to an existing one. ExpiresAt is Unix seconds.
+ */
+export interface IdentityChoiceResult {
+  mode: IdentityCompletionMode;
+  provider: IdentityProvider;
+  display_name: string;
+  role: IdentityRole;
+  return_to: string;
+  expires_at: number /* int64 */;
+}
+/**
+ * IdentityTrialOutcome is the verdict of an administrator's source trial.
+ */
+export const IdentityTrialOutcomeSuccess = "success";
+export const IdentityTrialOutcomeDenied = "denied";
+export const IdentityTrialOutcomeFailed = "failed";
+export type IdentityTrialOutcome = typeof IdentityTrialOutcomeSuccess | typeof IdentityTrialOutcomeDenied | typeof IdentityTrialOutcomeFailed;
+/**
+ * IdentityTrialResult reports an administrator's trial sign-in against a draft
+ * source. It never creates an account or session. MappedRole is null when the
+ * identity maps to no role; DisplayName and Code are empty when unknown.
+ */
+export interface IdentityTrialResult {
+  mode: IdentityCompletionMode;
+  provider: IdentityProvider;
+  outcome: IdentityTrialOutcome;
+  authenticated: boolean;
+  mapped_role: IdentityRole | null;
+  display_name: string;
+  code: string;
+  checked_at: string;
+  return_to: string;
+}
+/**
+ * LoginIdentity is one external identity linked to the signed-in account.
+ */
+export interface LoginIdentity {
+  id: number /* uint */;
+  provider: string;
+  protocol: IdentityProtocol;
+  provider_name: string;
+  provider_matches: boolean;
+  login_available: boolean;
+  display_name: string;
+  created_at: string;
+  last_login_at: string;
+  can_unlink: boolean;
+}
+/**
+ * LoginIdentityProvider is a configured source as the account page sees it.
+ * SessionTTLSeconds is present only when the source limits its sessions.
+ */
+export interface LoginIdentityProvider {
+  id: string;
+  protocol: IdentityProtocol;
+  name: string;
+  enabled: boolean;
+  can_link: boolean;
+  session_ttl_seconds?: number /* int64 */;
+}
+/**
+ * LoginIdentitiesResponse answers GET /auth/identities. The current identity
+ * fields are present only when the session began with an external identity.
+ */
+export interface LoginIdentitiesResponse {
+  permission_source: IdentityPermissionSource;
+  password_enabled: boolean;
+  can_link: boolean;
+  identities: LoginIdentity[];
+  providers: LoginIdentityProvider[];
+  current_identity_id?: number /* uint */;
+  current_provider_id?: string;
+}
+/**
+ * AuthenticationCheck answers POST /admin/authentication/check for an OIDC
+ * draft that passed every check.
+ */
+export interface AuthenticationCheck {
+  checked_at: string;
+  configuration_valid: boolean;
+  discovery_valid: boolean;
+  jwks_readable: boolean;
+}
+/**
+ * LDAPConfigurationCheck answers POST /admin/authentication/ldap/check for an
+ * LDAP draft that passed every check.
+ */
+export interface LDAPConfigurationCheck {
+  checked_at: string;
+  configuration_valid: boolean;
+  tls_valid: boolean;
+  bind_valid: boolean;
+  directory_readable: boolean;
+}
+
+//////////
+// source: identity_authentication.go
+
+/**
+ * LDAPDirectorySettings is the directory half of an LDAP source. The bind
+ * password is never returned; BindPasswordSet says whether one is stored.
+ */
+export interface LDAPDirectorySettings {
+  url: string;
+  bind_dn: string;
+  bind_password_set: boolean;
+  user_base_dn: string;
+  user_filter: string;
+  subject_attribute: string;
+  display_name_attribute: string;
+  groups_attribute: string;
+  ca_cert_pem: string;
+}
+/**
+ * AuthenticationSourceSettings is one authentication source's settings. Every
+ * source carries the OIDC fields (empty for LDAP); LDAP is present exactly for
+ * an LDAP source. The client secret is never returned.
+ */
+export interface AuthenticationSourceSettings {
+  ldap?: LDAPDirectorySettings;
+  enabled: boolean;
+  display_name: string;
+  issuer: string;
+  client_id: string;
+  client_secret_set: boolean;
+  redirect_url: string;
+  admin_groups: string[];
+  readonly_groups: string[];
+  groups_claim: string;
+  session_ttl: string;
+  allow_insecure_loopback: boolean;
+}
+/**
+ * AuthenticationSource is one source's configured and running state, answered
+ * by source create, update, and restore. Configured is null when the source is
+ * not in the configuration file; Effective is null when it is not running.
+ * Overrides maps an environment-owned field to its variable name.
+ */
+export interface AuthenticationSource {
+  id: string;
+  protocol: IdentityProtocol;
+  configured: AuthenticationSourceSettings | null;
+  effective: AuthenticationSourceSettings | null;
+  overrides: { [key: string]: string};
+  pending_restart: boolean;
+  sessions_will_reset: boolean;
+  config_writable: boolean;
+  can_restore: boolean;
+}
+/**
+ * AuthenticationSourceList answers GET /admin/authentication/sources.
+ */
+export interface AuthenticationSourceList {
+  sources: AuthenticationSource[];
+  config_writable: boolean;
+}
+/**
+ * AuthenticationImpactUser is an account bound to a source under review.
+ */
+export interface AuthenticationImpactUser {
+  id: number /* uint */;
+  username: string;
+  permission_source: IdentityPermissionSource;
+  enabled: boolean;
+}
+/**
+ * AuthenticationImpact answers GET /admin/authentication/sources/:id/impact:
+ * what removing or changing a source would affect. Users lists at most the
+ * first accounts; UsersTruncated says whether more are bound.
+ */
+export interface AuthenticationImpact {
+  source_id: string;
+  bound_user_count: number /* int64 */;
+  dependent_managed_user_count: number /* int64 */;
+  active_session_count: number /* int64 */;
+  observed_at: string;
+  users: AuthenticationImpactUser[];
+  users_truncated: boolean;
+}
+
+//////////
 // source: logs.go
 
 /**
@@ -1132,15 +1660,15 @@ export interface CapabilityFact {
 /**
  * CapabilitySummary answers GET /admin/capabilities/summary: the build
  * identity and every capability fact, with support, mode, and data freshness
- * kept independent. The handler also attaches the settings state under
- * "settings" when the config store can provide it; that field is not modelled
- * here until the settings bodies are contract types.
+ * kept independent. Settings is the GET /admin/settings body, absent when the
+ * config store cannot provide it.
  */
 export interface CapabilitySummary {
   version: string;
   commit: string;
   build_date: string;
   capabilities: CapabilityFact[];
+  settings?: AdminSettingsResponse;
 }
 /**
  * BandwidthRange is the report's inclusive UTC date range (YYYY-MM-DD).
@@ -1475,6 +2003,1018 @@ export interface ReadinessResponse {
   version: string;
   checks: ReadinessChecks;
   policy?: ReadinessPolicy;
+}
+
+//////////
+// source: projects.go
+
+/**
+ * Project is a project's identity, as PUT /admin/projects/:id answers it.
+ */
+export interface Project {
+  id: number /* uint */;
+  name: string;
+  slug: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
+/**
+ * ProjectSummary is one project in the project list. LastActivityAt is null
+ * until the project's token has fetched a package.
+ */
+export interface ProjectSummary {
+  id: number /* uint */;
+  name: string;
+  slug: string;
+  description: string;
+  package_count: number /* int64 */;
+  last_activity_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+/**
+ * ProjectCapabilities is what the active entitlement allows. ProjectLimit is
+ * null when the entitlement does not limit the project count.
+ */
+export interface ProjectCapabilities {
+  project_limit: number | null;
+  can_create: boolean;
+  can_export_sbom: boolean;
+}
+/**
+ * ProjectListResponse answers GET /admin/projects.
+ */
+export interface ProjectListResponse {
+  items: ProjectSummary[];
+  total: number /* int */;
+  capabilities: ProjectCapabilities;
+}
+/**
+ * CreateProjectResponse answers POST /admin/projects. It is the only
+ * response besides a token regeneration that carries the project token.
+ */
+export interface CreateProjectResponse {
+  id: number /* uint */;
+  name: string;
+  slug: string;
+  description: string;
+  token: string;
+  proxy_url: string;
+  created_at: string;
+}
+/**
+ * ProjectDetail answers GET /admin/projects/:id. EcosystemBreakdown counts
+ * recorded packages per ecosystem and is an empty object for a new project.
+ */
+export interface ProjectDetail {
+  id: number /* uint */;
+  name: string;
+  slug: string;
+  description: string;
+  proxy_url: string;
+  package_count: number /* int64 */;
+  ecosystem_breakdown: { [key: string]: number /* int64 */};
+  last_activity_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+/**
+ * ProjectPackage is one package version a project's token has fetched.
+ */
+export interface ProjectPackage {
+  ecosystem: string;
+  package_name: string;
+  version: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  download_count: number /* int */;
+}
+/**
+ * ProjectPackagesResponse answers GET /admin/projects/:id/packages with one
+ * page of packages.
+ */
+export interface ProjectPackagesResponse {
+  items: ProjectPackage[];
+  total: number /* int64 */;
+  page: number /* int */;
+}
+/**
+ * RegenerateProjectTokenResponse answers POST /admin/projects/:id/token.
+ */
+export interface RegenerateProjectTokenResponse {
+  token: string;
+  proxy_url: string;
+}
+/**
+ * DeleteProjectResponse answers DELETE /admin/projects/:id. Status is always
+ * "deleted"; a one-value enumeration is a literal tstype because tygo emits
+ * unions only for two or more constants.
+ */
+export interface DeleteProjectResponse {
+  status: 'deleted';
+}
+/**
+ * ComplianceProfile answers GET /admin/compliance/profile: the non-secret
+ * state of the CRA facts that project SBOM exports carry.
+ */
+export interface ComplianceProfile {
+  organization: string;
+  contact: string;
+  signing_configured: boolean;
+  component_annotation_count: number /* int */;
+}
+
+//////////
+// source: public.go
+
+/**
+ * HealthResponse answers GET /health and GET /live; a live process is always
+ * healthy. Uptime is a Go duration string such as "1h2m3.5s".
+ */
+export interface HealthResponse {
+  status: 'healthy';
+  version: string;
+  uptime: string;
+}
+/**
+ * PublicPackageSummary is one cached package aggregated over its files.
+ * LastAccessed is the database's timestamp text for the newest access.
+ */
+export interface PublicPackageSummary {
+  package_name: string;
+  adapter_type: string;
+  version_count: number /* int64 */;
+  total_size: number /* int64 */;
+  total_hits: number /* int64 */;
+  last_accessed: string;
+}
+/**
+ * PublicPackageListResponse answers GET /api/v1/packages.
+ */
+export interface PublicPackageListResponse {
+  total: number /* int64 */;
+  page: number /* int */;
+  per_page: number /* int */;
+  total_pages: number /* int64 */;
+  items: PublicPackageSummary[];
+}
+/**
+ * PublicPackageFile is one cached file of a package. Times are RFC 3339.
+ */
+export interface PublicPackageFile {
+  file_name: string;
+  size: number /* int64 */;
+  hit_count: number /* int64 */;
+  cached_at: string;
+  last_accessed: string;
+  content_type: string;
+}
+/**
+ * PublicPackageDetail answers GET /api/v1/packages/:type/:name.
+ */
+export interface PublicPackageDetail {
+  name: string;
+  adapter_type: string;
+  versions: PublicPackageFile[];
+  total_hits: number /* int64 */;
+  total_size: number /* int64 */;
+}
+/**
+ * DiscoverEcosystem is one ecosystem this instance serves, with its route.
+ */
+export interface DiscoverEcosystem {
+  name: string;
+  path: string;
+  purpose: string;
+}
+/**
+ * DiscoverEndpoints lists service paths by stable key. PublicPackages keeps
+ * its legacy key although the route now requires read authentication.
+ */
+export interface DiscoverEndpoints {
+  admin_dashboard: string;
+  admin_license: string;
+  admin_login: string;
+  admin_trial: string;
+  agent_prompt: string;
+  discover: string;
+  events_stream: string;
+  health: string;
+  integration_prompt: string;
+  mcp: string;
+  metrics: string;
+  public_packages: string;
+  public_stats: string;
+  setup_status: string;
+}
+/**
+ * DiscoverEndpointAuthentication describes the credentials an authenticated
+ * endpoint in DiscoverEndpoints expects.
+ */
+export interface DiscoverEndpointAuthentication {
+  events_stream: string;
+  mcp: string;
+  public_packages: string;
+}
+/**
+ * DiscoverMCP describes the Model Context Protocol endpoint.
+ */
+export interface DiscoverMCP {
+  authentication: string;
+  protocol: string;
+  summary: string;
+  transport: string;
+  url: string;
+}
+/**
+ * DiscoverAgentSetup points coding agents at their setup prompts.
+ * ReadmeAnchor keeps its historical key; it links the deployment guide.
+ */
+export interface DiscoverAgentSetup {
+  local_bootstrap_prompt_url: string;
+  portal_url: string;
+  project_integration_prompt_url: string;
+  prompt_url: string;
+  readme_anchor: string;
+  summary: string;
+}
+/**
+ * DiscoverResponse answers GET /api/v1/discover and the MCP discover
+ * resource: a self-description for agents and automation. Keys are in
+ * alphabetical order, as they were when this body was a map.
+ */
+export interface DiscoverResponse {
+  agent_setup: DiscoverAgentSetup;
+  commit: string;
+  description: string;
+  ecosystems: DiscoverEcosystem[];
+  endpoint_authentication: DiscoverEndpointAuthentication;
+  endpoints: DiscoverEndpoints;
+  homepage: string;
+  mcp: DiscoverMCP;
+  repository: string;
+  service: string;
+  setup_required: boolean;
+  version: string;
+}
+
+//////////
+// source: public_setup.go
+
+/**
+ * SetupStatusResponse answers GET /setup/status. ListenPort, TokenCommand, and
+ * ConfigExists are present exactly while setup is pending. RestartPending is
+ * present, and true, only between setup completion and the restart that
+ * applies it.
+ */
+export interface SetupStatusResponse {
+  needs_setup: boolean;
+  token_required: boolean;
+  listen_port?: number /* int */;
+  token_command?: string;
+  config_exists?: boolean;
+  restart_pending?: boolean;
+}
+/**
+ * SetupRestartStrategy is how the new configuration takes effect: the process
+ * replaces itself, or an external supervisor must restart it.
+ */
+export const SetupRestartStrategyExec = "exec";
+export const SetupRestartStrategySupervisorRequired = "supervisor_required";
+export type SetupRestartStrategy = typeof SetupRestartStrategyExec | typeof SetupRestartStrategySupervisorRequired;
+/**
+ * SetupCompleteResponse answers POST /setup/complete. ReconnectURL is where
+ * the browser finds the service once it listens on the configured port.
+ */
+export interface SetupCompleteResponse {
+  status: 'ok';
+  message: string;
+  reconnect_url: string;
+  restart_strategy: SetupRestartStrategy;
+}
+/**
+ * OnboardingStatus is where the first-project onboarding flow stands.
+ */
+export const OnboardingStatusNotStarted = "not_started";
+export const OnboardingStatusCompleted = "completed";
+export const OnboardingStatusSkipped = "skipped";
+export type OnboardingStatus = typeof OnboardingStatusNotStarted | typeof OnboardingStatusCompleted | typeof OnboardingStatusSkipped;
+/**
+ * OnboardingEvent is one package request observed since onboarding began.
+ * Outcome is the audit cache result.
+ */
+export interface OnboardingEvent {
+  id: number /* uint */;
+  request_id: string;
+  ecosystem: string;
+  package_name: string;
+  version: string;
+  action: string;
+  outcome: string;
+  status_code: number /* int */;
+  created_at: string;
+}
+/**
+ * OnboardingDeliveryEvent is one delivered response joined to its package
+ * request, with whether it counts as a successful artifact download.
+ */
+export interface OnboardingDeliveryEvent {
+  id: number /* uint */;
+  request_id: string;
+  ecosystem: string;
+  package_name: string;
+  version: string;
+  cache_key: string;
+  method: string;
+  dependency_kind: string;
+  delivery_result: string;
+  bytes_sent: number /* int64 */;
+  status_code: number /* int */;
+  outcome: string;
+  created_at: string;
+  successful_artifact_download: boolean;
+}
+/**
+ * OnboardingStatusResponse answers GET /admin/onboarding/status. The first
+ * request returns no events, only the cursors later polls continue from.
+ * NextDeliveryAfterID is empty when a poll sent no delivery cursor.
+ */
+export interface OnboardingStatusResponse {
+  status: OnboardingStatus;
+  started_at: string;
+  events: OnboardingEvent[];
+  next_after_id: number /* uint */;
+  has_more: boolean;
+  delivery_events: OnboardingDeliveryEvent[];
+  next_delivery_after_id: string;
+  deliveries_has_more: boolean;
+}
+/**
+ * OnboardingUpdateResponse answers PUT /admin/onboarding with the stored
+ * status, which stays completed once completed.
+ */
+export interface OnboardingUpdateResponse {
+  status: OnboardingStatus;
+}
+
+//////////
+// source: quarantine.go
+
+/**
+ * QuarantineEvent is one auditable supply-chain decision: a minimum release
+ * age block, serve, or bypass; a blocklist or tamper outcome; or an approval
+ * or override change. ActorID is 0 for system events.
+ */
+export interface QuarantineEvent {
+  id: number /* uint */;
+  ecosystem: string;
+  package: string;
+  version: string;
+  action: string;
+  reason: string;
+  /**
+   * ThresholdSeconds is the minimum release age in effect at the time.
+   */
+  threshold_seconds: number /* int64 */;
+  /**
+   * AgeAtCallSeconds is the observed release age when the call was made.
+   */
+  age_at_call_seconds: number /* int64 */;
+  actor_id: number /* uint */;
+  client_ip: string;
+  created_at: string;
+}
+/**
+ * QuarantineEventListResponse answers GET /admin/quarantine/events.
+ */
+export interface QuarantineEventListResponse {
+  items: QuarantineEvent[];
+  total: number /* int64 */;
+  /**
+   * Ecosystems counts the events every other filter matches, per ecosystem.
+   */
+  ecosystems: EcosystemCount[];
+}
+/**
+ * QuarantineApproval is an operator approval that lets one version through
+ * the minimum release age. ApprovedBy is the approving user's id.
+ */
+export interface QuarantineApproval {
+  id: number /* uint */;
+  ecosystem: string;
+  package: string;
+  version: string;
+  reason: string;
+  approved_by: number /* uint */;
+  created_at: string;
+}
+/**
+ * QuarantineApprovalListResponse answers GET /admin/quarantine/approvals.
+ */
+export interface QuarantineApprovalListResponse {
+  items: QuarantineApproval[];
+  total: number /* int64 */;
+}
+/**
+ * QuarantineApproveResponse answers POST /admin/quarantine/approve with the
+ * normalized coordinate that was approved. It carries no row id.
+ */
+export interface QuarantineApproveResponse {
+  ecosystem: string;
+  package: string;
+  version: string;
+  reason: string;
+  approved_by: number /* uint */;
+  created_at: string;
+}
+/**
+ * QuarantineRevokeResponse answers DELETE /admin/quarantine/approvals/:id
+ * with the coordinate whose approval was removed.
+ */
+export interface QuarantineRevokeResponse {
+  ecosystem: string;
+  package: string;
+  version: string;
+  revoked_by: number /* uint */;
+  reason: string;
+}
+
+//////////
+// source: quarantine_blocklist.go
+
+/**
+ * BlocklistStatus answers GET /admin/blocklist/status while the malicious
+ * blocklist is enabled. A disabled blocklist answers BlocklistDisabled
+ * instead. Running and SyncIntervalSeconds are present when a syncer runs;
+ * NextSyncAt also needs a previous sync.
+ */
+export interface BlocklistStatus {
+  enabled: boolean;
+  mode: string;
+  last_sync_at: string | null;
+  last_success_at: string | null;
+  last_error: string;
+  duration_ms: number /* int64 */;
+  entry_count: number /* int64 */;
+  per_ecosystem: { [key: string]: number /* int64 */};
+  ecosystems: string[];
+  running?: boolean;
+  sync_interval_seconds?: number /* int64 */;
+  next_sync_at?: string;
+}
+/**
+ * BlocklistDisabled answers the blocklist read endpoints when
+ * [supply_chain.blocklist] is disabled; Enabled is always false.
+ */
+export interface BlocklistDisabled {
+  enabled: boolean;
+}
+/**
+ * BlocklistSyncResponse answers POST /admin/blocklist/sync (202); the sync
+ * runs in the background and the status endpoint reports its outcome.
+ */
+export interface BlocklistSyncResponse {
+  status: 'sync started';
+}
+/**
+ * MalwareOverride is a time-limited exemption from the malicious blocklist.
+ * An empty Version covers every version of the package.
+ */
+export interface MalwareOverride {
+  id: number /* uint */;
+  ecosystem: string;
+  package: string;
+  version: string;
+  reason: string;
+  actor_id: number /* uint */;
+  created_at: string;
+  expires_at: string;
+}
+/**
+ * BlocklistOverrideListResponse answers GET /admin/blocklist/overrides with
+ * active and recently expired overrides and the server's clock, so the
+ * browser can count down expiry without trusting its own.
+ */
+export interface BlocklistOverrideListResponse {
+  items: MalwareOverride[];
+  now: string;
+}
+/**
+ * CreatedMalwareOverride answers override creation (201). MatchesBlocklist
+ * reports whether the package has any blocklist entry, so a mistyped name is
+ * visible at once.
+ */
+export interface CreatedMalwareOverride extends MalwareOverride {
+  matches_blocklist: boolean;
+}
+/**
+ * BlocklistRevokeOverrideResponse answers DELETE
+ * /admin/blocklist/overrides/:id with the revoked override's id.
+ */
+export interface BlocklistRevokeOverrideResponse {
+  revoked: number /* uint64 */;
+}
+
+//////////
+// source: rules.go
+
+/**
+ * RuleAction is what a Package Rule does to a matching request.
+ */
+export const RuleActionAllow = "allow";
+export const RuleActionDeny = "deny";
+export type RuleAction = typeof RuleActionAllow | typeof RuleActionDeny;
+/**
+ * RuleRecord is one persisted Package Rule. Ecosystem, PackageName, and
+ * Version are selectors: "*" matches anything, a trailing "*" on the package
+ * is a prefix, and the version may be exact or a single comparison.
+ */
+export interface RuleRecord {
+  id: number /* uint */;
+  ecosystem: string;
+  package_name: string;
+  version: string;
+  action: RuleAction;
+  reason: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+/**
+ * RuleListResponse answers GET /admin/rules, newest rule first.
+ */
+export interface RuleListResponse {
+  items: RuleRecord[];
+  total: number /* int */;
+}
+/**
+ * RuleTestSpecificity is a candidate's precedence tuple, compared
+ * lexicographically in field order; the larger tuple wins.
+ */
+export interface RuleTestSpecificity {
+  priority: number /* int */;
+  ecosystem: number /* int */;
+  package: number /* int */;
+  version: number /* int */;
+  /**
+   * Action is the tie-breaker: deny is 1, allow is 0.
+   */
+  action: number /* int */;
+  id: number /* uint */;
+}
+/**
+ * RuleTestEcosystemMatchLevel is how a rule's ecosystem selector matched.
+ */
+export const RuleTestEcosystemMatchLevelExact = "exact";
+export const RuleTestEcosystemMatchLevelWildcard = "wildcard";
+export type RuleTestEcosystemMatchLevel = typeof RuleTestEcosystemMatchLevelExact | typeof RuleTestEcosystemMatchLevelWildcard;
+/**
+ * RuleTestPackageMatchLevel is how a rule's package selector matched.
+ */
+export const RuleTestPackageMatchLevelExact = "exact";
+export const RuleTestPackageMatchLevelPrefix = "prefix";
+export const RuleTestPackageMatchLevelWildcard = "wildcard";
+export type RuleTestPackageMatchLevel = typeof RuleTestPackageMatchLevelExact | typeof RuleTestPackageMatchLevelPrefix | typeof RuleTestPackageMatchLevelWildcard;
+/**
+ * RuleTestVersionMatchLevel is how a rule's version selector matched.
+ */
+export const RuleTestVersionMatchLevelExact = "exact";
+export const RuleTestVersionMatchLevelRange = "range";
+export const RuleTestVersionMatchLevelWildcard = "wildcard";
+export type RuleTestVersionMatchLevel = typeof RuleTestVersionMatchLevelExact | typeof RuleTestVersionMatchLevelRange | typeof RuleTestVersionMatchLevelWildcard;
+/**
+ * RuleTestMatchLevels names the selector shape behind a candidate's
+ * specificity tuple.
+ */
+export interface RuleTestMatchLevels {
+  ecosystem: RuleTestEcosystemMatchLevel;
+  package: RuleTestPackageMatchLevel;
+  version: RuleTestVersionMatchLevel;
+}
+/**
+ * RuleTestCandidate is a persisted rule that matched the test coordinate,
+ * with its ranking. Explanation is a language-neutral diagnostic; the Admin
+ * localizes from MatchLevels and Specificity instead.
+ */
+export interface RuleTestCandidate {
+  rule: RuleRecord;
+  specificity: RuleTestSpecificity;
+  match_levels: RuleTestMatchLevels;
+  matched: boolean;
+  selected: boolean;
+  explanation?: string;
+}
+/**
+ * RuleTestResponse answers POST /admin/rules/test: the decision the request
+ * path would make, explained. MatchedRule and WinningRule are the same rule
+ * (null when none matched); Reason is that rule's operator-authored reason or
+ * the default decision's. PrecedenceReason names the tuple dimension that
+ * selected the winner. Candidates are in winning order and empty, never null,
+ * when no rule matched. PolicyStatus describes the rule snapshot evaluated.
+ */
+export interface RuleTestResponse {
+  allowed: boolean;
+  matched_rule: RuleRecord | null;
+  winning_rule: RuleRecord | null;
+  winner: RuleTestCandidate | null;
+  reason: string;
+  winner_reason: string;
+  precedence_reason: string;
+  candidates: RuleTestCandidate[];
+  policy_status?: PolicyStatus;
+}
+
+//////////
+// source: security.go
+
+/**
+ * SecuritySeverity is an advisory's severity band. Unknown is an advisory
+ * whose source carried no usable score.
+ */
+export const SecuritySeverityCritical = "critical";
+export const SecuritySeverityHigh = "high";
+export const SecuritySeverityMedium = "medium";
+export const SecuritySeverityLow = "low";
+export const SecuritySeverityUnknown = "unknown";
+export type SecuritySeverity = typeof SecuritySeverityCritical | typeof SecuritySeverityHigh | typeof SecuritySeverityMedium | typeof SecuritySeverityLow | typeof SecuritySeverityUnknown;
+/**
+ * SecurityDashboard answers GET /admin/security/dashboard. BySeverity always
+ * carries critical, high, medium, and low, plus any other stored band.
+ * LastScanAt is null until a scan has completed.
+ */
+export interface SecurityDashboard {
+  total_vulnerabilities: number /* int64 */;
+  affected_packages: number /* int64 */;
+  by_severity: { [severity in SecuritySeverity]?: number };
+  auto_blocked_count: number /* int64 */;
+  last_scan_at: string | null;
+  scan_in_progress: boolean;
+}
+/**
+ * SecurityVulnerability is one stored advisory for one package.
+ */
+export interface SecurityVulnerability {
+  id: number /* uint */;
+  osv_id: string;
+  ecosystem: string;
+  package_name: string;
+  affected_ranges: string;
+  severity: SecuritySeverity;
+  cvss_score: number /* float32 */;
+  summary: string;
+  details: string;
+  aliases: string;
+  references: string;
+  published_at: string;
+  modified_at: string;
+  created_at: string;
+  updated_at: string;
+}
+/**
+ * SecurityVulnerabilityCheck is the advisory lookup state of one package.
+ */
+export interface SecurityVulnerabilityCheck {
+  id: number /* uint */;
+  ecosystem: string;
+  package_name: string;
+  has_vulnerabilities: boolean;
+  vulnerability_count: number /* int */;
+  last_fetched_at: string;
+  next_fetch_at: string;
+  created_at: string;
+  updated_at: string;
+}
+/**
+ * SecurityVulnerabilityPage answers GET /admin/security/vulnerabilities.
+ */
+export interface SecurityVulnerabilityPage {
+  items: SecurityVulnerability[];
+  total: number /* int64 */;
+  page: number /* int */;
+}
+/**
+ * SecuritySuggestionPage answers GET /admin/security/suggestions: scored
+ * advisories an operator has not dismissed, highest score first.
+ */
+export interface SecuritySuggestionPage {
+  items: SecurityVulnerability[];
+  total: number /* int64 */;
+  page: number /* int */;
+}
+/**
+ * SecurityPackagePage answers GET /admin/security/packages: packages with at
+ * least one known advisory.
+ */
+export interface SecurityPackagePage {
+  items: SecurityVulnerabilityCheck[];
+  total: number /* int64 */;
+  page: number /* int */;
+}
+/**
+ * ApproveSuggestionResponse answers approving a suggestion: the deny Package
+ * Rule it created.
+ */
+export interface ApproveSuggestionResponse {
+  rule_id: number /* uint */;
+}
+/**
+ * DismissSuggestionResponse answers dismissing a suggestion.
+ */
+export interface DismissSuggestionResponse {
+  status: 'dismissed';
+}
+/**
+ * SecurityScanResponse answers POST /admin/security/scan (202): the scan runs
+ * in the background and the dashboard reports its progress.
+ */
+export interface SecurityScanResponse {
+  status: 'scan_started';
+}
+/**
+ * SecurityImportResponse answers an offline advisory import.
+ */
+export interface SecurityImportResponse {
+  imported: number /* int */;
+  received: number /* int */;
+  packages: number /* int */;
+  duplicates: number /* int */;
+  skipped: number /* int */;
+  rules_created: number /* int */;
+}
+/**
+ * SecurityPolicy is one ecosystem's advisory policy. GET
+ * /admin/security/policies answers an array of these.
+ */
+export interface SecurityPolicy {
+  id: number /* uint */;
+  ecosystem: string;
+  auto_block_enabled: boolean;
+  min_cvss_score: number /* float32 */;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+//////////
+// source: system.go
+
+/**
+ * EntitlementSource is which grant currently provides Pro access.
+ */
+export const EntitlementSourceNone = "none";
+export const EntitlementSourceTrial = "trial";
+export const EntitlementSourcePaid = "paid";
+export type EntitlementSource = typeof EntitlementSourceNone | typeof EntitlementSourceTrial | typeof EntitlementSourcePaid;
+/**
+ * EntitlementStatus answers GET /admin/license/status and every license or
+ * trial mutation that succeeds. ExpiresAt is absent when no license or trial
+ * carries an expiry.
+ */
+export interface EntitlementStatus {
+  is_pro: boolean;
+  source: EntitlementSource;
+  expires_at?: string;
+  days_left: number /* int */;
+  trial_used: boolean;
+  trial_available: boolean;
+  license_key_masked?: string;
+  license_error?: string;
+  last_checked: string;
+}
+/**
+ * LicenseRevalidateResponse answers POST /admin/license/revalidate, which only
+ * starts the background check.
+ */
+export interface LicenseRevalidateResponse {
+  message: string;
+}
+/**
+ * WebhookPlatform is the message format a webhook is sent in.
+ */
+export const WebhookPlatformSlack = "slack";
+export const WebhookPlatformDingTalk = "dingtalk";
+export const WebhookPlatformWeCom = "wecom";
+export const WebhookPlatformFeishu = "feishu";
+export const WebhookPlatformGeneric = "generic";
+export type WebhookPlatform = typeof WebhookPlatformSlack | typeof WebhookPlatformDingTalk | typeof WebhookPlatformWeCom | typeof WebhookPlatformFeishu | typeof WebhookPlatformGeneric;
+/**
+ * WebhookConfig is one notification webhook. The list masks URL for a
+ * principal that may not view credentials; creation echoes the URL it stored.
+ */
+export interface WebhookConfig {
+  id: number /* uint */;
+  name: string;
+  platform: WebhookPlatform;
+  url: string;
+  enabled: boolean;
+  events: string;
+  cooldown_minutes: number /* int */;
+  last_sent_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+/**
+ * WebhookAckStatus is the outcome a webhook mutation reports.
+ */
+export const WebhookAckStatusOK = "ok";
+export const WebhookAckStatusDeleted = "deleted";
+export const WebhookAckStatusTestQueued = "test queued";
+export type WebhookAckStatus = typeof WebhookAckStatusOK | typeof WebhookAckStatusDeleted | typeof WebhookAckStatusTestQueued;
+/**
+ * WebhookAck answers webhook update ("ok"), delete ("deleted"), and test
+ * ("test queued", sent with 202 because delivery is asynchronous).
+ */
+export interface WebhookAck {
+  status: WebhookAckStatus;
+}
+/**
+ * AdminUserRole is a local account's Admin role.
+ */
+export const AdminUserRoleAdmin = "admin";
+export const AdminUserRoleReadonly = "readonly";
+export type AdminUserRole = typeof AdminUserRoleAdmin | typeof AdminUserRoleReadonly;
+/**
+ * AdminUserPermissionSource is who owns an account's role and credentials:
+ * Depsilo itself or an external identity provider.
+ */
+export const AdminUserPermissionSourceLocal = "local";
+export const AdminUserPermissionSourceOIDC = "oidc";
+export const AdminUserPermissionSourceLDAP = "ldap";
+export type AdminUserPermissionSource = typeof AdminUserPermissionSourceLocal | typeof AdminUserPermissionSourceOIDC | typeof AdminUserPermissionSourceLDAP;
+/**
+ * AdminUser is an account without its password hash or credential version.
+ * GET /admin/users returns a list of them; create and update return one.
+ */
+export interface AdminUser {
+  id: number /* uint */;
+  username: string;
+  role: AdminUserRole;
+  enabled: boolean;
+  last_login_at: string | null;
+  created_at: string;
+  updated_at: string;
+  permission_source: AdminUserPermissionSource;
+}
+/**
+ * AdminUserDeleteResponse answers DELETE /admin/users/:id.
+ */
+export interface AdminUserDeleteResponse {
+  message: string;
+}
+/**
+ * APITokenPermissions is what an Admin API token may do.
+ */
+export const APITokenPermissionsReadonly = "readonly";
+export const APITokenPermissionsReadwrite = "readwrite";
+export type APITokenPermissions = typeof APITokenPermissionsReadonly | typeof APITokenPermissionsReadwrite;
+/**
+ * APITokenSummary is an Admin API token without its hash. GET /admin/tokens
+ * returns a list of them.
+ */
+export interface APITokenSummary {
+  id: number /* uint */;
+  user_id: number /* uint */;
+  name: string;
+  permissions: APITokenPermissions;
+  expires_at: string | null;
+  last_used_at: string | null;
+  created_at: string;
+}
+/**
+ * CreateAPITokenResponse answers token creation. It is the only response that
+ * carries the plain token.
+ */
+export interface CreateAPITokenResponse {
+  id: number /* uint */;
+  name: string;
+  token: string;
+  permissions: APITokenPermissions;
+  expires_at: string | null;
+  warning: string;
+}
+/**
+ * APITokenRevokeResponse answers DELETE /admin/tokens/:id.
+ */
+export interface APITokenRevokeResponse {
+  message: string;
+}
+
+//////////
+// source: system_settings.go
+
+/**
+ * SettingPath names one setting shown on the Settings page.
+ */
+export const SettingPathServerHost = "server.host";
+export const SettingPathServerPort = "server.port";
+export const SettingPathServerLogLevel = "server.log_level";
+export const SettingPathDatabaseDriver = "database.driver";
+export const SettingPathStorageType = "storage.type";
+export const SettingPathStoragePath = "storage.path";
+export const SettingPathCacheMaxSizeGB = "cache.max_size_gb";
+export const SettingPathCacheTTLIndex = "cache.ttl_index";
+export const SettingPathCacheTTLBlob = "cache.ttl_blob";
+export const SettingPathCacheLRUThreshold = "cache.lru_threshold";
+export const SettingPathAuthTokenTTL = "auth.token_ttl";
+export type SettingPath = typeof SettingPathServerHost | typeof SettingPathServerPort | typeof SettingPathServerLogLevel | typeof SettingPathDatabaseDriver | typeof SettingPathStorageType | typeof SettingPathStoragePath | typeof SettingPathCacheMaxSizeGB | typeof SettingPathCacheTTLIndex | typeof SettingPathCacheTTLBlob | typeof SettingPathCacheLRUThreshold | typeof SettingPathAuthTokenTTL;
+/**
+ * EditableSettingPath is the subset of SettingPath that PUT /admin/settings
+ * accepts. Every path list in a settings body holds only these.
+ */
+export const EditableSettingPathServerLogLevel = "server.log_level";
+export const EditableSettingPathCacheMaxSizeGB = "cache.max_size_gb";
+export const EditableSettingPathCacheTTLIndex = "cache.ttl_index";
+export const EditableSettingPathCacheTTLBlob = "cache.ttl_blob";
+export const EditableSettingPathCacheLRUThreshold = "cache.lru_threshold";
+export const EditableSettingPathAuthTokenTTL = "auth.token_ttl";
+export type EditableSettingPath = typeof EditableSettingPathServerLogLevel | typeof EditableSettingPathCacheMaxSizeGB | typeof EditableSettingPathCacheTTLIndex | typeof EditableSettingPathCacheTTLBlob | typeof EditableSettingPathCacheLRUThreshold | typeof EditableSettingPathAuthTokenTTL;
+/**
+ * SettingSource is where a setting's configured value comes from.
+ */
+export const SettingSourceDefault = "default";
+export const SettingSourceFile = "file";
+export const SettingSourceEnv = "env";
+export type SettingSource = typeof SettingSourceDefault | typeof SettingSourceFile | typeof SettingSourceEnv;
+/**
+ * AdminSettingsLogLevel is a validated server log level.
+ */
+export const AdminSettingsLogLevelDebug = "debug";
+export const AdminSettingsLogLevelInfo = "info";
+export const AdminSettingsLogLevelWarn = "warn";
+export const AdminSettingsLogLevelError = "error";
+export type AdminSettingsLogLevel = typeof AdminSettingsLogLevelDebug | typeof AdminSettingsLogLevelInfo | typeof AdminSettingsLogLevelWarn | typeof AdminSettingsLogLevelError;
+/**
+ * AdminSettingsServer is the server section of a settings snapshot.
+ */
+export interface AdminSettingsServer {
+  host: string;
+  port: number /* int */;
+  log_level: AdminSettingsLogLevel;
+}
+/**
+ * AdminSettingsDatabase is the database section of a settings snapshot.
+ */
+export interface AdminSettingsDatabase {
+  driver: string;
+}
+/**
+ * AdminSettingsStorage is the storage section of a settings snapshot.
+ */
+export interface AdminSettingsStorage {
+  type: string;
+  path: string;
+}
+/**
+ * AdminSettingsCache is the cache section of a settings snapshot. Durations
+ * are Go duration strings in their shortest form, such as "72h".
+ */
+export interface AdminSettingsCache {
+  max_size_gb: number /* int */;
+  ttl_index: string;
+  ttl_blob: string;
+  lru_threshold: number /* int */;
+}
+/**
+ * AdminSettingsAuth is the auth section of a settings snapshot.
+ */
+export interface AdminSettingsAuth {
+  token_ttl: string;
+}
+/**
+ * AdminSettingsSnapshot is one full set of setting values, either as the
+ * config file declares them or as the running process uses them.
+ */
+export interface AdminSettingsSnapshot {
+  server: AdminSettingsServer;
+  database: AdminSettingsDatabase;
+  storage: AdminSettingsStorage;
+  cache: AdminSettingsCache;
+  auth: AdminSettingsAuth;
+}
+/**
+ * AdminSettingsResponse answers GET /admin/settings. Sources has every
+ * SettingPath; Overrides has only the paths an environment variable pins,
+ * mapped to that variable's name.
+ */
+export interface AdminSettingsResponse {
+  configured: AdminSettingsSnapshot;
+  effective: AdminSettingsSnapshot;
+  pending_restart: EditableSettingPath[];
+  overrides: { [K in SettingPath]?: string };
+  sources: { [K in SettingPath]: SettingSource };
+  editable: EditableSettingPath[];
+  config_writable: boolean;
+}
+/**
+ * UpdateAdminSettingsResponse answers PUT /admin/settings: the new state plus
+ * what the patch changed and when each change takes effect.
+ */
+export interface UpdateAdminSettingsResponse extends AdminSettingsResponse {
+  changed: EditableSettingPath[];
+  applied_now: EditableSettingPath[];
+  restart_required: EditableSettingPath[];
+  blocked_by_override: EditableSettingPath[];
 }
 
 //////////

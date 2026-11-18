@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 )
 
@@ -65,16 +66,16 @@ func (h *PackagesHandler) List(c *gin.Context) {
 	}
 
 	// Aggregation query
-	type packageItem struct {
-		PackageName  string `json:"package_name"`
-		AdapterType  string `json:"adapter_type"`
-		VersionCount int64  `json:"version_count"`
-		TotalSize    int64  `json:"total_size"`
-		TotalHits    int64  `json:"total_hits"`
-		LastAccessed string `json:"last_accessed"`
+	type packageRow struct {
+		PackageName  string
+		AdapterType  string
+		VersionCount int64
+		TotalSize    int64
+		TotalHits    int64
+		LastAccessed string
 	}
 
-	var items []packageItem
+	var rows []packageRow
 	offset := (page - 1) * perPage
 
 	baseQuery.Session(&gorm.Session{}).
@@ -83,20 +84,20 @@ func (h *PackagesHandler) List(c *gin.Context) {
 		Order(orderClause).
 		Offset(offset).
 		Limit(perPage).
-		Scan(&items)
+		Scan(&rows)
 
-	if items == nil {
-		items = []packageItem{}
+	items := make([]contract.PublicPackageSummary, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, contract.PublicPackageSummary{
+			PackageName: row.PackageName, AdapterType: row.AdapterType, VersionCount: row.VersionCount,
+			TotalSize: row.TotalSize, TotalHits: row.TotalHits, LastAccessed: row.LastAccessed,
+		})
 	}
 
 	totalPages := (total + int64(perPage) - 1) / int64(perPage)
 
-	c.JSON(http.StatusOK, gin.H{
-		"total":       total,
-		"page":        page,
-		"per_page":    perPage,
-		"total_pages": totalPages,
-		"items":       items,
+	c.JSON(http.StatusOK, contract.PublicPackageListResponse{
+		Total: total, Page: page, PerPage: perPage, TotalPages: totalPages, Items: items,
 	})
 }
 
@@ -119,7 +120,7 @@ func (h *PackagesHandler) Detail(c *gin.Context) {
 
 	var totalHits int64
 	var totalSize int64
-	versions := make([]gin.H, 0, len(entries))
+	versions := make([]contract.PublicPackageFile, 0, len(entries))
 
 	for _, e := range entries {
 		totalHits += e.HitCount
@@ -131,21 +132,17 @@ func (h *PackagesHandler) Detail(c *gin.Context) {
 			fileName = e.Key[idx+1:]
 		}
 
-		versions = append(versions, gin.H{
-			"file_name":     fileName,
-			"size":          e.Size,
-			"hit_count":     e.HitCount,
-			"cached_at":     e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-			"last_accessed": e.LastAccessed.Format("2006-01-02T15:04:05Z07:00"),
-			"content_type":  e.ContentType,
+		versions = append(versions, contract.PublicPackageFile{
+			FileName:     fileName,
+			Size:         e.Size,
+			HitCount:     e.HitCount,
+			CachedAt:     e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			LastAccessed: e.LastAccessed.Format("2006-01-02T15:04:05Z07:00"),
+			ContentType:  e.ContentType,
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"name":         name,
-		"adapter_type": adapterType,
-		"versions":     versions,
-		"total_hits":   totalHits,
-		"total_size":   totalSize,
+	c.JSON(http.StatusOK, contract.PublicPackageDetail{
+		Name: name, AdapterType: adapterType, Versions: versions, TotalHits: totalHits, TotalSize: totalSize,
 	})
 }

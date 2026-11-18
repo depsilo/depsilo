@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 	"depsilo/internal/packagepolicy"
 	packagerules "depsilo/internal/rules"
@@ -103,7 +104,7 @@ func (h *SecurityHandler) Dashboard(c *gin.Context) {
 		lastScanStr = &s
 	}
 
-	c.JSON(http.StatusOK, securityDashboardResponse{
+	c.JSON(http.StatusOK, contract.SecurityDashboard{
 		TotalVulnerabilities: totalVulns,
 		AffectedPackages:     affectedPkgs,
 		BySeverity:           severityMap,
@@ -150,7 +151,7 @@ func (h *SecurityHandler) ListVulnerabilities(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, securityPage[vulnerabilityResponse]{Items: toVulnerabilityResponses(vulns), Total: total, Page: page})
+	c.JSON(http.StatusOK, contract.SecurityVulnerabilityPage{Items: toVulnerabilityResponses(vulns), Total: total, Page: page})
 }
 
 func (h *SecurityHandler) ListPackages(c *gin.Context) {
@@ -181,7 +182,7 @@ func (h *SecurityHandler) ListPackages(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, securityPage[vulnerabilityCheckResponse]{Items: toVulnerabilityCheckResponses(checks), Total: total, Page: page})
+	c.JSON(http.StatusOK, contract.SecurityPackagePage{Items: toVulnerabilityCheckResponses(checks), Total: total, Page: page})
 }
 
 func (h *SecurityHandler) ListSuggestions(c *gin.Context) {
@@ -212,7 +213,7 @@ func (h *SecurityHandler) ListSuggestions(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, securityPage[vulnerabilityResponse]{Items: toVulnerabilityResponses(vulns), Total: total, Page: page})
+	c.JSON(http.StatusOK, contract.SecuritySuggestionPage{Items: toVulnerabilityResponses(vulns), Total: total, Page: page})
 }
 
 func (h *SecurityHandler) ApproveSuggestion(c *gin.Context) {
@@ -266,7 +267,7 @@ func (h *SecurityHandler) ApproveSuggestion(c *gin.Context) {
 		return
 	}
 	h.invalidateRules()
-	c.JSON(http.StatusOK, gin.H{"rule_id": rule.ID})
+	c.JSON(http.StatusOK, contract.ApproveSuggestionResponse{RuleID: rule.ID})
 }
 
 func (h *SecurityHandler) DismissSuggestion(c *gin.Context) {
@@ -276,7 +277,7 @@ func (h *SecurityHandler) DismissSuggestion(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"code": "ALREADY_DISMISSED", "message": "already dismissed"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "dismissed"})
+	c.JSON(http.StatusOK, contract.DismissSuggestionResponse{Status: "dismissed"})
 }
 
 func (h *SecurityHandler) TriggerScan(c *gin.Context) {
@@ -289,7 +290,7 @@ func (h *SecurityHandler) TriggerScan(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "SCAN_UNAVAILABLE", "message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusAccepted, gin.H{"status": "scan_started"})
+	c.JSON(http.StatusAccepted, contract.SecurityScanResponse{Status: "scan_started"})
 }
 
 func (h *SecurityHandler) ImportData(c *gin.Context) {
@@ -322,13 +323,9 @@ func (h *SecurityHandler) ImportData(c *gin.Context) {
 	receipt, err := h.catalog.Import(c.Request.Context(), file)
 	switch {
 	case err == nil:
-		c.JSON(http.StatusOK, gin.H{
-			"imported":      receipt.Advisories,
-			"received":      receipt.Received,
-			"packages":      receipt.Packages,
-			"duplicates":    receipt.Duplicates,
-			"skipped":       receipt.Skipped,
-			"rules_created": receipt.RulesCreated,
+		c.JSON(http.StatusOK, contract.SecurityImportResponse{
+			Imported: receipt.Advisories, Received: receipt.Received, Packages: receipt.Packages,
+			Duplicates: receipt.Duplicates, Skipped: receipt.Skipped, RulesCreated: receipt.RulesCreated,
 		})
 	case errors.Is(err, security.ErrInvalidAdvisoryImport):
 		c.JSON(http.StatusBadRequest, gin.H{

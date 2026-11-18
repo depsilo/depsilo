@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/api/credentialurl"
 	"depsilo/internal/config"
 	"github.com/gin-gonic/gin"
@@ -34,7 +35,7 @@ func (h *AuthenticationSourceHandler) List(c *gin.Context) {
 		WriteAuthenticationError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, state)
+	c.JSON(http.StatusOK, authenticationSourceList(state))
 }
 func (h *AuthenticationSourceHandler) Create(c *gin.Context) {
 	var create config.AuthenticationSourceCreate
@@ -49,7 +50,7 @@ func (h *AuthenticationSourceHandler) Create(c *gin.Context) {
 		WriteAuthenticationError(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, state)
+	c.JSON(http.StatusCreated, authenticationSource(state))
 }
 func (h *AuthenticationSourceHandler) Update(c *gin.Context) {
 	state, err := h.store.AuthenticationSourceSettings(c.Request.Context())
@@ -76,7 +77,7 @@ func (h *AuthenticationSourceHandler) Update(c *gin.Context) {
 		WriteAuthenticationError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, updated)
+	c.JSON(http.StatusOK, authenticationSource(updated))
 }
 func (h *AuthenticationSourceHandler) Delete(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
@@ -109,7 +110,47 @@ func (h *AuthenticationSourceHandler) Restore(c *gin.Context) {
 		WriteAuthenticationError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, state)
+	c.JSON(http.StatusOK, authenticationSource(state))
+}
+
+func authenticationSourceList(state config.AuthenticationSourcesState) contract.AuthenticationSourceList {
+	var sources []contract.AuthenticationSource
+	if state.Sources != nil {
+		sources = make([]contract.AuthenticationSource, len(state.Sources))
+	}
+	for index, source := range state.Sources {
+		sources[index] = authenticationSource(source)
+	}
+	return contract.AuthenticationSourceList{Sources: sources, ConfigWritable: state.ConfigWritable}
+}
+
+func authenticationSource(state config.AuthenticationSourceState) contract.AuthenticationSource {
+	return contract.AuthenticationSource{
+		ID: state.ID, Protocol: contract.IdentityProtocol(state.Protocol),
+		Configured: authenticationSourceSettings(state.Configured), Effective: authenticationSourceSettings(state.Effective),
+		Overrides: state.Overrides, PendingRestart: state.PendingRestart, SessionsWillReset: state.SessionsWillReset,
+		ConfigWritable: state.ConfigWritable, CanRestore: state.CanRestore,
+	}
+}
+
+func authenticationSourceSettings(snapshot *config.OIDCSettingsSnapshot) *contract.AuthenticationSourceSettings {
+	if snapshot == nil {
+		return nil
+	}
+	settings := &contract.AuthenticationSourceSettings{
+		Enabled: snapshot.Enabled, DisplayName: snapshot.DisplayName, Issuer: snapshot.Issuer,
+		ClientID: snapshot.ClientID, ClientSecretSet: snapshot.ClientSecretSet, RedirectURL: snapshot.RedirectURL,
+		AdminGroups: snapshot.AdminGroups, ReadonlyGroups: snapshot.ReadonlyGroups, GroupsClaim: snapshot.GroupsClaim,
+		SessionTTL: snapshot.SessionTTL, AllowInsecureLoopback: snapshot.AllowInsecureLoopback,
+	}
+	if l := snapshot.LDAP; l != nil {
+		settings.LDAP = &contract.LDAPDirectorySettings{
+			URL: l.URL, BindDN: l.BindDN, BindPasswordSet: l.BindPasswordSet, UserBaseDN: l.UserBaseDN,
+			UserFilter: l.UserFilter, SubjectAttribute: l.SubjectAttribute,
+			DisplayNameAttribute: l.DisplayNameAttribute, GroupsAttribute: l.GroupsAttribute, CACertPEM: l.CACertPEM,
+		}
+	}
+	return settings
 }
 
 func DecodeAuthenticationSourceRequest(c *gin.Context, target any, create bool) bool {

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/identity"
 	"github.com/gin-gonic/gin"
 )
@@ -29,7 +30,10 @@ func (h *OIDCHandler) choiceCookie(c *gin.Context) (*identity.Manager, string) {
 }
 
 func (h *OIDCHandler) choiceResponse(c *gin.Context, manager *identity.Manager, choice identity.ChoiceInfo) {
-	c.JSON(http.StatusOK, gin.H{"mode": "choice", "provider": gin.H{"id": manager.ID(), "name": sourceName(manager), "protocol": manager.Protocol()}, "display_name": choice.DisplayName, "role": choice.Role, "return_to": choice.ReturnTo, "expires_at": choice.ExpiresAt.Unix()})
+	c.JSON(http.StatusOK, contract.IdentityChoiceResult{
+		Mode: contract.IdentityCompletionModeChoice, Provider: identityProvider(manager), DisplayName: choice.DisplayName,
+		Role: contract.IdentityRole(choice.Role), ReturnTo: choice.ReturnTo, ExpiresAt: choice.ExpiresAt.Unix(),
+	})
 }
 
 func (h *OIDCHandler) resumeChoice(c *gin.Context) {

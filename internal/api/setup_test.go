@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
 	"github.com/gin-gonic/gin"
@@ -414,7 +415,7 @@ func TestSetupCompleteCreatesAdminAndProtectedConfig(t *testing.T) {
 	}
 	// httptest addresses the request to "example.com" without a port, so it
 	// did not name the listening port and the client returns to its own origin.
-	if response.ReconnectURL != "http://example.com/" || response.RestartStrategy != setupRestartExec {
+	if response.ReconnectURL != "http://example.com/" || response.RestartStrategy != string(contract.SetupRestartStrategyExec) {
 		t.Fatalf("setup response = %#v", response)
 	}
 	info, err := os.Stat(cfg.ConfigPath)
@@ -1104,7 +1105,7 @@ func TestSetupReconnectURLUsesRequestedPortAndDirectTLS(t *testing.T) {
 	if got := setupReconnectURL(request, 8443, 24444); got != "https://[::1]:24444/" {
 		t.Fatalf("setupReconnectURL = %q", got)
 	}
-	if got := setupRestartStrategy("windows"); got != setupRestartSupervisorRequired {
+	if got := setupRestartStrategy("windows"); got != contract.SetupRestartStrategySupervisorRequired {
 		t.Fatalf("Windows restart strategy = %q", got)
 	}
 }

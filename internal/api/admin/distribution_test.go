@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/cache"
 	"depsilo/internal/db"
 	"depsilo/internal/distribution"
@@ -86,7 +87,7 @@ func TestDistributionAPICatalogLifecycle(t *testing.T) {
 	if created.Code != 201 {
 		t.Fatalf("stage %d: %s", created.Code, created.Body)
 	}
-	var set distribution.Set
+	var set contract.DistributionSet
 	if err := json.Unmarshal(created.Body.Bytes(), &set); err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +185,7 @@ func TestDistributionAPITransfersSignedBundles(t *testing.T) {
 		t.Fatal(err)
 	}
 	created := distributionAPIRequest(source, http.MethodPost, "/sets", raw)
-	var set distribution.Set
+	var set contract.DistributionSet
 	if err := json.Unmarshal(created.Body.Bytes(), &set); err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +268,7 @@ func TestDistributionAPIMetersFreeExports(t *testing.T) {
 		t.Fatal(err)
 	}
 	store.ConfigureTransfer(distribution.TransferKeys{Signer: signer})
-	var set distribution.Set
+	var set contract.DistributionSet
 	if err := json.Unmarshal(distributionAPIRequest(source, http.MethodPost, "/sets", raw).Body.Bytes(), &set); err != nil {
 		t.Fatal(err)
 	}
@@ -310,10 +311,10 @@ func TestDistributionAPIMetersFreeExports(t *testing.T) {
 		}
 		return body
 	}
-	usage := func(router *gin.Engine) distribution.ExportUsage {
+	usage := func(router *gin.Engine) contract.DistributionExportUsage {
 		t.Helper()
 		r := distributionAPIRequest(router, http.MethodGet, "/usage", nil)
-		var body distribution.ExportUsage
+		var body contract.DistributionExportUsage
 		if r.Code != http.StatusOK || json.Unmarshal(r.Body.Bytes(), &body) != nil {
 			t.Fatalf("usage %d %s", r.Code, r.Body)
 		}

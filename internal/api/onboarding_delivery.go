@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/accesslog"
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 )
 
@@ -66,25 +67,8 @@ func parseOnboardingDeliveryCursor(raw string) (onboardingDeliveryCursor, error)
 	return cursor, nil
 }
 
-type onboardingDeliveryEvent struct {
-	ID                         uint      `json:"id"`
-	RequestID                  string    `json:"request_id"`
-	Ecosystem                  string    `json:"ecosystem"`
-	PackageName                string    `json:"package_name"`
-	Version                    string    `json:"version"`
-	CacheKey                   string    `json:"cache_key"`
-	Method                     string    `json:"method"`
-	DependencyKind             string    `json:"dependency_kind"`
-	DeliveryResult             string    `json:"delivery_result"`
-	BytesSent                  int64     `json:"bytes_sent"`
-	StatusCode                 int       `json:"status_code"`
-	Outcome                    string    `json:"outcome"`
-	CreatedAt                  time.Time `json:"created_at"`
-	SuccessfulArtifactDownload bool      `json:"successful_artifact_download"`
-}
-
 type onboardingDeliveryRow struct {
-	Delivery onboardingDeliveryEvent `gorm:"embedded"`
+	Delivery contract.OnboardingDeliveryEvent `gorm:"embedded"`
 	AuditID  uint
 }
 
@@ -95,7 +79,7 @@ func onboardingAccessMaxID(ctx context.Context, database *gorm.DB) (uint, error)
 	return result.MaxID, err
 }
 
-func (h *OnboardingHandler) deliveryPage(ctx context.Context, cursor onboardingDeliveryCursor, startedAt time.Time, auditMax uint) ([]onboardingDeliveryEvent, string, bool, error) {
+func (h *OnboardingHandler) deliveryPage(ctx context.Context, cursor onboardingDeliveryCursor, startedAt time.Time, auditMax uint) ([]contract.OnboardingDeliveryEvent, string, bool, error) {
 	if !cursor.Paging {
 		accessMax, err := onboardingAccessMaxID(ctx, h.db)
 		if err != nil {
@@ -138,7 +122,7 @@ func (h *OnboardingHandler) deliveryPage(ctx context.Context, cursor onboardingD
 			Version: 1, AuditAfter: cursor.AuditThrough, AccessAfter: cursor.AccessThrough,
 		}
 	}
-	events := make([]onboardingDeliveryEvent, 0, len(rows))
+	events := make([]contract.OnboardingDeliveryEvent, 0, len(rows))
 	for _, row := range rows {
 		event := row.Delivery
 		event.DependencyKind = accesslog.DependencyRequestKind(event.Ecosystem, event.CacheKey)

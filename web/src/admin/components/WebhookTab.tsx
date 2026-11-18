@@ -18,7 +18,8 @@ import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import { NativeSelect } from '@/components/ui/native-select'
 import { useAppToast } from '@/components/Toast'
 import { usePrincipal } from '@/hooks/usePrincipal'
-import { webhookApi, type WebhookConfig } from '@/lib/api'
+import { webhookApi } from '@/lib/api'
+import type { WebhookConfig } from '@/lib/adminApi.types'
 import { getApiError } from '@/lib/apiError'
 
 const PLATFORM_OPTIONS = ['slack', 'dingtalk', 'wecom', 'feishu', 'generic'] as const

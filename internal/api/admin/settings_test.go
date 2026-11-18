@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/config"
 )
 
@@ -102,7 +103,7 @@ func performSettingsRequest(router http.Handler, method, body string) *httptest.
 	return recorder
 }
 
-func assertSettingPaths(t *testing.T, got, want []config.SettingPath) {
+func assertSettingPaths(t *testing.T, got, want []contract.EditableSettingPath) {
 	t.Helper()
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("paths = %#v, want %#v", got, want)
@@ -147,7 +148,7 @@ func TestSettingsGetReturnsCompleteConfiguredEffectiveContract(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
-	var response AdminSettingsResponse
+	var response contract.AdminSettingsResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +158,7 @@ func TestSettingsGetReturnsCompleteConfiguredEffectiveContract(t *testing.T) {
 	if response.Configured.Cache.TTLBlob != "96h" || response.Effective.Cache.TTLBlob != "72h" || response.Configured.Auth.TokenTTL != "168h" {
 		t.Fatalf("configured/effective = %+v / %+v", response.Configured, response.Effective)
 	}
-	assertSettingPaths(t, response.PendingRestart, []config.SettingPath{config.SettingCacheTTLBlob})
+	assertSettingPaths(t, response.PendingRestart, []contract.EditableSettingPath{contract.EditableSettingPathCacheTTLBlob})
 	if response.Sources == nil || response.Overrides == nil || response.Editable == nil || len(response.Sources) != 11 || len(response.Editable) != 6 || !response.ConfigWritable {
 		t.Fatalf("metadata = %+v", response)
 	}
@@ -186,15 +187,15 @@ func TestSettingsPutReturnsCompleteAppliedAndRestartContract(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
-	var response UpdateAdminSettingsResponse
+	var response contract.UpdateAdminSettingsResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	assertSettingPaths(t, response.Changed, []config.SettingPath{config.SettingServerLogLevel, config.SettingCacheTTLBlob})
-	assertSettingPaths(t, response.AppliedNow, []config.SettingPath{config.SettingServerLogLevel})
-	assertSettingPaths(t, response.RestartRequired, []config.SettingPath{config.SettingCacheTTLBlob})
-	assertSettingPaths(t, response.BlockedByOverride, []config.SettingPath{})
-	assertSettingPaths(t, response.PendingRestart, []config.SettingPath{config.SettingCacheTTLBlob})
+	assertSettingPaths(t, response.Changed, []contract.EditableSettingPath{contract.EditableSettingPathServerLogLevel, contract.EditableSettingPathCacheTTLBlob})
+	assertSettingPaths(t, response.AppliedNow, []contract.EditableSettingPath{contract.EditableSettingPathServerLogLevel})
+	assertSettingPaths(t, response.RestartRequired, []contract.EditableSettingPath{contract.EditableSettingPathCacheTTLBlob})
+	assertSettingPaths(t, response.BlockedByOverride, []contract.EditableSettingPath{})
+	assertSettingPaths(t, response.PendingRestart, []contract.EditableSettingPath{contract.EditableSettingPathCacheTTLBlob})
 	if response.Configured.Server.LogLevel != "debug" || response.Effective.Server.LogLevel != "debug" || response.Configured.Cache.TTLBlob != "96h" || response.Effective.Cache.TTLBlob != "72h" {
 		t.Fatalf("response = %+v", response)
 	}

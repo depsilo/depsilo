@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/ecosystem"
 	"depsilo/internal/prompts"
 	"depsilo/internal/requestorigin"
@@ -41,13 +42,6 @@ func (h *DiscoverHandler) setupPending() bool {
 	return h.setupRequired != nil && h.setupRequired()
 }
 
-// ecosystemInfo describes one wired ecosystem in the discover catalog.
-type ecosystemInfo struct {
-	Name    string `json:"name"`
-	Path    string `json:"path"`
-	Purpose string `json:"purpose"`
-}
-
 // ecosystemPurposes adds human-facing copy to the canonical ecosystem
 // catalog; names and routes remain owned by internal/ecosystem.
 var ecosystemPurposes = map[string]string{
@@ -76,8 +70,8 @@ func (h *DiscoverHandler) Discover(c *gin.Context) {
 // catalog builds the same service description for HTTP and in-process MCP
 // callers. The supplied base is display data only; this function never
 // dereferences it.
-func (h *DiscoverHandler) catalog(base string) gin.H {
-	ecos := make([]ecosystemInfo, 0, len(h.ecosystems))
+func (h *DiscoverHandler) catalog(base string) contract.DiscoverResponse {
+	ecos := make([]contract.DiscoverEcosystem, 0, len(h.ecosystems))
 	for _, name := range h.ecosystems {
 		path := "/" + name + "/"
 		if definition, ok := ecosystem.Lookup(name); ok {
@@ -87,7 +81,7 @@ func (h *DiscoverHandler) catalog(base string) gin.H {
 		if !ok {
 			purpose = name
 		}
-		ecos = append(ecos, ecosystemInfo{
+		ecos = append(ecos, contract.DiscoverEcosystem{
 			Name:    name,
 			Path:    path,
 			Purpose: purpose,
@@ -104,54 +98,54 @@ func (h *DiscoverHandler) catalog(base string) gin.H {
 		agentSummary = "First-run setup is not finished. A human operator must complete it in the Portal at " + base + "/. Do not change package manager configuration for this service until setup_required is false."
 	}
 
-	return gin.H{
-		"service":        "depsilo",
-		"version":        version.Version,
-		"commit":         version.Commit,
-		"description":    "A self-hosted dependency cache for homelabs and small teams.",
-		"homepage":       "https://depsilo.com",
-		"repository":     "https://github.com/depsilo/depsilo",
-		"setup_required": setupRequired,
-		"ecosystems":     ecos,
-		"endpoints": gin.H{
-			"health":             "/health",
-			"metrics":            "/metrics",
-			"discover":           "/api/v1/discover",
-			"setup_status":       "/api/v1/setup/status",
-			"agent_prompt":       "/api/v1/agent-prompt",
-			"integration_prompt": "/api/v1/integration-prompt",
-			"mcp":                "/mcp",
-			"public_stats":       "/api/v1/stats",
+	return contract.DiscoverResponse{
+		Service:       "depsilo",
+		Version:       version.Version,
+		Commit:        version.Commit,
+		Description:   "A self-hosted dependency cache for homelabs and small teams.",
+		Homepage:      "https://depsilo.com",
+		Repository:    "https://github.com/depsilo/depsilo",
+		SetupRequired: setupRequired,
+		Ecosystems:    ecos,
+		Endpoints: contract.DiscoverEndpoints{
+			Health:            "/health",
+			Metrics:           "/metrics",
+			Discover:          "/api/v1/discover",
+			SetupStatus:       "/api/v1/setup/status",
+			AgentPrompt:       "/api/v1/agent-prompt",
+			IntegrationPrompt: "/api/v1/integration-prompt",
+			MCP:               "/mcp",
+			PublicStats:       "/api/v1/stats",
 			// Stable legacy key: the endpoint now requires read authentication,
 			// but discover consumers must not lose the field during that change.
-			"public_packages": "/api/v1/packages",
-			"events_stream":   "/api/v1/events/stream",
-			"admin_login":     "/api/v1/auth/login",
-			"admin_dashboard": "/api/v1/admin/dashboard",
-			"admin_license":   "/api/v1/admin/license/status",
-			"admin_trial":     "/api/v1/admin/license/trial/activate",
+			PublicPackages: "/api/v1/packages",
+			EventsStream:   "/api/v1/events/stream",
+			AdminLogin:     "/api/v1/auth/login",
+			AdminDashboard: "/api/v1/admin/dashboard",
+			AdminLicense:   "/api/v1/admin/license/status",
+			AdminTrial:     "/api/v1/admin/license/trial/activate",
 		},
-		"endpoint_authentication": gin.H{
-			"mcp":             "Authorization: Bearer <JWT or readonly API token>",
-			"public_packages": "Authorization: Bearer <JWT or readonly API token>",
-			"events_stream":   "Authorization: Bearer <JWT or readonly API token>",
+		EndpointAuthentication: contract.DiscoverEndpointAuthentication{
+			MCP:            "Authorization: Bearer <JWT or readonly API token>",
+			PublicPackages: "Authorization: Bearer <JWT or readonly API token>",
+			EventsStream:   "Authorization: Bearer <JWT or readonly API token>",
 		},
-		"mcp": gin.H{
-			"url":            base + "/mcp",
-			"protocol":       "Model Context Protocol (JSON-RPC 2.0 over HTTP)",
-			"transport":      "streamable-http",
-			"authentication": "Authorization: Bearer <JWT or readonly API token>",
-			"summary":        "Authenticate, POST initialize, then tools/list to discover what you can call. depsilo_status is a good first call.",
+		MCP: contract.DiscoverMCP{
+			URL:            base + "/mcp",
+			Protocol:       "Model Context Protocol (JSON-RPC 2.0 over HTTP)",
+			Transport:      "streamable-http",
+			Authentication: "Authorization: Bearer <JWT or readonly API token>",
+			Summary:        "Authenticate, POST initialize, then tools/list to discover what you can call. depsilo_status is a good first call.",
 		},
-		"agent_setup": gin.H{
-			"prompt_url":                     base + "/api/v1/agent-prompt",
-			"local_bootstrap_prompt_url":     base + "/api/v1/agent-prompt",
-			"project_integration_prompt_url": base + "/api/v1/integration-prompt",
-			"portal_url":                     base + "/",
-			"summary":                        agentSummary,
+		AgentSetup: contract.DiscoverAgentSetup{
+			PromptURL:                   base + "/api/v1/agent-prompt",
+			LocalBootstrapPromptURL:     base + "/api/v1/agent-prompt",
+			ProjectIntegrationPromptURL: base + "/api/v1/integration-prompt",
+			PortalURL:                   base + "/",
+			Summary:                     agentSummary,
 			// Stable key from when this guidance was a README section. It now
 			// lives in the deployment guide.
-			"readme_anchor": "https://github.com/depsilo/depsilo/blob/master/docs/deployment.md#ai-coding-agents",
+			ReadmeAnchor: "https://github.com/depsilo/depsilo/blob/master/docs/deployment.md#ai-coding-agents",
 		},
 	}
 }

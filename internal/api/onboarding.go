@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 )
 
@@ -38,29 +39,6 @@ type OnboardingHandler struct {
 
 func NewOnboardingHandler(database *gorm.DB) *OnboardingHandler {
 	return &OnboardingHandler{db: database, now: time.Now}
-}
-
-type onboardingEvent struct {
-	ID          uint      `json:"id"`
-	RequestID   string    `json:"request_id"`
-	Ecosystem   string    `json:"ecosystem"`
-	PackageName string    `json:"package_name"`
-	Version     string    `json:"version"`
-	Action      string    `json:"action"`
-	Outcome     string    `json:"outcome"`
-	StatusCode  int       `json:"status_code"`
-	CreatedAt   time.Time `json:"created_at"`
-}
-
-type onboardingStatusResponse struct {
-	Status              string                    `json:"status"`
-	StartedAt           time.Time                 `json:"started_at"`
-	Events              []onboardingEvent         `json:"events"`
-	NextAfterID         uint                      `json:"next_after_id"`
-	HasMore             bool                      `json:"has_more"`
-	DeliveryEvents      []onboardingDeliveryEvent `json:"delivery_events"`
-	NextDeliveryAfterID string                    `json:"next_delivery_after_id"`
-	DeliveriesHasMore   bool                      `json:"deliveries_has_more"`
 }
 
 // Status starts or advances a client-owned onboarding cursor. The initial
@@ -96,12 +74,12 @@ func (h *OnboardingHandler) Status(c *gin.Context) {
 		// events inserted before MAX(id) are behind the cursor, while events
 		// inserted afterward must also have started on or after this boundary.
 		requestStartedAt := h.now().UTC()
-		c.JSON(http.StatusOK, onboardingStatusResponse{
-			Status:         status,
+		c.JSON(http.StatusOK, contract.OnboardingStatusResponse{
+			Status:         contract.OnboardingStatus(status),
 			StartedAt:      requestStartedAt,
-			Events:         []onboardingEvent{},
+			Events:         []contract.OnboardingEvent{},
 			NextAfterID:    maxID,
-			DeliveryEvents: []onboardingDeliveryEvent{},
+			DeliveryEvents: []contract.OnboardingDeliveryEvent{},
 			NextDeliveryAfterID: (onboardingDeliveryCursor{
 				Version: 1, AuditAfter: maxID, AccessAfter: accessMax,
 			}).encode(),
@@ -139,7 +117,7 @@ func (h *OnboardingHandler) Status(c *gin.Context) {
 		}
 	}
 
-	rows := make([]onboardingEvent, 0, onboardingEventPageSize+1)
+	rows := make([]contract.OnboardingEvent, 0, onboardingEventPageSize+1)
 	if maxID > afterID {
 		err = h.db.WithContext(c.Request.Context()).
 			Model(&db.AuditLog{}).
@@ -165,13 +143,13 @@ func (h *OnboardingHandler) Status(c *gin.Context) {
 	if hasMore {
 		nextAfterID = rows[len(rows)-1].ID
 	}
-	response := onboardingStatusResponse{
-		Status:         status,
+	response := contract.OnboardingStatusResponse{
+		Status:         contract.OnboardingStatus(status),
 		StartedAt:      sessionStartedAt.UTC(),
 		Events:         rows,
 		NextAfterID:    nextAfterID,
 		HasMore:        hasMore,
-		DeliveryEvents: []onboardingDeliveryEvent{},
+		DeliveryEvents: []contract.OnboardingDeliveryEvent{},
 	}
 	if hasDeliveryCursor {
 		response.DeliveryEvents, response.NextDeliveryAfterID, response.DeliveriesHasMore, err =
@@ -211,7 +189,7 @@ func (h *OnboardingHandler) Update(c *gin.Context) {
 		writeOnboardingDatabaseError(c)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": status})
+	c.JSON(http.StatusOK, contract.OnboardingUpdateResponse{Status: contract.OnboardingStatus(status)})
 }
 
 func parseOnboardingAfterID(value string) (uint, error) {

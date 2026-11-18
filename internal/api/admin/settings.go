@@ -12,18 +12,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/config"
 )
-
-type AdminSettingsResponse struct {
-	Configured     config.SettingsSnapshot                     `json:"configured"`
-	Effective      config.SettingsSnapshot                     `json:"effective"`
-	PendingRestart []config.SettingPath                        `json:"pending_restart"`
-	Overrides      map[config.SettingPath]string               `json:"overrides"`
-	Sources        map[config.SettingPath]config.SettingSource `json:"sources"`
-	Editable       []config.SettingPath                        `json:"editable"`
-	ConfigWritable bool                                        `json:"config_writable"`
-}
 
 type UpdateAdminSettingsRequest struct {
 	Server *struct {
@@ -38,14 +29,6 @@ type UpdateAdminSettingsRequest struct {
 	Auth *struct {
 		TokenTTL *string `json:"token_ttl"`
 	} `json:"auth"`
-}
-
-type UpdateAdminSettingsResponse struct {
-	AdminSettingsResponse
-	Changed           []config.SettingPath `json:"changed"`
-	AppliedNow        []config.SettingPath `json:"applied_now"`
-	RestartRequired   []config.SettingPath `json:"restart_required"`
-	BlockedByOverride []config.SettingPath `json:"blocked_by_override"`
 }
 
 type settingsStore interface {
@@ -243,26 +226,66 @@ func requireJSONEOF(decoder *json.Decoder) error {
 	return nil
 }
 
-func adminSettingsResponse(state config.SettingsState) AdminSettingsResponse {
-	return AdminSettingsResponse{
-		Configured:     state.Configured,
-		Effective:      state.Effective,
-		PendingRestart: state.PendingRestart,
-		Overrides:      state.Overrides,
-		Sources:        state.Sources,
-		Editable:       state.Editable,
+func adminSettingsResponse(state config.SettingsState) contract.AdminSettingsResponse {
+	var overrides map[contract.SettingPath]string
+	if state.Overrides != nil {
+		overrides = make(map[contract.SettingPath]string, len(state.Overrides))
+		for path, name := range state.Overrides {
+			overrides[contract.SettingPath(path)] = name
+		}
+	}
+	var sources map[contract.SettingPath]contract.SettingSource
+	if state.Sources != nil {
+		sources = make(map[contract.SettingPath]contract.SettingSource, len(state.Sources))
+		for path, source := range state.Sources {
+			sources[contract.SettingPath(path)] = contract.SettingSource(source)
+		}
+	}
+	return contract.AdminSettingsResponse{
+		Configured:     settingsSnapshotContract(state.Configured),
+		Effective:      settingsSnapshotContract(state.Effective),
+		PendingRestart: editableSettingPaths(state.PendingRestart),
+		Overrides:      overrides,
+		Sources:        sources,
+		Editable:       editableSettingPaths(state.Editable),
 		ConfigWritable: state.ConfigWritable,
 	}
 }
 
-func updateAdminSettingsResponse(result config.SettingsUpdateResult) UpdateAdminSettingsResponse {
-	return UpdateAdminSettingsResponse{
+func updateAdminSettingsResponse(result config.SettingsUpdateResult) contract.UpdateAdminSettingsResponse {
+	return contract.UpdateAdminSettingsResponse{
 		AdminSettingsResponse: adminSettingsResponse(result.SettingsState),
-		Changed:               result.Changed,
-		AppliedNow:            result.AppliedNow,
-		RestartRequired:       result.RestartRequired,
-		BlockedByOverride:     result.BlockedByOverride,
+		Changed:               editableSettingPaths(result.Changed),
+		AppliedNow:            editableSettingPaths(result.AppliedNow),
+		RestartRequired:       editableSettingPaths(result.RestartRequired),
+		BlockedByOverride:     editableSettingPaths(result.BlockedByOverride),
 	}
+}
+
+func settingsSnapshotContract(s config.SettingsSnapshot) contract.AdminSettingsSnapshot {
+	return contract.AdminSettingsSnapshot{
+		Server:   contract.AdminSettingsServer{Host: s.Server.Host, Port: s.Server.Port, LogLevel: contract.AdminSettingsLogLevel(s.Server.LogLevel)},
+		Database: contract.AdminSettingsDatabase{Driver: s.Database.Driver},
+		Storage:  contract.AdminSettingsStorage{Type: s.Storage.Type, Path: s.Storage.Path},
+		Cache: contract.AdminSettingsCache{
+			MaxSizeGB: s.Cache.MaxSizeGB, TTLIndex: s.Cache.TTLIndex,
+			TTLBlob: s.Cache.TTLBlob, LRUThreshold: s.Cache.LRUThreshold,
+		},
+		Auth: contract.AdminSettingsAuth{TokenTTL: s.Auth.TokenTTL},
+	}
+}
+
+// editableSettingPaths copies a path list, keeping a nil list nil. Every list
+// the settings store returns holds only editable paths.
+func editableSettingPaths(paths []config.SettingPath) []contract.EditableSettingPath {
+	if paths == nil {
+		return nil
+	}
+	out := make([]contract.EditableSettingPath, len(paths))
+	for i, path := range paths {
+		out[i] = contract.EditableSettingPath(path)
+	}
+	return out
 }
 
 func writeBadSettingsRequest(c *gin.Context, err error) {

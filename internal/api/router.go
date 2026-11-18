@@ -10,6 +10,7 @@ import (
 
 	"depsilo/internal/accesslog"
 	"depsilo/internal/api/admin"
+	"depsilo/internal/api/contract"
 	"depsilo/internal/api/public"
 	"depsilo/internal/asyncruntime"
 	"depsilo/internal/audit"
@@ -516,9 +517,9 @@ func healthHandler(c *gin.Context) {
 	// no-cors response, which cannot distinguish a healthy 200 from a 503.
 	c.Header("Access-Control-Allow-Origin", "*")
 	c.Header("Cache-Control", "no-store")
-	c.JSON(http.StatusOK, gin.H{
-		"status":  "healthy",
-		"version": version.Version,
-		"uptime":  time.Since(startTime).String(),
+	c.JSON(http.StatusOK, contract.HealthResponse{
+		Status:  "healthy",
+		Version: version.Version,
+		Uptime:  time.Since(startTime).String(),
 	})
 }

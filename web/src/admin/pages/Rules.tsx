@@ -240,10 +240,9 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
 
 function upsertRule(current: AxiosResponse<RuleListPayload> | undefined, response: AxiosResponse<RuleRecord>): AxiosResponse<RuleListPayload> {
   const rule = response.data
-  if (!current) return { ...response, data: [rule] }
-  const items = Array.isArray(current.data) ? current.data : current.data.items
-  const next = [...items.filter((item) => item.id !== rule.id), rule]
-  return { ...current, data: Array.isArray(current.data) ? next : { ...current.data, items: next } }
+  if (!current) return { ...response, data: { items: [rule], total: 1 } }
+  const items = [...current.data.items.filter((item) => item.id !== rule.id), rule]
+  return { ...current, data: { items, total: items.length } }
 }
 
 export default function Rules() {
@@ -265,7 +264,7 @@ export default function Rules() {
   const query = useQuery({ queryKey: ['admin', 'rules'], queryFn: ({ signal }) => adminApi.listRules({ signal }), retry: false })
   const { data } = query
   const rulePayload = data?.data
-  const allItems = rulePayload ? (Array.isArray(rulePayload) ? rulePayload : rulePayload.items) : []
+  const allItems = rulePayload?.items ?? []
   const items = allItems.filter(rule => (!ecosystemFilter || rule.ecosystem === ecosystemFilter)
     && (!actionFilter || rule.action === actionFilter)
     && (!search.trim() || [rule.package_name, rule.reason, rule.version].some(value => value.toLowerCase().includes(search.trim().toLowerCase()))))

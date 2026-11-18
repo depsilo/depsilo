@@ -42,7 +42,7 @@ func TestCapabilitySummaryKeepsSupportModeAndDataIndependent(t *testing.T) {
 	if response.Code != 200 {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 	}
-	var got capabilitySummary
+	var got contract.CapabilitySummary
 	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestCapabilitySummaryReportsSourceBoundMinimumReleaseAge(t *testing.T) {
 	if response.Code != 200 {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 	}
-	var got capabilitySummary
+	var got contract.CapabilitySummary
 	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestCapabilitySummaryReportsObservedMinimumReleaseAge(t *testing.T) {
 	if response.Code != 200 {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 	}
-	var got capabilitySummary
+	var got contract.CapabilitySummary
 	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}

@@ -16,10 +16,6 @@ import (
 // Ecosystems plus a few adapter aliases; anything longer is not a real filter.
 const maxFilterEcosystems = 32
 
-// ecosystemCount is the facet entry handlers that predate the contract package
-// still name; new code uses contract.EcosystemCount directly.
-type ecosystemCount = contract.EcosystemCount
-
 // parseEcosystemFilter reads an ecosystem filter from the first parameter
 // name that is present. Values may repeat (`?ecosystem=pypi&ecosystem=npm`)
 // or be comma-separated (`?ecosystem=pypi,npm`); blanks and duplicates are

@@ -17,7 +17,7 @@ const rule = (overrides: Record<string, unknown> = {}) => ({
 test('test policy shows candidate hierarchy, winner, and decision reason', async ({ page }) => {
   let requestBody: unknown
   await mockAdminApi(page, {
-    'GET /api/v1/admin/rules': [],
+    'GET /api/v1/admin/rules': { items: [], total: 0 },
     'POST /api/v1/admin/rules/test': async (request: Request) => {
       requestBody = request.postDataJSON()
       return {

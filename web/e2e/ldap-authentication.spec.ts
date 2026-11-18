@@ -6,7 +6,7 @@ import type { LDAPAuthenticationSourceState, LoginIdentity, Principal } from '..
 const principal: Principal = { id: 1, username: 'admin', enabled: true, role: 'admin', auth_method: 'jwt', token_permissions: null, can_write: true, permission_source: 'local', login_method: 'password', can_manage_credentials: true }
 const provider = { id: 'directory', name: 'Company directory', protocol: 'ldap' as const, enabled: true, can_link: true }
 const config = { enabled: false, display_name: provider.name, admin_groups: ['cn=operators,dc=example'], readonly_groups: ['cn=readers,dc=example'], session_ttl: '30m', ldap: { url: 'ldaps://directory.example:636', bind_dn: 'cn=search,dc=example', bind_password_set: true, user_base_dn: 'ou=people,dc=example', user_filter: '(uid={username})', subject_attribute: 'entryUUID', display_name_attribute: 'displayName', groups_attribute: 'memberOf', ca_cert_pem: '' } }
-const source: LDAPAuthenticationSourceState = { id: provider.id, protocol: 'ldap', configured: config, effective: config, overrides: {}, config_writable: true, pending_restart: false }
+const source: LDAPAuthenticationSourceState = { id: provider.id, protocol: 'ldap', configured: config, effective: config, overrides: {}, config_writable: true, pending_restart: false, sessions_will_reset: true, can_restore: false }
 
 async function serveInsecureOrigin(page: Page, baseURL: string | undefined) {
   await page.route('http://depsilo.example.test/**', async route => {
@@ -224,7 +224,7 @@ test('LDAP sign-in retries invalid credentials without changing an existing toke
 
 test('local accounts link a directory identity using two separate proofs without changing their local authority', async ({ page }) => {
   let linked = false
-  const identity: LoginIdentity = { id: 12, provider: 'directory', protocol: 'ldap', provider_name: provider.name, provider_matches: true, login_available: true, display_name: 'Directory operator', created_at: '2026-10-23T10:00:00Z', last_login_at: null, can_unlink: true }
+  const identity: LoginIdentity = { id: 12, provider: 'directory', protocol: 'ldap', provider_name: provider.name, provider_matches: true, login_available: true, display_name: 'Directory operator', created_at: '2026-10-23T10:00:00Z', last_login_at: '0001-01-01T00:00:00Z', can_unlink: true }
   await mockAdminApi(page, {
     'GET /api/v1/auth/me': principal,
     'GET /api/v1/auth/identities': () => ({ permission_source: 'local', password_enabled: true, can_link: true, providers: [provider], identities: linked ? [identity] : [] }),

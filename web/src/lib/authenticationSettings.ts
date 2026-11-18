@@ -47,7 +47,7 @@ export function newAuthenticationSource(id: string, origin: string) {
     redirect_url: `${origin}/api/v1/auth/oidc/${id}/callback`,
     admin_groups: [], readonly_groups: [], groups_claim: 'groups', session_ttl: '30m', allow_insecure_loopback: false,
   }
-  return { id, protocol: 'oidc' as const, configured, effective: null, overrides: {}, pending_restart: false, config_writable: true }
+  return { id, protocol: 'oidc' as const, configured, effective: null, overrides: {}, pending_restart: false, sessions_will_reset: false, config_writable: true, can_restore: false }
 }
 
 /** Running labels always describe the effective config, never a pending draft. */

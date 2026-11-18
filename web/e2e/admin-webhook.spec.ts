@@ -1,5 +1,5 @@
 import type { Page, Request } from '@playwright/test'
-import type { WebhookConfig } from '../src/lib/api'
+import type { WebhookConfig } from '../src/lib/adminApi.types'
 import { test, expect, mockAdminApi } from './fixtures/admin-api'
 
 const webhookRows = [

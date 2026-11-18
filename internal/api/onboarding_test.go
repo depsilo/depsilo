@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 )
 
@@ -28,7 +29,7 @@ func newOnboardingTestHandler(t *testing.T, startedAt time.Time) (*OnboardingHan
 	return handler, database
 }
 
-func onboardingStatusRequest(t *testing.T, handler *OnboardingHandler, target string) onboardingStatusResponse {
+func onboardingStatusRequest(t *testing.T, handler *OnboardingHandler, target string) contract.OnboardingStatusResponse {
 	t.Helper()
 	router := gin.New()
 	router.GET("/onboarding/status", handler.Status)
@@ -37,7 +38,7 @@ func onboardingStatusRequest(t *testing.T, handler *OnboardingHandler, target st
 	if response.Code != http.StatusOK {
 		t.Fatalf("GET %s status = %d, body = %s", target, response.Code, response.Body.String())
 	}
-	var payload onboardingStatusResponse
+	var payload contract.OnboardingStatusResponse
 	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode onboarding status: %v", err)
 	}

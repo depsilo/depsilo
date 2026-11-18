@@ -1,6 +1,9 @@
 import type { OnboardingDeliveryEvent, OnboardingEvent, OnboardingStatusResponse } from './adminApi.types'
 import { getClientSelection } from './clientConnection'
 
+/** The request fields a delivery event shares with a request event. */
+type OnboardingRequestFields = Omit<OnboardingEvent, 'action'>
+
 export const ONBOARDING_SESSION_KEY = 'depsilo.admin.onboarding-session.v2'
 export const ONBOARDING_GATE_QUERY_KEY = ['admin', 'onboarding', 'gate'] as const
 
@@ -85,13 +88,13 @@ export function isSuccessfulOnboardingDownload(value: unknown): value is Onboard
     value.delivery_result === 'completed' && (value.outcome === 'hit' || value.outcome === 'miss')
 }
 
-function matchesScope(event: OnboardingEvent, scope: OnboardingScope, allowUnknownVersion = false): boolean {
+function matchesScope(event: OnboardingRequestFields, scope: OnboardingScope, allowUnknownVersion = false): boolean {
   return event.ecosystem === scope.ecosystem &&
     (!scope.targetPackage || event.package_name === scope.targetPackage) &&
     (!scope.targetVersion || event.version === scope.targetVersion || (allowUnknownVersion && event.version === ''))
 }
 
-function withinSession(event: OnboardingEvent, session: OnboardingSession, allowUnknownVersion = false): boolean {
+function withinSession(event: OnboardingRequestFields, session: OnboardingSession, allowUnknownVersion = false): boolean {
   return Date.parse(event.created_at) >= Date.parse(session.startedAt) && matchesScope(event, session, allowUnknownVersion)
 }
 
@@ -176,7 +179,7 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
 }
 
 /** Request outcome alone describes arrival, never successful artifact delivery. */
-export function onboardingOutcomeKind(event: OnboardingEvent): 'hit' | 'miss' | 'blocked' | 'error' {
+export function onboardingOutcomeKind(event: OnboardingRequestFields): 'hit' | 'miss' | 'blocked' | 'error' {
   if (event.outcome === 'blocked') return 'blocked'
   if (event.outcome === 'error' || event.status_code >= 400) return 'error'
   if (event.outcome === 'hit') return 'hit'
