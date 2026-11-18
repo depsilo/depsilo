@@ -99,7 +99,7 @@ function SidebarContent({
           {!collapsed && (
             <span
               className="text-[15px] font-[600]"
-              style={{ color: 'var(--text)', fontFamily: 'var(--font-display)' }}
+              style={{ color: 'var(--foreground)', fontFamily: 'var(--font-display)' }}
             >
               Depsilo
             </span>
@@ -124,7 +124,7 @@ function SidebarContent({
               <div
                 data-admin-workspace-row
                 data-admin-workspace-current={section.active ? 'true' : undefined}
-                className="flex min-w-0 items-center rounded-md transition-colors duration-150 hover:bg-[var(--admin-rail-hover)]"
+                className="flex min-w-0 items-center rounded-md transition-colors duration-150 hover:bg-[var(--accent)]"
                 style={{
                   background: section.active ? 'var(--brand-soft)' : undefined,
                 }}
@@ -137,15 +137,15 @@ function SidebarContent({
                     aria-current={section.active ? (section.current ? 'page' : 'location') : undefined}
                     className={`stripe-focus-ring flex min-h-[40px] min-w-0 flex-1 items-center gap-2.5 rounded-md py-2 text-[13px] no-underline ${collapsed ? 'justify-center px-0' : 'px-2.5'}`}
                     style={{
-                      color: section.active ? 'var(--brand-text)' : 'var(--text-soft)',
+                      color: section.active ? 'var(--brand-text)' : 'var(--muted-foreground)',
                       fontWeight: section.active ? 600 : 500,
                     }}
                   >
                     <span
                       className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
                       style={{
-                        background: section.active ? 'var(--bg-card)' : 'transparent',
-                        color: section.active ? 'var(--brand-text)' : 'var(--text-subtle)',
+                        background: section.active ? 'var(--card)' : 'transparent',
+                        color: section.active ? 'var(--brand-text)' : 'var(--muted-foreground)',
                       }}
                     >
                       <Icon name={section.icon} size="sm" />
@@ -187,15 +187,15 @@ function SidebarContent({
               to={getAdminRouteHref('users')}
               onClick={onNavigate}
               aria-label={t('nav.instanceManagement')}
-              className={`stripe-focus-ring mb-2 flex min-h-10 items-center gap-2.5 rounded-md py-2 text-[13px] font-[500] no-underline transition-colors hover:bg-[var(--admin-rail-hover)] ${collapsed ? 'justify-center px-0' : 'px-2'}`}
-              style={{ color: 'var(--text-soft)' }}
+              className={`stripe-focus-ring mb-2 flex min-h-10 items-center gap-2.5 rounded-md py-2 text-[13px] font-[500] no-underline transition-colors hover:bg-[var(--accent)] ${collapsed ? 'justify-center px-0' : 'px-2'}`}
+              style={{ color: 'var(--muted-foreground)' }}
             >
               <Icon name="settings" size="sm" />
               {!collapsed && <span>{t('nav.instanceManagement')}</span>}
             </Link>
           </RailTooltip>
         )}
-        <div className={`group flex cursor-default items-center gap-2.5 rounded-md transition-colors duration-150 ${collapsed ? 'flex-col gap-1 px-0 py-1' : 'px-2 py-2 hover:bg-[var(--admin-rail-hover)]'}`}>
+        <div className={`group flex cursor-default items-center gap-2.5 rounded-md transition-colors duration-150 ${collapsed ? 'flex-col gap-1 px-0 py-1' : 'px-2 py-2 hover:bg-[var(--accent)]'}`}>
           {collapsed ? (
             <RailTooltip label={`${username ?? ''} · ${t('account.title')}`} enabled>
               <Link
@@ -220,8 +220,8 @@ function SidebarContent({
                 {username?.[0]?.toUpperCase() || 'A'}
               </div>
               <Link to={getAdminRouteHref('account')} onClick={onNavigate} aria-label={t('account.title')} className="stripe-focus-ring min-w-0 flex-1 rounded-md py-1 no-underline">
-                <p className="truncate text-[13px] font-[500] leading-tight" style={{ color: 'var(--text)' }}>{username}</p>
-                <p className="mt-0.5 text-[12px] leading-tight" style={{ color: 'var(--text-muted)' }}>
+                <p className="truncate text-[13px] font-[500] leading-tight" style={{ color: 'var(--foreground)' }}>{username}</p>
+                <p className="mt-0.5 text-[12px] leading-tight" style={{ color: 'var(--muted-foreground)' }}>
                   {isAdmin ? t('nav.admin') : t('nav.readonly')} · {t('account.title')}
                 </p>
               </Link>
@@ -297,12 +297,12 @@ export default function MainLayout() {
       data-admin-concept="dependency-flowline"
       data-admin-rail={railCollapsed ? 'collapsed' : 'expanded'}
       className="relative z-[1] flex min-h-screen"
-      style={{ background: 'var(--admin-canvas)' }}
+      style={{ background: 'var(--background)' }}
     >
       <aside
         id="admin-rail-navigation"
         className="admin-rail fixed inset-y-0 left-0 z-30 hidden flex-col lg:flex"
-        style={{ background: 'var(--admin-rail)', borderRight: '1px solid var(--border-soft)' }}
+        style={{ background: 'var(--admin-rail)', borderRight: '1px solid var(--border)' }}
       >
         <SidebarContent
           {...sidebarProps}
@@ -329,8 +329,8 @@ export default function MainLayout() {
         </SheetContent>
       </Sheet>
 
-      <div data-admin-main className="admin-main min-w-0 flex-1" style={{ background: 'var(--admin-canvas)' }}>
-        <main className="min-h-screen pb-8 pt-4 lg:pt-6" style={{ background: 'var(--admin-canvas)' }}>
+      <div data-admin-main className="admin-main min-w-0 flex-1" style={{ background: 'var(--background)' }}>
+        <main className="min-h-screen pb-8 pt-4 lg:pt-6" style={{ background: 'var(--background)' }}>
           <div data-admin-outlet className="mx-auto w-full max-w-[1840px] px-4 sm:px-6 lg:px-8">
             {/* The Admin shell has no utility bar. On narrow screens the
                 workspace rail is off-canvas, so the drawer trigger sits at the

@@ -121,11 +121,10 @@
    and lives under [data-theme="dark"] below, which is set on
    <html> by main.tsx before first paint to avoid FOUC.
 
-   Old token NAMES are preserved so every component that uses
-   var(--brand), var(--bg-page), etc. keeps working without
-   touching one line of JSX. The new Instrument NAMES (--bg,
-   --surface, --hit, --btn, ...) are added alongside so new
-   code can use the role-based vocabulary the brief prescribes. */
+   Components use shadcn's role tokens (--background, --card,
+   --muted, --foreground, --muted-foreground, --primary, ...)
+   directly; the Depsilo tokens below cover what shadcn has no
+   role for (brand accent, status, severity, code surfaces). */
 :root {
   color-scheme: light;
   --font-sans: 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei', sans-serif;
@@ -164,39 +163,23 @@
   --ring: #2b5fda;
   --radius: 0.625rem;
 
-  /* ── Depsilo compatibility aliases ──
-     The names the application grew up with, now pointing at the roles above
-     so ~1,200 existing `var(--…)` call sites keep working unchanged.
-     `--brand*` is the Depsilo Deep Blue interaction accent (selection, links,
+  /* ── Depsilo product tokens ──
+     Roles shadcn does not define. `--brand*` is the Depsilo Deep Blue interaction accent (selection, links,
      active navigation) on every surface; green survives only in `--ok*` /
      `--hit*`, where it is a status. The filled primary keeps white text on
      Deep Blue in both themes; dark mode lifts link and focus blue so text
      clears AA on the near-black canvas. */
-  --bg-page:   var(--background);
-  --bg-card:   var(--card);
-  --bg-soft:   var(--muted);
-  --bg-hover:  var(--accent);
-  --admin-canvas: var(--background);
   --admin-rail: oklch(0.985 0 0);
-  --admin-rail-hover: var(--accent);
 
   --border:        oklch(0.922 0 0);
-  --border-soft:   var(--border);
   --border-strong: oklch(0.87 0 0);
-
-  --text:        var(--foreground);
-  --text-muted:  var(--muted-foreground);
-  --text-soft:   var(--muted-foreground);
-  --text-subtle: var(--muted-foreground);
 
   --brand:        #2b5fda;
   --brand-soft:   #ecf2fd;
   --brand-border: #b9cbf4;
   --brand-text:   #2b5fda;
 
-  --btn-primary-bg: var(--primary);
-  --btn-primary-fg: var(--primary-foreground);
-  --btn-primary-press: #183ba5;
+  --primary-press: #183ba5;
 
   /* Chart ramp — shadcn's neutral chart-1..5 scale. */
   --spec-1: oklch(0.87 0 0);
@@ -225,23 +208,16 @@
   --sev-critical:  #a51d1d;
   --sev-high:      #e2581f;
   --sev-medium:    #e8a320;
-  --sev-low:       var(--text-soft);
+  --sev-low:       var(--muted-foreground);
   --sev-unknown:   var(--border-strong);
   --danger-fill:   oklch(0.936 0.032 17.717);
   --danger-border: oklch(0.808 0.114 19.571);
   --danger-text:   oklch(0.505 0.213 27.518);
   --focus-ring:    #2b5fda;
 
-  /* Remaining role-named aliases. The ones with no consumers were deleted
-     rather than carried: they were a second vocabulary for tokens that
-     already have a name. */
-  --inverse:   var(--text);
-  --on-inverse: var(--bg-page);
+  /* Status aliases: a cache hit is shown in the OK colour. */
   --hit:       var(--ok);
   --on-hit:    var(--ok-text);
-  --btn:       var(--btn-primary-bg);
-  --btn-press: var(--btn-primary-press);
-  --btn-fg:    var(--btn-primary-fg);
   --grid:      color-mix(in oklab, var(--border) 35%, transparent);
 
   /* shadcn/ui radius scale: --radius is 0.625rem, so sm/md/lg/xl land on
@@ -282,12 +258,12 @@
   --chart-2: var(--spec-2);
   --chart-3: var(--spec-3);
   --chart-4: var(--spec-4);
-  --chart-5: var(--text-muted);
+  --chart-5: var(--muted-foreground);
   --sidebar: var(--admin-rail);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: var(--admin-rail-hover);
+  --sidebar-accent: var(--accent);
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
@@ -321,32 +297,18 @@ html.dark,
   --ring: #6b93f7;
   --radius: 0.625rem;
 
-  /* Compatibility aliases — see the light block. */
-  --bg-page:   var(--background);
-  --bg-card:   var(--card);
-  --bg-soft:   var(--muted);
-  --bg-hover:  var(--accent);
-  --admin-canvas: var(--background);
+  /* Depsilo product tokens — see the light block. */
   --admin-rail: oklch(0.205 0 0);
-  --admin-rail-hover: var(--accent);
 
   --border:        oklch(1 0 0 / 10%);
-  --border-soft:   var(--border);
   --border-strong: oklch(1 0 0 / 20%);
-
-  --text:        var(--foreground);
-  --text-muted:  var(--muted-foreground);
-  --text-soft:   var(--muted-foreground);
-  --text-subtle: var(--muted-foreground);
 
   --brand:        #6b93f7;
   --brand-soft:   #16234a;
   --brand-border: #2b4090;
   --brand-text:   #a8c3fb;
 
-  --btn-primary-bg: var(--primary);
-  --btn-primary-fg: var(--primary-foreground);
-  --btn-primary-press: #1e47b8;
+  --primary-press: #1e47b8;
 
   --spec-1: oklch(0.87 0 0);
   --spec-2: oklch(0.556 0 0);
@@ -367,21 +329,16 @@ html.dark,
   --sev-critical:  #e5484d;
   --sev-high:      #ff9b45;
   --sev-medium:    #ffe066;
-  --sev-low:       var(--text-soft);
+  --sev-low:       var(--muted-foreground);
   --sev-unknown:   var(--border-strong);
   --danger-fill:   oklch(0.258 0.092 26.042);
   --danger-border: oklch(0.444 0.177 26.899);
   --danger-text:   oklch(0.808 0.114 19.571);
   --focus-ring:    #6b93f7;
 
-  /* Remaining role-named aliases — same set as the light block. */
-  --inverse:   var(--foreground);
-  --on-inverse: var(--background);
+  /* Status aliases — same set as the light block. */
   --hit:       var(--ok);
   --on-hit:    var(--ok-text);
-  --btn:       var(--btn-primary-bg);
-  --btn-press: var(--btn-primary-press);
-  --btn-fg:    var(--btn-primary-fg);
   --grid:      color-mix(in oklab, var(--border) 35%, transparent);
 
   /* Elevation is the same offset/blur system in both themes; dark surfaces
@@ -433,31 +390,17 @@ html.dark,
     --ring: #6b93f7;
     --radius: 0.625rem;
 
-    --bg-page:   var(--background);
-    --bg-card:   var(--card);
-    --bg-soft:   var(--muted);
-    --bg-hover:  var(--accent);
-    --admin-canvas: var(--background);
     --admin-rail: oklch(0.205 0 0);
-    --admin-rail-hover: var(--accent);
 
     --border:        oklch(1 0 0 / 10%);
-    --border-soft:   var(--border);
     --border-strong: oklch(1 0 0 / 20%);
-
-    --text:        var(--foreground);
-    --text-muted:  var(--muted-foreground);
-    --text-soft:   var(--muted-foreground);
-    --text-subtle: var(--muted-foreground);
 
     --brand:        #6b93f7;
     --brand-soft:   #16234a;
     --brand-border: #2b4090;
     --brand-text:   #a8c3fb;
 
-    --btn-primary-bg: var(--primary);
-    --btn-primary-fg: var(--primary-foreground);
-    --btn-primary-press: #1e47b8;
+    --primary-press: #1e47b8;
 
     --spec-1: oklch(0.87 0 0);
     --spec-2: oklch(0.556 0 0);
@@ -478,7 +421,7 @@ html.dark,
     --sev-critical:  #e5484d;
     --sev-high:      #ff9b45;
     --sev-medium:    #ffe066;
-    --sev-low:       var(--text-soft);
+    --sev-low:       var(--muted-foreground);
     --sev-unknown:   var(--border-strong);
     --danger-fill:   oklch(0.258 0.092 26.042);
     --danger-border: oklch(0.444 0.177 26.899);
@@ -488,9 +431,6 @@ html.dark,
     --bg:        oklch(0.145 0 0);
     --hit:       var(--ok);
     --on-hit:    var(--ok-text);
-    --btn:       var(--btn-primary-bg);
-    --btn-press: var(--btn-primary-press);
-    --btn-fg:    var(--btn-primary-fg);
     --grid:      color-mix(in oklab, var(--border) 35%, transparent);
 
     --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.4);
@@ -510,8 +450,8 @@ html.dark,
 
 /* ── Body defaults ── */
 html, body {
-  background: var(--bg-page);
-  color: var(--text);
+  background: var(--background);
+  color: var(--foreground);
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 400;
@@ -542,7 +482,7 @@ body { overflow-x: clip; }
   }
   h1, h2, h3, h4 {
     font-family: var(--font-display);
-    color: var(--text);
+    color: var(--foreground);
     font-weight: 600;
     letter-spacing: -0.025em;
     line-height: 1.1;
@@ -626,7 +566,7 @@ pre, code {
 }
 
 .shell {
-  background: var(--bg-card);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--r-shell);
 }
@@ -669,7 +609,7 @@ pre, code {
 ::-webkit-scrollbar-thumb {
   background: var(--border-strong);
   border-radius: var(--r-sm);
-  border: 2px solid var(--bg-page);
+  border: 2px solid var(--background);
 }
 ::-webkit-scrollbar-track { background: transparent; }
 
@@ -762,18 +702,18 @@ html.dark[data-surface='portal'] {
    shadow fades the edge that still has content behind it, and the
    locally-attached cover hides it again once the end is reached. */
 .code-scroll {
-  background-color: var(--bg-soft);
+  background-color: var(--muted);
   background-image:
-    linear-gradient(to right, var(--bg-soft) 30%, transparent),
-    linear-gradient(to left, var(--bg-soft) 30%, transparent),
-    linear-gradient(to right, color-mix(in oklab, var(--text) 16%, transparent), transparent),
-    linear-gradient(to left, color-mix(in oklab, var(--text) 16%, transparent), transparent);
+    linear-gradient(to right, var(--muted) 30%, transparent),
+    linear-gradient(to left, var(--muted) 30%, transparent),
+    linear-gradient(to right, color-mix(in oklab, var(--foreground) 16%, transparent), transparent),
+    linear-gradient(to left, color-mix(in oklab, var(--foreground) 16%, transparent), transparent);
   background-position: 0 0, 100% 0, 0 0, 100% 0;
   background-size: 32px 100%, 32px 100%, 14px 100%, 14px 100%;
   background-repeat: no-repeat;
   background-attachment: local, local, scroll, scroll;
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklab, var(--text) 30%, transparent) transparent;
+  scrollbar-color: color-mix(in oklab, var(--foreground) 30%, transparent) transparent;
 }
 .code-block[data-code-tone='ink'] .code-scroll {
   background-color: var(--code-bg);
@@ -790,15 +730,15 @@ html.dark[data-surface='portal'] {
 }
 @media (hover: hover) {
   .manager-choice:hover:not([data-active='true']) {
-    background: var(--bg-hover) !important;
+    background: var(--accent) !important;
   }
   .code-block[data-code-tone='ink'] .code-copy-control:hover {
     background: color-mix(in oklab, var(--code-fg) 8%, transparent) !important;
     color: var(--code-fg) !important;
   }
   .code-block[data-code-tone='light'] .code-copy-control:hover {
-    background: var(--bg-hover) !important;
-    color: var(--text) !important;
+    background: var(--accent) !important;
+    color: var(--foreground) !important;
   }
 }
 
@@ -826,11 +766,11 @@ details[open] > summary:not(.list-none):not(:has(> .icon))::before {
 
 .config-disclosure > summary::-webkit-details-marker { display: none; }
 .disclosure-chevron {
-  color: var(--text-subtle);
+  color: var(--muted-foreground);
   transition: transform 160ms cubic-bezier(0.2, 0, 0, 1), color 140ms ease;
 }
 .config-disclosure[open] > summary .disclosure-chevron {
-  color: var(--text);
+  color: var(--foreground);
   transform: rotate(180deg);
 }
 
@@ -873,7 +813,7 @@ details[open] > summary:not(.list-none):not(:has(> .icon))::before {
   border: 1px solid var(--border);
   border-radius: var(--r-tag);
   font-size: 12px;
-  color: var(--text-soft);
+  color: var(--muted-foreground);
   background: transparent;
 }
 /* Overview aliases resolve through the shared theme. Chart series identity

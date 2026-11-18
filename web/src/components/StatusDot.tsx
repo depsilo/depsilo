@@ -8,7 +8,7 @@ const colorMap = {
   healthy:  'var(--ok)',
   degraded: 'var(--warn)',
   failed:   'var(--danger)',
-  unknown:  'var(--text-subtle)',
+  unknown:  'var(--muted-foreground)',
 } as const;
 
 export default function StatusDot({ status, size = 6, live = false }: Props) {

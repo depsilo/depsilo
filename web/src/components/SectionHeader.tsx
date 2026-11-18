@@ -13,11 +13,11 @@ export default function SectionHeader({ title, action, hint, divider = true }: S
   return (
     <header className={`mb-4 flex flex-col gap-3 pb-2 sm:flex-row sm:items-end sm:justify-between ${divider ? 'border-b border-[var(--border)]' : ''}`}>
       <div className="min-w-0">
-        <h2 className="text-[14px] font-[600]" style={{ color: 'var(--text)' }}>
+        <h2 className="text-[14px] font-[600]" style={{ color: 'var(--foreground)' }}>
           {title}
         </h2>
         {hint && (
-          <p className="mt-1 text-[12px]" style={{ color: 'var(--text-soft)' }}>
+          <p className="mt-1 text-[12px]" style={{ color: 'var(--muted-foreground)' }}>
             {hint}
           </p>
         )}

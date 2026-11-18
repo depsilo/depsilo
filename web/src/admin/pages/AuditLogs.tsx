@@ -292,7 +292,7 @@ export default function AuditLogs() {
       />
 
       {isPending ? (
-        <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>
+        <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--muted-foreground)' }}>
           <span aria-hidden="true">{t('loading')}</span>
         </div>
       ) : isError && !data ? (
@@ -318,11 +318,11 @@ export default function AuditLogs() {
               {items.map((row: AuditLog) => (
                 <TableRow
                   key={row.id}
-                  className="transition-colors duration-75 hover:bg-[var(--bg-soft)]"
-                  style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
+                  className="transition-colors duration-75 hover:bg-[var(--muted)]"
+                  style={{ borderBottom: '1px solid var(--border, var(--border))' }}
                 >
                   <TableCell className="py-2 px-3 pl-0 whitespace-nowrap">
-                    <span className="font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{formatTime(row.created_at)}</span>
+                    <span className="font-mono tabular-nums" style={{ color: 'var(--muted-foreground)' }}>{formatTime(row.created_at)}</span>
                   </TableCell>
                   <TableCell className="py-2 px-3 max-w-[260px]">
                     <span className="block break-words font-mono">{row.package_name || '—'}{row.version ? `@${row.version}` : ''}</span>

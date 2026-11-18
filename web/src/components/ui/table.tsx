@@ -73,7 +73,7 @@ function TableHead({ className, ...props }: React.ComponentProps<'th'>) {
       className={cn(
         // One header style for every Admin table: sentence case, the interface
         // face, and the muted text role. Pages set padding and alignment only.
-        'h-10 px-2 text-left align-middle text-[12px] font-[500] whitespace-nowrap text-[var(--text-muted)]',
+        'h-10 px-2 text-left align-middle text-[12px] font-[500] whitespace-nowrap text-[var(--muted-foreground)]',
         className,
       )}
       {...props}

@@ -56,15 +56,15 @@ export default function QuickStart({ pytorchIndexPath }: Props) {
       <header className="max-w-[760px]">
         <h1
           id="quickstart-title"
-          className="m-0 font-display text-[clamp(30px,3vw,38px)] font-[600] leading-[1.08] text-[var(--text)]"
+          className="m-0 font-display text-[clamp(30px,3vw,38px)] font-[600] leading-[1.08] text-[var(--foreground)]"
         >
           {t('quickstart.title')}
         </h1>
-        <p className="mt-2 max-w-[68ch] text-[14px] leading-[1.5] text-[var(--text-muted)]">
+        <p className="mt-2 max-w-[68ch] text-[14px] leading-[1.5] text-[var(--muted-foreground)]">
           {t('quickstart.flowIntro')}
         </p>
         {isLoopbackServiceOrigin(endpoint) && (
-          <p data-loopback-endpoint className="mt-2 max-w-[68ch] break-words text-[13px] leading-[1.5] text-[var(--text-muted)]">
+          <p data-loopback-endpoint className="mt-2 max-w-[68ch] break-words text-[13px] leading-[1.5] text-[var(--muted-foreground)]">
             {t('common.loopbackEndpoint', { address: endpoint })}
           </p>
         )}
@@ -83,7 +83,7 @@ export default function QuickStart({ pytorchIndexPath }: Props) {
           data-quickstart-shell
           className="grid grid-cols-1 overflow-hidden rounded-xl min-[900px]:grid-cols-[280px_minmax(0,1fr)]"
           style={{
-            background: 'var(--bg-card)',
+            background: 'var(--card)',
             border: '1px solid var(--border-strong)',
           }}
         >

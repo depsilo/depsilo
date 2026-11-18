@@ -325,7 +325,7 @@ export default function Dashboard() {
       )}
       actions={(
         <div data-dashboard-refresh-group className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 text-[12px] tabular-nums" style={{ color: 'var(--text-soft)' }}>
+          <span className="inline-flex items-center gap-1.5 text-[12px] tabular-nums" style={{ color: 'var(--muted-foreground)' }}>
             <Icon name="history" size="sm" />
             {t('overview.updatedAt', { time: lastUpdatedLabel })}
           </span>

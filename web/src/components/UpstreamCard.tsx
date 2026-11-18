@@ -74,9 +74,9 @@ function beatHeight(latency: number, scale: number): number {
 }
 
 function beatColor(latency: number): string {
-  if (latency < 0) return 'color-mix(in oklab, var(--danger) 78%, var(--bg-card))'
-  if (latency < BEAT_SLOW_MS) return 'color-mix(in oklab, var(--ok) 82%, var(--bg-card))'
-  return 'color-mix(in oklab, var(--warn) 76%, var(--bg-card))'
+  if (latency < 0) return 'color-mix(in oklab, var(--danger) 78%, var(--card))'
+  if (latency < BEAT_SLOW_MS) return 'color-mix(in oklab, var(--ok) 82%, var(--card))'
+  return 'color-mix(in oklab, var(--warn) 76%, var(--card))'
 }
 
 /** Exposed on each beat so the encoding can be asserted without reading styles. */
@@ -253,7 +253,7 @@ function HeartbeatBar({ upstream, showEmptyLabel = false }: { upstream: Upstream
                 height: BEAT_AREA,
                 opacity: beats.length === 0 ? 0.4 : (activeIdx !== null && activeIdx !== i ? 0.42 : 1),
                 boxShadow: activeIdx === i
-                  ? '0 0 0 1px color-mix(in oklab, var(--text) 22%, transparent) inset'
+                  ? '0 0 0 1px color-mix(in oklab, var(--foreground) 22%, transparent) inset'
                   : 'none',
                 transition: 'opacity 140ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 140ms cubic-bezier(0.22, 1, 0.36, 1)',
               }}
@@ -276,7 +276,7 @@ function HeartbeatBar({ upstream, showEmptyLabel = false }: { upstream: Upstream
           aria-live="polite"
           aria-atomic="true"
           className="absolute bottom-full mb-1 px-2 py-1 rounded-sm text-[13px] font-mono whitespace-nowrap pointer-events-none z-10"
-          style={{ background: 'var(--inverse)', color: 'var(--on-inverse)', left: tooltipLeft, transform: tooltipTransform }}
+          style={{ background: 'var(--foreground)', color: 'var(--background)', left: tooltipLeft, transform: tooltipTransform }}
         >
           {activeDetail}
         </div>
@@ -312,7 +312,7 @@ function UpstreamRow({
   const statusIndicator = (
     <span
       className="inline-flex shrink-0 items-center gap-1.5 text-[13px] font-medium"
-      style={{ color: 'var(--text-muted)' }}
+      style={{ color: 'var(--muted-foreground)' }}
     >
       <StatusDot status={status} />
       {t(`monitor.${status}`)}
@@ -321,7 +321,7 @@ function UpstreamRow({
   const latencyIndicator = (
     <span
       className="shrink-0 text-[13px] tabular-nums"
-      style={{ color: 'var(--text-muted)' }}
+      style={{ color: 'var(--muted-foreground)' }}
     >
       {operational ? t('monitor.averageLatency', { value: latency }) : latency}
     </span>
@@ -353,7 +353,7 @@ function UpstreamRow({
             <span
               className="min-w-0 flex-1 truncate text-[13px] font-[400]"
               title={upstream.name}
-              style={{ color: 'var(--text)' }}
+              style={{ color: 'var(--foreground)' }}
             >
               {upstream.name}
             </span>
@@ -368,7 +368,7 @@ function UpstreamRow({
             {statusIndicator}
             {latencyIndicator}
             {metadata !== undefined && metadata !== null && metadata !== false && (
-              <div data-upstream-metadata className="min-w-0 text-[12px]" style={{ color: 'var(--text-muted)' }}>
+              <div data-upstream-metadata className="min-w-0 text-[12px]" style={{ color: 'var(--muted-foreground)' }}>
                 {metadata}
               </div>
             )}
@@ -380,7 +380,7 @@ function UpstreamRow({
             <span
               className="min-w-0 flex-1 truncate text-[13px] font-[400]"
               title={upstream.name}
-              style={{ color: 'var(--text)' }}
+              style={{ color: 'var(--foreground)' }}
             >
               {upstream.name}
             </span>
@@ -393,7 +393,7 @@ function UpstreamRow({
             <div
               data-upstream-metadata
               className="mb-1 min-w-0 text-[12px]"
-              style={{ color: 'var(--text-muted)' }}
+              style={{ color: 'var(--muted-foreground)' }}
             >
               {metadata}
             </div>
@@ -471,7 +471,7 @@ export function UpstreamGroupedPanel({
   }, [resolvedUpstreams])
 
   if (upstreams.length === 0) {
-    return <p className="text-[13px] py-4" style={{ color: 'var(--text-soft)' }}>{t('monitor.noUpstreams')}</p>
+    return <p className="text-[13px] py-4" style={{ color: 'var(--muted-foreground)' }}>{t('monitor.noUpstreams')}</p>
   }
 
   const isCards = variant === 'cards'
@@ -505,7 +505,7 @@ export function UpstreamGroupedPanel({
           <Button variant="link"
             type="button"
             className="min-h-[40px] px-0 font-semibold"
-            style={{ color: 'var(--text)' }}
+            style={{ color: 'var(--foreground)' }}
             onClick={() => { void refetchLatencies() }}
           >
             {t('common.retry')}
@@ -548,7 +548,7 @@ export function UpstreamGroupedPanel({
                   <h2
                     id={headingId}
                     className="flex min-w-0 items-center gap-2 text-[14px] font-semibold"
-                    style={{ color: 'var(--text)' }}
+                    style={{ color: 'var(--foreground)' }}
                   >
                     {isEcosystemType(adapter) && <EcosystemIcon type={adapter} size={14} useColor decorative />}
                     <span className="min-w-0 truncate">
@@ -557,7 +557,7 @@ export function UpstreamGroupedPanel({
                   </h2>
                   <span
                     className="ml-auto shrink-0 text-[12px] tabular-nums"
-                    style={{ color: 'var(--text-muted)' }}
+                    style={{ color: 'var(--muted-foreground)' }}
                   >
                     {!isOperational && <>{t('monitor.historySummary', { count: checkCount })} · </>}{t('monitor.healthySummary', { healthy: healthyCount, total: items.length })}
                   </span>

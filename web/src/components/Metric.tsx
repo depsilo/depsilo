@@ -44,7 +44,7 @@ export default function Metric({
     >
       <span
         className="text-[12px] font-[600]"
-        style={{ color: 'var(--text-subtle)' }}
+        style={{ color: 'var(--muted-foreground)' }}
       >
         {label}
       </span>
@@ -59,7 +59,7 @@ export default function Metric({
             ? 'var(--ok-text)'
             : valueTone === 'warn'
               ? 'var(--warn-text)'
-              : 'var(--text)',
+              : 'var(--foreground)',
         }}
       >
         {value}
@@ -75,7 +75,7 @@ export default function Metric({
               ? 'var(--ok-text)'
               : changeTone === 'negative'
                 ? 'var(--danger-text)'
-                : 'var(--text-soft)',
+                : 'var(--muted-foreground)',
           }}
         >
           {change >= 0 ? '+' : ''}{change.toFixed(1)}%

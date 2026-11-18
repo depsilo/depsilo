@@ -104,8 +104,8 @@ function EntryButton({
           background: active
             ? 'var(--accent)'
             : rail
-              ? 'var(--bg-card)'
-              : 'color-mix(in oklab, var(--bg-soft) 78%, transparent)',
+              ? 'var(--card)'
+              : 'color-mix(in oklab, var(--muted) 78%, transparent)',
           flexShrink: 0,
         }}
       >
@@ -116,7 +116,7 @@ function EntryButton({
           style={{
             display: 'block',
             overflow: 'hidden',
-            color: active ? 'var(--brand-text)' : 'var(--text)',
+            color: active ? 'var(--brand-text)' : 'var(--foreground)',
             fontSize: rail ? 13 : compact ? 12.5 : 14,
             fontWeight: active ? 600 : 500,
             lineHeight: 1.25,
@@ -135,7 +135,7 @@ function EntryButton({
               display: 'block',
               overflow: 'hidden',
               marginTop: 2,
-              color: 'var(--text-muted)',
+              color: 'var(--muted-foreground)',
               fontSize: 12,
               lineHeight: 1.25,
               textOverflow: 'ellipsis',
@@ -205,7 +205,7 @@ export default function EcosystemCatalog({ selected, onSelect, leading = [], opt
     if (entries.length === 0) return null
     return (
       <section aria-labelledby="ecosystem-group-optional">
-        <h4 id="ecosystem-group-optional" className="m-0 mb-1 text-[12px] font-[500] text-[var(--text-muted)]">
+        <h4 id="ecosystem-group-optional" className="m-0 mb-1 text-[12px] font-[500] text-[var(--muted-foreground)]">
           {t('quickstart.catalog.optionalGroup')}
         </h4>
         <ul className="m-0 grid list-none grid-cols-1 gap-1 p-0">
@@ -231,7 +231,7 @@ export default function EcosystemCatalog({ selected, onSelect, leading = [], opt
         <section key={group} aria-labelledby={`ecosystem-group-${group}`}>
           <h4
             id={`ecosystem-group-${group}`}
-            className="m-0 mb-1 text-[12px] font-[500] text-[var(--text-muted)]"
+            className="m-0 mb-1 text-[12px] font-[500] text-[var(--muted-foreground)]"
           >
             {t(groupLabelKey(group))}
           </h4>
@@ -292,10 +292,10 @@ export default function EcosystemCatalog({ selected, onSelect, leading = [], opt
         padding: '16px 12px 20px',
         // A rail, not a card: the tint keeps the column reading as a
         // directory when the configuration pane next to it is taller.
-        background: 'var(--bg-soft)',
+        background: 'var(--muted)',
       }}
     >
-      <h3 className="m-0 text-[16px] font-[600] leading-[1.3] text-[var(--text)]">
+      <h3 className="m-0 text-[16px] font-[600] leading-[1.3] text-[var(--foreground)]">
         {t('quickstart.pickEcosystem')}
       </h3>
 
@@ -303,7 +303,7 @@ export default function EcosystemCatalog({ selected, onSelect, leading = [], opt
         <Icon
           name="search"
           size="sm"
-          className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[var(--text-muted)]"
+          className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[var(--muted-foreground)]"
         />
         <Input
           type="search"
@@ -319,7 +319,7 @@ export default function EcosystemCatalog({ selected, onSelect, leading = [], opt
           placeholder={t('quickstart.searchEcosystemPlaceholder')}
           autoComplete="off"
           className="pl-9"
-          style={{ background: 'var(--bg-card)' }}
+          style={{ background: 'var(--card)' }}
         />
       </div>
 
@@ -335,7 +335,7 @@ export default function EcosystemCatalog({ selected, onSelect, leading = [], opt
               {renderOptional(matchingOptional)}
             </>
           ) : (
-            <p className="m-0 py-4 text-[13px] leading-[1.5] text-[var(--text-muted)]">
+            <p className="m-0 py-4 text-[13px] leading-[1.5] text-[var(--muted-foreground)]">
               {t('quickstart.noEcosystemMatch', { query: query.trim() })}
             </p>
           )}
@@ -356,8 +356,8 @@ export default function EcosystemCatalog({ selected, onSelect, leading = [], opt
         <div className="mt-auto pt-6">
           <Link
             to="/monitor"
-            className="stripe-focus-ring -ml-2 inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-[13px] font-[500] no-underline hover:bg-[var(--bg-card)]"
-            style={{ color: 'var(--text-muted)' }}
+            className="stripe-focus-ring -ml-2 inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-[13px] font-[500] no-underline hover:bg-[var(--card)]"
+            style={{ color: 'var(--muted-foreground)' }}
           >
             {t('quickstart.viewUpstreamHealth')}
             <Icon name="arrow_forward" size="sm" />

@@ -239,7 +239,7 @@ export default function Quarantine() {
             <DialogTitle className="pr-10">{t('quarantine.revoke.title')}</DialogTitle>
             {revokeTarget && (
               <div className="space-y-4">
-                <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>
+                <p className="text-[13px]" style={{ color: 'var(--muted-foreground)' }}>
                   {t('quarantine.revoke.body', { eco: revokeTarget.ecosystem, pkg: revokeTarget.package, ver: revokeTarget.version })}
                 </p>
                 <Field disabled={revokeM.isPending}>
@@ -319,7 +319,7 @@ function EventsTab(props: {
 
       {/* Table */}
       {props.eventsQ.isPending ? (
-        <p aria-busy="true" className="text-[13px]" style={{ color: 'var(--text-soft)' }}><span aria-hidden="true">{t('loading')}</span></p>
+        <p aria-busy="true" className="text-[13px]" style={{ color: 'var(--muted-foreground)' }}><span aria-hidden="true">{t('loading')}</span></p>
       ) : props.eventsQ.isError && !props.eventsQ.data ? (
         <QueryErrorState message={getApiError(props.eventsQ.error).status === 403 ? t('common.permissionDenied') : getApiError(props.eventsQ.error).message} onRetry={() => { void props.eventsQ.refetch() }} />
       ) : (
@@ -356,7 +356,7 @@ function EventsTab(props: {
         <TableContainer label={t('quarantine.events.table')} minWidth={920}>
           <div className="rounded-md border" style={{ borderColor: 'var(--border)' }}>
             <Table className="w-full" style={{ borderCollapse: 'collapse' }}>
-            <TableHeader style={{ background: 'var(--bg-soft)' }}>
+            <TableHeader style={{ background: 'var(--muted)' }}>
               <TableRow>
                 <Th>{t('quarantine.col.time')}</Th>
                 <Th>{t('quarantine.col.ecosystem')}</Th>
@@ -370,7 +370,7 @@ function EventsTab(props: {
               {items.map((ev) => (
                 <TableRow key={ev.id} style={{ borderTop: '1px solid var(--border)' }}>
                   <Td>
-                    <span className="text-[12px] font-mono whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>
+                    <span className="text-[12px] font-mono whitespace-nowrap" style={{ color: 'var(--muted-foreground)' }}>
                       {formatTime(ev.created_at)}
                     </span>
                   </Td>
@@ -381,10 +381,10 @@ function EventsTab(props: {
                     </div>
                   </Td>
                   <Td><Button variant="link" className="h-auto min-h-10 p-0 whitespace-normal text-left" onClick={() => setSelected(ev)}>{ev.package}</Button></Td>
-                  <Td><span className="text-[13px] font-mono" style={{ color: 'var(--text-soft)' }}>{ev.version}</span></Td>
+                  <Td><span className="text-[13px] font-mono" style={{ color: 'var(--muted-foreground)' }}>{ev.version}</span></Td>
                   <Td>{actionBadge(ev.action, t)}</Td>
                   <Td>
-                    <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>{ev.reason}</span>
+                    <span className="text-[12px]" style={{ color: 'var(--muted-foreground)' }}>{ev.reason}</span>
                   </Td>
                 </TableRow>
               ))}
@@ -466,7 +466,7 @@ function ApprovalsTab(props: {
   const items = data?.items ?? []
 
   if (props.approvalsQ.isPending) {
-    return <p aria-busy="true" className="text-[13px]" style={{ color: 'var(--text-soft)' }}><span aria-hidden="true">{t('loading')}</span></p>
+    return <p aria-busy="true" className="text-[13px]" style={{ color: 'var(--muted-foreground)' }}><span aria-hidden="true">{t('loading')}</span></p>
   }
   if (props.approvalsQ.isError && !props.approvalsQ.data) {
     const normalized = getApiError(props.approvalsQ.error)
@@ -540,7 +540,7 @@ function ApprovalsTab(props: {
     <TableContainer label={t('quarantine.approvals.table')} minWidth={820}>
       <div className="rounded-md border" style={{ borderColor: 'var(--border)' }}>
         <Table className="w-full" style={{ borderCollapse: 'collapse' }}>
-        <TableHeader style={{ background: 'var(--bg-soft)' }}>
+        <TableHeader style={{ background: 'var(--muted)' }}>
           <TableRow>
             <Th>{t('quarantine.col.created_at')}</Th>
             <Th>{t('quarantine.col.ecosystem')}</Th>
@@ -554,7 +554,7 @@ function ApprovalsTab(props: {
           {items.map((row) => (
             <TableRow key={row.id} style={{ borderTop: '1px solid var(--border)' }}>
               <Td>
-                <span className="text-[12px] font-mono whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>
+                <span className="text-[12px] font-mono whitespace-nowrap" style={{ color: 'var(--muted-foreground)' }}>
                   {formatTime(row.created_at)}
                 </span>
               </Td>
@@ -565,8 +565,8 @@ function ApprovalsTab(props: {
                 </div>
               </Td>
               <Td><span className="text-[13px] font-mono">{row.package}</span></Td>
-              <Td><span className="text-[13px] font-mono" style={{ color: 'var(--text-soft)' }}>{row.version}</span></Td>
-              <Td><span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>{row.reason}</span></Td>
+              <Td><span className="text-[13px] font-mono" style={{ color: 'var(--muted-foreground)' }}>{row.version}</span></Td>
+              <Td><span className="text-[12px]" style={{ color: 'var(--muted-foreground)' }}>{row.reason}</span></Td>
               <Td>
                 {props.canWrite && <Button size="sm" variant="destructive" onClick={() => props.onRevoke(row)}>
                   <Icon name="undo" size="sm" /> {t('quarantine.revoke.cta')}
@@ -698,7 +698,7 @@ function BlocklistTab() {
     <div className="space-y-5">
       {/* Status card */}
       {statusQ.isPending ? (
-        <p aria-busy="true" className="text-[13px]" style={{ color: 'var(--text-soft)' }}><span aria-hidden="true">{t('loading')}</span></p>
+        <p aria-busy="true" className="text-[13px]" style={{ color: 'var(--muted-foreground)' }}><span aria-hidden="true">{t('loading')}</span></p>
       ) : statusQ.isError && !statusQ.data ? (
         <QueryErrorState message={getApiError(statusQ.error).status === 403 ? t('common.permissionDenied') : getApiError(statusQ.error).message} onRetry={() => { void statusQ.refetch() }} />
       ) : (
@@ -712,7 +712,7 @@ function BlocklistTab() {
         <Alert variant={"warning"}><AlertDescription>{t('quarantine.blocklist.observe_warning')}</AlertDescription></Alert>
       )}
       <div className="rounded-md border p-4 flex flex-wrap items-center gap-x-8 gap-y-3"
-           style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}>
+           style={{ borderColor: 'var(--border)', background: 'var(--card)' }}>
         <StatusItem label={t('quarantine.blocklist.mode')}>
           <Badge variant={st.mode === 'warn' ? 'warning' : 'success'}>
             {st.mode === 'warn' ? t('quarantine.blocklist.mode_observe') : t('quarantine.blocklist.mode_enforce')}
@@ -722,12 +722,12 @@ function BlocklistTab() {
           <span className="text-[22px] font-mono font-[600] tabular-nums">{st?.entry_count ?? 0}</span>
         </StatusItem>
         <StatusItem label={t('quarantine.blocklist.last_success')}>
-          <span className="text-[13px] font-mono" style={{ color: st?.last_success_at ? 'var(--text)' : 'var(--warn-text)' }}>
+          <span className="text-[13px] font-mono" style={{ color: st?.last_success_at ? 'var(--foreground)' : 'var(--warn-text)' }}>
             {st?.last_success_at ? formatTime(st.last_success_at) : t('quarantine.blocklist.never')}
           </span>
         </StatusItem>
         <StatusItem label={t('quarantine.blocklist.next_sync')}>
-          <span className="text-[13px] font-mono" style={{ color: 'var(--text-soft)' }}>
+          <span className="text-[13px] font-mono" style={{ color: 'var(--muted-foreground)' }}>
             {st?.running
               ? t('quarantine.blocklist.syncing')
               : st?.next_sync_at
@@ -736,7 +736,7 @@ function BlocklistTab() {
           </span>
         </StatusItem>
         <StatusItem label={t('quarantine.blocklist.coverage')}>
-          <span className="text-[12px] font-mono" style={{ color: 'var(--text-soft)' }}>
+          <span className="text-[12px] font-mono" style={{ color: 'var(--muted-foreground)' }}>
             {(st?.ecosystems ?? []).join(' · ')}
           </span>
         </StatusItem>
@@ -763,11 +763,11 @@ function BlocklistTab() {
       {/* Overrides */}
       <div>
         <h3 className="text-[14px] font-[600] mb-2">{t('quarantine.blocklist.overrides_title')}</h3>
-        <p className="text-[12px] mb-3" style={{ color: 'var(--text-soft)' }}>
+        <p className="text-[12px] mb-3" style={{ color: 'var(--muted-foreground)' }}>
           {t('quarantine.blocklist.overrides_hint')}
         </p>
         {overridesQ.isPending ? (
-          <p aria-busy="true" className="text-[13px] text-[var(--text-soft)]"><span aria-hidden="true">{t('loading')}</span></p>
+          <p aria-busy="true" className="text-[13px] text-[var(--muted-foreground)]"><span aria-hidden="true">{t('loading')}</span></p>
         ) : overridesQ.isError && !overridesQ.data ? (
           <QueryErrorState message={getApiError(overridesQ.error).status === 403 ? t('common.permissionDenied') : getApiError(overridesQ.error).message} onRetry={() => { void overridesQ.refetch() }} />
         ) : (
@@ -828,7 +828,7 @@ function BlocklistTab() {
           <TableContainer label={t('quarantine.blocklist.overrides_table')} minWidth={760}>
             <div className="rounded-md border" style={{ borderColor: 'var(--border)' }}>
               <Table className="w-full" style={{ borderCollapse: 'collapse' }}>
-              <TableHeader style={{ background: 'var(--bg-soft)' }}>
+              <TableHeader style={{ background: 'var(--muted)' }}>
                 <TableRow>
                   <Th>{t('quarantine.col.ecosystem')}</Th>
                   <Th>{t('quarantine.col.package')}</Th>
@@ -852,11 +852,11 @@ function BlocklistTab() {
                       </Td>
                       <Td><span className="text-[13px] font-mono">{row.package}</span></Td>
                       <Td>
-                        <span className="text-[13px] font-mono" style={{ color: 'var(--text-soft)' }}>
+                        <span className="text-[13px] font-mono" style={{ color: 'var(--muted-foreground)' }}>
                           {row.version || t('quarantine.blocklist.all_versions')}
                         </span>
                       </Td>
-                      <Td><span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>{row.reason}</span></Td>
+                      <Td><span className="text-[12px]" style={{ color: 'var(--muted-foreground)' }}>{row.reason}</span></Td>
                       <Td>
                         {expired ? (
                           <Badge>{t('quarantine.blocklist.expired')}</Badge>
@@ -892,7 +892,7 @@ function BlocklistTab() {
         <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={createM.isPending}>
           <DialogTitle className="pr-10">{t('quarantine.blocklist.create_title')}</DialogTitle>
           <div className="space-y-4">
-            <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>
+            <p className="text-[13px]" style={{ color: 'var(--muted-foreground)' }}>
               {t('quarantine.blocklist.create_body')}
             </p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-[auto_minmax(0,1fr)]">
@@ -953,7 +953,7 @@ function BlocklistTab() {
           <DialogTitle className="pr-10">{t('quarantine.revoke.title')}</DialogTitle>
           {revokeTarget && (
             <div className="space-y-4">
-              <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>
+              <p className="text-[13px]" style={{ color: 'var(--muted-foreground)' }}>
                 {t('quarantine.blocklist.revokeImpact', { eco: revokeTarget.ecosystem, pkg: revokeTarget.package, ver: revokeTarget.version || t('quarantine.blocklist.all_versions') })}
               </p>
               <Field disabled={revokeM.isPending}>
@@ -989,7 +989,7 @@ function BlocklistTab() {
 function StatusItem({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-[12px] font-[500]" style={{ color: 'var(--text-muted)' }}>
+      <span className="text-[12px] font-[500]" style={{ color: 'var(--muted-foreground)' }}>
         {label}
       </span>
       {children}
@@ -1026,10 +1026,10 @@ function MobilePackageIdentity(props: { ecosystem: string; packageName: string; 
         </span>
       )}
       <div className="min-w-0">
-        <p className="break-words font-mono text-[14px] font-[500]" style={{ color: 'var(--text)' }}>
+        <p className="break-words font-mono text-[14px] font-[500]" style={{ color: 'var(--foreground)' }}>
           {props.packageName}
         </p>
-        <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[12px]" style={{ color: 'var(--text-muted)' }}>
+        <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[12px]" style={{ color: 'var(--muted-foreground)' }}>
           <span>{props.ecosystem}</span>
           <span aria-hidden="true">·</span>
           <span className="break-all">{props.version}</span>
@@ -1046,12 +1046,12 @@ function MobileMetadata({ entries }: {
     <dl className="grid grid-cols-1 gap-2.5">
       {entries.map((entry) => (
         <div key={entry.label} className="min-w-0">
-          <dt className="text-[12px] font-[600]" style={{ color: 'var(--text-subtle)' }}>
+          <dt className="text-[12px] font-[600]" style={{ color: 'var(--muted-foreground)' }}>
             {entry.label}
           </dt>
           <dd
             className={`mt-0.5 break-words text-[13px] leading-[1.5] ${entry.mono ? 'font-mono tabular-nums' : ''}`}
-            style={{ color: 'var(--text-soft)' }}
+            style={{ color: 'var(--muted-foreground)' }}
           >
             {entry.value || '—'}
           </dd>

@@ -145,14 +145,14 @@ export default function Login() {
   }
 
   return (
-    <main className="grid min-h-screen place-items-center bg-[var(--bg-page)] px-4 py-16 sm:px-6">
+    <main className="grid min-h-screen place-items-center bg-[var(--background)] px-4 py-16 sm:px-6">
       <div className="w-full max-w-[420px]">
         <div className="mb-12 flex items-center justify-between gap-4">
           <Link
             to="/"
             aria-label="Depsilo"
             onClick={cancelLoginForPortalNavigation}
-            className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-2 rounded-md text-[var(--text)] no-underline transition-opacity duration-150 hover:opacity-75"
+            className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-2 rounded-md text-[var(--foreground)] no-underline transition-opacity duration-150 hover:opacity-75"
           >
             <Logo size={28} />
             <span className="font-display text-[16px] font-[600]">Depsilo</span>
@@ -160,7 +160,7 @@ export default function Login() {
           <Link
             to="/"
             onClick={cancelLoginForPortalNavigation}
-            className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1.5 rounded-md px-2 text-[12px] font-[500] text-[var(--text-muted)] no-underline transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
+            className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1.5 rounded-md px-2 text-[12px] font-[500] text-[var(--muted-foreground)] no-underline transition-colors duration-150 hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
           >
             <Icon name="arrow_back" size="sm" />
             {t('login.backToPortal')}
@@ -168,10 +168,10 @@ export default function Login() {
         </div>
 
         <header className="mb-8">
-          <h1 className="m-0 font-display text-[30px] font-[600] leading-[1.1] text-[var(--text)]">
+          <h1 className="m-0 font-display text-[30px] font-[600] leading-[1.1] text-[var(--foreground)]">
             {t('login.title')}
           </h1>
-          <p className="mt-2 max-w-[46ch] text-[14px] leading-6 text-[var(--text-muted)]">
+          <p className="mt-2 max-w-[46ch] text-[14px] leading-6 text-[var(--muted-foreground)]">
             {t('login.subtitle')}
           </p>
         </header>

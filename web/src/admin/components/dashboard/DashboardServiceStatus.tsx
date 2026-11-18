@@ -70,7 +70,7 @@ export default function DashboardServiceStatus({
       healthy: 'overview.statusHealthy', partial: 'overview.serviceAttention',
       unavailable: 'overview.statusUnavailable', unknown: 'overview.statusUnknown',
     }[status.health])
-  const color = pending || status.health === 'unknown' ? 'var(--text-soft)'
+  const color = pending || status.health === 'unknown' ? 'var(--muted-foreground)'
     : status.health === 'healthy' ? 'var(--ok-text)'
     : status.health === 'unavailable' ? 'var(--danger-text)' : 'var(--warn-text)'
   const otherProblems = status.problems.filter(problem => !upstreamCodes.has(problem.code))
@@ -88,27 +88,27 @@ export default function DashboardServiceStatus({
       aria-expanded={open}
       aria-busy={pending || undefined}
       onClick={() => onOpenChange(true)}
-      className="stripe-focus-ring inline-flex max-w-full items-center gap-2 rounded-md border px-3 text-[13px] font-medium hover:bg-[var(--bg-hover)]"
-      style={{ background: 'var(--bg-card)', borderColor: 'var(--border)', color: 'var(--text)' }}
+      className="stripe-focus-ring inline-flex max-w-full items-center gap-2 rounded-md border px-3 text-[13px] font-medium hover:bg-[var(--accent)]"
+      style={{ background: 'var(--card)', borderColor: 'var(--border)', color: 'var(--foreground)' }}
     >
       <Icon name={pending ? 'progress_activity' : status.health === 'healthy' ? 'check_circle' : status.health === 'unknown' ? 'help' : 'warning'} size="sm" style={{ color }} />
       <span className="min-w-0 text-left">{title}</span>
-      <Icon name="expand_more" size="sm" className="shrink-0 text-[var(--text-soft)]" />
+      <Icon name="expand_more" size="sm" className="shrink-0 text-[var(--muted-foreground)]" />
     </Button>
     <DashboardInfoDialog
       open={open}
       onClose={close}
       title={t('overview.problemsTitle')}
       width={640}
-      footer={<Button variant="outline" type="button" onClick={onRefresh} aria-busy={refreshing || undefined} className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-2 rounded-md border border-[var(--border)] px-3 text-[14px] hover:bg-[var(--bg-hover)]"><Icon name="refresh" size="sm" />{t('overview.refreshStatus')}</Button>}
+      footer={<Button variant="outline" type="button" onClick={onRefresh} aria-busy={refreshing || undefined} className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-2 rounded-md border border-[var(--border)] px-3 text-[14px] hover:bg-[var(--accent)]"><Icon name="refresh" size="sm" />{t('overview.refreshStatus')}</Button>}
     >
       <div role="status" className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[14px] font-semibold" style={{ color }}>{title}</p>
-        {now && <p className="text-[12px] text-[var(--text-soft)]">{t('overview.uptimeLabel')} {formatUptimeSeconds(now.uptime_seconds, t)}</p>}
+        {now && <p className="text-[12px] text-[var(--muted-foreground)]">{t('overview.uptimeLabel')} {formatUptimeSeconds(now.uptime_seconds, t)}</p>}
       </div>
       <dl className="flex flex-wrap gap-x-6 gap-y-2 text-[13px]">
         {(['database', 'storage'] as const).map(check => <div key={check} className="flex items-center gap-2">
-          <dt className="text-[var(--text-soft)]">{t(`overview.healthChecks.${check}`)}</dt>
+          <dt className="text-[var(--muted-foreground)]">{t(`overview.healthChecks.${check}`)}</dt>
           <dd>{status.problems.some(problem => problem.code === 'readiness-stale') && `${t('overview.previousState')} · `}{t(readiness?.checks[check] === 'ready' ? 'overview.checkReady' : readiness?.checks[check] === 'unavailable' ? 'overview.checkUnavailable' : 'overview.checkUnknown')}</dd>
         </div>)}
       </dl>
@@ -117,7 +117,7 @@ export default function DashboardServiceStatus({
           const entry = problemEntry(problem.code)
           return <li key={problem.code} className="rounded-md border border-[var(--border)] p-3">
             <h3 className="text-[14px] font-semibold">{problemTitle(problem, t, policyStale)}</h3>
-            <p className="mt-1 text-[13px] leading-relaxed text-[var(--text-soft)]">{t(entry?.impact ?? 'overview.healthUnknownImpact')}</p>
+            <p className="mt-1 text-[13px] leading-relaxed text-[var(--muted-foreground)]">{t(entry?.impact ?? 'overview.healthUnknownImpact')}</p>
             {entry && <Link to={entry.href} onClick={close} className="stripe-focus-ring mt-1 inline-flex min-h-[40px] items-center gap-1 rounded-md text-[13px] text-[var(--brand-text)]">{t(entry.label)}<Icon name="chevron_right" size="sm" /></Link>}
           </li>
         })}
@@ -131,25 +131,25 @@ export default function DashboardServiceStatus({
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
               <h4 className="break-words text-[14px] font-semibold">{upstream.name}</h4>
-              <p className="mt-0.5 text-[12px] text-[var(--text-soft)]">{ecosystemLabel(upstream.adapter)}{upstream.id > 0 && ` · #${upstream.id}`} · {t('overview.upstreamCheckCount', { count: upstream.checks.length })}</p>
+              <p className="mt-0.5 text-[12px] text-[var(--muted-foreground)]">{ecosystemLabel(upstream.adapter)}{upstream.id > 0 && ` · #${upstream.id}`} · {t('overview.upstreamCheckCount', { count: upstream.checks.length })}</p>
             </div>
             <p className="text-[13px]" style={{ color: upstream.state === 'healthy' ? 'var(--ok-text)' : 'var(--warn-text)' }}>
               {upstreamsStale && `${t('overview.previousState')} · `}{t(`overview.upstreamState.${upstream.state}`)}
             </p>
           </div>
           <dl className="mt-3 grid gap-2 text-[13px]">
-            <div className="flex flex-wrap justify-between gap-x-3"><dt className="text-[var(--text-soft)]">{t('overview.upstreamHealthCheck')}</dt><dd>{t(upstream.healthy ? 'overview.checkAvailable' : 'overview.checkUnavailable')}</dd></div>
-            {upstream.avg_latency_ms > 0 && <div className="flex flex-wrap justify-between gap-x-3"><dt className="text-[var(--text-soft)]">{t('overview.upstreamLatencyCheck')}</dt><dd className="tabular-nums">{Math.round(upstream.avg_latency_ms).toLocaleString(i18n.language)} ms{upstream.checks.includes('slow') && ` · ${t('overview.upstreamState.slow')}`}</dd></div>}
+            <div className="flex flex-wrap justify-between gap-x-3"><dt className="text-[var(--muted-foreground)]">{t('overview.upstreamHealthCheck')}</dt><dd>{t(upstream.healthy ? 'overview.checkAvailable' : 'overview.checkUnavailable')}</dd></div>
+            {upstream.avg_latency_ms > 0 && <div className="flex flex-wrap justify-between gap-x-3"><dt className="text-[var(--muted-foreground)]">{t('overview.upstreamLatencyCheck')}</dt><dd className="tabular-nums">{Math.round(upstream.avg_latency_ms).toLocaleString(i18n.language)} ms{upstream.checks.includes('slow') && ` · ${t('overview.upstreamState.slow')}`}</dd></div>}
           </dl>
         </article>)}
-        {status.affectedUpstreamCount > 0 && <p className="text-[13px] leading-relaxed text-[var(--text-soft)]">{t('overview.upstreamImpact')}</p>}
-        <div className="space-y-1 text-[12px] leading-relaxed text-[var(--text-soft)]">
+        {status.affectedUpstreamCount > 0 && <p className="text-[13px] leading-relaxed text-[var(--muted-foreground)]">{t('overview.upstreamImpact')}</p>}
+        <div className="space-y-1 text-[12px] leading-relaxed text-[var(--muted-foreground)]">
           <p>{t('overview.upstreamObservationBasis')}</p>
           <p>{t('overview.upstreamTimingUnavailable')}</p>
           {upstreamsUpdatedAt > 0 && <p>{t('overview.statusDataUpdatedAt', { time: new Date(upstreamsUpdatedAt).toLocaleString(i18n.language) })}</p>}
         </div>
       </section>}
-      {!pending && status.health === 'healthy' && upstreams.length === 0 && <p className="text-[13px] text-[var(--text-soft)]">{t('overview.noUpstreamChecks')}</p>}
+      {!pending && status.health === 'healthy' && upstreams.length === 0 && <p className="text-[13px] text-[var(--muted-foreground)]">{t('overview.noUpstreamChecks')}</p>}
     </DashboardInfoDialog>
   </>
 }

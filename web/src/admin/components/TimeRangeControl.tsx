@@ -16,9 +16,9 @@ interface Props {
 }
 
 const segmentClass = cn(
-  'stripe-focus-ring min-h-10 shrink-0 rounded-sm px-2.5 text-[13px] font-[500] text-[var(--text-soft)] sm:min-h-8',
-  'hover:bg-[var(--bg-hover)] hover:text-[var(--text)]',
-  'aria-pressed:bg-[var(--bg-card)] aria-pressed:text-[var(--text)] aria-pressed:shadow-[var(--shadow-surface)]',
+  'stripe-focus-ring min-h-10 shrink-0 rounded-sm px-2.5 text-[13px] font-[500] text-[var(--muted-foreground)] sm:min-h-8',
+  'hover:bg-[var(--accent)] hover:text-[var(--foreground)]',
+  'aria-pressed:bg-[var(--card)] aria-pressed:text-[var(--foreground)] aria-pressed:shadow-[var(--shadow-surface)]',
 )
 
 /** `2026-11-16T10:30` in local time, the value a datetime-local input takes. */
@@ -78,7 +78,7 @@ export default function TimeRangeControl({ value, onChange, className }: Props) 
 
   return (
     <div role="group" aria-label={t('filters.timeRange')} data-time-range className={cn('flex min-w-0 items-center gap-1', className)}>
-      <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-md bg-[var(--bg-soft)] p-0.5">
+      <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-md bg-[var(--muted)] p-0.5">
         {TIME_PRESETS.map(preset => (
           <Toggle
             key={preset}
@@ -111,15 +111,15 @@ export default function TimeRangeControl({ value, onChange, className }: Props) 
               className="flex flex-col gap-3"
               onSubmit={event => { event.preventDefault(); apply() }}
             >
-              <label className="flex flex-col gap-1 text-[12px] font-[500] text-[var(--text-muted)]">
+              <label className="flex flex-col gap-1 text-[12px] font-[500] text-[var(--muted-foreground)]">
                 {t('filters.timeStart')}
                 <Input type="datetime-local" value={draftStart} max={draftEnd || undefined} onChange={event => setDraftStart(event.target.value)} />
               </label>
-              <label className="flex flex-col gap-1 text-[12px] font-[500] text-[var(--text-muted)]">
+              <label className="flex flex-col gap-1 text-[12px] font-[500] text-[var(--muted-foreground)]">
                 {t('filters.timeEnd')}
                 <Input type="datetime-local" value={draftEnd} min={draftStart || undefined} onChange={event => setDraftEnd(event.target.value)} aria-invalid={invalid || undefined} />
               </label>
-              <p className="m-0 text-[12px] text-[var(--text-muted)]" role={invalid ? 'alert' : undefined}>
+              <p className="m-0 text-[12px] text-[var(--muted-foreground)]" role={invalid ? 'alert' : undefined}>
                 {invalid ? t('filters.timeEndBeforeStart') : t('filters.timeCustomHint')}
               </p>
               <div className="flex justify-end gap-2">

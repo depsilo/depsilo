@@ -48,7 +48,7 @@ function isUpdateResult(value: string | null): value is UpstreamUpdateResult {
 
 function latencyColor(latencyMs: number): string {
   if (latencyMs >= 1000) return 'var(--warn-text)'
-  return 'var(--text-muted)'
+  return 'var(--muted-foreground)'
 }
 
 export default function UpstreamUpdates() {
@@ -268,10 +268,10 @@ export default function UpstreamUpdates() {
         {isAdminEcosystem(event.ecosystem) && (
           <EcosystemIcon type={event.ecosystem} size={13} useColor decorative />
         )}
-        <span className="shrink-0" style={{ color: 'var(--text)' }}>
+        <span className="shrink-0" style={{ color: 'var(--foreground)' }}>
           {ecosystemLabel(event.ecosystem)}
         </span>
-        <span aria-hidden="true" style={{ color: 'var(--text-subtle)' }}>·</span>
+        <span aria-hidden="true" style={{ color: 'var(--muted-foreground)' }}>·</span>
         <span className="min-w-0 truncate" title={event.upstream || undefined}>
           {event.upstream || t('upstreamUpdates.unknownUpstream')}
         </span>
@@ -301,16 +301,16 @@ export default function UpstreamUpdates() {
               count: occurrenceCount,
             })}
       >
-        <div className="font-mono text-[12px] tabular-nums" style={{ color: 'var(--text)' }}>
+        <div className="font-mono text-[12px] tabular-nums" style={{ color: 'var(--foreground)' }}>
           <time dateTime={firstSeenAt}>{firstSeen}</time>
           {isEpisode && (
             <>
-              <span className="mx-1" aria-hidden="true" style={{ color: 'var(--text-subtle)' }}>→</span>
+              <span className="mx-1" aria-hidden="true" style={{ color: 'var(--muted-foreground)' }}>→</span>
               <time dateTime={lastSeenAt}>{lastSeen}</time>
             </>
           )}
         </div>
-        <div className="mt-0.5 text-[12px]" style={{ color: 'var(--text-muted)' }}>
+        <div className="mt-0.5 text-[12px]" style={{ color: 'var(--muted-foreground)' }}>
           <span aria-label={t('upstreamUpdates.checkCount', { count: occurrenceCount })}>
             {occurrenceCount > 1 ? `×${occurrenceCount}` : occurrenceCount}
           </span>
@@ -420,7 +420,7 @@ export default function UpstreamUpdates() {
           <div
             data-upstream-updates-summary
             className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[12px]"
-            style={{ color: 'var(--text-muted)' }}
+            style={{ color: 'var(--muted-foreground)' }}
           >
             <span>
               {t('upstreamUpdates.loadedSummary', {
@@ -455,7 +455,7 @@ export default function UpstreamUpdates() {
                 key={index}
                 aria-hidden="true"
                 className="h-14 rounded-md"
-                style={{ background: 'var(--bg-soft)' }}
+                style={{ background: 'var(--muted)' }}
               />
             ))}
           </div>
@@ -485,16 +485,16 @@ export default function UpstreamUpdates() {
                     <div className="flex min-w-0 items-start justify-between gap-3">
                       <Link to={`${getAdminRouteHref('cacheIndexes')}?${new URLSearchParams({ package: event.package })}`}
                         className="min-w-0 break-words font-mono text-[14px] font-[500] underline-offset-4 hover:underline focus-visible:outline-2"
-                        style={{ color: 'var(--text)' }}
+                        style={{ color: 'var(--foreground)' }}
                       >
                         {event.package}
                       </Link>
                       {resultBadge(event.result)}
                     </div>
-                    <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
+                    <div className="text-[12px]" style={{ color: 'var(--muted-foreground)' }}>
                       {source(event)}
                     </div>
-                    <p className="text-[13px] leading-[1.5]" style={{ color: 'var(--text-soft)' }}>
+                    <p className="text-[13px] leading-[1.5]" style={{ color: 'var(--muted-foreground)' }}>
                       {detail}
                     </p>
                     <div className="grid grid-cols-1 gap-2 text-[12px] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
@@ -538,24 +538,24 @@ export default function UpstreamUpdates() {
                     {events.map(event => (
                       <TableRow
                         key={event.id}
-                        className="border-b border-[var(--border)] transition-colors duration-75 hover:bg-[var(--bg-soft)]"
+                        className="border-b border-[var(--border)] transition-colors duration-75 hover:bg-[var(--muted)]"
                       >
                         <TableCell className="w-[290px] px-3 py-3 pl-0 align-top">
                           {observation(event)}
                         </TableCell>
-                        <TableCell className="max-w-[220px] px-3 py-3 align-top" style={{ color: 'var(--text-muted)' }}>
+                        <TableCell className="max-w-[220px] px-3 py-3 align-top" style={{ color: 'var(--muted-foreground)' }}>
                           {source(event)}
                         </TableCell>
                         <TableCell
                           className="max-w-[260px] px-3 py-3 text-left align-top font-mono font-[500]"
-                          style={{ color: 'var(--text)' }}
+                          style={{ color: 'var(--foreground)' }}
                         >
                           <Link className="block break-words underline-offset-4 hover:underline focus-visible:outline-2" to={`${getAdminRouteHref('cacheIndexes')}?${new URLSearchParams({ package: event.package })}`}>{event.package}</Link>
                         </TableCell>
                         <TableCell className="max-w-[360px] px-3 py-3 align-top">
                           <div className="flex min-w-0 items-start gap-2">
                             {resultBadge(event.result)}
-                            <span className="min-w-0 leading-[1.5]" style={{ color: 'var(--text-soft)' }}>
+                            <span className="min-w-0 leading-[1.5]" style={{ color: 'var(--muted-foreground)' }}>
                               {detailLabels[event.detail] ?? event.detail}
                             </span>
                           </div>

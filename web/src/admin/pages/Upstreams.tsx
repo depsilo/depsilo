@@ -598,7 +598,7 @@ export default function Upstreams() {
                 <Skeleton
                   key={index}
                   className="h-32 rounded-md"
-                  style={{ background: 'var(--bg-soft)' }}
+                  style={{ background: 'var(--muted)' }}
                 />
               ))}
             </div>
@@ -619,7 +619,7 @@ export default function Upstreams() {
                 <div
                   role="group"
                   aria-label={t('upstreams.statusFilterLabel')}
-                  className="grid min-w-0 grid-cols-2 gap-0.5 rounded-md border border-[var(--border)] bg-[var(--bg-soft)] p-[3px] sm:flex sm:flex-wrap"
+                  className="grid min-w-0 grid-cols-2 gap-0.5 rounded-md border border-[var(--border)] bg-[var(--muted)] p-[3px] sm:flex sm:flex-wrap"
                 >
                   {statusOptions.map((option) => {
                     const active = statusFilter === option.value
@@ -630,15 +630,15 @@ export default function Upstreams() {
                         pressed={active}
                         className="stripe-focus-ring inline-flex min-h-[40px] min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm border px-3 text-[13px] transition-[background,color,border-color,transform] duration-150 active:scale-[0.96]"
                         style={{
-                          background: active ? 'var(--bg-card)' : 'transparent',
+                          background: active ? 'var(--card)' : 'transparent',
                           borderColor: active ? 'var(--border-strong)' : 'transparent',
-                          color: active ? 'var(--text)' : 'var(--text-muted)',
+                          color: active ? 'var(--foreground)' : 'var(--muted-foreground)',
                         }}
                         onPressedChange={() => setStatusFilter(option.value)}
                       >
                         {option.dot && <StatusDot status={option.dot} />}
                         <span>{option.label}</span>
-                        <span className="font-mono tabular-nums" style={{ color: 'var(--text)' }}>
+                        <span className="font-mono tabular-nums" style={{ color: 'var(--foreground)' }}>
                           {option.count}
                         </span>
                       </Toggle>
@@ -649,9 +649,9 @@ export default function Upstreams() {
                 <div
                   role="search"
                   className="flex min-h-[40px] min-w-0 flex-1 items-center gap-2 rounded-md border border-[var(--border)] px-3 lg:max-w-[360px]"
-                  style={{ background: 'var(--bg-card)' }}
+                  style={{ background: 'var(--card)' }}
                 >
-                  <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
+                  <Icon name="search" size="sm" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
                       <Input
                         ref={searchInputRef}
                         type="text"
@@ -659,7 +659,7 @@ export default function Upstreams() {
                         aria-label={t('upstreams.searchLabel')}
                         placeholder={t('upstreams.searchPlaceholder')}
                         className={"min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]" + ' h-9 rounded-none border-0 px-0 shadow-none focus-visible:ring-0 dark:bg-transparent'}
-                        style={{ color: 'var(--text)' }}
+                        style={{ color: 'var(--foreground)' }}
                         onChange={(event) => setSearch(event.target.value)}
                         onKeyDown={(event) => {
                           if (event.key === 'Escape') {
@@ -681,7 +681,7 @@ export default function Upstreams() {
                               data-icon-button
                               aria-label={t('upstreams.clearSearch')}
                               className="-mr-3"
-                              style={{ color: 'var(--text-soft)' }}
+                              style={{ color: 'var(--muted-foreground)' }}
                             />
                           }>
                             <Icon name={"close"} size="sm" />
@@ -691,7 +691,7 @@ export default function Upstreams() {
                   ) : (
                     <kbd
                       aria-hidden="true"
-                      className="hidden rounded-sm border border-[var(--border)] px-1.5 py-0.5 font-mono text-[12px] text-[var(--text-subtle)] sm:inline"
+                      className="hidden rounded-sm border border-[var(--border)] px-1.5 py-0.5 font-mono text-[12px] text-[var(--muted-foreground)] sm:inline"
                     >
                       /
                     </kbd>
@@ -789,7 +789,7 @@ export default function Upstreams() {
                             aria-label={t('upstreams.checkNamed', { name: upstream.name })}
                             aria-busy={checkingIds.has(upstream.id) || undefined}
                             disabled={(checking) || (checkingIds.has(upstream.id))}
-                            style={{ color: 'var(--text-soft)' }}
+                            style={{ color: 'var(--muted-foreground)' }}
                           />
                         }>
                           <Icon name={checkingIds.has(upstream.id) ? 'progress_activity' : ("refresh")} size="sm" className={checkingIds.has(upstream.id) ? 'animate-spin' : ''} />
@@ -805,7 +805,7 @@ export default function Upstreams() {
                           size="icon"
                           data-icon-button
                           aria-label={t('upstreams.editNamed', { name: upstream.name })}
-                          style={{ color: 'var(--text-soft)' }}
+                          style={{ color: 'var(--muted-foreground)' }}
                         />
                       }>
                         <Icon name={"edit"} size="sm" />
@@ -843,7 +843,7 @@ export default function Upstreams() {
             <DialogTitle className="pr-10 text-[18px]">{editId ? t('upstreams.editUpstream') : t('upstreams.addUpstream')}</DialogTitle>
             <form onSubmit={handleSubmit} className="space-y-5">
               <fieldset className="space-y-3" disabled={isSaving}>
-                <legend className="mb-3 text-[14px] font-[600]" style={{ color: 'var(--text)' }}>
+                <legend className="mb-3 text-[14px] font-[600]" style={{ color: 'var(--foreground)' }}>
                   {t('upstreams.connectionSection')}
                 </legend>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -939,7 +939,7 @@ export default function Upstreams() {
               </fieldset>
 
               <fieldset className="space-y-3 border-t border-[var(--border)] pt-4" disabled={isSaving}>
-                <legend className="px-1 text-[14px] font-[600]" style={{ color: 'var(--text)' }}>
+                <legend className="px-1 text-[14px] font-[600]" style={{ color: 'var(--foreground)' }}>
                   {t('upstreams.healthSection')}
                 </legend>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1005,7 +1005,7 @@ export default function Upstreams() {
               : t('upstreams.confirmDelete')}</DialogTitle>
             {deleteTarget && (
               <div className="space-y-5">
-                <p className="text-[14px] leading-6" style={{ color: 'var(--text-soft)' }}>
+                <p className="text-[14px] leading-6" style={{ color: 'var(--muted-foreground)' }}>
                   {t('upstreams.confirmDeleteMsg', {
                     name: deleteTarget.name,
                     ecosystem: deleteTarget.adapter_type,
@@ -1013,18 +1013,18 @@ export default function Upstreams() {
                 </p>
                 <dl className="space-y-2 border-y border-[var(--border)] py-3 text-[12px]">
                   <div className="flex min-w-0 items-start justify-between gap-4">
-                    <dt style={{ color: 'var(--text-muted)' }}>{t('upstreams.url')}</dt>
+                    <dt style={{ color: 'var(--muted-foreground)' }}>{t('upstreams.url')}</dt>
                     <dd
                       className="min-w-0 max-w-[70%] truncate font-mono text-right"
                       title={upstreamEndpointLabel(deleteTarget.url)}
-                      style={{ color: 'var(--text)' }}
+                      style={{ color: 'var(--foreground)' }}
                     >
                       {upstreamEndpointLabel(deleteTarget.url)}
                     </dd>
                   </div>
                   <div className="flex items-center justify-between gap-4">
-                    <dt style={{ color: 'var(--text-muted)' }}>{t('upstreams.priority')}</dt>
-                    <dd className="font-mono tabular-nums" style={{ color: 'var(--text)' }}>
+                    <dt style={{ color: 'var(--muted-foreground)' }}>{t('upstreams.priority')}</dt>
+                    <dd className="font-mono tabular-nums" style={{ color: 'var(--foreground)' }}>
                       {deleteTarget.priority}
                     </dd>
                   </div>

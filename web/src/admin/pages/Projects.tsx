@@ -53,7 +53,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
           size="icon"
           data-icon-button
           aria-label={label}
-          style={{ color: copied ? 'var(--ok-text)' : 'var(--text-soft)' }}
+          style={{ color: copied ? 'var(--ok-text)' : 'var(--muted-foreground)' }}
         />
       }>
         <Icon name={copied ? 'check' : 'content_copy'} size="sm" />
@@ -296,18 +296,18 @@ export default function Projects() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-[13px] font-[500] mb-1" style={{ color: 'var(--text-muted)' }}>{t('projects.token')}</label>
+                  <label className="block text-[13px] font-[500] mb-1" style={{ color: 'var(--muted-foreground)' }}>{t('projects.token')}</label>
                   <div className="flex items-center gap-2">
-                    <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-sm break-all" style={{ background: 'var(--bg-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}>
+                    <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-sm break-all" style={{ background: 'var(--muted)', color: 'var(--foreground)', border: '1px solid var(--border)' }}>
                       {tokenData.token}
                     </code>
                     <CopyButton text={tokenData.token} label={t('projects.copyToken')} />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-[13px] font-[500] mb-1" style={{ color: 'var(--text-muted)' }}>{t('projects.proxyUrl')}</label>
+                  <label className="block text-[13px] font-[500] mb-1" style={{ color: 'var(--muted-foreground)' }}>{t('projects.proxyUrl')}</label>
                   <div className="flex items-center gap-2">
-                    <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-sm break-all" style={{ background: 'var(--bg-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}>
+                    <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-sm break-all" style={{ background: 'var(--muted)', color: 'var(--foreground)', border: '1px solid var(--border)' }}>
                       {tokenData.proxy_url}
                     </code>
                     <CopyButton text={tokenData.proxy_url} label={t('projects.copyProxyUrl')} />
@@ -327,7 +327,7 @@ export default function Projects() {
   if (query.isPending) {
     return (
       <AdminPage description={t('projects.subtitle')}>
-        <div role="status" aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]">{t('loading')}</div>
+        <div role="status" aria-busy="true" className="py-8 text-center text-[13px] text-[var(--muted-foreground)]">{t('loading')}</div>
       </AdminPage>
     )
   }
@@ -366,11 +366,11 @@ export default function Projects() {
           </div>
         ),
       },
-      { key: 'package_name', label: t('name'), render: (v: unknown) => <span className="font-mono text-[13px]" style={{ color: 'var(--text)' }}>{v as string}</span> },
-      { key: 'version', label: t('projects.version'), render: (v: unknown) => <span className="font-mono text-[13px]" style={{ color: 'var(--text-soft)' }}>{(v as string) || '-'}</span> },
-      { key: 'first_seen_at', label: t('projects.firstSeen'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatProjectTime(v as string)}</span> },
-      { key: 'last_seen_at', label: t('projects.lastSeen'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatProjectTime(v as string)}</span> },
-      { key: 'download_count', label: t('projects.downloads'), render: (v: unknown) => <span className="text-[12px] font-mono" style={{ color: 'var(--text-soft)' }}>{(v as number) ?? 0}</span> },
+      { key: 'package_name', label: t('name'), render: (v: unknown) => <span className="font-mono text-[13px]" style={{ color: 'var(--foreground)' }}>{v as string}</span> },
+      { key: 'version', label: t('projects.version'), render: (v: unknown) => <span className="font-mono text-[13px]" style={{ color: 'var(--muted-foreground)' }}>{(v as string) || '-'}</span> },
+      { key: 'first_seen_at', label: t('projects.firstSeen'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--muted-foreground)' }}>{formatProjectTime(v as string)}</span> },
+      { key: 'last_seen_at', label: t('projects.lastSeen'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--muted-foreground)' }}>{formatProjectTime(v as string)}</span> },
+      { key: 'download_count', label: t('projects.downloads'), render: (v: unknown) => <span className="text-[12px] font-mono" style={{ color: 'var(--muted-foreground)' }}>{(v as number) ?? 0}</span> },
     ]
 
     return (
@@ -387,14 +387,14 @@ export default function Projects() {
                   size="icon"
                   data-icon-button
                   aria-label={t('projects.backToList')}
-                  style={{ color: 'var(--text-soft)' }}
+                  style={{ color: 'var(--muted-foreground)' }}
                 />
               }>
                 <Icon name={"arrow_back"} size="sm" />
               </TooltipTrigger>
               <TooltipContent>{t('projects.backToList')}</TooltipContent>
             </Tooltip>
-          <h2 className="min-w-0 break-words text-[20px] font-[600] [overflow-wrap:anywhere]" style={{ color: 'var(--text)' }}>{projectDetail?.name}</h2>
+          <h2 className="min-w-0 break-words text-[20px] font-[600] [overflow-wrap:anywhere]" style={{ color: 'var(--foreground)' }}>{projectDetail?.name}</h2>
           <div className="ml-auto flex flex-wrap gap-2">
             <Button variant="outline" disabled={!detailData} onClick={() => { setSbomError(''); setExportOpen(true) }}><Icon name="download" size="sm" />{t('sbom.export')}</Button>
             {canWrite && <>
@@ -408,7 +408,7 @@ export default function Projects() {
         <section>
           <SectionHeader title={t('projects.overview')} />
           {detailQuery.isPending ? (
-            <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]"><span aria-hidden="true">{t('loading')}</span></div>
+            <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--muted-foreground)]"><span aria-hidden="true">{t('loading')}</span></div>
           ) : detailQuery.isError && !detailData ? (
             <QueryErrorState
               message={getApiError(detailQuery.error).status === 403 ? t('common.permissionDenied') : getApiError(detailQuery.error).message}
@@ -422,12 +422,12 @@ export default function Projects() {
               data-project-proxy-row
               className="grid min-w-0 gap-2 sm:grid-cols-[8rem_minmax(0,1fr)] sm:items-center sm:gap-3"
             >
-              <span className="text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('projects.proxyUrl')}</span>
+              <span className="text-[13px]" style={{ color: 'var(--muted-foreground)' }}>{t('projects.proxyUrl')}</span>
               <div className="flex min-w-0 items-center gap-2">
                 <span
                   data-project-proxy-value
                   className="min-w-0 flex-1 break-all rounded-sm px-2 py-1 font-mono text-[13px] leading-5"
-                  style={{ background: 'var(--bg-soft)', color: 'var(--text)' }}
+                  style={{ background: 'var(--muted)', color: 'var(--foreground)' }}
                 >
                   {proxyUrl}
                 </span>
@@ -439,18 +439,18 @@ export default function Projects() {
             <p className="max-w-[80ch] text-sm text-muted-foreground">{t('projects.connectionHint')}</p>
             <Button variant="link" className="px-0" render={<Link to={getAdminRouteHref('connect')} />} nativeButton={false} role="link">{t('projects.connectionGuide')}<Icon name="arrow_forward" size="sm" /></Button>
             <div className="flex items-center gap-3">
-              <span className="text-[13px] w-32 shrink-0" style={{ color: 'var(--text-soft)' }}>{t('projects.packageCount')}</span>
-              <span className="text-[13px] font-mono tabular-nums" style={{ color: 'var(--text)' }}>{projectDetail?.package_count ?? 0}</span>
+              <span className="text-[13px] w-32 shrink-0" style={{ color: 'var(--muted-foreground)' }}>{t('projects.packageCount')}</span>
+              <span className="text-[13px] font-mono tabular-nums" style={{ color: 'var(--foreground)' }}>{projectDetail?.package_count ?? 0}</span>
             </div>
             {Object.keys(ecosystems).length > 0 && (
               <div className="flex items-start gap-3">
-                <span className="text-[13px] w-32 shrink-0 pt-1" style={{ color: 'var(--text-soft)' }}>{t('projects.ecosystemBreakdown')}</span>
+                <span className="text-[13px] w-32 shrink-0 pt-1" style={{ color: 'var(--muted-foreground)' }}>{t('projects.ecosystemBreakdown')}</span>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(ecosystems).map(([eco, count]) => (
-                    <div key={eco} className="flex items-center gap-1.5 px-2 py-1 rounded-sm" style={{ background: 'var(--bg-soft)' }}>
+                    <div key={eco} className="flex items-center gap-1.5 px-2 py-1 rounded-sm" style={{ background: 'var(--muted)' }}>
                       {isAdminEcosystem(eco) && <EcosystemIcon type={eco} size={12} />}
-                      <span className="text-[12px]" style={{ color: 'var(--text)' }}>{ecosystemLabel(eco)}</span>
-                      <span className="text-[12px] font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{count}</span>
+                      <span className="text-[12px]" style={{ color: 'var(--foreground)' }}>{ecosystemLabel(eco)}</span>
+                      <span className="text-[12px] font-mono tabular-nums" style={{ color: 'var(--muted-foreground)' }}>{count}</span>
                     </div>
                   ))}
                 </div>
@@ -490,7 +490,7 @@ export default function Projects() {
             </Button>
           </div>
           <div className="mt-3 grid gap-2">
-            <label className="flex cursor-pointer items-start gap-2 text-[14px] text-[var(--text-soft)]">
+            <label className="flex cursor-pointer items-start gap-2 text-[14px] text-[var(--muted-foreground)]">
                 <Checkbox
                   className="mt-0.5"
                   disabled={sbomLoading} checked={sbomTechnicalFile}
@@ -498,10 +498,10 @@ export default function Projects() {
                 />
               <span>
                 {t('sbom.technicalFile')}
-                <span className="block text-[13px] text-[var(--text-soft)]">{t('sbom.technicalFileHint')}</span>
+                <span className="block text-[13px] text-[var(--muted-foreground)]">{t('sbom.technicalFileHint')}</span>
               </span>
             </label>
-            <label className="flex cursor-pointer items-start gap-2 text-[14px] text-[var(--text-soft)]">
+            <label className="flex cursor-pointer items-start gap-2 text-[14px] text-[var(--muted-foreground)]">
                 <Checkbox
                   className="mt-0.5"
                   checked={sbomSign}
@@ -510,13 +510,13 @@ export default function Projects() {
                 />
               <span>
                 {t('sbom.sign')}
-                <span className="block text-[13px] text-[var(--text-soft)]">
+                <span className="block text-[13px] text-[var(--muted-foreground)]">
                   {complianceQuery.isSuccess ? (compliance?.signing_configured ? t('sbom.signHint') : t('sbom.signUnavailable')) : t('sbom.profileUnknown')}
                 </span>
               </span>
             </label>
             {sbomTechnicalFile && complianceQuery.isSuccess && !compliance?.organization && (
-              <p className="text-[13px] text-[var(--text-soft)]">{t('sbom.organizationMissing')}</p>
+              <p className="text-[13px] text-[var(--muted-foreground)]">{t('sbom.organizationMissing')}</p>
             )}
             {sbomError && <Alert variant={"destructive"}><AlertDescription>{sbomError}</AlertDescription></Alert>}
           </div>
@@ -537,7 +537,7 @@ export default function Projects() {
             }
           />
           {packagesQuery.isPending ? (
-            <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}><span aria-hidden="true">{t('loading')}</span></div>
+            <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--muted-foreground)' }}><span aria-hidden="true">{t('loading')}</span></div>
           ) : packagesQuery.isError && !pkgData ? (
             <QueryErrorState
               message={getApiError(packagesQuery.error).status === 403 ? t('common.permissionDenied') : getApiError(packagesQuery.error).message}
@@ -588,9 +588,9 @@ export default function Projects() {
 
   // ── List view ──────────────────────────────────────────────────
   const columns = [
-    { key: 'name', label: t('projects.name'), render: (v: unknown) => <span className="font-[500] text-[14px]" style={{ color: 'var(--text)' }}>{v as string}</span> },
-    { key: 'package_count', label: t('projects.packageCount'), render: (v: unknown) => <span className="text-[12px] font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{(v as number) ?? 0}</span> },
-    { key: 'last_activity_at', label: t('projects.lastActivity'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatProjectTime(v as string)}</span> },
+    { key: 'name', label: t('projects.name'), render: (v: unknown) => <span className="font-[500] text-[14px]" style={{ color: 'var(--foreground)' }}>{v as string}</span> },
+    { key: 'package_count', label: t('projects.packageCount'), render: (v: unknown) => <span className="text-[12px] font-mono tabular-nums" style={{ color: 'var(--muted-foreground)' }}>{(v as number) ?? 0}</span> },
+    { key: 'last_activity_at', label: t('projects.lastActivity'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--muted-foreground)' }}>{formatProjectTime(v as string)}</span> },
     {
       key: 'id',
       label: t('actions'),

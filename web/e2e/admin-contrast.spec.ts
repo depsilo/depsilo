@@ -490,7 +490,7 @@ test('primary command uses the semantic primary color without a filter', async (
   const tokenColor = await page.evaluate(() => {
     const probe = document.createElement('span')
     document.body.appendChild(probe)
-    probe.style.backgroundColor = 'var(--btn)'
+    probe.style.backgroundColor = 'var(--primary)'
     const value = getComputedStyle(probe).backgroundColor
     probe.remove()
     return value

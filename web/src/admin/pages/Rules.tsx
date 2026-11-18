@@ -142,19 +142,19 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
         </div>
 
         {winner ? (
-          <div className="space-y-1 text-[12px]" data-rule-test-winner style={{ color: 'var(--text-soft)' }}>
-            <p className="font-[400]" style={{ color: 'var(--text)' }}>{t('rules.winningRule')}</p>
+          <div className="space-y-1 text-[12px]" data-rule-test-winner style={{ color: 'var(--muted-foreground)' }}>
+            <p className="font-[400]" style={{ color: 'var(--foreground)' }}>{t('rules.winningRule')}</p>
             <p className="break-all font-mono" data-rule-test-winner-selector>
               {ruleSelector(winner)} → {winner.action === 'allow' ? t('rules.allow') : t('rules.deny')}
             </p>
-            {winnerReason && <p data-rule-test-reason><span className="font-[400]" style={{ color: 'var(--text)' }}>{t('rules.decisionReason')}:</span> {winnerReason}</p>}
-            {precedenceReason && <p data-rule-test-precedence><span className="font-[400]" style={{ color: 'var(--text)' }}>{t('rules.precedenceReason')}:</span> {precedenceReason}</p>}
+            {winnerReason && <p data-rule-test-reason><span className="font-[400]" style={{ color: 'var(--foreground)' }}>{t('rules.decisionReason')}:</span> {winnerReason}</p>}
+            {precedenceReason && <p data-rule-test-precedence><span className="font-[400]" style={{ color: 'var(--foreground)' }}>{t('rules.precedenceReason')}:</span> {precedenceReason}</p>}
           </div>
         ) : (
-          <div className="space-y-1 text-[12px]" style={{ color: 'var(--text-soft)' }}>
+          <div className="space-y-1 text-[12px]" style={{ color: 'var(--muted-foreground)' }}>
             <p data-rule-test-no-match>{result.allowed ? t('rules.noMatch') : t('rules.noMatchDenied')}</p>
             {displayReason && <p data-rule-test-reason>{displayReason}</p>}
-            {precedenceReason && <p data-rule-test-precedence><span className="font-[400]" style={{ color: 'var(--text)' }}>{t('rules.precedenceReason')}:</span> {precedenceReason}</p>}
+            {precedenceReason && <p data-rule-test-precedence><span className="font-[400]" style={{ color: 'var(--foreground)' }}>{t('rules.precedenceReason')}:</span> {precedenceReason}</p>}
           </div>
         )}
       </div>
@@ -172,7 +172,7 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
       {!hasCandidateData ? null : candidates.length > 0 ? (
         <section aria-label={t('rules.candidateRules')} data-rule-test-candidates>
           <div className="mb-2 flex items-center justify-between gap-2">
-            <h3 className="text-[13px] font-[500]" style={{ color: 'var(--text)' }}>{t('rules.candidateRules')}</h3>
+            <h3 className="text-[13px] font-[500]" style={{ color: 'var(--foreground)' }}>{t('rules.candidateRules')}</h3>
             <Badge variant="neutral">{candidates.length}</Badge>
           </div>
           <ol className="space-y-2">
@@ -196,7 +196,7 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
                   }}
                 >
                   <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
-                    <span className="min-w-0 break-all font-mono text-[12px]" style={{ color: 'var(--text)' }}>
+                    <span className="min-w-0 break-all font-mono text-[12px]" style={{ color: 'var(--foreground)' }}>
                       {ruleSelector(candidate.rule)}
                     </span>
                     <div className="flex shrink-0 flex-wrap items-center gap-1">
@@ -208,16 +208,16 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
                     </div>
                   </div>
                   <div className="mt-2 grid min-w-0 grid-cols-1 gap-1 text-[12px] sm:grid-cols-3" data-rule-test-levels>
-                    <span className="min-w-0 break-words" style={{ color: 'var(--text-soft)' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>{t('rules.levelEcosystem')}:</span>{' '}
+                    <span className="min-w-0 break-words" style={{ color: 'var(--muted-foreground)' }}>
+                      <span style={{ color: 'var(--muted-foreground)' }}>{t('rules.levelEcosystem')}:</span>{' '}
                       {matchLevelLabel(t, 'ecosystem', levels?.ecosystem)}
                     </span>
-                    <span className="min-w-0 break-words" style={{ color: 'var(--text-soft)' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>{t('rules.levelPackage')}:</span>{' '}
+                    <span className="min-w-0 break-words" style={{ color: 'var(--muted-foreground)' }}>
+                      <span style={{ color: 'var(--muted-foreground)' }}>{t('rules.levelPackage')}:</span>{' '}
                       {matchLevelLabel(t, 'package', levels?.package)}
                     </span>
-                    <span className="min-w-0 break-words" style={{ color: 'var(--text-soft)' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>{t('rules.levelVersion')}:</span>{' '}
+                    <span className="min-w-0 break-words" style={{ color: 'var(--muted-foreground)' }}>
+                      <span style={{ color: 'var(--muted-foreground)' }}>{t('rules.levelVersion')}:</span>{' '}
                       {matchLevelLabel(t, 'version', levels?.version)}
                     </span>
                   </div>
@@ -230,7 +230,7 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
           </ol>
         </section>
       ) : (
-        <p className="text-[12px]" data-rule-test-candidates-empty style={{ color: 'var(--text-soft)' }}>
+        <p className="text-[12px]" data-rule-test-candidates-empty style={{ color: 'var(--muted-foreground)' }}>
           {t('rules.noCandidates')}
         </p>
       )}
@@ -323,10 +323,10 @@ export default function Rules() {
   const columns = [
     { key: 'ecosystem', label: t('rules.ecosystem'), render: (v: unknown) => { const ecosystem = typeof v === 'string' ? v : ''; return <div className="flex items-center gap-1.5">{isAdminEcosystem(ecosystem) && <EcosystemIcon type={ecosystem} size={14} />}<Badge variant="default">{ecosystem === '*' ? t('rules.allEcosystems') : ecosystemLabel(ecosystem)}</Badge></div> } },
     { key: 'package_name', label: t('rules.packageName'), render: (v: unknown, row: RuleRecord) => <Button variant="link" className="h-auto min-h-10 whitespace-normal p-0 text-left break-all" onClick={() => setDetail(row)}>{v as string}</Button> },
-    { key: 'version', label: t('rules.version'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{(v as string) === '*' ? t('rules.allVersions') : (v as string)}</span> },
+    { key: 'version', label: t('rules.version'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--muted-foreground)' }}>{(v as string) === '*' ? t('rules.allVersions') : (v as string)}</span> },
     { key: 'action', label: t('rules.action'), render: (v: unknown) => (v as string) === 'allow' ? <Badge variant="success">{t('rules.allow')}</Badge> : <Badge variant="destructive">{t('rules.deny')}</Badge> },
-    { key: 'reason', label: t('rules.reason'), render: (v: unknown) => <span className="text-[12px] truncate block max-w-[200px]" style={{ color: 'var(--text-soft)' }} title={v as string}>{(v as string) || '-'}</span> },
-    { key: 'created_at', label: t('users.createdAt'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string, 'relative')}</span> },
+    { key: 'reason', label: t('rules.reason'), render: (v: unknown) => <span className="text-[12px] truncate block max-w-[200px]" style={{ color: 'var(--muted-foreground)' }} title={v as string}>{(v as string) || '-'}</span> },
+    { key: 'created_at', label: t('users.createdAt'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--muted-foreground)' }}>{formatTime(v as string, 'relative')}</span> },
     {
       key: 'id', label: t('actions'), render: (_v: unknown, row: RuleRecord & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><Tooltip>
         <TooltipTrigger render={
@@ -336,7 +336,7 @@ export default function Rules() {
             size="icon"
             data-icon-button
             aria-label={t('rules.editNamed', { name: row.package_name })}
-            style={{ color: 'var(--text-soft)' }}
+            style={{ color: 'var(--muted-foreground)' }}
           />
         }>
           <Icon name={"edit"} size="sm" />
@@ -377,7 +377,7 @@ export default function Rules() {
         <NativeSelect aria-label={t('rules.action')} value={actionFilter} onChange={event => setFilter('action', event.target.value)}><option value="">{t('all')}</option><option value="allow">{t('rules.allow')}</option><option value="deny">{t('rules.deny')}</option></NativeSelect>
       </div>
       {query.isPending ? (
-        <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}><span aria-hidden="true">{t('loading')}</span></div>
+        <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--muted-foreground)' }}><span aria-hidden="true">{t('loading')}</span></div>
       ) : query.isError && !data ? (
         <QueryErrorState message={apiError.status === 403 ? t('common.permissionDenied') : apiError.message} onRetry={() => { void query.refetch() }} />
       ) : (
@@ -418,14 +418,14 @@ export default function Rules() {
               {form.ecosystem === 'npm' && <Alert variant={"warning"}><AlertDescription>{t('rules.npmVersionHint')}</AlertDescription></Alert>}
               {form.ecosystem === 'composer' && <Alert variant={"warning"}><AlertDescription>{t('rules.composerVersionHint')}</AlertDescription></Alert>}
               <fieldset>
-                <legend className="mb-1 block text-[14px] font-[400] text-[var(--text-muted)]">{t('rules.action')}</legend>
+                <legend className="mb-1 block text-[14px] font-[400] text-[var(--muted-foreground)]">{t('rules.action')}</legend>
                 <div className="flex gap-2">
                   <Toggle
                     type="button"
                     pressed={form.action === 'allow'}
                     onPressedChange={() => setForm({ ...form, action: 'allow' })}
                     className="stripe-focus-ring flex-1 cursor-pointer rounded-sm py-2 text-[14px] font-[400] transition-colors min-h-[40px]"
-                    style={{ background: form.action === 'allow' ? 'var(--ok-fill)' : 'var(--bg-soft)', color: form.action === 'allow' ? 'var(--ok-text)' : 'var(--text-soft)', border: form.action === 'allow' ? '1px solid var(--ok-border)' : '1px solid var(--border)' }}
+                    style={{ background: form.action === 'allow' ? 'var(--ok-fill)' : 'var(--muted)', color: form.action === 'allow' ? 'var(--ok-text)' : 'var(--muted-foreground)', border: form.action === 'allow' ? '1px solid var(--ok-border)' : '1px solid var(--border)' }}
                   >
                     {t('rules.allow')}
                   </Toggle>
@@ -434,7 +434,7 @@ export default function Rules() {
                     pressed={form.action === 'deny'}
                     onPressedChange={() => setForm({ ...form, action: 'deny' })}
                     className="stripe-focus-ring flex-1 cursor-pointer rounded-sm py-2 text-[14px] font-[400] transition-colors min-h-[40px]"
-                    style={{ background: form.action === 'deny' ? 'var(--danger-fill)' : 'var(--bg-soft)', color: form.action === 'deny' ? 'var(--danger)' : 'var(--text-soft)', border: form.action === 'deny' ? '1px solid var(--danger)' : '1px solid var(--border)' }}
+                    style={{ background: form.action === 'deny' ? 'var(--danger-fill)' : 'var(--muted)', color: form.action === 'deny' ? 'var(--danger)' : 'var(--muted-foreground)', border: form.action === 'deny' ? '1px solid var(--danger)' : '1px solid var(--border)' }}
                   >
                     {t('rules.deny')}
                   </Toggle>

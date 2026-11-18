@@ -47,12 +47,12 @@ export default function CompileCachePane() {
         >
           <Icon name="memory" />
         </span>
-        <h3 className="m-0 font-display text-[clamp(20px,2vw,24px)] font-[600] leading-[1.15] text-[var(--text)]">
+        <h3 className="m-0 font-display text-[clamp(20px,2vw,24px)] font-[600] leading-[1.15] text-[var(--foreground)]">
           {t('quickstart.cc.paneTitle')}
         </h3>
         <span
-          className="rounded px-1.5 py-0.5 text-[12px] font-[500] text-[var(--text-muted)]"
-          style={{ background: 'var(--bg-soft)', border: '1px solid var(--border)' }}
+          className="rounded px-1.5 py-0.5 text-[12px] font-[500] text-[var(--muted-foreground)]"
+          style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}
         >
           {t('quickstart.catalog.optionalGroup')}
         </span>
@@ -60,10 +60,10 @@ export default function CompileCachePane() {
 
       <div className="flex flex-col gap-7 p-4 sm:p-6 lg:p-7">
         <div role="group" aria-labelledby="quickstart-cc-clients" className="flex flex-col gap-2">
-          <span id="quickstart-cc-clients" className="text-[12px] font-[600] leading-[1.3] text-[var(--text-muted)]">
+          <span id="quickstart-cc-clients" className="text-[12px] font-[600] leading-[1.3] text-[var(--muted-foreground)]">
             {t('quickstart.cc.clientLabel')}
           </span>
-          <div className="grid grid-cols-2 gap-1 rounded-md p-1" style={{ background: 'var(--bg-soft)' }}>
+          <div className="grid grid-cols-2 gap-1 rounded-md p-1" style={{ background: 'var(--muted)' }}>
             {CLIENTS.map(item => {
               const active = item === client
               return (
@@ -76,11 +76,11 @@ export default function CompileCachePane() {
                   style={{
                     minHeight: 40,
                     justifyContent: 'center',
-                    background: active ? 'var(--bg-card)' : 'transparent',
+                    background: active ? 'var(--card)' : 'transparent',
                     border: '1px solid transparent',
                     borderRadius: 6,
                     boxShadow: active ? 'var(--shadow-surface)' : 'none',
-                    color: active ? 'var(--brand-text)' : 'var(--text)',
+                    color: active ? 'var(--brand-text)' : 'var(--foreground)',
                     fontSize: 13,
                     fontWeight: active ? 600 : 500,
                   }}
@@ -90,7 +90,7 @@ export default function CompileCachePane() {
               )
             })}
           </div>
-          <p className="m-0 text-[12px] leading-[1.5] text-[var(--text-muted)]">
+          <p className="m-0 text-[12px] leading-[1.5] text-[var(--muted-foreground)]">
             {t(client === 'ccache' ? 'quickstart.cc.ccacheHint' : 'quickstart.cc.sccacheHint')}
           </p>
         </div>
@@ -105,7 +105,7 @@ export default function CompileCachePane() {
           <a
             href="/admin/compile-cache"
             className="stripe-focus-ring inline-flex min-h-10 items-center gap-2 rounded-md px-3 text-[13px] font-[500] no-underline"
-            style={{ color: 'var(--btn-fg)', background: 'var(--btn)' }}
+            style={{ color: 'var(--primary-foreground)', background: 'var(--primary)' }}
           >
             {t('quickstart.compileCacheAction')}
             <Icon name="arrow_forward" size="sm" />
@@ -139,11 +139,11 @@ export default function CompileCachePane() {
         </section>
 
         <details className="config-disclosure border-t border-[var(--border)] pt-1">
-          <summary className="stripe-focus-ring -mx-1 flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-md px-1 text-[13px] font-[500] text-[var(--text-muted)] hover:text-[var(--text)]">
+          <summary className="stripe-focus-ring -mx-1 flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-md px-1 text-[13px] font-[500] text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
             {t('quickstart.compileCacheDetails')}
             <span className="disclosure-chevron inline-flex"><Icon name="expand_more" size="sm" /></span>
           </summary>
-          <ul className="mb-1 mt-2 flex list-none flex-col gap-2 p-0 text-[12px] leading-[1.5] text-[var(--text-muted)]">
+          <ul className="mb-1 mt-2 flex list-none flex-col gap-2 p-0 text-[12px] leading-[1.5] text-[var(--muted-foreground)]">
             <li className="flex items-start gap-2"><Icon name="cloud_sync" size="sm" className="mt-0.5 shrink-0 text-[var(--brand-text)]" /><span>{t('quickstart.compileCacheProtocol')}</span></li>
             <li className="flex items-start gap-2"><Icon name="storage" size="sm" className="mt-0.5 shrink-0 text-[var(--brand-text)]" /><span>{t('quickstart.compileCacheStorage')}</span></li>
             <li className="flex items-start gap-2"><Icon name="info" size="sm" className="mt-0.5 shrink-0 text-[var(--warn-text)]" /><span>{t('quickstart.compileCacheLimitation')}</span></li>

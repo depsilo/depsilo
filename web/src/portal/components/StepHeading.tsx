@@ -29,11 +29,11 @@ export default function StepHeading({ id, number, title, description, inline = f
         {String(number).padStart(2, '0')}
       </span>
       <span className="block min-w-0">
-        <Title id={id} className="m-0 block text-[15px] font-[600] leading-[1.3] text-[var(--text)]">
+        <Title id={id} className="m-0 block text-[15px] font-[600] leading-[1.3] text-[var(--foreground)]">
           {title}
         </Title>
         {description && (
-          <Description className="mb-0 mt-1 block text-[13px] leading-[1.5] text-[var(--text-muted)]">
+          <Description className="mb-0 mt-1 block text-[13px] leading-[1.5] text-[var(--muted-foreground)]">
             {description}
           </Description>
         )}

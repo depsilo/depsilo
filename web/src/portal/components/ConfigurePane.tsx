@@ -47,7 +47,7 @@ function ManagerChoice({
         alignItems: 'center',
         justifyContent: 'center',
         padding: '6px 11px',
-        background: active ? 'var(--bg-card)' : 'transparent',
+        background: active ? 'var(--card)' : 'transparent',
         border: '1px solid transparent',
         borderRadius: 6,
         boxShadow: active ? 'var(--shadow-surface)' : 'none',
@@ -58,7 +58,7 @@ function ManagerChoice({
     >
       <span
         style={{
-          color: active ? 'var(--brand-text)' : 'var(--text)',
+          color: active ? 'var(--brand-text)' : 'var(--foreground)',
           fontSize: 13,
           fontWeight: active ? 600 : 500,
           lineHeight: 1.25,
@@ -95,17 +95,17 @@ function ManagerPicker({
       <div className="mb-2 flex items-baseline justify-between gap-3">
         <span
           id={titleId}
-          className="text-[12px] font-[600] leading-[1.3] text-[var(--text-muted)]"
+          className="text-[12px] font-[600] leading-[1.3] text-[var(--muted-foreground)]"
         >
           {t('quickstart.managerPickerLabel')}
         </span>
-        <span className="text-[12px] tabular-nums text-[var(--text-subtle)]">
+        <span className="text-[12px] tabular-nums text-[var(--muted-foreground)]">
           {t('quickstart.managerCount', { count: managers.filter(item => item.id !== AI_TAB).length })}
         </span>
       </div>
       <div
         className="manager-picker-viewport overflow-x-auto rounded-md p-1"
-        style={{ background: 'var(--bg-soft)' }}
+        style={{ background: 'var(--muted)' }}
       >
         <div
           className="grid gap-1"
@@ -126,7 +126,7 @@ function ManagerPicker({
       </div>
       <p
         data-manager-description
-        className="mb-0 mt-2 text-[12px] leading-[1.5] text-[var(--text-muted)]"
+        className="mb-0 mt-2 text-[12px] leading-[1.5] text-[var(--muted-foreground)]"
       >
         {activeHint}
       </p>
@@ -142,10 +142,10 @@ function PathsCollapsible({ paths }: { paths: { os: string; path: string }[] }) 
       className="config-disclosure overflow-hidden rounded-md"
       style={{
         border: '1px solid var(--border)',
-        background: 'var(--bg-card)',
+        background: 'var(--card)',
       }}
     >
-      <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-md px-3 text-[13px] font-[500] text-[var(--text-muted)]">
+      <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-md px-3 text-[13px] font-[500] text-[var(--muted-foreground)]">
         {t('quickstart.whereReadsFrom')}
         <span className="disclosure-chevron inline-flex">
           <Icon name="expand_more" size="sm" />
@@ -163,7 +163,7 @@ function PathsCollapsible({ paths }: { paths: { os: string; path: string }[] }) 
           >
             <span
               style={{
-                color: 'var(--text-muted)',
+                color: 'var(--muted-foreground)',
                 fontSize: 12,
                 fontWeight: 600,
                 whiteSpace: 'nowrap',
@@ -174,7 +174,7 @@ function PathsCollapsible({ paths }: { paths: { os: string; path: string }[] }) 
             <span
               style={{
                 overflow: 'hidden',
-                color: 'var(--text)',
+                color: 'var(--foreground)',
                 fontFamily: 'var(--font-mono)',
                 fontSize: 12,
                 textOverflow: 'ellipsis',
@@ -254,19 +254,19 @@ export default function ConfigurePane({
         </span>
         <div style={{ minWidth: 0 }}>
           <h3
-            className="m-0 font-display text-[clamp(20px,2vw,24px)] font-[600] leading-[1.15] text-[var(--text)]"
+            className="m-0 font-display text-[clamp(20px,2vw,24px)] font-[600] leading-[1.15] text-[var(--foreground)]"
           >
             {t('quickstart.configureTitle', { name: language.name })}
           </h3>
         </div>
         <div
           className="ml-auto hidden min-w-0 max-w-[48%] items-center gap-2 rounded-md px-2.5 py-1.5 min-[640px]:flex"
-          style={{ background: 'var(--bg-soft)' }}
+          style={{ background: 'var(--muted)' }}
           title={resolvedEndpoint}
         >
-          <Icon name="link" size="sm" className="shrink-0 text-[var(--text-subtle)]" />
+          <Icon name="link" size="sm" className="shrink-0 text-[var(--muted-foreground)]" />
           <span className="sr-only">{t('quickstart.endpointLabel')}</span>
-          <span className="truncate font-mono text-[12px] text-[var(--text-muted)]">
+          <span className="truncate font-mono text-[12px] text-[var(--muted-foreground)]">
             {resolvedEndpoint}
           </span>
         </div>
@@ -324,7 +324,7 @@ export default function ConfigurePane({
               <div className="flex flex-col gap-3 pb-2 pt-3">
                 {manager.methods.map(method => (
                   <div key={`${method.label}-${method.body}`} className="flex flex-col gap-1">
-                    <span className="px-0.5 text-[12px] font-[500] text-[var(--text-muted)]">
+                    <span className="px-0.5 text-[12px] font-[500] text-[var(--muted-foreground)]">
                       {t(method.label)}
                     </span>
                     <CodeBlock
@@ -358,14 +358,14 @@ export default function ConfigurePane({
             <section data-quickstart-notes aria-labelledby="quickstart-notes-title">
               <h4
                 id="quickstart-notes-title"
-                className="m-0 mb-2 text-[13px] font-[600] leading-[1.35] text-[var(--text)]"
+                className="m-0 mb-2 text-[13px] font-[600] leading-[1.35] text-[var(--foreground)]"
               >
                 {t('quickstart.notesTitle')}
               </h4>
               <ul className="m-0 flex list-none flex-col gap-3 p-0">
                 {notes.map(note => (
                   <li key={note.text} className="flex flex-col gap-2">
-                    <p className="m-0 max-w-[72ch] text-[13px] leading-[1.5] text-[var(--text-muted)]">
+                    <p className="m-0 max-w-[72ch] text-[13px] leading-[1.5] text-[var(--muted-foreground)]">
                       {t(note.text)}
                     </p>
                     {note.body && (

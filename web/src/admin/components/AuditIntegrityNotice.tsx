@@ -39,7 +39,7 @@ export default function AuditIntegrityNotice() {
 
   if (query.isPending && !report) {
     return (
-      <div aria-busy="true" className="rounded-md px-3 py-2 text-[13px]" style={{ background: 'var(--bg-soft)', color: 'var(--text-soft)' }}>
+      <div aria-busy="true" className="rounded-md px-3 py-2 text-[13px]" style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}>
         {t('auditIntegrity.verifying')}
       </div>
     )

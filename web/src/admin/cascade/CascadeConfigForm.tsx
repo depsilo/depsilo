@@ -190,7 +190,7 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
                     data-icon-button
                     aria-label={t(draft.clearSharedToken ? 'cascade.config.undoClear' : 'cascade.config.clearToken')}
                     className="mb-0.5"
-                    style={{ color: 'var(--text-soft)' }}
+                    style={{ color: 'var(--muted-foreground)' }}
                   />
                 }>
                   <Icon name={draft.clearSharedToken ? 'undo' : 'key'} size="sm" />
@@ -204,7 +204,7 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
 
       <fieldset className="space-y-2" disabled={disabled}>
         <div className="flex items-center justify-between gap-2">
-          <legend className="text-[12px] font-[600]" style={{ color: 'var(--text)' }}>
+          <legend className="text-[12px] font-[600]" style={{ color: 'var(--foreground)' }}>
             {t('cascade.config.peersSection')}
           </legend>
           <Button
@@ -222,12 +222,12 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
         </div>
         <p className="text-xs text-muted-foreground">{t('cascade.config.peerIdentityHint')}</p>
         {draft.peers.length === 0 ? (
-          <p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
+          <p className="text-[12px]" style={{ color: 'var(--muted-foreground)' }}>
             {t('cascade.config.peersEmpty')}
           </p>
         ) : (
           <>
-            <div className={`${peerRowGrid} hidden px-1 text-[12px] font-[500] lg:grid`} style={{ color: 'var(--text-muted)' }}>
+            <div className={`${peerRowGrid} hidden px-1 text-[12px] font-[500] lg:grid`} style={{ color: 'var(--muted-foreground)' }}>
               <span>{t('cascade.config.peerName')}</span>
               <span>{t('cascade.config.peerURL')}</span>
               <span>{t('cascade.config.peerTokenShort')}</span>
@@ -295,7 +295,7 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
                             size="icon"
                             data-icon-button
                             aria-label={t(peer.clearToken ? 'cascade.config.undoClear' : 'cascade.config.clearToken')}
-                            style={{ color: 'var(--text-soft)' }}
+                            style={{ color: 'var(--muted-foreground)' }}
                           />
                         }>
                           <Icon name={peer.clearToken ? 'undo' : 'key'} size="sm" />
@@ -359,11 +359,11 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
           className="sticky bottom-4 z-10 flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3"
           style={{
             borderColor: 'var(--border)',
-            background: 'var(--bg-card)',
-            boxShadow: '0 4px 16px color-mix(in oklab, var(--text) 8%, transparent)',
+            background: 'var(--card)',
+            boxShadow: '0 4px 16px color-mix(in oklab, var(--foreground) 8%, transparent)',
           }}
         >
-          <span className="text-[12px] font-[600]" style={{ color: 'var(--text)' }}>
+          <span className="text-[12px] font-[600]" style={{ color: 'var(--foreground)' }}>
             {t('cascade.config.unsaved')}
           </span>
           <div className="flex items-center gap-2">

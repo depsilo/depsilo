@@ -156,12 +156,12 @@ export default function SiemExportersSection() {
         </div>
         </DialogContent></Dialog>
       </>}
-      <p className="mt-2 text-[13px] text-[var(--text-soft)]">{t('siem.filterHint')}</p>
+      <p className="mt-2 text-[13px] text-[var(--muted-foreground)]">{t('siem.filterHint')}</p>
 
       <div className="mt-4">
         {query.isRefetchError && data && <StaleDataNotice onRefresh={() => { void query.refetch() }} />}
         {query.isPending ? (
-          <div aria-busy="true" className="py-6 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>
+          <div aria-busy="true" className="py-6 text-center text-[13px]" style={{ color: 'var(--muted-foreground)' }}>
             <span aria-hidden="true">{t('loading')}</span>
           </div>
         ) : query.isError && !data ? (
@@ -172,7 +172,7 @@ export default function SiemExportersSection() {
           <TableContainer label={t('siem.table')} minWidth={860}>
             <Table className="w-full text-[12px]">
               <TableHeader>
-                <TableRow style={{ color: 'var(--text-soft)' }}>
+                <TableRow style={{ color: 'var(--muted-foreground)' }}>
                   <TableHead className="px-2 py-2 text-left">{t('siem.name')}</TableHead>
                   <TableHead className="px-2 py-2 text-left">{t('siem.kind')}</TableHead>
                   <TableHead className="px-2 py-2 text-left">{t('siem.status')}</TableHead>
@@ -188,11 +188,11 @@ export default function SiemExportersSection() {
                   <TableRow key={exporter.id} style={{ borderTop: '1px solid var(--border)' }}>
                     <TableCell className="px-2 py-3">
                       <div className="flex min-w-0 flex-col">
-                        <span className="min-w-0 truncate" style={{ color: 'var(--text)' }}>{exporter.name}</span>
-                        <span className="min-w-0 truncate font-mono text-[12px] text-[var(--text-soft)]" title={exporter.url}>{exporter.url}</span>
+                        <span className="min-w-0 truncate" style={{ color: 'var(--foreground)' }}>{exporter.name}</span>
+                        <span className="min-w-0 truncate font-mono text-[12px] text-[var(--muted-foreground)]" title={exporter.url}>{exporter.url}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="px-2 py-3" style={{ color: 'var(--text-soft)' }}>
+                    <TableCell className="px-2 py-3" style={{ color: 'var(--muted-foreground)' }}>
                       {exporter.kind === 'splunk_hec' ? 'Splunk HEC' : 'NDJSON'}
                       {exporter.token_set && <span className="ml-1"><Icon name="key" size="sm" /></span>}
                     </TableCell>
@@ -201,18 +201,18 @@ export default function SiemExportersSection() {
                         {exporter.enabled ? t('siem.enabled') : t('siem.disabled')}
                       </Badge>
                     </TableCell>
-                    <TableCell className="px-2 py-3 font-mono" style={{ color: 'var(--text-soft)' }}>{exporter.events}</TableCell>
-                    <TableCell className="px-2 py-3 text-right font-mono tabular-nums" style={{ color: 'var(--text)' }}>
+                    <TableCell className="px-2 py-3 font-mono" style={{ color: 'var(--muted-foreground)' }}>{exporter.events}</TableCell>
+                    <TableCell className="px-2 py-3 text-right font-mono tabular-nums" style={{ color: 'var(--foreground)' }}>
                       {exporter.delivered_count.toLocaleString()}
                     </TableCell>
-                    <TableCell className="px-2 py-3 text-right font-mono tabular-nums" style={{ color: exporter.lag > 0 ? 'var(--dash-warn)' : 'var(--text-soft)' }}>
+                    <TableCell className="px-2 py-3 text-right font-mono tabular-nums" style={{ color: exporter.lag > 0 ? 'var(--dash-warn)' : 'var(--muted-foreground)' }}>
                       {exporter.lag.toLocaleString()}
                     </TableCell>
                     <TableCell className="max-w-[220px] px-2 py-3">
                       {exporter.last_error ? (
                         <span className="block truncate text-[12px]" style={{ color: 'var(--danger)' }} title={exporter.last_error}>{exporter.last_error}</span>
                       ) : (
-                        <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
+                        <span className="text-[12px]" style={{ color: 'var(--muted-foreground)' }}>
                           {exporter.last_success_at ? formatTime(exporter.last_success_at, 'auto') : t('siem.never')}
                         </span>
                       )}

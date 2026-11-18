@@ -72,7 +72,7 @@ export default function AdminPage({
                     <div
                       data-admin-page-description
                       className="min-w-0 max-w-[72ch] text-[13px] leading-[1.6]"
-                      style={{ color: 'var(--text-soft)' }}
+                      style={{ color: 'var(--muted-foreground)' }}
                     >
                       {description}
                     </div>
@@ -112,7 +112,7 @@ export default function AdminPage({
                 <div
                   data-admin-page-description
                   className="mt-2 min-w-0 max-w-[72ch] text-[13px] leading-[1.6]"
-                  style={{ color: 'var(--text-soft)' }}
+                  style={{ color: 'var(--muted-foreground)' }}
                 >
                   {description}
                 </div>

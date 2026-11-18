@@ -26,8 +26,8 @@ export default function DockerBootstrap() {
 
   return (
     <section aria-labelledby="docker-bootstrap-title" className="mt-6 border-t border-[var(--border)] pt-6">
-      <h3 id="docker-bootstrap-title" className="text-[14px] font-[600] text-[var(--text)]">{t('onboarding.docker.title')}</h3>
-      {query.isLoading && <p role="status" className="mt-2 text-[13px] text-[var(--text-muted)]">{t('onboarding.docker.checking')}</p>}
+      <h3 id="docker-bootstrap-title" className="text-[14px] font-[600] text-[var(--foreground)]">{t('onboarding.docker.title')}</h3>
+      {query.isLoading && <p role="status" className="mt-2 text-[13px] text-[var(--muted-foreground)]">{t('onboarding.docker.checking')}</p>}
       {query.isError && <div className="mt-3"><QueryErrorState message={t('onboarding.docker.loadError')} onRetry={() => { void query.refetch() }} /></div>}
       {query.data && (
         <div className="mt-3 space-y-3">
@@ -41,19 +41,19 @@ export default function DockerBootstrap() {
             <Alert variant={"info"}><AlertDescription>{t('onboarding.docker.custom')}</AlertDescription></Alert>
           ) : (
             <>
-              <p className="text-[13px] text-[var(--text-muted)]">{t('onboarding.docker.disabled')}</p>
+              <p className="text-[13px] text-[var(--muted-foreground)]">{t('onboarding.docker.disabled')}</p>
               {canWrite && query.data.config_writable && (
                 <Button disabled={enable.isPending} onClick={() => enable.mutate()}>
                   <Icon name="add" size="sm" />{t('onboarding.docker.enable')}
                 </Button>
               )}
               {!query.data.config_writable && <Alert variant={"warning"}><AlertDescription>{t('onboarding.docker.readOnly')}</AlertDescription></Alert>}
-              {!canWrite && <p className="text-[13px] text-[var(--text-muted)]">{t('common.permissionDenied')}</p>}
+              {!canWrite && <p className="text-[13px] text-[var(--muted-foreground)]">{t('common.permissionDenied')}</p>}
             </>
           )}
           {enable.isError && <p role="alert" className="text-[13px] text-[var(--danger-text)]">{t('onboarding.docker.enableError')}</p>}
           {query.data.effective && query.data.docker_hub && (
-            <p className="text-[12px] leading-5 text-[var(--text-muted)]">{t('onboarding.docker.scope')}</p>
+            <p className="text-[12px] leading-5 text-[var(--muted-foreground)]">{t('onboarding.docker.scope')}</p>
           )}
         </div>
       )}

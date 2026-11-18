@@ -213,7 +213,7 @@ export default function CacheManage() {
                 const share = distribution.total_size > 0 ? bt.size / distribution.total_size : 0
                 return <li key={bt.type} className="flex min-w-0 flex-col gap-1.5">
                   <div className="flex min-w-0 items-baseline gap-2"><span className="font-medium">{ecosystemLabel(bt.type)}</span><span className="font-mono tabular-nums">{formatBytes(bt.size)}</span><span className="ml-auto shrink-0 font-mono text-[12px] tabular-nums text-muted-foreground">{(share * 100).toFixed(share < 0.1 ? 1 : 0)}%</span></div>
-                  <div aria-hidden className="h-1 overflow-hidden rounded-full bg-[var(--bg-soft)]"><div className="h-full rounded-full bg-[var(--text-subtle)]" style={{ width: `${Math.max(share * 100, share > 0 ? 1 : 0)}%` }} /></div>
+                  <div aria-hidden className="h-1 overflow-hidden rounded-full bg-[var(--muted)]"><div className="h-full rounded-full bg-[var(--muted-foreground)]" style={{ width: `${Math.max(share * 100, share > 0 ? 1 : 0)}%` }} /></div>
                   <span className="truncate text-[12px] text-muted-foreground">{t('cache.objectCount', { count: bt.file_count })}</span>
                 </li>
               })}</ul>}
@@ -240,7 +240,7 @@ export default function CacheManage() {
 
       <div data-cache-list>
       {isPending ? (
-        <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]">
+        <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--muted-foreground)]">
           <span aria-hidden="true">{t('loading')}</span>
         </div>
       ) : isError && !data ? (
@@ -264,8 +264,8 @@ export default function CacheManage() {
               {items.map((row) => (
                 <TableRow
                   key={row.id}
-                  className="transition-colors duration-75 hover:bg-[var(--bg-soft)]"
-                  style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
+                  className="transition-colors duration-75 hover:bg-[var(--muted)]"
+                  style={{ borderBottom: '1px solid var(--border, var(--border))' }}
                 >
                   <TableCell className="py-2 px-3 pl-0 max-w-[260px]">
                     <details className="min-w-0"><summary className="cursor-pointer break-all font-medium">{row.package_name || row.key.split('/').pop() || row.key}</summary><code className="mt-2 block break-all text-xs text-muted-foreground">{row.key}</code></details>
@@ -278,13 +278,13 @@ export default function CacheManage() {
                     </div>
                   </TableCell>
                   <TableCell className="py-2 px-3">
-                    <span className="font-mono tabular-nums" style={{ color: 'var(--text)' }}>{formatBytes(row.size || 0)}</span>
+                    <span className="font-mono tabular-nums" style={{ color: 'var(--foreground)' }}>{formatBytes(row.size || 0)}</span>
                   </TableCell>
                   <TableCell className="py-2 px-3">
-                    <span className="font-mono tabular-nums" style={{ color: 'var(--text)' }}>{row.hit_count || 0}</span>
+                    <span className="font-mono tabular-nums" style={{ color: 'var(--foreground)' }}>{row.hit_count || 0}</span>
                   </TableCell>
                   <TableCell className="py-2 px-3">
-                    <span style={{ color: 'var(--text-soft)' }}>{formatTime(row.last_accessed)}</span>
+                    <span style={{ color: 'var(--muted-foreground)' }}>{formatTime(row.last_accessed)}</span>
                   </TableCell>
                   <TableCell className="py-2 px-3">
                     {canWrite && <Tooltip>
@@ -326,7 +326,7 @@ export default function CacheManage() {
         }} modal>
           <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={deleteMutation.isPending}>
             <DialogTitle className="pr-10">{t('cache.confirmDelete')}</DialogTitle>
-            <p className="text-[14px] mb-4" style={{ color: 'var(--text-soft)' }}>{t('cache.confirmDeleteMsg')}</p><code className="mb-4 block break-all text-sm">{selectedEntry?.key}</code>{selectedEntry && <p className="mb-4 text-sm text-muted-foreground">{ecosystemLabel(selectedEntry.adapter_type)} · {formatBytes(selectedEntry.size)}</p>}
+            <p className="text-[14px] mb-4" style={{ color: 'var(--muted-foreground)' }}>{t('cache.confirmDeleteMsg')}</p><code className="mb-4 block break-all text-sm">{selectedEntry?.key}</code>{selectedEntry && <p className="mb-4 text-sm text-muted-foreground">{ecosystemLabel(selectedEntry.adapter_type)} · {formatBytes(selectedEntry.size)}</p>}
             {deleteMutation.isError && <div className="mb-4"><Alert variant={"destructive"}><AlertDescription>{getApiError(deleteMutation.error).message}</AlertDescription></Alert></div>}
             <div className="flex justify-end gap-3">
               <Button variant="outline" disabled={deleteMutation.isPending} onClick={() => {
@@ -351,20 +351,20 @@ export default function CacheManage() {
         }} modal>
           <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={cleanupMutation.isPending}>
             <DialogTitle className="pr-10">{t('cache.cleanExpiredTitle')}</DialogTitle>
-            <p className="text-[14px] mb-6" style={{ color: 'var(--text-soft)' }}>{t('cache.cleanExpiredMsg')}</p>
+            <p className="text-[14px] mb-6" style={{ color: 'var(--muted-foreground)' }}>{t('cache.cleanExpiredMsg')}</p>
             {cleanupPreviewQuery.isPending ? (
-              <div aria-busy="true" className="mb-6 text-[13px] text-[var(--text-soft)]">{t('cache.previewLoading')}</div>
+              <div aria-busy="true" className="mb-6 text-[13px] text-[var(--muted-foreground)]">{t('cache.previewLoading')}</div>
             ) : cleanupPreviewQuery.isError ? (
               <div className="mb-6 space-y-3"><Alert variant={"warning"}><AlertDescription>{t('cache.previewUnavailable')}</AlertDescription></Alert><Button variant="outline" onClick={() => cleanupPreviewQuery.refetch()}>{t('cache.retryPreview')}</Button></div>
             ) : cleanupPreviewQuery.data?.data ? (
               <div className="mb-6 space-y-3" data-testid="cache-cleanup-preview">
-                <p className="text-[13px] text-[var(--text-soft)]">
+                <p className="text-[13px] text-[var(--muted-foreground)]">
                   {t('cache.previewSummary', {
                     count: cleanupPreviewQuery.data.data.candidate_count,
                     bytes: formatBytes(cleanupPreviewQuery.data.data.logical_bytes),
                   })}
                 </p>
-                <p className="text-[13px] text-[var(--text-soft)]">
+                <p className="text-[13px] text-[var(--muted-foreground)]">
                   {t('cache.previewPlanned', {
                     count: cleanupPreviewQuery.data.data.planned_count,
                     bytes: formatBytes(cleanupPreviewQuery.data.data.planned_bytes),
@@ -375,12 +375,12 @@ export default function CacheManage() {
                     {cleanupPreviewQuery.data.data.items.map((item) => (
                       <li key={item.id} className="flex justify-between gap-3">
                         <span className="truncate">{item.package_name || item.key}</span>
-                        <span className="shrink-0 text-[var(--text-soft)]">{formatBytes(item.size)} · {item.reason}</span>
+                        <span className="shrink-0 text-[var(--muted-foreground)]">{formatBytes(item.size)} · {item.reason}</span>
                       </li>
                     ))}
                   </ul>
-                ) : <p className="text-[12px] text-[var(--text-soft)]">{t('cache.previewEmpty')}</p>}
-                <p className="text-[12px] text-[var(--text-soft)]">{t('cache.previewSnapshot')}</p>
+                ) : <p className="text-[12px] text-[var(--muted-foreground)]">{t('cache.previewEmpty')}</p>}
+                <p className="text-[12px] text-[var(--muted-foreground)]">{t('cache.previewSnapshot')}</p>
               </div>
             ) : null}
             {cleanupResult && (
@@ -441,13 +441,13 @@ export default function CacheManage() {
                 <div className="space-y-3 rounded-md border border-[var(--border)] p-3" data-testid="warmup-job-status">
                   <div className="flex justify-between gap-3 text-[12px]">
                     <span>{t('cache.warmupJobStatus', { status: t(WARMUP_STATUS_KEYS[warmupJobQuery.data.data.status] || 'cache.warmupStatus.unknown') })}</span>
-                    <span className="font-mono text-[var(--text-soft)]">{warmupJobId}</span>
+                    <span className="font-mono text-[var(--muted-foreground)]">{warmupJobId}</span>
                   </div>
                   <ul className="max-h-40 overflow-auto space-y-1 text-[12px]" aria-label={t('cache.warmupResults')}>
                     {warmupJobQuery.data.data.items.map(item => (
                       <li key={item.package} className="flex justify-between gap-3">
                         <span className="truncate font-mono">{item.package}</span>
-                        <span className="shrink-0 text-[var(--text-soft)]">{item.detail === 'metadata cached' ? t('cache.warmupItemMetadata') : item.detail === 'request failed' ? t('cache.warmupItemFailed') : item.detail === 'warmup stopped before this package completed' ? t('cache.warmupItemStopped') : t(WARMUP_STATUS_KEYS[item.status] || 'cache.warmupStatus.unknown')}</span>
+                        <span className="shrink-0 text-[var(--muted-foreground)]">{item.detail === 'metadata cached' ? t('cache.warmupItemMetadata') : item.detail === 'request failed' ? t('cache.warmupItemFailed') : item.detail === 'warmup stopped before this package completed' ? t('cache.warmupItemStopped') : t(WARMUP_STATUS_KEYS[item.status] || 'cache.warmupStatus.unknown')}</span>
                       </li>
                     ))}
                   </ul>

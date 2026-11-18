@@ -52,7 +52,7 @@ export function AIIntegrationSteps({ scope }: { scope?: AIScope }) {
           flat
           wrap
         />
-        <p className="mb-0 mt-2 flex items-start gap-1.5 text-[12px] leading-[1.5] text-[var(--text-subtle)]">
+        <p className="mb-0 mt-2 flex items-start gap-1.5 text-[12px] leading-[1.5] text-[var(--muted-foreground)]">
           <Icon name="info" size="sm" className="mt-px shrink-0" />
           {t('quickstart.ai.reachNote', { endpoint })}
         </p>
@@ -75,9 +75,9 @@ export function AIIntegrationSteps({ scope }: { scope?: AIScope }) {
           <details
             data-quickstart-full-prompt
             className="config-disclosure overflow-hidden rounded-md"
-            style={{ border: '1px solid var(--border)', background: 'var(--bg-card)' }}
+            style={{ border: '1px solid var(--border)', background: 'var(--card)' }}
           >
-            <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-md px-3 text-[13px] font-[500] text-[var(--text-muted)]">
+            <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-md px-3 text-[13px] font-[500] text-[var(--muted-foreground)]">
               {full.data
                 ? t('quickstart.ai.fullShow', { lines: full.data.split('\n').length })
                 : t('quickstart.loading')}
@@ -126,15 +126,15 @@ export default function AIIntegrationPane() {
           <Icon name="lightbulb" />
         </span>
         <div className="min-w-0">
-          <h3 className="m-0 font-display text-[clamp(20px,2vw,24px)] font-[600] leading-[1.15] text-[var(--text)]">
+          <h3 className="m-0 font-display text-[clamp(20px,2vw,24px)] font-[600] leading-[1.15] text-[var(--foreground)]">
             {t('quickstart.ai.paneTitle')}
           </h3>
-          <p className="m-0 mt-0.5 text-[12px] text-[var(--text-muted)]">{t('quickstart.ai.agents')}</p>
+          <p className="m-0 mt-0.5 text-[12px] text-[var(--muted-foreground)]">{t('quickstart.ai.agents')}</p>
         </div>
       </div>
 
       <div className="flex flex-col gap-7 p-4 sm:p-6 lg:p-7">
-        <p className="m-0 max-w-[72ch] text-[13px] leading-[1.6] text-[var(--text-muted)]">
+        <p className="m-0 max-w-[72ch] text-[13px] leading-[1.6] text-[var(--muted-foreground)]">
           {t('quickstart.ai.intro')}
         </p>
         <AIIntegrationSteps />

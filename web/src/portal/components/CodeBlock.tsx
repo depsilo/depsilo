@@ -34,7 +34,7 @@ function highlightLine(line: string, lineIdx: number, ink: boolean): ReactNode {
     return (
       <span
         key={lineIdx}
-        style={{ color: ink ? 'var(--code-muted)' : 'var(--text-subtle)' }}
+        style={{ color: ink ? 'var(--code-muted)' : 'var(--muted-foreground)' }}
       >
         {line}
       </span>
@@ -102,7 +102,7 @@ export default function CodeBlock({
       data-code-flat={flat ? 'true' : undefined}
       style={{
         position: flat ? 'relative' : undefined,
-        background: ink ? 'var(--code-bg)' : 'var(--bg-soft)',
+        background: ink ? 'var(--code-bg)' : 'var(--muted)',
         border: flat ? '1px solid var(--code-line)' : ink ? 'none' : '1px solid var(--border)',
         borderRadius: 'var(--r-card)',
         boxShadow: ink && !flat ? 'var(--code-shadow)' : 'none',
@@ -111,7 +111,7 @@ export default function CodeBlock({
     >
       <div
         style={headed ? {
-          background: ink ? 'var(--code-header)' : 'var(--bg-card)',
+          background: ink ? 'var(--code-header)' : 'var(--card)',
           borderBottom: `1px solid ${ink ? 'var(--code-line)' : 'var(--border)'}`,
           minHeight: flat ? 40 : 42,
           display: 'flex',
@@ -132,7 +132,7 @@ export default function CodeBlock({
             style={{
               fontFamily: 'var(--font-mono)',
               fontSize: 12,
-              color: ink ? 'var(--code-muted)' : 'var(--text-subtle)',
+              color: ink ? 'var(--code-muted)' : 'var(--muted-foreground)',
             }}
           >
             {filename ?? ''}
@@ -159,7 +159,7 @@ export default function CodeBlock({
                   : 'var(--danger-text)'
                 : ink
                   ? 'var(--code-muted)'
-                  : 'var(--text-muted)' }}
+                  : 'var(--muted-foreground)' }}
         >
           <Icon name={copied ? 'check' : 'content_copy'} size="sm" />
           {copyState === 'copied'
@@ -188,7 +188,7 @@ export default function CodeBlock({
           fontFamily: 'var(--font-mono)',
           fontSize: 13,
           lineHeight: ink ? 1.68 : 1.6,
-          color: ink ? 'var(--code-fg)' : 'var(--text)',
+          color: ink ? 'var(--code-fg)' : 'var(--foreground)',
           overflowX: 'auto',
           whiteSpace: wrap ? 'pre-wrap' : undefined,
           overflowWrap: wrap ? 'anywhere' : undefined,

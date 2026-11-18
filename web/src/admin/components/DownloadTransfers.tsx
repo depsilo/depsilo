@@ -44,18 +44,18 @@ export default function DownloadTransfers() {
   return (
     <section aria-label={t('cache.transfers.title')} className="min-w-0">
       <details open={open} onToggle={event => setOpen(event.currentTarget.open)}><summary className="cursor-pointer text-sm font-medium">{t('cache.transfers.title')} <span className="font-normal text-muted-foreground">· {items.length > 0 ? items.length : t('cache.transfers.noneActive')}</span></summary><p className="my-2 text-xs text-muted-foreground">{t('cache.transfers.scope')}</p>
-      {query.isPending ? <p role="status" className="text-[13px] text-[var(--text-soft)]">{t('cache.transfers.loading')}</p>
+      {query.isPending ? <p role="status" className="text-[13px] text-[var(--muted-foreground)]">{t('cache.transfers.loading')}</p>
         : query.isError && (!data || error.status === 403) ? <QueryErrorState message={t(error.status === 403 ? 'cache.transfers.permission' : 'cache.transfers.unavailable')} onRetry={() => { void query.refetch() }} />
           : <>
             {query.isRefetchError && <div className="mb-3"><StaleDataNotice onRefresh={() => query.refetch()} /></div>}
-            {items.length === 0 ? <p className="text-[13px] text-[var(--text-soft)]">{t('cache.transfers.empty')}</p> : <ul className="divide-y divide-[var(--border)]">
+            {items.length === 0 ? <p className="text-[13px] text-[var(--muted-foreground)]">{t('cache.transfers.empty')}</p> : <ul className="divide-y divide-[var(--border)]">
               {items.map(item => {
                 const ecosystem = item.ecosystem === 'extra:pytorch' ? 'PyTorch' : operatorEcosystems.find(ecosystem => ecosystem.id === item.ecosystem)?.label ?? item.ecosystem.replace(/^extra:/, '')
                 const percent = item.total_bytes > 0 ? Math.min(100, Math.max(0, Math.round(item.downloaded_bytes / item.total_bytes * 100))) : undefined
                 const size = `${formatBytes(item.downloaded_bytes)} / ${item.total_bytes > 0 ? formatBytes(item.total_bytes) : t('cache.transfers.unknown')}`
                 return <li key={item.id} className={`min-w-0 ${item.status === 'cached' ? 'space-y-1 py-2.5' : 'space-y-2 py-4'}`}>
                   <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
-                    <p className="min-w-0 flex-1 break-all font-mono text-[12px] text-[var(--text)]">{item.name}</p>
+                    <p className="min-w-0 flex-1 break-all font-mono text-[12px] text-[var(--foreground)]">{item.name}</p>
                     <Badge variant={item.status === 'cached' ? 'success' : item.status === 'failed' ? "destructive" : item.status === 'resuming' ? 'warning' : 'neutral'}>{t(`cache.transfers.${item.status}`)}</Badge>
                   </div>
                   {item.status !== 'cached' && <Progress value={percent ?? null} aria-label={t('cache.transfers.progress', { name: item.name })} aria-valuetext={size}>
@@ -63,20 +63,20 @@ export default function DownloadTransfers() {
                       <ProgressIndicator style={item.finished_at ? { animation: 'none' } : undefined} />
                     </ProgressTrack>
                   </Progress>}
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-[var(--text-soft)]">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-[var(--muted-foreground)]">
                     <span className="font-mono tabular-nums">{size}</span>
                     {percent !== undefined && <span>{percent}%</span>}
                     {!item.finished_at && <span>{t('cache.transfers.rate', { rate: formatBytes(item.bytes_per_second) })}</span>}
                     <span>{ecosystem}{item.upstream ? ` · ${item.upstream}` : ''}</span>
                     <span>{formatTime(item.started_at)}</span>
                   </div>
-                  {item.resume_attempts > 0 && <p className="text-[12px] text-[var(--text-soft)]">{t('cache.transfers.resumes', { count: item.resume_attempts })} · {t('cache.transfers.offset', { bytes: formatBytes(item.resume_offset) })}</p>}
-                  {item.status === 'cached' && <p className="text-[12px] text-[var(--text-soft)]">{t('cache.transfers.saved')}</p>}
-                  {item.status === 'failed' && <p className="text-[12px] text-[var(--text-soft)]">{t('cache.transfers.failedDetail')}</p>}
+                  {item.resume_attempts > 0 && <p className="text-[12px] text-[var(--muted-foreground)]">{t('cache.transfers.resumes', { count: item.resume_attempts })} · {t('cache.transfers.offset', { bytes: formatBytes(item.resume_offset) })}</p>}
+                  {item.status === 'cached' && <p className="text-[12px] text-[var(--muted-foreground)]">{t('cache.transfers.saved')}</p>}
+                  {item.status === 'failed' && <p className="text-[12px] text-[var(--muted-foreground)]">{t('cache.transfers.failedDetail')}</p>}
                 </li>
               })}
             </ul>}
-            {data && data.items.length > items.length && <p className="text-[12px] text-[var(--text-soft)]">{t('cache.transfers.shown', { shown: items.length, count: data.items.length })}</p>}
+            {data && data.items.length > items.length && <p className="text-[12px] text-[var(--muted-foreground)]">{t('cache.transfers.shown', { shown: items.length, count: data.items.length })}</p>}
           </>}
       </details>
     </section>

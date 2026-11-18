@@ -60,17 +60,17 @@ function QueueItem({ icon, title, detail, count, tone, href, action }: QueueItem
         </span>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-[13px] font-[600] text-[var(--text)]">{title}</h3>
+            <h3 className="text-[13px] font-[600] text-[var(--foreground)]">{title}</h3>
             {count !== undefined && (
               <Badge variant={tone === 'danger' ? "destructive" : 'warning'}>{count.toLocaleString()}</Badge>
             )}
           </div>
-          <p className="mt-1 max-w-2xl text-[12px] leading-5 text-[var(--text-soft)]">{detail}</p>
+          <p className="mt-1 max-w-2xl text-[12px] leading-5 text-[var(--muted-foreground)]">{detail}</p>
         </div>
       </div>
       <Link
         to={href}
-        className="stripe-focus-ring inline-flex min-h-10 shrink-0 items-center justify-center gap-1 rounded-sm px-2.5 text-[12px] font-[600] no-underline text-[var(--brand-text)] transition-colors duration-150 hover:bg-[var(--bg-hover)] sm:self-center"
+        className="stripe-focus-ring inline-flex min-h-10 shrink-0 items-center justify-center gap-1 rounded-sm px-2.5 text-[12px] font-[600] no-underline text-[var(--brand-text)] transition-colors duration-150 hover:bg-[var(--accent)] sm:self-center"
       >
         {action}
         <span aria-hidden>→</span>
@@ -83,7 +83,7 @@ function AttentionSkeleton() {
   return (
     <div aria-busy="true" className="space-y-3">
       {[0, 1, 2].map(index => (
-        <Skeleton key={index} aria-hidden className="h-16 rounded-md bg-[var(--bg-soft)]" />
+        <Skeleton key={index} aria-hidden className="h-16 rounded-md bg-[var(--muted)]" />
       ))}
     </div>
   )
@@ -244,7 +244,7 @@ export default function Attention() {
             action={(
               <Link
                 to={getAdminRouteHref('quarantine')}
-                className="stripe-focus-ring inline-flex min-h-10 items-center rounded-sm px-2 text-[12px] font-[600] no-underline text-[var(--brand-text)] hover:bg-[var(--bg-hover)]"
+                className="stripe-focus-ring inline-flex min-h-10 items-center rounded-sm px-2 text-[12px] font-[600] no-underline text-[var(--brand-text)] hover:bg-[var(--accent)]"
               >
                 {t('attention.viewQuarantine')}
               </Link>
@@ -303,11 +303,11 @@ export default function Attention() {
                           <EcosystemIcon type={event.ecosystem} size={16} />
                         )}
                         <div className="min-w-0">
-                          <p className="break-all font-mono text-[13px] font-[500] text-[var(--text)]">
+                          <p className="break-all font-mono text-[13px] font-[500] text-[var(--foreground)]">
                             <Link className="stripe-focus-ring text-[var(--brand-text)] underline" to={`${getAdminRouteHref('quarantine')}?${new URLSearchParams({ tab: 'events', package: event.package, ecosystem: event.ecosystem, action: event.action })}`}>{event.package}</Link>
-                            {event.version ? <span className="text-[var(--text-soft)]"> @{event.version}</span> : null}
+                            {event.version ? <span className="text-[var(--muted-foreground)]"> @{event.version}</span> : null}
                           </p>
-                          <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-[var(--text-soft)]">
+                          <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-[var(--muted-foreground)]">
                             {event.reason || t('attention.noReason')}
                           </p>
                         </div>
@@ -316,7 +316,7 @@ export default function Attention() {
                         <Badge variant={event.action.includes('blocked') || event.action === 'tamper_detected' ? "destructive" : 'warning'}>
                           {t(`quarantine.action.${event.action}`)}
                         </Badge>
-                        <time className="font-mono text-[12px] tabular-nums text-[var(--text-subtle)]" dateTime={event.created_at}>
+                        <time className="font-mono text-[12px] tabular-nums text-[var(--muted-foreground)]" dateTime={event.created_at}>
                           {formatTime(event.created_at)}
                         </time>
                       </div>

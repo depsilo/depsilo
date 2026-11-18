@@ -24,8 +24,8 @@ import { REQUEST_OUTCOME_META, requestOutcome } from '@/lib/dashboardOverview'
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
-      <dt className="text-[13px]" style={{ color: 'var(--text-soft)' }}>{label}</dt>
-      <dd className="min-w-0 break-words text-[14px]" style={{ color: 'var(--text)' }}>{children}</dd>
+      <dt className="text-[13px]" style={{ color: 'var(--muted-foreground)' }}>{label}</dt>
+      <dd className="min-w-0 break-words text-[14px]" style={{ color: 'var(--foreground)' }}>{children}</dd>
     </div>
   )
 }
@@ -48,16 +48,16 @@ function CopyableField({ label, value }: { label: string; value: string }) {
 
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
-      <dt className="text-[13px]" style={{ color: 'var(--text-soft)' }}>{label}</dt>
+      <dt className="text-[13px]" style={{ color: 'var(--muted-foreground)' }}>{label}</dt>
       <dd className="flex min-w-0 items-center gap-1.5">
-        <span className="min-w-0 break-all font-mono text-[13px]" style={{ color: 'var(--text)' }}>{value || '—'}</span>
+        <span className="min-w-0 break-all font-mono text-[13px]" style={{ color: 'var(--foreground)' }}>{value || '—'}</span>
         {available && (
           <Button variant="ghost" size="icon"
             type="button"
             onClick={handleCopy}
             aria-label={copied ? t('common.copied') : t('overview.copyValue', { label })}
             className="text-muted-foreground"
-            style={{ color: 'var(--text-soft)' }}
+            style={{ color: 'var(--muted-foreground)' }}
           >
             <Icon name={copied ? 'check' : 'content_copy'} size="sm" />
           </Button>
@@ -111,7 +111,7 @@ function ChainTab({ detail, t }: { detail: AccessLogDetail; t: TFunction }) {
         <Field label={t('overview.fieldUpstreamRequests')}>{originRequests.toLocaleString()}</Field>
         <Field label={t('overview.fieldUpstreamBytes')}>{formatBytes(originBytes)}</Field>
       </div>
-      <p className="rounded-md px-3 py-2 text-[13px] leading-[1.6]" style={{ background: 'var(--bg-soft)', color: 'var(--text-soft)' }}>
+      <p className="rounded-md px-3 py-2 text-[13px] leading-[1.6]" style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}>
         {t('overview.chainNote')}
       </p>
     </div>
@@ -120,20 +120,20 @@ function ChainTab({ detail, t }: { detail: AccessLogDetail; t: TFunction }) {
 
 function LogTab({ detail, t }: { detail: AccessLogDetail; t: TFunction }) {
   if (!detail.audit_events || detail.audit_events.length === 0) {
-    return <p className="text-[14px]" style={{ color: 'var(--text-soft)' }}>{t('overview.noAuditEvents')}</p>
+    return <p className="text-[14px]" style={{ color: 'var(--muted-foreground)' }}>{t('overview.noAuditEvents')}</p>
   }
   return (
     <ol className="flex flex-col gap-3">
       {detail.audit_events.map(event => (
-        <li key={event.id} className="flex min-w-0 flex-col gap-1 rounded-md px-3 py-2" style={{ background: 'var(--bg-soft)' }}>
+        <li key={event.id} className="flex min-w-0 flex-col gap-1 rounded-md px-3 py-2" style={{ background: 'var(--muted)' }}>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="neutral">{event.action}</Badge>
-            <span className="font-mono text-[13px]" style={{ color: 'var(--text)' }}>
+            <span className="font-mono text-[13px]" style={{ color: 'var(--foreground)' }}>
               {event.package_name}{event.version ? `@${event.version}` : ''}
             </span>
-            <span className="ml-auto text-[12px]" style={{ color: 'var(--text-soft)' }}>{formatTime(event.created_at, 'auto')}</span>
+            <span className="ml-auto text-[12px]" style={{ color: 'var(--muted-foreground)' }}>{formatTime(event.created_at, 'auto')}</span>
           </div>
-          <span className="text-[13px]" style={{ color: 'var(--text-soft)' }}>
+          <span className="text-[13px]" style={{ color: 'var(--muted-foreground)' }}>
             {t('overview.auditEventMeta', { ecosystem: event.ecosystem, result: event.cache_result, status: event.status_code })}
           </span>
         </li>
@@ -164,7 +164,7 @@ export default function RequestDetailsDialog({ logId, onClose }: RequestDetailsD
 
   let body: ReactNode
   if (query.isPending && !detail) {
-    body = <Skeleton className="h-40 rounded-md" style={{ background: 'var(--bg-soft)' }} />
+    body = <Skeleton className="h-40 rounded-md" style={{ background: 'var(--muted)' }} />
   } else if (query.isError && !detail) {
     body = (
       <QueryErrorState
@@ -173,7 +173,7 @@ export default function RequestDetailsDialog({ logId, onClose }: RequestDetailsD
       />
     )
   } else if (!detail) {
-    body = <p className="text-[14px]" style={{ color: 'var(--text-soft)' }}>{t('overview.requestUnavailable')}</p>
+    body = <p className="text-[14px]" style={{ color: 'var(--muted-foreground)' }}>{t('overview.requestUnavailable')}</p>
   } else {
     body = (
       <Tabs value={tab} onValueChange={setTab}>
@@ -199,9 +199,9 @@ export default function RequestDetailsDialog({ logId, onClose }: RequestDetailsD
           {detail && (
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               {isAdminEcosystem(detail.adapter_type) && <EcosystemIcon type={detail.adapter_type} size={18} decorative />}
-              <span className="min-w-0 truncate font-mono text-[16px] font-semibold" style={{ color: 'var(--text)' }}>
+              <span className="min-w-0 truncate font-mono text-[16px] font-semibold" style={{ color: 'var(--foreground)' }}>
                 {detail.package_name || t('recentDownloads.unknownPackage')}
-                {detail.version && <span style={{ color: 'var(--text-soft)' }}>@{detail.version}</span>}
+                {detail.version && <span style={{ color: 'var(--muted-foreground)' }}>@{detail.version}</span>}
               </span>
               <Badge variant="neutral">{detail.adapter_type || '—'}</Badge>
               <Badge variant={outcomeMeta.variant}>{t(outcomeMeta.key)}</Badge>
@@ -214,7 +214,7 @@ export default function RequestDetailsDialog({ logId, onClose }: RequestDetailsD
                 to={getAdminRouteHref('upstreams')}
                 onClick={onClose}
                 className="dash-focus inline-flex min-h-9 items-center gap-1.5 rounded-md border px-3 text-[14px] font-medium no-underline"
-                style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+                style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
               >
                 {t('overview.viewUpstreams')}
               </Link>
@@ -223,7 +223,7 @@ export default function RequestDetailsDialog({ logId, onClose }: RequestDetailsD
               to={getAdminRouteHref('accessLogs')}
               onClick={onClose}
               className="dash-focus inline-flex min-h-9 items-center gap-1.5 rounded-md border px-3 text-[14px] font-medium no-underline"
-              style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+              style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
             >
               <Icon name="receipt_long" size="sm" />
               {t('overview.openLogs')}

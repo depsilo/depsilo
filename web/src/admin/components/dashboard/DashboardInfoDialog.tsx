@@ -41,14 +41,14 @@ export default function DashboardInfoDialog({
         <DialogTitle className="pr-10">{title}</DialogTitle>
         <div data-dashboard-info-dialog className="flex flex-col gap-4">
           {description && (
-            <p className="text-[14px] leading-[1.6]" style={{ color: 'var(--dash-muted, var(--text-soft))' }}>
+            <p className="text-[14px] leading-[1.6]" style={{ color: 'var(--dash-muted, var(--muted-foreground))' }}>
               {description}
             </p>
           )}
           {sections.map(section => (
             <section key={section.title} className="flex flex-col gap-1.5">
-              <h3 className="text-[14px] font-semibold" style={{ color: 'var(--text)' }}>{section.title}</h3>
-              <div className="text-[14px] leading-[1.65]" style={{ color: 'var(--text-soft)' }}>{section.body}</div>
+              <h3 className="text-[14px] font-semibold" style={{ color: 'var(--foreground)' }}>{section.title}</h3>
+              <div className="text-[14px] leading-[1.65]" style={{ color: 'var(--muted-foreground)' }}>{section.body}</div>
             </section>
           ))}
           {children}

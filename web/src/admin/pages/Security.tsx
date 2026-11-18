@@ -116,28 +116,28 @@ function CapabilityOverview() {
   return (
     <section aria-label={t('security.capabilityTitle')} className="space-y-3">
       <SectionHeader title={t('security.capabilityTitle')} />
-      {query.isPending && <p className="text-[12px] text-[var(--text-soft)]" aria-busy="true">{t('security.capabilityLoading')}</p>}
+      {query.isPending && <p className="text-[12px] text-[var(--muted-foreground)]" aria-busy="true">{t('security.capabilityLoading')}</p>}
       {query.isError && <Alert variant={"warning"}><AlertDescription>{t('security.capabilityUnavailable')}</AlertDescription></Alert>}
       {!query.isPending && !query.isError && facts.length === 0 && <Alert variant={"warning"}><AlertDescription>{t('security.capabilityNoData')}</AlertDescription></Alert>}
       {facts.length > 0 && (
         <div className="grid gap-3 md:grid-cols-2">
           {[...grouped.entries()].map(([name, rows]) => (
-            <details key={name} className="rounded-md border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2">
+            <details key={name} className="rounded-md border border-[var(--border)] bg-[var(--muted)] px-3 py-2">
               <summary className="cursor-pointer stripe-focus-ring text-[14px] font-[600]">
                 {label(name)}
                 {rows.some(fact => fact.data_status === 'error' || fact.data_status === 'stale') && <Badge variant="warning" className="ml-2">{t('security.capabilityNeedsReview')}</Badge>}
               </summary>
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {rows.map((fact) => (
-                  <div key={`${fact.ecosystem ?? 'all'}-${fact.name}`} className="min-w-0 rounded-sm bg-[var(--bg-page)] p-2 text-[12px]">
+                  <div key={`${fact.ecosystem ?? 'all'}-${fact.name}`} className="min-w-0 rounded-sm bg-[var(--background)] p-2 text-[12px]">
                     <div className="mb-1 font-[600]">{fact.ecosystem ? ecosystemLabel(fact.ecosystem) : t('security.capabilityOverall')}</div>
-                    <div><span className="text-[var(--text-soft)]">{t('security.capabilitySupport')}: </span>{value(fact, 'support')}</div>
-                    <div><span className="text-[var(--text-soft)]">{t('security.capabilityMode')}: </span>{value(fact, 'mode')}</div>
-                    <div><span className="text-[var(--text-soft)]">{t('security.capabilityData')}: </span>{value(fact, 'data_status')}</div>
+                    <div><span className="text-[var(--muted-foreground)]">{t('security.capabilitySupport')}: </span>{value(fact, 'support')}</div>
+                    <div><span className="text-[var(--muted-foreground)]">{t('security.capabilityMode')}: </span>{value(fact, 'mode')}</div>
+                    <div><span className="text-[var(--muted-foreground)]">{t('security.capabilityData')}: </span>{value(fact, 'data_status')}</div>
                     {fact.name === 'minimum_release_age' && fact.ecosystem === 'docker' && fact.support === 'safety_disabled' && (
-                      <div className="mt-1 text-[var(--text-soft)]">{t('security.dockerAgeExcluded')}</div>
+                      <div className="mt-1 text-[var(--muted-foreground)]">{t('security.dockerAgeExcluded')}</div>
                     )}
-                    {fact.last_success_at && <div className="text-[var(--text-soft)]">{t('security.capabilityLastSuccess')}: {formatTime(fact.last_success_at)}</div>}
+                    {fact.last_success_at && <div className="text-[var(--muted-foreground)]">{t('security.capabilityLastSuccess')}: {formatTime(fact.last_success_at)}</div>}
                     {fact.recent_failure && <div className="break-words text-[var(--danger)]">{t('security.capabilityRecentFailure')}: {fact.recent_failure}</div>}
                   </div>
                 ))}
@@ -188,8 +188,8 @@ function OverviewTab() {
         <div className="grid grid-cols-2 gap-6 py-2 lg:grid-cols-3 lg:gap-8">
           {[...Array(3)].map((_, i) => (
             <div key={i} className="flex flex-col items-center gap-3">
-              <Skeleton className="h-3 w-20 rounded" style={{ background: 'var(--bg-soft)' }} />
-              <Skeleton className="h-11 w-32 rounded" style={{ background: 'var(--bg-soft)' }} />
+              <Skeleton className="h-3 w-20 rounded" style={{ background: 'var(--muted)' }} />
+              <Skeleton className="h-11 w-32 rounded" style={{ background: 'var(--muted)' }} />
             </div>
           ))}
         </div>
@@ -339,7 +339,7 @@ function VulnerabilitiesTab() {
       key: 'cvss_score',
       label: t('security.cvssScore'),
       render: (v: unknown) => (
-        <span className="font-mono text-[12px] tabular-nums" style={{ color: 'var(--text)' }}>
+        <span className="font-mono text-[12px] tabular-nums" style={{ color: 'var(--foreground)' }}>
           {v != null ? Number(v).toFixed(1) : '-'}
         </span>
       ),
@@ -348,7 +348,7 @@ function VulnerabilitiesTab() {
       key: 'published_at',
       label: t('security.published'),
       render: (v: unknown) => (
-        <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatDate(v as string)}</span>
+        <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--muted-foreground)' }}>{formatDate(v as string)}</span>
       ),
     },
   ]
@@ -403,7 +403,7 @@ function VulnerabilitiesTab() {
 
       {/* Table — bare (no Card wrap) */}
       {query.isPending ? (
-        <div role="status" aria-busy="true" className="py-8 text-center text-[14px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
+        <div role="status" aria-busy="true" className="py-8 text-center text-[14px]" style={{ color: 'var(--muted-foreground)' }}>{t('loading')}</div>
       ) : query.isError && !data ? (
         <QueryErrorState message={getApiError(query.error).status === 403 ? t('common.permissionDenied') : getApiError(query.error).message} onRetry={() => { void query.refetch() }} />
       ) : (
@@ -473,7 +473,7 @@ function SuggestionsTab() {
       <div aria-busy="true" className="space-y-4">
         <div aria-hidden="true" className="contents">
         {[...Array(3)].map((_, i) => (
-          <Skeleton key={i} className="h-20 rounded" style={{ background: 'var(--bg-soft)' }} />
+          <Skeleton key={i} className="h-20 rounded" style={{ background: 'var(--muted)' }} />
         ))}
         </div>
       </div>
@@ -493,7 +493,7 @@ function SuggestionsTab() {
           <span>{t('security.manualRuleRequired')}</span>
           <Link
             to={getAdminRouteHref('rules')}
-            className="stripe-focus-ring inline-flex min-h-10 shrink-0 items-center rounded-sm px-2 text-[12px] font-[600] text-[var(--brand-text)] no-underline hover:bg-[var(--bg-hover)]"
+            className="stripe-focus-ring inline-flex min-h-10 shrink-0 items-center rounded-sm px-2 text-[12px] font-[600] text-[var(--brand-text)] no-underline hover:bg-[var(--accent)]"
           >
             {t('security.openPackageRules')}
           </Link>
@@ -516,14 +516,14 @@ function SuggestionsTab() {
                   <Button variant="link" className="h-auto min-h-10 p-0 text-left whitespace-normal" onClick={() => setSelected(item)}>{item.osv_id}</Button>
                   <Badge variant={severityVariant}>{item.severity?.toUpperCase()}</Badge>
                   {item.cvss_score != null && (
-                    <span className="font-mono text-[12px] tabular-nums" style={{ color: 'var(--text-soft)' }}>
+                    <span className="font-mono text-[12px] tabular-nums" style={{ color: 'var(--muted-foreground)' }}>
                       CVSS {Number(item.cvss_score).toFixed(1)}
                     </span>
                   )}
                 </div>
                 <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2">
                   {item.ecosystem && <EcosystemIcon type={item.ecosystem as EcosystemName} size={14} />}
-                  <span className="min-w-0 break-all font-mono text-[13px]" style={{ color: 'var(--text)' }}>
+                  <span className="min-w-0 break-all font-mono text-[13px]" style={{ color: 'var(--foreground)' }}>
                     {item.package_name}
                   </span>
                 </div>
@@ -787,7 +787,7 @@ function PoliciesTab() {
       <div aria-busy="true" className="space-y-2">
         <div aria-hidden="true" className="contents">
         {[...Array(4)].map((_, i) => (
-          <Skeleton key={i} className="h-12 rounded" style={{ background: 'var(--bg-soft)' }} />
+          <Skeleton key={i} className="h-12 rounded" style={{ background: 'var(--muted)' }} />
         ))}
         </div>
       </div>
@@ -810,7 +810,7 @@ function PoliciesTab() {
           className="rounded-sm p-6 text-center transition-colors duration-150"
           style={{
             border: '2px dashed var(--border)',
-            background: 'var(--bg-soft)',
+            background: 'var(--muted)',
           }}
           onDragOver={(e) => { e.preventDefault(); e.stopPropagation() }}
           onDrop={(e) => {
@@ -886,7 +886,7 @@ function PoliciesTab() {
                 />
                 <FieldLabel>{t('security.bulkAutoBlock')}</FieldLabel>
               </Field>
-              <p className="mt-1 text-[12px] leading-5 text-[var(--text-soft)]">
+              <p className="mt-1 text-[12px] leading-5 text-[var(--muted-foreground)]">
                 {t('security.bulkPolicyHint')}
               </p>
             </div>
@@ -917,7 +917,7 @@ function PoliciesTab() {
         )}
         <div className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-3">
-            <span className="text-[12px] text-[var(--text-soft)]" aria-live="polite">
+            <span className="text-[12px] text-[var(--muted-foreground)]" aria-live="polite">
               {t('security.unsavedCount', { count: dirtyEcosystems.length })}
             </span>
             <Field orientation="horizontal">
@@ -986,13 +986,13 @@ function PoliciesTab() {
                 >
                   <div className="flex min-w-0 items-center gap-2">
                     <EcosystemIcon type={eco as EcosystemName} size={16} />
-                    <span className="min-w-0 truncate text-[13px] font-[500]" title={ecosystemLabel(eco)} style={{ color: 'var(--text)' }}>
+                    <span className="min-w-0 truncate text-[13px] font-[500]" title={ecosystemLabel(eco)} style={{ color: 'var(--foreground)' }}>
                       {ecosystemLabel(eco)}
                     </span>
                     {isDirty && <Badge variant="warning">{t('security.unsaved')}</Badge>}
                   </div>
 
-                  <div className="justify-self-end text-[var(--text-soft)] sm:justify-self-start">
+                  <div className="justify-self-end text-[var(--muted-foreground)] sm:justify-self-start">
                     <Field orientation="horizontal" disabled={!canWrite || isSaving || isBatchSaving || (!autoBlockSupported && !policy.auto_block_enabled)}>
                       <Switch
                         aria-label={`${ecosystemLabel(eco)} ${t('security.autoBlock')}`}
@@ -1036,7 +1036,7 @@ function PoliciesTab() {
                   </div>}
                 </div>
                 {!autoBlockSupported && (
-                  <p className="mt-1 text-[12px] leading-5 text-[var(--text-soft)]">
+                  <p className="mt-1 text-[12px] leading-5 text-[var(--muted-foreground)]">
                     {t(autoBlockUnavailableHint)}
                   </p>
                 )}

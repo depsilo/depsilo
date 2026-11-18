@@ -159,13 +159,13 @@ function SearchPill({
         width: 'min(100%, 320px)',
         minHeight: 40,
         padding: '0 0 0 10px',
-        background: 'var(--bg-soft)',
+        background: 'var(--muted)',
         border: `1px solid ${focused ? 'var(--brand-border)' : 'var(--border)'}`,
         borderRadius: 8,
         transition: 'border-color 120ms ease, background 120ms ease',
       }}
     >
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true" style={{ color: 'var(--text-subtle)', flexShrink: 0 }}>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }}>
         <circle cx="11" cy="11" r="7" />
         <path d="M21 21l-4.3-4.3" />
       </svg>
@@ -191,7 +191,7 @@ function SearchPill({
           border: 'none',
           outline: 'none',
           fontFamily: 'var(--font-mono)',
-          color: 'var(--text)',
+          color: 'var(--foreground)',
         }}
       />
       {value ? (
@@ -214,12 +214,12 @@ function SearchPill({
             background: 'transparent',
             border: 'none',
             borderRadius: 4,
-            color: 'var(--text-subtle)',
+            color: 'var(--muted-foreground)',
             cursor: 'pointer',
             transition: 'color 120ms ease',
           }}
-          onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)' }}
-          onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-subtle)' }}
+          onMouseEnter={e => { e.currentTarget.style.color = 'var(--foreground)' }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'var(--muted-foreground)' }}
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
             <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" />
@@ -231,7 +231,7 @@ function SearchPill({
           style={{
             fontSize: 11,
             fontFamily: 'var(--font-mono)',
-            color: 'var(--text-subtle)',
+            color: 'var(--muted-foreground)',
             padding: '0 5px',
             lineHeight: '15px',
             border: '1px solid var(--border)',
@@ -355,7 +355,7 @@ export default function MonitorPage() {
           </span>
           <span>
             {t('monitor.saved7d')}{' '}
-            <span className="num" style={{ color: 'var(--text)', fontWeight: 600 }}>
+            <span className="num" style={{ color: 'var(--foreground)', fontWeight: 600 }}>
               {savedFmt.value} {savedFmt.unit}
             </span>
           </span>
@@ -399,8 +399,8 @@ export default function MonitorPage() {
               gap: '6px 12px',
               fontSize: 13,
               lineHeight: 1.3,
-              color: 'var(--text-muted)',
-              background: 'color-mix(in oklab, var(--bg-page) 88%, transparent)',
+              color: 'var(--muted-foreground)',
+              background: 'color-mix(in oklab, var(--background) 88%, transparent)',
               backdropFilter: 'saturate(180%) blur(8px)',
               WebkitBackdropFilter: 'saturate(180%) blur(8px)',
               borderBottom: '1px solid var(--border)',
@@ -435,7 +435,7 @@ export default function MonitorPage() {
                 // and milder still for CJK.
                 letterSpacing: i18n.language === 'zh' ? '-0.02em' : '-0.025em',
                 lineHeight: 1.02,
-                color: 'var(--text)',
+                color: 'var(--foreground)',
               }}
             >
               {t('monitor.title')}
@@ -474,10 +474,10 @@ export default function MonitorPage() {
                     gap: 6,
                     minHeight: 40,
                     padding: '0 12px',
-                    background: problemsOnly ? 'var(--brand-soft)' : 'var(--bg-soft)',
+                    background: problemsOnly ? 'var(--brand-soft)' : 'var(--muted)',
                     border: `1px solid ${problemsOnly ? 'var(--brand-border)' : 'var(--border)'}`,
                     borderRadius: 8,
-                    color: problemsOnly ? 'var(--brand-text)' : 'var(--text-muted)',
+                    color: problemsOnly ? 'var(--brand-text)' : 'var(--muted-foreground)',
                     fontSize: 12.5,
                     fontWeight: problemsOnly ? 600 : 500,
                     cursor: 'pointer',
@@ -502,7 +502,7 @@ export default function MonitorPage() {
                 gap: '8px 12px',
                 fontSize: 13,
                 lineHeight: 1.3,
-                color: 'var(--text-muted)',
+                color: 'var(--muted-foreground)',
               }}
             >
               {summaryCounts}
@@ -536,7 +536,7 @@ export default function MonitorPage() {
                 <Skeleton
                   key={index}
                   className="h-32 rounded-lg"
-                  style={{ background: 'var(--bg-soft)' }}
+                  style={{ background: 'var(--muted)' }}
                 />
               ))}
             </div>
@@ -575,8 +575,8 @@ export default function MonitorPage() {
                     className="app-button stripe-focus-ring inline-flex min-h-10 items-center justify-center rounded-sm px-3 text-[13px] font-[500] no-underline"
                     style={{
                       border: '1px solid var(--border-strong)',
-                      color: 'var(--text)',
-                      background: 'var(--bg-card)',
+                      color: 'var(--foreground)',
+                      background: 'var(--card)',
                     }}
                   >
                     {t('monitor.configureUpstreams')}

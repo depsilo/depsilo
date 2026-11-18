@@ -48,9 +48,9 @@ function StatePanel({
           <Icon name={icon} size="sm" />
         </span>
         <div>
-          <p className="font-[500] text-[14px]" style={{ color: 'var(--text)' }}>{title}</p>
+          <p className="font-[500] text-[14px]" style={{ color: 'var(--foreground)' }}>{title}</p>
           {description && (
-            <p className="text-[12px] mt-0.5" style={{ color: 'var(--text-soft)' }}>{description}</p>
+            <p className="text-[12px] mt-0.5" style={{ color: 'var(--muted-foreground)' }}>{description}</p>
           )}
         </div>
       </div>
@@ -138,7 +138,7 @@ export default function License() {
   if (statusQuery.isPending) {
     return (
       <AdminPage width="readable" description={t('license.subtitle')}>
-        <div aria-busy="true" className="py-6 text-[14px]" style={{ color: 'var(--text-soft)' }}>
+        <div aria-busy="true" className="py-6 text-[14px]" style={{ color: 'var(--muted-foreground)' }}>
           <span aria-hidden="true">{t('loading')}</span>
         </div>
       </AdminPage>
@@ -246,8 +246,8 @@ export default function License() {
                 className="flex items-center justify-between py-2"
                 style={{ borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none' }}
               >
-                <span className="text-[13px]" style={{ color: 'var(--text-soft)' }}>{item.label}</span>
-                <span className="text-[13px]" style={{ color: 'var(--text)' }}>{item.value}</span>
+                <span className="text-[13px]" style={{ color: 'var(--muted-foreground)' }}>{item.label}</span>
+                <span className="text-[13px]" style={{ color: 'var(--foreground)' }}>{item.value}</span>
               </div>
             ))}
           </div>
@@ -265,19 +265,19 @@ export default function License() {
           disabled={setKey.isPending}
           onClick={() => setKeyExpanded(!keySectionOpen)}
         >
-          <span className="text-[13px] font-[600]" style={{ color: 'var(--text)' }}>
+          <span className="text-[13px] font-[600]" style={{ color: 'var(--foreground)' }}>
             {t('license.key.title')}
           </span>
-          <Icon name={keySectionOpen ? 'expand_less' : 'expand_more'} size="sm" style={{ color: 'var(--text-soft)' }} />
+          <Icon name={keySectionOpen ? 'expand_less' : 'expand_more'} size="sm" style={{ color: 'var(--muted-foreground)' }} />
         </Button>
 
         {keySectionOpen && (
           <div id="license-key-content" className="mt-4 space-y-3">
             {status.license_key_masked && <div className="space-y-3 rounded-md border border-[var(--border)] p-4">
               <p className="break-all font-mono text-[14px]">{status.license_key_masked}</p>
-              <p className="text-[13px] text-[var(--text-soft)]">{t('license.pro.last_checked', { relative_time: formatRelative(status.last_checked) })}</p>
-              {source !== 'paid' && <p className="text-[13px] text-[var(--text-soft)]">{t('license.key.notGranting')}</p>}
-              {(verification || verificationDelayed) && <p role="status" className="text-[13px] text-[var(--text-soft)]">{t(verification ? 'license.key.checking' : 'license.key.checkDelayed')}</p>}
+              <p className="text-[13px] text-[var(--muted-foreground)]">{t('license.pro.last_checked', { relative_time: formatRelative(status.last_checked) })}</p>
+              {source !== 'paid' && <p className="text-[13px] text-[var(--muted-foreground)]">{t('license.key.notGranting')}</p>}
+              {(verification || verificationDelayed) && <p role="status" className="text-[13px] text-[var(--muted-foreground)]">{t(verification ? 'license.key.checking' : 'license.key.checkDelayed')}</p>}
               <div className="flex flex-wrap gap-2">
                 {canWrite && <Button variant="outline" onClick={() => revalidate.mutate()} disabled={revalidate.isPending || verification !== null || setKey.isPending || clearKey.isPending}><Icon name="refresh" size="sm" />{t('license.revalidate')}</Button>}
                 <Button variant="ghost" disabled={statusQuery.isFetching} onClick={() => { void statusQuery.refetch() }}>{t('now.refresh')}</Button>
@@ -320,7 +320,7 @@ export default function License() {
                       {t('license.key.saved_pending_message')}
                     </p>
                     {setKey.data.license_error && (
-                      <p className="text-[12px] opacity-70" style={{ color: 'var(--text-soft)' }}>
+                      <p className="text-[12px] opacity-70" style={{ color: 'var(--muted-foreground)' }}>
                         {setKey.data.license_error}
                       </p>
                     )}
@@ -378,25 +378,25 @@ export default function License() {
         <SectionHeader title={t('license.features.heading')} />
         <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
           <div>
-            <p className="mb-3 whitespace-nowrap text-[13px] font-[600]" style={{ color: 'var(--text)' }}>
+            <p className="mb-3 whitespace-nowrap text-[13px] font-[600]" style={{ color: 'var(--foreground)' }}>
               {t('license.status.free')}
             </p>
             <ul className="space-y-2">
               {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                <li key={i} className="flex items-center gap-2 text-[13px]" style={{ color: 'var(--text-soft)' }}>
-                  <Icon name="check_circle" size="sm" style={{ color: 'var(--text-subtle)' }} />
+                <li key={i} className="flex items-center gap-2 text-[13px]" style={{ color: 'var(--muted-foreground)' }}>
+                  <Icon name="check_circle" size="sm" style={{ color: 'var(--muted-foreground)' }} />
                   {t(`license.features.free.f${i}`)}
                 </li>
               ))}
             </ul>
           </div>
           <div>
-            <p className="mb-3 whitespace-nowrap text-[13px] font-[600]" style={{ color: 'var(--text)' }}>
+            <p className="mb-3 whitespace-nowrap text-[13px] font-[600]" style={{ color: 'var(--foreground)' }}>
               {t('license.status.pro')}
             </p>
             <ul className="space-y-2">
               {[1, 2].map((i) => (
-                <li key={i} className="flex items-center gap-2 text-[13px]" style={{ color: 'var(--text-soft)' }}>
+                <li key={i} className="flex items-center gap-2 text-[13px]" style={{ color: 'var(--muted-foreground)' }}>
                   <Icon name="star" size="sm" style={{ color: 'var(--brand)' }} />
                   {t(`license.features.pro.f${i}`)}
                 </li>
@@ -414,7 +414,7 @@ export default function License() {
         }} modal>
           <DialogContent style={{ maxWidth: 440 }} finalFocus={true}>
             <DialogTitle className="pr-10">{t('license.key.remove_confirm_title')}</DialogTitle>
-            <p className="text-[14px] mb-5" style={{ color: 'var(--text-soft)' }}>
+            <p className="text-[14px] mb-5" style={{ color: 'var(--muted-foreground)' }}>
               {t('license.key.remove_confirm_body')}
             </p>
             {clearKey.isError && (

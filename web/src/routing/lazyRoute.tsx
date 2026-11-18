@@ -72,7 +72,7 @@ function RouteLoading({ surface }: { surface: RouteSurface }) {
       aria-busy="true"
       className={`grid place-items-center px-4 py-10 ${surfaceClassName(surface)}`}
     >
-      <span className="text-[13px] text-[var(--text-soft)]">{t('loading')}</span>
+      <span className="text-[13px] text-[var(--muted-foreground)]">{t('loading')}</span>
     </div>
   )
 }
@@ -96,12 +96,12 @@ function RouteFailure({ surface }: { surface: RouteSurface }) {
       className={`programmatic-focus-target grid place-items-center px-4 py-10 ${surfaceClassName(surface)}`}
     >
       <div
-        className="w-full max-w-[520px] rounded-md border border-[var(--danger-border)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-pop)]"
+        className="w-full max-w-[520px] rounded-md border border-[var(--danger-border)] bg-[var(--card)] p-5 shadow-[var(--shadow-pop)]"
       >
-        <h2 id={titleId} className="text-[17px] font-[600] text-[var(--text)]">
+        <h2 id={titleId} className="text-[17px] font-[600] text-[var(--foreground)]">
           {t('routeError.title')}
         </h2>
-        <p className="mt-2 text-[13px] leading-6 text-[var(--text-soft)]">
+        <p className="mt-2 text-[13px] leading-6 text-[var(--muted-foreground)]">
           {t('routeError.hint')}
         </p>
         <Button className="mt-4" type="button" onClick={() => window.location.reload()}>

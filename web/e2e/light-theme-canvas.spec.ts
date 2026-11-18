@@ -12,7 +12,7 @@ test('light Portal uses one untextured pure-white canvas', async ({ page }) => {
   await expect(page.locator('.page-wash')).toHaveCount(0)
   await expect.poll(() => page.evaluate(() => (
     getComputedStyle(document.documentElement)
-      .getPropertyValue('--bg-page')
+      .getPropertyValue('--background')
       .trim()
   ))).toBe('oklch(1 0 0)')
   await expect(page.locator('#root > .min-h-screen')).toHaveCSS(
@@ -32,7 +32,7 @@ test('dark Portal uses the near-black canvas without a grain layer', async ({ pa
   await expect(page.locator('.page-wash')).toHaveCount(0)
   await expect.poll(() => page.evaluate(() => (
     getComputedStyle(document.documentElement)
-      .getPropertyValue('--bg-page')
+      .getPropertyValue('--background')
       .trim()
   ))).toBe('oklch(0.145 0 0)')
 })

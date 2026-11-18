@@ -58,7 +58,7 @@ function EndpointPill() {
             style={{
               position: 'absolute',
               inset: 0,
-              color: copyState === 'failed' ? 'var(--danger-text)' : 'var(--text-subtle)',
+              color: copyState === 'failed' ? 'var(--danger-text)' : 'var(--muted-foreground)',
               opacity: copied ? 0 : 1,
               transform: copied ? 'scale(0.25)' : 'scale(1)',
               filter: copied ? 'blur(4px)' : 'blur(0)',
@@ -115,16 +115,16 @@ function NavTab({ to, label, compactLabel }: NavTabProps) {
         fontSize: 13,
         fontWeight: isActive ? 600 : 500,
         letterSpacing: isActive ? '-0.005em' : '0',
-        color: isActive ? 'var(--text)' : 'var(--text-soft)',
+        color: isActive ? 'var(--foreground)' : 'var(--muted-foreground)',
         borderRadius: 6,
         whiteSpace: 'nowrap',
         transition: 'color 120ms ease',
       })}
-      onMouseEnter={event => { event.currentTarget.style.color = 'var(--text)' }}
+      onMouseEnter={event => { event.currentTarget.style.color = 'var(--foreground)' }}
       onMouseLeave={event => {
         event.currentTarget.style.color = event.currentTarget.getAttribute('aria-current') === 'page'
-          ? 'var(--text)'
-          : 'var(--text-soft)'
+          ? 'var(--foreground)'
+          : 'var(--muted-foreground)'
       }}
     >
       {({ isActive }) => (
@@ -224,13 +224,13 @@ export default function PortalApp() {
   )
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--bg-page)' }}>
+    <div className="min-h-screen" style={{ background: 'var(--background)' }}>
       <header
         style={{
           position: 'sticky',
           top: 0,
           zIndex: 30,
-          background: 'color-mix(in oklab, var(--bg-page) 88%, transparent)',
+          background: 'color-mix(in oklab, var(--background) 88%, transparent)',
           backdropFilter: 'saturate(180%) blur(8px)',
           WebkitBackdropFilter: 'saturate(180%) blur(8px)',
           borderBottom: '1px solid var(--border)',
@@ -262,7 +262,7 @@ export default function PortalApp() {
                 fontSize: 15,
                 fontWeight: 600,
                 letterSpacing: '-0.025em',
-                color: 'var(--text)',
+                color: 'var(--foreground)',
               }}
             >
               Depsilo
@@ -273,7 +273,7 @@ export default function PortalApp() {
               style={{
                 fontFamily: 'var(--font-mono)',
                 fontSize: 11,
-                color: 'var(--text-subtle)',
+                color: 'var(--muted-foreground)',
                 padding: '1px 5px',
                 border: '1px solid var(--border)',
                 borderRadius: 4,

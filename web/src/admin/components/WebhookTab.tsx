@@ -202,7 +202,7 @@ export default function WebhookTab() {
   return (
     <div className="min-w-0">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="min-w-0 text-[13px] leading-5 text-[var(--text-soft)]">{t('webhook.description')}</p>
+        <p className="min-w-0 text-[13px] leading-5 text-[var(--muted-foreground)]">{t('webhook.description')}</p>
         {canWrite && (
           <Button type="button" onClick={openCreate}>{t('webhook.addWebhook')}</Button>
         )}
@@ -210,7 +210,7 @@ export default function WebhookTab() {
 
       <div aria-busy={query.isPending || undefined} className="min-w-0">
         {query.isPending ? (
-          <Skeleton className="h-40 rounded-md bg-[var(--bg-soft)]" />
+          <Skeleton className="h-40 rounded-md bg-[var(--muted)]" />
         ) : query.isError && !query.data ? (
           <QueryErrorState message={getApiError(query.error).status === 403 ? t('common.permissionDenied') : getApiError(query.error).message} onRetry={() => { void query.refetch() }} />
         ) : (
@@ -225,17 +225,17 @@ export default function WebhookTab() {
               <article key={webhook.id} className="flex min-w-0 flex-col gap-3 py-4 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <strong className="text-[14px] font-[600] text-[var(--text)]">{webhook.name}</strong>
+                    <strong className="text-[14px] font-[600] text-[var(--foreground)]">{webhook.name}</strong>
                     <Badge>{t(`webhook.platforms.${webhook.platform}`)}</Badge>
                     {!webhook.enabled && <Badge variant="warning">{t('webhook.disabled')}</Badge>}
                   </div>
-                  <p className="break-all font-mono text-[12px] leading-5 text-[var(--text-soft)]">{displayAddress(webhook.url)}</p>
-                  <dl className="mt-2 flex min-w-0 flex-col gap-1 text-[12px] text-[var(--text-muted)] sm:flex-row sm:flex-wrap sm:gap-x-4">
+                  <p className="break-all font-mono text-[12px] leading-5 text-[var(--muted-foreground)]">{displayAddress(webhook.url)}</p>
+                  <dl className="mt-2 flex min-w-0 flex-col gap-1 text-[12px] text-[var(--muted-foreground)] sm:flex-row sm:flex-wrap sm:gap-x-4">
                     <div className="flex min-w-0 gap-1"><dt className="shrink-0">{t('webhook.events')}:</dt><dd className="min-w-0 break-words">{webhook.events === '*' ? t('webhook.eventsAll') : eventValues(webhook.events).map(event => t(`webhook.events_list.${event}`, { defaultValue: event })).join(' · ')}</dd></div>
                     <div className="flex min-w-0 gap-1"><dt className="shrink-0">{t('webhook.cooldown')}:</dt><dd className="min-w-0 break-words">{t('webhook.minutes', { count: webhook.cooldown_minutes })}</dd></div>
                     <div className="flex min-w-0 gap-1"><dt className="shrink-0">{t('webhook.lastSent')}:</dt><dd className="min-w-0 break-words">{formatLastSent(webhook.last_sent_at)}</dd></div>
                   </dl>
-                  {testResults[webhook.id] && <p role="status" className="mt-2 text-[13px] text-[var(--text-soft)]">{testResults[webhook.id]}</p>}
+                  {testResults[webhook.id] && <p role="status" className="mt-2 text-[13px] text-[var(--muted-foreground)]">{testResults[webhook.id]}</p>}
                   {toggleMutation.isError && toggleMutation.variables.id === webhook.id && <Alert variant="destructive"><AlertDescription>{getApiError(toggleMutation.error).message}</AlertDescription></Alert>}
                 </div>
                 {canWrite && (
@@ -261,7 +261,7 @@ export default function WebhookTab() {
                           size="icon"
                           data-icon-button
                           aria-label={t('webhook.editNamed', { name: webhook.name })}
-                          style={{ color: 'var(--text-soft)' }}
+                          style={{ color: 'var(--muted-foreground)' }}
                         />
                       }>
                         <Icon name={"edit"} size="sm" />
@@ -310,7 +310,7 @@ export default function WebhookTab() {
                 {PLATFORM_OPTIONS.map(platform => <option key={platform} value={platform}>{t(`webhook.platforms.${platform}`)}</option>)}
               </NativeSelect>
             </Field>
-            {guide && <p className="text-[12px] leading-5 text-[var(--text-muted)]">{t('webhook.guideTitle')}: {guide}</p>}
+            {guide && <p className="text-[12px] leading-5 text-[var(--muted-foreground)]">{t('webhook.guideTitle')}: {guide}</p>}
             <Field>
               <FieldLabel>{t('webhook.url')}</FieldLabel>
               <Input value={form.url} onChange={event => setForm(current => ({ ...current, url: event.target.value }))} placeholder={t('webhook.urlPlaceholder')} />
@@ -318,13 +318,13 @@ export default function WebhookTab() {
             </Field>
             <label className="flex min-h-10 items-center gap-2 text-[14px]"><Checkbox checked={form.enabled} onCheckedChange={enabled => setForm(current => ({ ...current, enabled }))} />{t('webhook.enabled')}</label>
             <fieldset aria-invalid={!hasEvents || undefined} aria-describedby={!hasEvents ? 'webhook-events-error' : undefined}>
-              <legend className="mb-2 text-[14px] text-[var(--text-muted)]">{t('webhook.events')}</legend>
+              <legend className="mb-2 text-[14px] text-[var(--muted-foreground)]">{t('webhook.events')}</legend>
               <div className="grid gap-2 sm:grid-cols-2">
                 {WEBHOOK_EVENTS.map(eventName => {
                   const current = eventValues(form.events)
                   const selected = current.includes(eventName)
                   return (
-                    <label key={eventName} className="flex min-h-10 cursor-pointer items-center gap-2 text-[13px] text-[var(--text-soft)]">
+                    <label key={eventName} className="flex min-h-10 cursor-pointer items-center gap-2 text-[13px] text-[var(--muted-foreground)]">
                       <Checkbox
                         checked={selected}
                         onCheckedChange={() => {
@@ -360,7 +360,7 @@ export default function WebhookTab() {
       <Dialog open={deleteId !== null} onOpenChange={(nextOpen) => { if (!nextOpen && !deleteMutation.isPending) setDeleteId(null) }} modal>
         <DialogContent style={{ maxWidth: 440 }} finalFocus={deleteTriggerRef} closeDisabled={deleteMutation.isPending}>
           <DialogTitle className="pr-10">{t('webhook.deleteConfirmNamed', { name: deletingWebhook?.name ?? '' })}</DialogTitle>
-          <p className="mb-5 text-[13px] leading-5 text-[var(--text-soft)]">{t('webhook.deleteWarning')}</p>
+          <p className="mb-5 text-[13px] leading-5 text-[var(--muted-foreground)]">{t('webhook.deleteWarning')}</p>
           {deleteMutation.isError && <Alert variant="destructive"><AlertDescription>{getApiError(deleteMutation.error).message}</AlertDescription></Alert>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" disabled={deleteMutation.isPending} onClick={() => setDeleteId(null)}>{t('cancel')}</Button>

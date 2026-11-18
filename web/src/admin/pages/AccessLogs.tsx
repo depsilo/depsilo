@@ -35,7 +35,7 @@ import TimeRangeControl from '@/admin/components/TimeRangeControl'
 import { parseEcosystemList, parseTimeRange, resolveTimeWindow, serializeEcosystemList, writeTimeRange, type TimePreset, type TimeRangeValue } from '@/admin/listFilters'
 
 function latencyColor(ms: number): string {
-  return ms >= 1000 ? 'var(--warn-text)' : 'var(--text-soft)'
+  return ms >= 1000 ? 'var(--warn-text)' : 'var(--muted-foreground)'
 }
 
 /** Rows per page: short enough to scan without scrolling far. */
@@ -292,7 +292,7 @@ export default function AccessLogs() {
       <EcosystemChips counts={data?.data.ecosystems} selected={ecosystems} onChange={setEcosystems} />
 
       {isPending ? (
-        <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>
+        <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--muted-foreground)' }}>
           <span aria-hidden="true">{t('loading')}</span>
         </div>
       ) : isError && !data ? (
@@ -318,26 +318,26 @@ export default function AccessLogs() {
               {items.map((row: AccessLog) => (
                 <TableRow
                   key={row.id}
-                  className="transition-colors duration-75 hover:bg-[var(--bg-soft)]"
-                  style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
+                  className="transition-colors duration-75 hover:bg-[var(--muted)]"
+                  style={{ borderBottom: '1px solid var(--border, var(--border))' }}
                 >
                   {/* Time */}
                   <TableCell className="py-2 px-3 pl-0 whitespace-nowrap">
-                    <span className="font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{formatTime(row.created_at)}</span>
+                    <span className="font-mono tabular-nums" style={{ color: 'var(--muted-foreground)' }}>{formatTime(row.created_at)}</span>
                   </TableCell>
 
                   {/* Ecosystem */}
                   <TableCell className="py-2 px-3">
                     <div className="flex items-center gap-1.5">
                       {isAdminEcosystem(row.adapter_type) && <EcosystemIcon type={row.adapter_type} size={13} />}
-                      <span className="text-[12px]" style={{ color: 'var(--text)' }}>{ecosystemLabel(row.adapter_type)}</span>
+                      <span className="text-[12px]" style={{ color: 'var(--foreground)' }}>{ecosystemLabel(row.adapter_type)}</span>
                     </div>
                   </TableCell>
 
                   {/* Package name + cache key */}
                   <TableCell className="py-2 px-3 max-w-[260px]">
-                    <span className="font-mono truncate block" style={{ color: 'var(--text)' }}>{row.package_name || '-'}</span>
-                    <span className="font-mono text-[12px] truncate block" style={{ color: 'var(--text-soft)' }} title={row.cache_key}>{row.cache_key}</span>
+                    <span className="font-mono truncate block" style={{ color: 'var(--foreground)' }}>{row.package_name || '-'}</span>
+                    <span className="font-mono text-[12px] truncate block" style={{ color: 'var(--muted-foreground)' }} title={row.cache_key}>{row.cache_key}</span>
                   </TableCell>
 
                   {/* Result */}
@@ -367,7 +367,7 @@ export default function AccessLogs() {
                           size="icon"
                           data-icon-button
                           aria-label={t('logs.viewDetails')}
-                          style={{ color: 'var(--text-soft)' }}
+                          style={{ color: 'var(--muted-foreground)' }}
                         />
                       }>
                         <Icon name={"chevron_right"} size="sm" />
@@ -393,8 +393,8 @@ export default function AccessLogs() {
           <div className="flex h-full flex-col gap-5 overflow-y-auto p-5 sm:p-6">
             <div className="flex items-start justify-between gap-4 pr-10">
               <div>
-                <p className="text-[12px] font-[500]" style={{ color: 'var(--text-muted)' }}>{t('logs.detailTitle')}</p>
-                <h2 className="mt-1 break-words font-mono text-[16px]" style={{ color: 'var(--text)' }}>{detailQuery.data?.data.package_name || (detailQuery.isPending ? t('logs.loadingDetail') : t('logs.detailTitle'))}</h2>
+                <p className="text-[12px] font-[500]" style={{ color: 'var(--muted-foreground)' }}>{t('logs.detailTitle')}</p>
+                <h2 className="mt-1 break-words font-mono text-[16px]" style={{ color: 'var(--foreground)' }}>{detailQuery.data?.data.package_name || (detailQuery.isPending ? t('logs.loadingDetail') : t('logs.detailTitle'))}</h2>
               </div>
               {detailQuery.data?.data && <Tooltip>
                 <TooltipTrigger render={
@@ -404,7 +404,7 @@ export default function AccessLogs() {
                     size="icon"
                     data-icon-button
                     aria-label={t('logs.copySummary')}
-                    style={{ color: 'var(--text-soft)' }}
+                    style={{ color: 'var(--muted-foreground)' }}
                   />
                 }>
                   <Icon name={"content_copy"} size="sm" />
@@ -412,7 +412,7 @@ export default function AccessLogs() {
                 <TooltipContent>{t('logs.copySummary')}</TooltipContent>
               </Tooltip>}
             </div>
-            {detailQuery.isPending ? <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div> : detailQuery.isError && !detailQuery.data ? <QueryErrorState message={getApiError(detailQuery.error).message} onRetry={() => { void detailQuery.refetch() }} /> : detailQuery.data?.data && <>
+            {detailQuery.isPending ? <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--muted-foreground)' }}>{t('loading')}</div> : detailQuery.isError && !detailQuery.data ? <QueryErrorState message={getApiError(detailQuery.error).message} onRetry={() => { void detailQuery.refetch() }} /> : detailQuery.data?.data && <>
               {detailQuery.isRefetchError && <StaleDataNotice onRefresh={() => { void detailQuery.refetch() }} />}
               <DiagnosticDetail detail={detailQuery.data.data} t={t} />
               <div className="flex flex-wrap gap-2">
@@ -442,11 +442,11 @@ function DiagnosticDetail({ detail, t }: { detail: AccessLogDetail; t: (key: str
   ]
   return <div className="space-y-5">
     <dl className="grid gap-3 text-[14px]">
-      {facts.map(([label, content]) => <div key={label} className="grid grid-cols-1 sm:grid-cols-[112px_minmax(0,1fr)] gap-3 border-b pb-2" style={{ borderColor: 'var(--border-soft, var(--border))' }}><dt style={{ color: 'var(--text-soft)' }}>{label}</dt><dd className="min-w-0 break-words font-mono" style={{ color: 'var(--text)' }}>{content}</dd></div>)}
+      {facts.map(([label, content]) => <div key={label} className="grid grid-cols-1 sm:grid-cols-[112px_minmax(0,1fr)] gap-3 border-b pb-2" style={{ borderColor: 'var(--border, var(--border))' }}><dt style={{ color: 'var(--muted-foreground)' }}>{label}</dt><dd className="min-w-0 break-words font-mono" style={{ color: 'var(--foreground)' }}>{content}</dd></div>)}
     </dl>
     <div>
-      <h3 className="mb-2 text-[12px] font-semibold" style={{ color: 'var(--text)' }}>{t('logs.auditEvents')}</h3>
-      {detail.audit_events.length === 0 ? <p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>{t('logs.noAuditEvents')}</p> : <ul className="space-y-2">{detail.audit_events.map(event => <li key={event.id} className="rounded border p-2 text-[12px]" style={{ borderColor: 'var(--border-soft, var(--border))' }}><span className="font-mono">{event.action}</span> · {value(event.cache_result)} · {event.status_code || '-'} · {formatTime(event.created_at)}</li>)}</ul>}
+      <h3 className="mb-2 text-[12px] font-semibold" style={{ color: 'var(--foreground)' }}>{t('logs.auditEvents')}</h3>
+      {detail.audit_events.length === 0 ? <p className="text-[12px]" style={{ color: 'var(--muted-foreground)' }}>{t('logs.noAuditEvents')}</p> : <ul className="space-y-2">{detail.audit_events.map(event => <li key={event.id} className="rounded border p-2 text-[12px]" style={{ borderColor: 'var(--border, var(--border))' }}><span className="font-mono">{event.action}</span> · {value(event.cache_result)} · {event.status_code || '-'} · {formatTime(event.created_at)}</li>)}</ul>}
     </div>
   </div>
 }

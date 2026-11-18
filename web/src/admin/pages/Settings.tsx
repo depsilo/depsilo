@@ -253,7 +253,7 @@ export default function Settings() {
   // Notification settings are database-owned and stay usable when config.toml cannot be read.
   if (activeTab === 'webhooks') return isolatedSection(<>
     {!canWrite && <Alert variant="warning" className="mb-4"><AlertDescription>{t('settings.readOnlyPrincipal')}</AlertDescription></Alert>}
-    {dirty && <p className="mb-4 text-[13px] text-[var(--text-soft)]">{t('settings.draftRetained')}</p>}
+    {dirty && <p className="mb-4 text-[13px] text-[var(--muted-foreground)]">{t('settings.draftRetained')}</p>}
     <WebhookTab />
   </>)
 
@@ -321,7 +321,7 @@ export default function Settings() {
     </section>
   )
   const fields = (children: ReactNode) => (
-    <div className="divide-y divide-[var(--border-soft)] [&_[data-slot=field-description]]:mt-1.5 [&_[data-slot=field-description]]:text-[12px] [&>div]:grid [&>div]:gap-x-6 [&>div]:py-5 [&>div:first-child]:pt-0 [&_label]:mb-2 sm:[&>div]:grid-cols-[160px_minmax(0,1fr)] sm:[&_label]:mb-0 sm:[&_label]:pt-2.5 sm:[&_p]:col-start-2">
+    <div className="divide-y divide-[var(--border)] [&_[data-slot=field-description]]:mt-1.5 [&_[data-slot=field-description]]:text-[12px] [&>div]:grid [&>div]:gap-x-6 [&>div]:py-5 [&>div:first-child]:pt-0 [&_label]:mb-2 sm:[&>div]:grid-cols-[160px_minmax(0,1fr)] sm:[&_label]:mb-0 sm:[&_label]:pt-2.5 sm:[&_p]:col-start-2">
       {children}
     </div>
   )
@@ -489,8 +489,8 @@ export default function Settings() {
       )}
     >
     <div className="min-w-0 space-y-4">
-      {dirty && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--bg-soft)] p-4">
-        <div><p className="text-[14px] font-medium">{t('settings.dirtyCount', { count: changedFields.length })}</p><p className="mt-1 text-[13px] text-[var(--text-soft)]">{t(!draftStored ? 'settings.draftNotStored' : restored ? 'settings.draftRestored' : 'settings.draftRetained')}</p></div>
+      {dirty && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--muted)] p-4">
+        <div><p className="text-[14px] font-medium">{t('settings.dirtyCount', { count: changedFields.length })}</p><p className="mt-1 text-[13px] text-[var(--muted-foreground)]">{t(!draftStored ? 'settings.draftNotStored' : restored ? 'settings.draftRestored' : 'settings.draftRetained')}</p></div>
         <div className="flex gap-2"><Button variant="outline" onClick={() => setReviewOpen(true)}>{t('settings.reviewChanges')}</Button><Button variant="ghost" disabled={updateMutation.isPending} onClick={() => { setDraft(draftFrom(data.configured)); setValidationErrors({}); setInlineError(null); setLastResult(null); setRestored(false) }}>{t('settings.discardChanges')}</Button></div>
       </div>}
       {settingsQuery.isError && settingsQuery.data && (
@@ -519,7 +519,7 @@ export default function Settings() {
         </AlertDescription></Alert>
       )}
       {(
-        <div className="flex min-w-0 items-start gap-2 border-b border-[var(--border)] pb-3 text-[12px] text-[var(--text-soft)]">
+        <div className="flex min-w-0 items-start gap-2 border-b border-[var(--border)] pb-3 text-[12px] text-[var(--muted-foreground)]">
           <Icon name="info" size="sm" className="mt-0.5 shrink-0" />
           <span>{t('settings.hotReloadNote')}</span>
         </div>
@@ -534,9 +534,9 @@ export default function Settings() {
         </Tabs>
       <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
         <DialogContent className="max-w-xl"><DialogTitle>{t('settings.reviewChanges')}</DialogTitle>
-          <p className="text-[13px] text-[var(--text-soft)]">{t('settings.reviewHint')}</p>
+          <p className="text-[13px] text-[var(--muted-foreground)]">{t('settings.reviewHint')}</p>
           {inlineError && <Alert variant="destructive"><AlertDescription>{inlineError}</AlertDescription></Alert>}
-          <dl className="divide-y divide-[var(--border)]">{changedFields.map(key => <div key={key} className="py-3"><dt className="text-[14px] font-medium">{fieldLabel(draftPaths[key])}</dt><dd className="mt-1 break-all font-mono text-[13px]">{baseDraft?.[key]} → {draft[key]}</dd><dd className="mt-1 text-[12px] text-[var(--text-soft)]">{data.overrides[draftPaths[key]] ? t('settings.envOverride', { variable: data.overrides[draftPaths[key]] }) : key === 'logLevel' ? t('settings.appliedNowTitle') : t('settings.requiresRestart')}</dd></div>)}</dl>
+          <dl className="divide-y divide-[var(--border)]">{changedFields.map(key => <div key={key} className="py-3"><dt className="text-[14px] font-medium">{fieldLabel(draftPaths[key])}</dt><dd className="mt-1 break-all font-mono text-[13px]">{baseDraft?.[key]} → {draft[key]}</dd><dd className="mt-1 text-[12px] text-[var(--muted-foreground)]">{data.overrides[draftPaths[key]] ? t('settings.envOverride', { variable: data.overrides[draftPaths[key]] }) : key === 'logLevel' ? t('settings.appliedNowTitle') : t('settings.requiresRestart')}</dd></div>)}</dl>
           <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setReviewOpen(false)}>{t('common.close')}</Button><Button disabled={globallyReadOnly || updateMutation.isPending} onClick={save}>{t('settings.saveAll')}</Button></div>
         </DialogContent>
       </Dialog>

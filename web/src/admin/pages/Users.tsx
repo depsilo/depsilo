@@ -197,12 +197,12 @@ export default function Users() {
   const tokensApiError = getApiError(tokensQuery.error)
 
   const userColumns = [
-    { key: 'username', label: t('users.user'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => (<div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-md text-[13px] font-[500] shrink-0" style={{ background: 'var(--hit)', color: 'var(--on-hit)' }}>{row.username?.[0]?.toUpperCase() || '?'}</div><span className="font-[500]" style={{ color: 'var(--text)' }}>{row.username}</span></div>) },
+    { key: 'username', label: t('users.user'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => (<div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-md text-[13px] font-[500] shrink-0" style={{ background: 'var(--hit)', color: 'var(--on-hit)' }}>{row.username?.[0]?.toUpperCase() || '?'}</div><span className="font-[500]" style={{ color: 'var(--foreground)' }}>{row.username}</span></div>) },
     { key: 'permission_source', label: t('account.permissionSource'), render: (v: unknown) => <Badge variant="secondary">{t(v && v !== 'local' ? 'account.externalSource' : 'account.localSource')}</Badge> },
     { key: 'role', label: t('users.role'), render: (v: unknown) => <Badge variant={(v as string) === 'admin' ? "default" : 'default'}>{t((v as string) === 'admin' ? 'users.admin' : 'users.readonly')}</Badge> },
     { key: 'enabled', label: t('status'), render: (v: unknown) => <Badge variant={v ? 'success' : "destructive"}>{v ? t('users.enabled') : t('users.disabled')}</Badge> },
-    { key: 'last_login_at', label: t('users.lastLogin'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
-    { key: 'created_at', label: t('users.createdAt'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
+    { key: 'last_login_at', label: t('users.lastLogin'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--muted-foreground)' }}>{formatTime(v as string)}</span> },
+    { key: 'created_at', label: t('users.createdAt'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--muted-foreground)' }}>{formatTime(v as string)}</span> },
     {
       key: 'id', label: t('actions'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => canWrite ? (<div className="flex gap-1">{(!row.permission_source || row.permission_source === 'local') && <Tooltip>
         <TooltipTrigger render={
@@ -212,7 +212,7 @@ export default function Users() {
             size="icon"
             data-icon-button
             aria-label={t('users.editNamed', { name: row.username })}
-            style={{ color: 'var(--text-soft)' }}
+            style={{ color: 'var(--muted-foreground)' }}
           />
         }>
           <Icon name={"edit"} size="sm" />
@@ -228,7 +228,7 @@ export default function Users() {
           aria-label={t(row.enabled ? 'users.disableNamed' : 'users.enableNamed', { name: row.username })}
           aria-busy={togglingUserIds.has(row.id) || undefined}
           disabled={(togglingUserIds.has(row.id))}
-          style={{ color: 'var(--text-soft)' }}
+          style={{ color: 'var(--muted-foreground)' }}
         />
       }>
         <Icon name={togglingUserIds.has(row.id) ? 'progress_activity' : (row.enabled ? 'person_off' : 'person')} size="sm" className={togglingUserIds.has(row.id) ? 'animate-spin' : ''} />
@@ -238,15 +238,15 @@ export default function Users() {
   ]
 
   const tokenColumns = [
-    { key: 'name', label: t('name'), render: (v: unknown) => <span className="font-[500]" style={{ color: 'var(--text)' }}>{v as string}</span> },
+    { key: 'name', label: t('name'), render: (v: unknown) => <span className="font-[500]" style={{ color: 'var(--foreground)' }}>{v as string}</span> },
     { key: 'user_id', label: t('users.owner'), render: (v: unknown) => users.find(user => user.id === v)?.username ?? t('users.ownerUnknown', { id: v }) },
     { key: 'status', label: t('status'), render: (_v: unknown, row: APITokenSummary & Record<string, unknown>) => {
       const state = tokenStatus(row, usersQuery.isError ? undefined : usersData?.data, now)
       return <Badge variant={state === 'active' ? 'success' : state === 'unknown' ? 'secondary' : 'warning'}>{t(`users.tokenStates.${state}`)}</Badge>
     } },
     { key: 'permissions', label: t('users.declaredPermissions'), render: (v: unknown) => <span>{t((v as string) === 'readwrite' ? 'users.readwrite' : 'users.readonly')}</span> },
-    { key: 'last_used_at', label: t('users.lastUsed'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{v ? formatTime(v as string) : t('users.neverUsed')}</span> },
-    { key: 'expires_at', label: t('users.expiresAt'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{v ? formatTime(v as string) : t('users.neverExpires')}</span> },
+    { key: 'last_used_at', label: t('users.lastUsed'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--muted-foreground)' }}>{v ? formatTime(v as string) : t('users.neverUsed')}</span> },
+    { key: 'expires_at', label: t('users.expiresAt'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--muted-foreground)' }}>{v ? formatTime(v as string) : t('users.neverExpires')}</span> },
     { key: 'id', label: t('actions'), render: (_v: unknown, row: APITokenSummary & Record<string, unknown>) => canWrite ? <Button variant="ghost" size="sm" className="!text-[12px]" style={{ color: 'var(--danger)' }} onClick={(e: React.MouseEvent) => { e.stopPropagation(); openRevokeDialog(row) }}>{t('users.revoke')}</Button> : null },
   ]
 
@@ -261,7 +261,7 @@ export default function Users() {
           action={canWrite ? <Button onClick={openCreateUser} size="sm"><Icon name="person_add" size="sm" />{t('users.addUser')}</Button> : undefined}
         />
         {usersQuery.isPending ? (
-          <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]"><span aria-hidden="true">{t('loading')}</span></div>
+          <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--muted-foreground)]"><span aria-hidden="true">{t('loading')}</span></div>
         ) : usersQuery.isError && !usersData ? (
           <QueryErrorState message={usersApiError.status === 403 ? t('common.permissionDenied') : usersApiError.message} onRetry={() => { void usersQuery.refetch() }} />
         ) : (
@@ -316,7 +316,7 @@ export default function Users() {
           action={canWrite ? <Button variant="outline" size="sm" onClick={openTokenDialog}><Icon name="key" size="sm" />{t('users.generateToken')}</Button> : undefined}
         />
         {tokensQuery.isPending ? (
-          <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}><span aria-hidden="true">{t('loading')}</span></div>
+          <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--muted-foreground)' }}><span aria-hidden="true">{t('loading')}</span></div>
         ) : tokensQuery.isError && !tokensData ? (
           <QueryErrorState message={tokensApiError.status === 403 ? t('common.permissionDenied') : tokensApiError.message} onRetry={() => { void tokensQuery.refetch() }} />
         ) : (
@@ -337,7 +337,7 @@ export default function Users() {
           <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={isUserSaving}>
             <DialogTitle className="pr-10">{editUserId ? t('users.editUser') : t('users.addUser')}</DialogTitle>
             <form onSubmit={handleUserSubmit} className="space-y-4">
-              {editUserId && <p className="text-[13px] leading-5 text-[var(--text-soft)]">{t(editUserId === principal?.id ? 'users.selfCredentialImpact' : 'users.credentialImpact')}</p>}
+              {editUserId && <p className="text-[13px] leading-5 text-[var(--muted-foreground)]">{t(editUserId === principal?.id ? 'users.selfCredentialImpact' : 'users.credentialImpact')}</p>}
               <Field disabled={!!editUserId}>
                 <FieldLabel>{t('login.username')}</FieldLabel>
                 <Input value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} disabled={!!editUserId} required={!editUserId} />
@@ -361,7 +361,7 @@ export default function Users() {
           <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={createTokenMutation.isPending}>
             <DialogTitle className="pr-10">{t('users.generateToken')}</DialogTitle>
             <form onSubmit={handleTokenSubmit} className="space-y-4">
-              <p className="text-[13px] leading-5 text-[var(--text-soft)]">{t('users.tokenOwnerHint', { name: principal?.username })}</p>
+              <p className="text-[13px] leading-5 text-[var(--muted-foreground)]">{t('users.tokenOwnerHint', { name: principal?.username })}</p>
               <Field>
                 <FieldLabel>{t('name')}</FieldLabel>
                 <Input
@@ -388,9 +388,9 @@ export default function Users() {
         <Dialog open={tokenResultOpen} onOpenChange={(nextOpen) => { if (!nextOpen) closeTokenResult() }} modal>
           <DialogContent style={{ maxWidth: 440 }} finalFocus={true}>
             <DialogTitle className="pr-10">{t('users.tokenGenerated')}</DialogTitle>
-            <p className="text-[14px] mb-3" style={{ color: 'var(--text-soft)' }}>{t('users.tokenCopyWarning')}</p>
-            <div className="flex items-center gap-2 rounded-sm p-3" style={{ background: 'var(--bg-soft)', border: '1px solid var(--border)' }}>
-              <code className="flex-1 font-mono text-[13px] break-all" style={{ color: 'var(--text)' }}>{createdToken}</code>
+            <p className="text-[14px] mb-3" style={{ color: 'var(--muted-foreground)' }}>{t('users.tokenCopyWarning')}</p>
+            <div className="flex items-center gap-2 rounded-sm p-3" style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
+              <code className="flex-1 font-mono text-[13px] break-all" style={{ color: 'var(--foreground)' }}>{createdToken}</code>
               <Tooltip>
                 <TooltipTrigger render={
                   <Button
@@ -399,7 +399,7 @@ export default function Users() {
                     size="icon"
                     data-icon-button
                     aria-label={t('users.copyToken')}
-                    style={{ color: 'var(--text-soft)' }}
+                    style={{ color: 'var(--muted-foreground)' }}
                   />
                 }>
                   <Icon name={copied ? 'check' : 'content_copy'} size="sm" />

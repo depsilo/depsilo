@@ -3,13 +3,13 @@
 
 .status-band {
   --status-band-hit: var(--ok);
-  --status-band-miss: color-mix(in oklab, var(--text-subtle) 55%, transparent);
+  --status-band-miss: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
   display: grid;
   grid-template-columns: minmax(170px, 1.25fr) repeat(5, minmax(0, 1fr)) minmax(200px, 1.6fr) minmax(130px, 1fr);
   align-items: stretch;
   min-height: 64px;
   overflow: hidden;
-  background: var(--bg-card);
+  background: var(--card);
   border: 1px solid var(--border-strong);
   border-radius: 12px;
 }
@@ -20,14 +20,14 @@
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  background: color-mix(in oklab, var(--ok-text) 7%, var(--bg-card));
+  background: color-mix(in oklab, var(--ok-text) 7%, var(--card));
 }
-.status-band-state[data-tone='failed'] { background: color-mix(in oklab, var(--danger-text) 8%, var(--bg-card)); }
-.status-band-state[data-tone='unknown'] { background: var(--bg-card); }
+.status-band-state[data-tone='failed'] { background: color-mix(in oklab, var(--danger-text) 8%, var(--card)); }
+.status-band-state[data-tone='unknown'] { background: var(--card); }
 .status-band-state-text { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
 .status-band-state-head { font-size: 15px; font-weight: 600; line-height: 1.2; color: var(--ok-text); white-space: nowrap; }
 .status-band-state[data-tone='failed'] .status-band-state-head { color: var(--danger-text); }
-.status-band-state[data-tone='unknown'] .status-band-state-head { color: var(--text-muted); }
+.status-band-state[data-tone='unknown'] .status-band-state-head { color: var(--muted-foreground); }
 
 .status-band-cell,
 .status-band-hour {
@@ -38,7 +38,7 @@
   gap: 4px;
   padding: 12px 16px;
 }
-.status-band-label { font-size: 12px; line-height: 1.3; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.status-band-label { font-size: 12px; line-height: 1.3; color: var(--muted-foreground); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .status-band-value {
   display: flex;
   min-height: 24px;
@@ -48,11 +48,11 @@
   font-size: 17px;
   font-weight: 600;
   line-height: 1.25;
-  color: var(--text);
+  color: var(--foreground);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.status-band-value small { font-size: 12px; font-weight: 400; color: var(--text-muted); }
+.status-band-value small { font-size: 12px; font-weight: 400; color: var(--muted-foreground); }
 
 .status-band-upstreams .status-band-value { align-items: center; font-size: 14px; }
 .status-band-upstreams[data-tone='warn'] .status-band-value { color: var(--warn-text); }
@@ -74,7 +74,7 @@ button.status-band-failing:hover { background: color-mix(in oklab, var(--warn-te
 .status-band-retry:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
 .status-band-hour svg { width: 100%; height: 24px; }
-.status-band-hour-idle { font-size: 14px; font-weight: 500; line-height: 24px; color: var(--text-muted); }
+.status-band-hour-idle { font-size: 14px; font-weight: 500; line-height: 24px; color: var(--muted-foreground); }
 
 .status-band-retry {
   display: inline-flex;
@@ -84,8 +84,8 @@ button.status-band-failing:hover { background: color-mix(in oklab, var(--warn-te
   padding: 0 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--bg-card);
-  color: var(--text);
+  background: var(--card);
+  color: var(--foreground);
   font-size: 12px;
   cursor: pointer;
 }
@@ -94,7 +94,7 @@ button.status-band-failing:hover { background: color-mix(in oklab, var(--warn-te
   width: 64px;
   height: 16px;
   border-radius: 4px;
-  background: var(--bg-soft);
+  background: var(--muted);
 }
 
 @media (max-width: 1279px) {
@@ -108,7 +108,7 @@ button.status-band-failing:hover { background: color-mix(in oklab, var(--warn-te
 @media (max-width: 759px) {
   .status-band { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--border); }
   .status-band > * + * { border-left: 0; }
-  .status-band > :not(.status-band-state) { background: var(--bg-card); }
+  .status-band > :not(.status-band-state) { background: var(--card); }
   .status-band-state,
   .status-band-upstreams { grid-column: 1 / -1; }
   .status-band-state { padding: 12px; }

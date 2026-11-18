@@ -182,12 +182,12 @@ export default function CompileCache() {
     {
       key: 'name',
       label: t('name'),
-      render: (value: unknown) => <span className="font-[500] text-[var(--text)]">{value as string}</span>,
+      render: (value: unknown) => <span className="font-[500] text-[var(--foreground)]">{value as string}</span>,
     },
     {
       key: 'namespace',
       label: t('compileCache.namespace'),
-      render: (value: unknown) => <code className="font-mono text-[12px] text-[var(--text-soft)]">{value as string}</code>,
+      render: (value: unknown) => <code className="font-mono text-[12px] text-[var(--muted-foreground)]">{value as string}</code>,
     },
     {
       key: 'permissions',
@@ -205,7 +205,7 @@ export default function CompileCache() {
       key: 'last_used_at',
       label: t('compileCache.lastUsed'),
       render: (value: unknown) => (
-        <span className="font-mono text-[12px] text-[var(--text-soft)]">
+        <span className="font-mono text-[12px] text-[var(--muted-foreground)]">
           {value ? formatTime(value as string) : t('compileCache.neverUsed')}
         </span>
       ),
@@ -297,7 +297,7 @@ export default function CompileCache() {
           <span id="compile-cache-status-heading" className="sr-only">{t('compileCache.statusTitle')}</span>
 
           {statusQuery.isPending ? (
-            <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]">
+            <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--muted-foreground)]">
               <span aria-hidden="true">{t('loading')}</span>
             </div>
           ) : statusQuery.isError && !statusResponse ? (
@@ -344,7 +344,7 @@ export default function CompileCache() {
                   </div>
 
                   <div className="max-w-xl">
-                    <div className="mb-2 flex items-center justify-between gap-4 text-[13px] text-[var(--text-soft)]">
+                    <div className="mb-2 flex items-center justify-between gap-4 text-[13px] text-[var(--muted-foreground)]">
                       <span>{t('compileCache.capacity')}</span>
                       <span className="font-mono tabular-nums">
                         {formatBytes(status.stats.size_bytes)}{status.stats.max_bytes > 0 && ` / ${formatBytes(status.stats.max_bytes)}`}
@@ -361,15 +361,15 @@ export default function CompileCache() {
                   </div>
 
                   <div className="space-y-3 border-t border-[var(--border)] pt-4">
-                    <span className="text-[12px] font-[500] text-[var(--text-muted)]">
+                    <span className="text-[12px] font-[500] text-[var(--muted-foreground)]">
                       {t('compileCache.endpoints')}
                     </span>
                     {(['ccache', 'sccache'] as const).map(client => {
                       const target = `${client}-endpoint` as CopiedValue
                       return (
                         <div key={client} className="flex min-w-0 items-center gap-3">
-                          <span className="w-16 shrink-0 font-mono text-[12px] font-[600] text-[var(--text)]">{client}</span>
-                          <code className="min-w-0 flex-1 break-all font-mono text-[12px] text-[var(--text-soft)]">
+                          <span className="w-16 shrink-0 font-mono text-[12px] font-[600] text-[var(--foreground)]">{client}</span>
+                          <code className="min-w-0 flex-1 break-all font-mono text-[12px] text-[var(--muted-foreground)]">
                             {status.endpoints[client]}
                           </code>
                           <Tooltip>
@@ -380,7 +380,7 @@ export default function CompileCache() {
                                 size="icon"
                                 data-icon-button
                                 aria-label={t('compileCache.copyClientEndpoint', { client })}
-                                style={{ color: 'var(--text-soft)' }}
+                                style={{ color: 'var(--muted-foreground)' }}
                               />
                             }>
                               <Icon name={copiedValue === target ? 'check' : 'content_copy'} size="sm" />
@@ -417,7 +417,7 @@ export default function CompileCache() {
           {canWrite && !canManageCredentials && <Alert variant="info"><AlertDescription>{t('account.credentialRestriction')}</AlertDescription></Alert>}
           {credentials.length > 0 && <div className="mb-4 max-w-56"><NativeSelect aria-label={t('compileCache.credentialStatus')} value={credentialFilter} onChange={event => setCredentialFilter(event.target.value)}><option value="all">{t('compileCache.allCredentials')}</option><option value="active">{t('compileCache.active')}</option><option value="expired">{t('compileCache.expired')}</option></NativeSelect></div>}
           {credentialsQuery.isPending ? (
-            <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]">
+            <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--muted-foreground)]">
               <span aria-hidden="true">{t('loading')}</span>
             </div>
           ) : credentialsQuery.isError && !credentialsResponse ? (
@@ -540,10 +540,10 @@ export default function CompileCache() {
                   const target = `${item.client}-config` as CopiedValue
                   return (
                     <TabsContent key={item.client} value={item.client}><section className="flex min-w-0 flex-col rounded-md border border-[var(--border)] p-4">
-                      <h3 className="font-mono text-[14px] font-[600] text-[var(--text)]">{item.client}</h3>
-                      <p className="mt-1 text-[12px] text-[var(--text-muted)]">{item.label}</p>
-                      <div className="mt-3 flex-1 rounded-sm bg-[var(--bg-soft)] p-3">
-                        <code className="block whitespace-pre-wrap break-all font-mono text-[12px] leading-5 text-[var(--text)]">
+                      <h3 className="font-mono text-[14px] font-[600] text-[var(--foreground)]">{item.client}</h3>
+                      <p className="mt-1 text-[12px] text-[var(--muted-foreground)]">{item.label}</p>
+                      <div className="mt-3 flex-1 rounded-sm bg-[var(--muted)] p-3">
+                        <code className="block whitespace-pre-wrap break-all font-mono text-[12px] leading-5 text-[var(--foreground)]">
                           {item.value}
                         </code>
                       </div>
@@ -583,7 +583,7 @@ export default function CompileCache() {
       }} modal>
         <DialogContent style={{ maxWidth: 440 }} finalFocus={true}>
           <DialogTitle className="pr-10">{t('compileCache.revokeTitle')}</DialogTitle>
-          <p className="text-[13px] leading-5 text-[var(--text-soft)]">
+          <p className="text-[13px] leading-5 text-[var(--muted-foreground)]">
             {t('compileCache.revokeHint', { name: revokeTarget?.name, namespace: revokeTarget?.namespace })}
           </p>
           {revokeMutation.isError && (
@@ -620,7 +620,7 @@ export default function CompileCache() {
       }} modal>
         <DialogContent style={{ maxWidth: 440 }} finalFocus={true}>
           <DialogTitle className="pr-10">{t('compileCache.cleanupTitle')}</DialogTitle>
-          <p className="text-[13px] leading-5 text-[var(--text-soft)]">{t('compileCache.cleanupHint')}</p>
+          <p className="text-[13px] leading-5 text-[var(--muted-foreground)]">{t('compileCache.cleanupHint')}</p>
           {cleanupMutation.isError && (
             <div className="mt-4"><Alert variant={"destructive"}><AlertDescription>{getApiError(cleanupMutation.error).message}</AlertDescription></Alert></div>
           )}

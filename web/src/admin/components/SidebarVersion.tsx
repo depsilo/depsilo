@@ -40,7 +40,7 @@ export default function SidebarVersion({ version }: { version?: string }) {
             fit; the tight metrics usually keep "dev·<7-hex>" on one line. */}
         <span
           className="block min-w-0 rounded-sm border px-1 py-1 font-mono text-[12px] leading-tight tabular-nums [overflow-wrap:anywhere]"
-          style={{ background: 'var(--bg-hover)', color: 'var(--text-soft)', borderColor: 'var(--border)' }}
+          style={{ background: 'var(--accent)', color: 'var(--muted-foreground)', borderColor: 'var(--border)' }}
         >
           {separator > 0 ? <>{label.slice(0, separator)}<wbr />{label.slice(separator)}</> : label}
         </span>

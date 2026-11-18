@@ -20,7 +20,7 @@
   flex-shrink: 0;
   align-items: center;
   border-radius: var(--r-md);
-  background: var(--bg-card);
+  background: var(--card);
   outline: 1px solid var(--border);
   outline-offset: -1px;
 }
@@ -35,7 +35,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--muted-foreground);
   font-size: 12px;
   font-weight: 500;
   line-height: 1;
@@ -55,8 +55,8 @@ button.portal-header-control {
   border-left: 1px solid var(--border);
 }
 .portal-header-group button.portal-header-control:hover {
-  background: var(--bg-hover);
-  color: var(--text);
+  background: var(--accent);
+  color: var(--foreground);
 }
 .portal-header-group button.portal-header-control:active {
   transform: scale(0.97);
@@ -92,8 +92,8 @@ button.portal-header-control {
 /* No 'degraded' state here on purpose: the Portal header reports Depsilo's own
    availability, and upstream mirror health lives on /monitor. */
 .portal-status-pill[data-status='failed'] { color: var(--danger-text); }
-.portal-status-pill[data-status='unknown'] { color: var(--text-muted); }
-.portal-status-pill[data-status='loading'] { color: var(--text-muted); }
+.portal-status-pill[data-status='unknown'] { color: var(--muted-foreground); }
+.portal-status-pill[data-status='loading'] { color: var(--muted-foreground); }
 .portal-status-pill[data-status='unavailable'] { color: var(--danger-text); }
 .portal-status-compact-icon,
 .portal-admin-mobile-label,
@@ -114,7 +114,7 @@ button.portal-header-control {
   text-decoration: none;
 }
 .portal-admin-link:hover {
-  background: var(--btn-primary-press);
+  background: var(--primary-press);
 }
 .portal-admin-link:active {
   transform: scale(0.97);

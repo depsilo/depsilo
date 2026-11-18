@@ -18,7 +18,7 @@ function SetupChecking() {
       aria-busy="true"
       className="grid min-h-screen place-items-center p-4"
     >
-      <p className="text-[13px] text-[var(--text-soft)]">{t('setupGate.checking')}</p>
+      <p className="text-[13px] text-[var(--muted-foreground)]">{t('setupGate.checking')}</p>
     </main>
   )
 }
@@ -40,12 +40,12 @@ function SetupUnavailable({ retrying, onRetry }: { retrying: boolean; onRetry: (
         role="alert"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="programmatic-focus-target w-full max-w-[560px] rounded-md border border-[var(--danger-border)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-pop)]"
+        className="programmatic-focus-target w-full max-w-[560px] rounded-md border border-[var(--danger-border)] bg-[var(--card)] p-5 shadow-[var(--shadow-pop)]"
       >
-        <h1 id={titleId} className="text-[18px] font-[600] text-[var(--text)]">
+        <h1 id={titleId} className="text-[18px] font-[600] text-[var(--foreground)]">
           {t('setupGate.title')}
         </h1>
-        <p className="mt-2 text-[13px] leading-6 text-[var(--text-soft)]">
+        <p className="mt-2 text-[13px] leading-6 text-[var(--muted-foreground)]">
           {t('setupGate.hint')}
         </p>
         <Button

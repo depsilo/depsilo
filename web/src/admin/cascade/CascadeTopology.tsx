@@ -32,17 +32,17 @@ function FlowNode({
       className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-md border px-3 py-2"
       style={{
         borderColor: highlight ? 'color-mix(in oklab, var(--brand-text) 35%, var(--border))' : 'var(--border)',
-        background: highlight ? 'var(--brand-soft)' : 'var(--bg-soft)',
+        background: highlight ? 'var(--brand-soft)' : 'var(--muted)',
       }}
     >
       <Icon name={icon} size="sm" className="shrink-0" style={{ color: 'var(--brand-text)' }} />
       <span className="min-w-0">
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-[12px] font-[600]" style={{ color: 'var(--text)' }}>{title}</span>
+          <span className="truncate text-[12px] font-[600]" style={{ color: 'var(--foreground)' }}>{title}</span>
           {badge}
         </span>
         {subtitle && (
-          <span className="block truncate text-[12px]" style={{ color: 'var(--text-soft)' }}>{subtitle}</span>
+          <span className="block truncate text-[12px]" style={{ color: 'var(--muted-foreground)' }}>{subtitle}</span>
         )}
       </span>
     </div>
@@ -52,11 +52,11 @@ function FlowNode({
 function FlowArrow({ label, dashed }: { label: string; dashed?: boolean }) {
   return (
     <span className="hidden shrink-0 flex-col items-center px-1 sm:inline-flex">
-      <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-subtle)' }}>{label}</span>
+      <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--muted-foreground)' }}>{label}</span>
       <Icon
         name="arrow_forward"
         size="sm"
-        style={{ color: dashed ? 'var(--text-subtle)' : 'var(--brand-text)' }}
+        style={{ color: dashed ? 'var(--muted-foreground)' : 'var(--brand-text)' }}
       />
     </span>
   )
@@ -82,8 +82,8 @@ export default function CascadeTopology({
   if (info.enabled && info.instance_id) {
     chips.push(
       <span key="instance" className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="shrink-0" style={{ color: 'var(--text-subtle)' }}>{t('cascade.instanceId')}</span>
-        <span className="min-w-0 break-all font-mono" style={{ color: 'var(--text)' }}>{info.instance_id}</span>
+        <span className="shrink-0" style={{ color: 'var(--muted-foreground)' }}>{t('cascade.instanceId')}</span>
+        <span className="min-w-0 break-all font-mono" style={{ color: 'var(--foreground)' }}>{info.instance_id}</span>
         <Tooltip>
           <TooltipTrigger render={
             <Button
@@ -105,14 +105,14 @@ export default function CascadeTopology({
     )
     chips.push(
       <span key="relay">
-        {t('cascade.relayPath')} <span className="font-mono" style={{ color: 'var(--text)' }}>{info.relay_path}</span>
+        {t('cascade.relayPath')} <span className="font-mono" style={{ color: 'var(--foreground)' }}>{info.relay_path}</span>
       </span>,
     )
   }
   if (boundUpstreams === null || boundUpstreams > 0 || info.enabled) {
     chips.push(
       <span key="bound">
-        {t('cascade.boundLabel')} <span className="font-mono" style={{ color: 'var(--text)' }}>{boundUpstreams ?? '—'}</span>
+        {t('cascade.boundLabel')} <span className="font-mono" style={{ color: 'var(--foreground)' }}>{boundUpstreams ?? '—'}</span>
       </span>,
     )
   }
@@ -128,7 +128,7 @@ export default function CascadeTopology({
     <div
       data-cascade-topology
       className="rounded-lg border px-4 py-3"
-      style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}
+      style={{ borderColor: 'var(--border)', background: 'var(--card)' }}
     >
       <div className="flex flex-wrap items-center gap-1.5">
         <FlowNode
@@ -145,7 +145,7 @@ export default function CascadeTopology({
           badge={(
             <span
               className="size-1.5 shrink-0 rounded-full"
-              style={{ background: info.enabled ? 'var(--brand-text)' : 'var(--text-subtle)' }}
+              style={{ background: info.enabled ? 'var(--brand-text)' : 'var(--muted-foreground)' }}
               title={t(info.enabled ? 'cascade.enabled' : 'cascade.disabled')}
             />
           )}
@@ -163,7 +163,7 @@ export default function CascadeTopology({
       {chips.length > 0 && (
         <div
           className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-2 text-[12px]"
-          style={{ borderColor: 'var(--border)', color: 'var(--text-soft)' }}
+          style={{ borderColor: 'var(--border)', color: 'var(--muted-foreground)' }}
         >
           {chips}
         </div>

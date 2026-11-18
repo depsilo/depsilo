@@ -161,7 +161,7 @@ export default function SnapshotSection() {
           {createMutation.isPending ? t('snapshot.creating') : t('snapshot.create')}
         </Button>
       </div>
-      <p className="mt-2 text-[13px] text-[var(--text-soft)]">{t('snapshot.createHint')}</p>
+      <p className="mt-2 text-[13px] text-[var(--muted-foreground)]">{t('snapshot.createHint')}</p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <input
           ref={fileInput}
@@ -185,7 +185,7 @@ export default function SnapshotSection() {
       {data && snapshotsQuery.isRefetchError && <StaleDataNotice onRefresh={() => snapshotsQuery.refetch()} />}
       <div className="mt-4">
         {snapshotsQuery.isPending ? (
-          <div aria-busy="true" className="py-6 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>
+          <div aria-busy="true" className="py-6 text-center text-[13px]" style={{ color: 'var(--muted-foreground)' }}>
             <span aria-hidden="true">{t('loading')}</span>
           </div>
         ) : snapshotsQuery.isError && !data ? (
@@ -196,7 +196,7 @@ export default function SnapshotSection() {
           <TableContainer label={t('snapshot.table')} minWidth={760}>
             <Table className="w-full text-[12px]">
               <TableHeader>
-                <TableRow style={{ color: 'var(--text-soft)' }}>
+                <TableRow style={{ color: 'var(--muted-foreground)' }}>
                   <TableHead className="px-2 py-2 text-left">{t('snapshot.name')}</TableHead>
                   <TableHead className="px-2 py-2 text-left">{t('snapshot.artifacts')}</TableHead>
                   <TableHead className="px-2 py-2 text-left">{t('snapshot.size')}</TableHead>
@@ -209,14 +209,14 @@ export default function SnapshotSection() {
                   <TableRow key={snapshot.id} style={{ borderTop: '1px solid var(--border)' }}>
                     <TableCell className="px-2 py-2">
                       <div className="flex min-w-0 items-center gap-2">
-                        <span className="min-w-0 truncate" style={{ color: 'var(--text)' }}>{snapshot.name}</span>
+                        <span className="min-w-0 truncate" style={{ color: 'var(--foreground)' }}>{snapshot.name}</span>
                         {snapshot.id === activeId && <Badge variant="success">{t('snapshot.active')}</Badge>}
                       </div>
-                      {snapshot.note && <p className="mt-0.5 truncate text-[12px] text-[var(--text-soft)]">{snapshot.note}</p>}
+                      {snapshot.note && <p className="mt-0.5 truncate text-[12px] text-[var(--muted-foreground)]">{snapshot.note}</p>}
                     </TableCell>
-                    <TableCell className="px-2 py-2" style={{ color: 'var(--text-soft)' }}>{snapshot.artifact_count}</TableCell>
-                    <TableCell className="px-2 py-2" style={{ color: 'var(--text-soft)' }}>{formatBytes(snapshot.total_bytes)}</TableCell>
-                    <TableCell className="px-2 py-2" style={{ color: 'var(--text-soft)' }}>{dateFormat.format(new Date(snapshot.created_at))}</TableCell>
+                    <TableCell className="px-2 py-2" style={{ color: 'var(--muted-foreground)' }}>{snapshot.artifact_count}</TableCell>
+                    <TableCell className="px-2 py-2" style={{ color: 'var(--muted-foreground)' }}>{formatBytes(snapshot.total_bytes)}</TableCell>
+                    <TableCell className="px-2 py-2" style={{ color: 'var(--muted-foreground)' }}>{dateFormat.format(new Date(snapshot.created_at))}</TableCell>
                     <TableCell className="px-2 py-2">
                       <div className="flex justify-end gap-1.5">
                         {canWrite && (snapshot.id === activeId ? (

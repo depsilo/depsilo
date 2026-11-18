@@ -26,7 +26,7 @@ import { getApiError } from '@/lib/apiError'
 import type { AdminUpstream, UpstreamMutationRequest } from '@/lib/adminApi.types'
 import { ecosystemLabel } from '@/admin/operatorEcosystems'
 
-const navigateLinkClass = 'stripe-focus-ring inline-flex min-h-10 items-center rounded-sm px-2 text-[12px] font-[600] no-underline text-[var(--brand-text)] hover:bg-[var(--bg-hover)]'
+const navigateLinkClass = 'stripe-focus-ring inline-flex min-h-10 items-center rounded-sm px-2 text-[12px] font-[600] no-underline text-[var(--brand-text)] hover:bg-[var(--accent)]'
 const tableHeadClass = 'px-3 py-2 text-left first:pl-0'
 const tableCellClass = 'px-3 py-3 align-top first:pl-0'
 
@@ -139,7 +139,7 @@ export default function Cascade() {
     >
       <div className="space-y-5">
         {infoQuery.isPending ? (
-          <div aria-busy="true" className="py-16 text-center text-[13px] text-[var(--text-soft)]">
+          <div aria-busy="true" className="py-16 text-center text-[13px] text-[var(--muted-foreground)]">
             {t('loading')}
           </div>
         ) : infoQuery.isError && !info ? (
@@ -184,7 +184,7 @@ export default function Cascade() {
                 <SectionHeader title={t('cascade.configSectionTitle')} divider={false} />
                 <span id="cascade-config-heading" className="sr-only">{t('cascade.configSectionTitle')}</span>
                 {configQuery.isPending ? (
-                  <div aria-busy="true" className="py-10 text-center text-[13px] text-[var(--text-soft)]">
+                  <div aria-busy="true" className="py-10 text-center text-[13px] text-[var(--muted-foreground)]">
                     {t('loading')}
                   </div>
                 ) : configQuery.isError && !config ? (
@@ -261,17 +261,17 @@ export default function Cascade() {
                           <TableRow
                             key={upstream.id}
                             data-cascade-upstream={upstream.id}
-                            style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
+                            style={{ borderBottom: '1px solid var(--border, var(--border))' }}
                           >
                             <TableCell className={tableCellClass}>
-                              <span style={{ color: 'var(--text-muted)' }}>
+                              <span style={{ color: 'var(--muted-foreground)' }}>
                                 {ecosystemLabel(upstream.adapter_type)}
                               </span>
                             </TableCell>
-                            <TableCell className={`${tableCellClass} font-[500]`} style={{ color: 'var(--text)' }}>
+                            <TableCell className={`${tableCellClass} font-[500]`} style={{ color: 'var(--foreground)' }}>
                               {upstream.name}
                             </TableCell>
-                            <TableCell className={`${tableCellClass} font-mono`} style={{ color: 'var(--text-muted)' }}>
+                            <TableCell className={`${tableCellClass} font-mono`} style={{ color: 'var(--muted-foreground)' }}>
                               <span title={upstream.url}>{truncateMiddle(upstream.url)}</span>
                             </TableCell>
                             <TableCell className={tableCellClass}>
@@ -291,10 +291,10 @@ export default function Cascade() {
                               ) : missing ? (
                                 <Badge variant="warning">{t('cascade.viaMissing', { peer: via })}</Badge>
                               ) : (
-                                <span className="font-mono" style={{ color: 'var(--text)' }}>{via || t('cascade.viaDirect')}</span>
+                                <span className="font-mono" style={{ color: 'var(--foreground)' }}>{via || t('cascade.viaDirect')}</span>
                               )}
                             </TableCell>
-                            <TableCell className={`${tableCellClass} font-mono tabular-nums`} style={{ color: 'var(--text)' }}>
+                            <TableCell className={`${tableCellClass} font-mono tabular-nums`} style={{ color: 'var(--foreground)' }}>
                               {upstream.priority}
                             </TableCell>
                           </TableRow>

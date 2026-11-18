@@ -36,7 +36,7 @@ export default function PolicyStatusNotice() {
               {policy.isUnverified ? t('policy.statusUnavailable') : t('policy.staleSnapshot')}
             </p>
             {!policy.isUnverified && (
-              <p className="mt-0.5 text-[12px]" style={{ color: 'var(--text-soft)' }}>
+              <p className="mt-0.5 text-[12px]" style={{ color: 'var(--muted-foreground)' }}>
                 {policy.refreshTime
                   ? t('policy.lastSuccessfulRefresh', { time: policy.refreshTime })
                   : t('policy.neverRefreshed')}

@@ -20,7 +20,7 @@ interface Props {
 
 const chipClass = cn(
   'stripe-focus-ring inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-[13px] font-[500] sm:min-h-8',
-  'border-[var(--border)] bg-transparent text-[var(--text)] hover:bg-[var(--bg-hover)]',
+  'border-[var(--border)] bg-transparent text-[var(--foreground)] hover:bg-[var(--accent)]',
   'aria-pressed:border-[var(--brand-border)] aria-pressed:bg-[var(--brand-soft)] aria-pressed:text-[var(--brand-text)]',
 )
 
@@ -56,7 +56,7 @@ export default function EcosystemChips({ counts, selected, onChange, labelFor, c
         data-ecosystem-chip="all"
       >
         {t('filters.allEcosystems')}
-        {counts && <span className="tabular-nums text-[12px] text-[var(--text-muted)]">{number(total)}</span>}
+        {counts && <span className="tabular-nums text-[12px] text-[var(--muted-foreground)]">{number(total)}</span>}
       </Toggle>
       {chips.map(item => {
         const pressed = selected.includes(item.id)
@@ -73,7 +73,7 @@ export default function EcosystemChips({ counts, selected, onChange, labelFor, c
           >
             {isEcosystemType(item.id) && <EcosystemIcon type={item.id} size={14} useColor decorative />}
             {name}
-            <span className="tabular-nums text-[12px] text-[var(--text-muted)]">{number(item.count)}</span>
+            <span className="tabular-nums text-[12px] text-[var(--muted-foreground)]">{number(item.count)}</span>
           </Toggle>
         )
       })}
