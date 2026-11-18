@@ -501,7 +501,6 @@ func TestRawShutdownAndCloseFallbackWaitForEnteredHandlers(t *testing.T) {
 func TestProductionEntrypointsAwaitServerShutdownHelper(t *testing.T) {
 	paths := []string{
 		"../cli/serve.go",
-		"../../cmd/server/main_server.go",
 		"../../cmd/depsilo-tray/main.go",
 	}
 	for _, path := range paths {

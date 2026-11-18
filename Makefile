@@ -63,7 +63,7 @@ LDFLAGS    := -X depsilo/internal/version.Version=$(VERSION) \
 GO_BUILD   := CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$(LDFLAGS)"
 
 # ─── 初始化与构建 ─────────────────────────────
-.PHONY: setup setup-ui version prepare-go frontend build build-dev-server build-server tray app-macos install-linux uninstall-linux autostart-linux unautostart-linux
+.PHONY: setup setup-ui version prepare-go frontend build build-dev-server tray app-macos install-linux uninstall-linux autostart-linux unautostart-linux
 
 setup:                          ## 安装 Go 与前端开发依赖
 	go mod download
@@ -91,9 +91,6 @@ build: frontend | $(BIN_DIR)    ## 构建前端 + 编译后端
 
 build-dev-server: prepare-go | $(BIN_DIR)  # 内部：为 Vite 热更新仅编译后端
 	$(GO_BUILD) -o $(BIN) ./cmd/depsilo
-
-build-server: frontend | $(BIN_DIR)  # 兼容：构建纯服务器入口
-	$(GO_BUILD) -o $(BIN)-server ./cmd/server
 
 tray: frontend | $(BIN_DIR)     ## 构建桌面托盘应用
 	go build -trimpath -buildvcs=false -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP)-tray ./cmd/depsilo-tray
@@ -293,7 +290,7 @@ DOCKER_TAG   := local
 DOCKER_NAME  := depsilo-local
 COMPOSE      ?= docker compose
 
-.PHONY: docker-build docker-run docker-stop docker-logs docker-shell docker-status docker-compose-up docker-compose-down docker-test proxy-env
+.PHONY: docker-build docker-run docker-stop docker-logs docker-shell docker-status docker-compose-up docker-compose-down docker-test
 
 docker-build:                   ## 本地构建 Docker 镜像
 	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
@@ -361,7 +358,6 @@ docker-test: docker-build docker-run  # 兼容：构建、启动并冒烟测试
 	@echo ""
 	@echo ">>> Done. Container still running. Use 'make docker-stop' to stop."
 
-proxy-env: cli-activate          # 兼容别名：打印代理环境变量
 
 # ─── 发布 ─────────────────────────────────────
 .PHONY: release-dry-run release-check
@@ -373,7 +369,7 @@ release-check:                   ## 检查 goreleaser 配置是否正确
 	goreleaser check
 
 # ─── 清理 ─────────────────────────────────────
-.PHONY: clean clean-all lint lint-go lint-web lint-i18n check verify verify-modules verify-build verify-web verify-ui security verify-scripts verify-installer help
+.PHONY: clean clean-all lint lint-go lint-web lint-i18n check verify verify-modules verify-build verify-web verify-ui security verify-scripts help
 
 clean: stop docker-stop         ## 清理构建产物（保留运行数据与开发 JWT）
 	rm -rf $(BIN_DIR) $(DIST_DIR) $(WEB_DIST) $(DEV_LOG) $(PID_FILE)
@@ -436,8 +432,6 @@ verify-scripts:                 # 内部：安装、开发与发布脚本回归�
 	python3 scripts/test-benchmark-cascade.py
 	python3 scripts/test-npm-audit-gate.py
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s testground/offline-pypi -p 'test_*.py'
-
-verify-installer: verify-scripts # 兼容别名
 
 check: lint test verify-web verify-build test-ui  ## 日常提交前快速检查
 

@@ -30,9 +30,8 @@ the changed interface.
 | Previous-release upgrade | `make test-previous-release-upgrade` | Docker and registry access | Run the previous published release's image by digest with its checksummed Compose named-volume layout, complete first-run setup, and create a session, an API token, a second user, and a Package Rule, activate the trial and edit an Upstream; then start the candidate on the same volume and require unchanged config, no reopened setup, working credentials, the rule, the trial, the edited Upstream, an intact audit chain, private state files owned by the service user, a clean startup log, and the candidate's schema version. Refuses a shallow checkout. Fails when the pinned baseline is older than the newest release in the candidate's history |
 | Development scripts | `make verify-scripts` | No | Make workflows, paired Vite/backend lifecycle, and development proxy coverage |
 
-A fresh checkout or worktree has no `web/dist/`, and five packages embed it:
-`internal/cli`, `internal/server`, `cmd/depsilo`, `cmd/depsilo-tray`, and
-`cmd/server`. Run `make prepare-go` once before `go test` or `go build` on
+A fresh checkout or worktree has no `web/dist/`, and four packages embed it:
+`internal/cli`, `internal/server`, `cmd/depsilo`, and `cmd/depsilo-tray`. Run `make prepare-go` once before `go test` or `go build` on
 them; without it they stop with `pattern all:dist: no matching files found`.
 `make clean` removes `web/dist/`; run `make prepare-go` again after it. The
 Make test targets do this themselves. To run several packages, pass
