@@ -5,6 +5,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-11-19
+
 ### Changed
 - First-run setup is needed only for Admin. The Portal, its client guide,
   `GET /api/v1/agent-prompt`, and `depsilo init-agent` work before setup
