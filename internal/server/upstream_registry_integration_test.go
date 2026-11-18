@@ -750,7 +750,7 @@ func TestRegistryUpdateChangesNextRealPyPIProxyRequest(t *testing.T) {
 	pool := registry.Pools()["pypi"]
 	engine := gin.New()
 	cacheMgr := testCacheManager(t, database)
-	handler := pypi.New(cacheMgr, upstream.NewPrioritySelector(pool), config.CacheConfig{TTLIndex: time.Hour}, database)
+	handler := pypi.New(cacheMgr, upstream.NewPassiveRecoverySelector(pool), config.CacheConfig{TTLIndex: time.Hour}, database)
 	handler.Register(engine.Group("/pypi"))
 
 	requestUniquePyPIPath(t, engine, "/pypi/simple/before/")

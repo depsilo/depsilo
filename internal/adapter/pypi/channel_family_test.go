@@ -50,7 +50,7 @@ func newTestChannelFamily(t *testing.T, upstreamURL string) (*ChannelFamily, *gi
 	}
 	family, err := NewChannelFamily(
 		manager,
-		upstream.NewPrioritySelector(pool),
+		upstream.NewPassiveRecoverySelector(pool),
 		config.CacheConfig{TTLIndex: time.Hour, TTLBlob: time.Hour},
 		database,
 		Options{

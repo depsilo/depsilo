@@ -146,7 +146,7 @@ func TestSelectAfterFailureNeverReadmitsCriticallyFailedOnlySource(t *testing.T)
 	}
 	failed := pool.Snapshot()[0]
 	failed.ReportCriticalFailure(time.Millisecond)
-	handler := &Handler{selector: upstream.NewPrioritySelector(pool)}
+	handler := &Handler{selector: upstream.NewPassiveRecoverySelector(pool)}
 	if selected := handler.selectAfterFailure(context.Background(), failed); selected != nil {
 		t.Fatalf("critically failed source was reselected: %s", selected.Name)
 	}

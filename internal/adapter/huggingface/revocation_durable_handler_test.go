@@ -275,5 +275,5 @@ func newDurableHTTPHandler(t *testing.T, manager *cache.Manager, database *gorm.
 	if err != nil {
 		t.Fatal(err)
 	}
-	return New(manager, upstream.NewPrioritySelector(pool), config.CacheConfig{TTLBlob: time.Hour}, database)
+	return New(manager, upstream.NewPassiveRecoverySelector(pool), config.CacheConfig{TTLBlob: time.Hour}, database)
 }

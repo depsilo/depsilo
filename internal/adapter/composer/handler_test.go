@@ -128,7 +128,7 @@ func TestPackagesJSONURLsTakeOnlyAnHTTPSchemeFromForwardedProto(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := New(manager, upstream.NewPrioritySelector(pool), config.CacheConfig{TTLIndex: time.Hour, TTLBlob: time.Hour}, database)
+	handler := New(manager, upstream.NewPassiveRecoverySelector(pool), config.CacheConfig{TTLIndex: time.Hour, TTLBlob: time.Hour}, database)
 	router := gin.New()
 	handler.Register(router.Group("/composer"))
 

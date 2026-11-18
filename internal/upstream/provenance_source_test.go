@@ -54,7 +54,7 @@ func TestProvenanceSourceIdentityDoesNotExposeCredentialVerifier(t *testing.T) {
 	}
 }
 
-func TestPrioritySelectorResolvesOnlyExactProvenanceSource(t *testing.T) {
+func TestSelectorResolvesOnlyExactProvenanceSource(t *testing.T) {
 	pool, err := NewPool([]config.UpstreamConfig{
 		{Name: "a", URL: "https://a.example", Priority: 1, ProbeMode: "passive"},
 		{Name: "b", URL: "https://b.example", Priority: 2, ProbeMode: "passive"},
@@ -62,7 +62,7 @@ func TestPrioritySelectorResolvesOnlyExactProvenanceSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	selector := NewPrioritySelector(pool)
+	selector := NewPassiveRecoverySelector(pool)
 	sourceB := pool.Snapshot()[1]
 	resolved, err := selector.ResolveProvenanceSource(sourceB.ProvenanceSourceID())
 	if err != nil {

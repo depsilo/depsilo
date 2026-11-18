@@ -14,7 +14,7 @@ func TestPoolReplaceChangesExistingSelectorWithoutChangingPoolIdentity(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	selector := NewPrioritySelector(pool)
+	selector := NewPassiveRecoverySelector(pool)
 	next, err := buildPoolSnapshotWithOptions([]db.UpstreamRecord{{ID: 2, AdapterType: "pypi", Name: "two", URL: "https://two.example", Priority: 1, Healthy: true}}, pool.load(), PoolOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -29,7 +29,7 @@ func TestPoolReplaceChangesExistingSelectorWithoutChangingPoolIdentity(t *testin
 	}
 }
 
-func TestPrioritySelectorCanExcludeCurrentHealthySource(t *testing.T) {
+func TestSelectorCanExcludeCurrentHealthySource(t *testing.T) {
 	pool, err := NewPoolFromRecords([]db.UpstreamRecord{
 		{
 			ID: 1, AdapterType: "huggingface", Name: "primary",
@@ -43,7 +43,7 @@ func TestPrioritySelectorCanExcludeCurrentHealthySource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	selector := NewPrioritySelector(pool)
+	selector := NewPassiveRecoverySelector(pool)
 	primary, err := selector.Select(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -175,7 +175,7 @@ func TestCriticalFailureStaysOutOfSelectorUntilConfigObjectReplacement(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	selector := NewPrioritySelector(pool)
+	selector := NewPassiveRecoverySelector(pool)
 	primary, ok := pool.Find(1)
 	if !ok {
 		t.Fatal("primary upstream not found")

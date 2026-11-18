@@ -91,7 +91,7 @@ func TestSignedArtifactRouteWithUV(t *testing.T) {
 	}
 	handler, err := NewWithOptions(
 		manager,
-		upstream.NewPrioritySelector(pool),
+		upstream.NewPassiveRecoverySelector(pool),
 		config.CacheConfig{TTLIndex: time.Hour, TTLBlob: time.Hour},
 		database,
 		Options{

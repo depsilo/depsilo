@@ -199,7 +199,7 @@ func newNPMProvenanceRouterFactory(
 	if err != nil {
 		t.Fatal(err)
 	}
-	selector := upstream.NewPrioritySelector(pool)
+	selector := upstream.NewPassiveRecoverySelector(pool)
 	newRouter := func(activeSigner *tarballSigner) *gin.Engine {
 		handler := newHandlerWithSigner(
 			manager,

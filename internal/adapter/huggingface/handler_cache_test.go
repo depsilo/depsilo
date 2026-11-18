@@ -576,7 +576,7 @@ func TestHandlerReselectsAfterMutableRefMetadataTransportFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler.selector = upstream.NewPrioritySelector(pool)
+	handler.selector = upstream.NewPassiveRecoverySelector(pool)
 	router := gin.New()
 	handler.Register(router.Group("/huggingface"))
 
@@ -622,7 +622,7 @@ func TestServeDirectSelectedReplacesCriticallyLatchedPreferredUpstream(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler.selector = upstream.NewPrioritySelector(pool)
+	handler.selector = upstream.NewPassiveRecoverySelector(pool)
 	var preferred *upstream.Upstream
 	for _, candidate := range pool.Snapshot() {
 		if candidate.Name == "bad" {
@@ -707,7 +707,7 @@ func TestHandlerReselectsStalePinRangeAfterTransientMetadataStatus(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler.selector = upstream.NewPrioritySelector(pool)
+	handler.selector = upstream.NewPassiveRecoverySelector(pool)
 	router := gin.New()
 	handler.Register(router.Group("/huggingface"))
 	path := "/huggingface/acme/model/resolve/main/model.bin"
@@ -806,7 +806,7 @@ func TestHandlerStalePinRangeFallbackDoesNotReuseIntegrityFailedUpstream(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler.selector = upstream.NewPrioritySelector(pool)
+	handler.selector = upstream.NewPassiveRecoverySelector(pool)
 	router := gin.New()
 	handler.Register(router.Group("/huggingface"))
 	path := "/huggingface/acme/model/resolve/main/model.bin"
@@ -1267,7 +1267,7 @@ func TestHandlerCanonicalCommitMismatchAllowsHealthyFallbackOnNextRequest(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler.selector = upstream.NewPrioritySelector(pool)
+	handler.selector = upstream.NewPassiveRecoverySelector(pool)
 	for _, candidate := range pool.Snapshot() {
 		if candidate.Name != "bad" {
 			continue
@@ -2275,7 +2275,7 @@ func newCachingTestHandler(t *testing.T, originURL string) (*Handler, *cache.Man
 	}
 	handler := New(
 		manager,
-		upstream.NewPrioritySelector(pool),
+		upstream.NewPassiveRecoverySelector(pool),
 		config.CacheConfig{TTLIndex: 5 * time.Minute, TTLBlob: 72 * time.Hour},
 		database,
 	)

@@ -121,21 +121,6 @@ func TestPassiveRecoverySelectorDoesNotRecoverActiveUpstream(t *testing.T) {
 	}
 }
 
-func TestPrioritySelectorDoesNotGainPassiveRecovery(t *testing.T) {
-	pool, err := NewPoolFromRecords([]db.UpstreamRecord{{
-		ID: 1, AdapterType: "extra:pytorch-cu128", Name: "pytorch",
-		URL: "https://download.pytorch.org/whl/cu128", Priority: 1,
-		ProbeMode: "passive", ProbeInterval: "30m", Healthy: false,
-	}})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := NewPrioritySelector(pool).Select(context.Background()); err == nil {
-		t.Fatal("legacy priority selector unexpectedly gained passive recovery")
-	}
-}
-
 func TestPassiveRecoverySelectorAllowsOneAttemptPerCooldown(t *testing.T) {
 	pool, err := NewPoolFromRecords([]db.UpstreamRecord{{
 		ID: 1, AdapterType: "extra:pytorch-cu128", Name: "pytorch",
@@ -291,7 +276,7 @@ func TestSelectorsSkipEverySourceThatFailedTheRequest(t *testing.T) {
 	ctx := context.Background()
 	for name, selector := range map[string]interface {
 		SelectExcludingAll(context.Context, ...*Upstream) (*Upstream, error)
-	}{"passive recovery": NewPassiveRecoverySelector(pool), "priority": NewPrioritySelector(pool)} {
+	}{"passive recovery": NewPassiveRecoverySelector(pool)} {
 		if first, err := selector.SelectExcludingAll(ctx); err != nil || first != ordered[0] {
 			t.Fatalf("%s: unexcluded selection = %v, %v", name, first, err)
 		}

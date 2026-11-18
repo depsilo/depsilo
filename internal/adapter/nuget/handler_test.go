@@ -119,7 +119,7 @@ func TestPassthroughPreservesRawQueryAndIsolatesCachedResponses(t *testing.T) {
 	}
 	handler := New(
 		manager,
-		upstream.NewPrioritySelector(pool),
+		upstream.NewPassiveRecoverySelector(pool),
 		config.CacheConfig{TTLIndex: time.Hour, TTLBlob: 72 * time.Hour},
 		database,
 	)
@@ -200,7 +200,7 @@ func TestServiceIndexURLsTakeOnlyAnHTTPSchemeFromForwardedProto(t *testing.T) {
 	}
 	handler := New(
 		manager,
-		upstream.NewPrioritySelector(pool),
+		upstream.NewPassiveRecoverySelector(pool),
 		config.CacheConfig{TTLIndex: time.Hour, TTLBlob: 72 * time.Hour},
 		database,
 	)

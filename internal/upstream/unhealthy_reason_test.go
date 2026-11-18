@@ -74,9 +74,8 @@ func TestAllUnhealthyErrorNamesTheSharedEgressReason(t *testing.T) {
 			name  string
 			build func(*Pool) Selector
 		}{
-			{"priority", func(pool *Pool) Selector { return NewPrioritySelector(pool) }},
 			// An active upstream never enters passive recovery, so this pool
-			// reaches that selector's final error as well.
+			// reaches the selector's final error.
 			{"passive recovery", func(pool *Pool) Selector { return NewPassiveRecoverySelector(pool) }},
 		} {
 			t.Run(test.name+"/"+selector.name, func(t *testing.T) {
@@ -128,7 +127,7 @@ func TestAllUnhealthyErrorNamesFakeIPAnswersThatNothingCarried(t *testing.T) {
 		Err: &url.Error{Op: "Head", URL: upstreams[0].URL, Err: &fakeIPNotCarriedError{address: netip.MustParseAddr("198.18.0.65")}},
 	})
 	refuseByGuard(t, upstreams[1], "198.18.0.66")
-	for _, selector := range []Selector{NewPrioritySelector(pool), NewPassiveRecoverySelector(pool)} {
+	for _, selector := range []Selector{NewPassiveRecoverySelector(pool)} {
 		_, err := selector.Select(context.Background())
 		if err == nil || err.Error() != fakeIPUnhealthy {
 			t.Fatalf("error = %v, want %q", err, fakeIPUnhealthy)
@@ -160,7 +159,7 @@ func TestAllUnhealthyErrorNamesUniqueLocalFakeIPAnswers(t *testing.T) {
 		}
 		u.applyProbe(ProbeResult{Healthy: false, CheckedAt: time.Now(), Err: &url.Error{Op: "Head", URL: u.URL, Err: err}})
 	}
-	for _, selector := range []Selector{NewPrioritySelector(pool), NewPassiveRecoverySelector(pool)} {
+	for _, selector := range []Selector{NewPassiveRecoverySelector(pool)} {
 		_, err := selector.Select(context.Background())
 		if err == nil || err.Error() != fakeIPUnhealthy {
 			t.Fatalf("error = %v, want %q", err, fakeIPUnhealthy)
@@ -187,7 +186,6 @@ func TestAllUnhealthyErrorNamesAFailureAtTheEgressProxy(t *testing.T) {
 		name  string
 		build func(*Pool) Selector
 	}{
-		{"priority", func(pool *Pool) Selector { return NewPrioritySelector(pool) }},
 		{"passive recovery", func(pool *Pool) Selector { return NewPassiveRecoverySelector(pool) }},
 	} {
 		t.Run(selector.name, func(t *testing.T) {
@@ -224,7 +222,7 @@ func TestAllUnhealthyErrorStaysPlainWithoutARecordedReason(t *testing.T) {
 	u.mu.Lock()
 	u.health.healthy = false
 	u.mu.Unlock()
-	if _, err := NewPrioritySelector(pool).Select(context.Background()); err == nil || err.Error() != "all upstreams are unhealthy" {
+	if err := allUnhealthyError(orderedUpstreams(pool)); err == nil || err.Error() != "all upstreams are unhealthy" {
 		t.Fatalf("error = %v, want the plain message", err)
 	}
 
@@ -234,7 +232,7 @@ func TestAllUnhealthyErrorStaysPlainWithoutARecordedReason(t *testing.T) {
 	u.mu.Lock()
 	u.health.healthy = false
 	u.mu.Unlock()
-	if _, err := NewPrioritySelector(pool).Select(context.Background()); err == nil || err.Error() != "all upstreams are unhealthy" {
+	if err := allUnhealthyError(orderedUpstreams(pool)); err == nil || err.Error() != "all upstreams are unhealthy" {
 		t.Fatalf("error after a passing check = %v, want the plain message", err)
 	}
 
@@ -250,7 +248,7 @@ func TestAllUnhealthyErrorStaysPlainWithoutARecordedReason(t *testing.T) {
 		}
 		u := recovered.Snapshot()[0]
 		refuseByGuard(t, u, "198.18.0.65")
-		if _, err := NewPrioritySelector(recovered).Select(context.Background()); err == nil || !strings.Contains(err.Error(), FailureFakeIP) {
+		if err := allUnhealthyError(orderedUpstreams(recovered)); err == nil || !strings.Contains(err.Error(), FailureFakeIP) {
 			t.Fatalf("%s: error after the refused check = %v, want the %s reason", mode, err, FailureFakeIP)
 		}
 		for range 5 {
@@ -262,7 +260,7 @@ func TestAllUnhealthyErrorStaysPlainWithoutARecordedReason(t *testing.T) {
 		for range 20 {
 			u.Report(time.Millisecond, false)
 		}
-		if _, err := NewPrioritySelector(recovered).Select(context.Background()); err == nil || err.Error() != "all upstreams are unhealthy" {
+		if err := allUnhealthyError(orderedUpstreams(recovered)); err == nil || err.Error() != "all upstreams are unhealthy" {
 			t.Fatalf("%s: error after traffic recovered and failed again = %v, want the plain message", mode, err)
 		}
 	}
@@ -271,7 +269,7 @@ func TestAllUnhealthyErrorStaysPlainWithoutARecordedReason(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := NewPrioritySelector(empty).Select(context.Background()); err == nil || err.Error() != "all upstreams are unhealthy" {
+	if err := allUnhealthyError(orderedUpstreams(empty)); err == nil || err.Error() != "all upstreams are unhealthy" {
 		t.Fatalf("empty pool error = %v, want the plain message", err)
 	}
 }

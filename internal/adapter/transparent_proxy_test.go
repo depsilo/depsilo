@@ -52,7 +52,7 @@ func TestTransparentProxyOwnsFetchCacheStreamAndAccessLogPipeline(t *testing.T) 
 	if err != nil {
 		t.Fatalf("create upstream pool: %v", err)
 	}
-	proxy := NewTransparentProxy("fixture", manager, upstream.NewPrioritySelector(pool), database)
+	proxy := NewTransparentProxy("fixture", manager, upstream.NewPassiveRecoverySelector(pool), database)
 	engine := gin.New()
 	engine.GET("/fixture/*path", func(c *gin.Context) {
 		proxy.Serve(c, TransparentPlan{Path: "packages/example.bin", CacheKey: "fixture/packages/example.bin", TTL: time.Hour})
@@ -136,7 +136,7 @@ func TestTransparentProxyRecordsFailedUpstreamRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create upstream pool: %v", err)
 	}
-	proxy := NewTransparentProxy("fixture", manager, upstream.NewPrioritySelector(pool), database)
+	proxy := NewTransparentProxy("fixture", manager, upstream.NewPassiveRecoverySelector(pool), database)
 	engine := gin.New()
 	engine.GET("/fixture/*path", func(c *gin.Context) {
 		proxy.Serve(c, TransparentPlan{Path: "packages/missing.bin", CacheKey: "fixture/packages/missing.bin", TTL: time.Hour})

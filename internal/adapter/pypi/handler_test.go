@@ -156,7 +156,7 @@ func TestPackageIndexUsesTTLAndSupportsForcedConditionalRefresh(t *testing.T) {
 			t.Errorf("close cache manager: %v", err)
 		}
 	})
-	handler := New(manager, upstream.NewPrioritySelector(pool), config.CacheConfig{TTLIndex: time.Hour, TTLBlob: 72 * time.Hour}, database)
+	handler := New(manager, upstream.NewPassiveRecoverySelector(pool), config.CacheConfig{TTLIndex: time.Hour, TTLBlob: 72 * time.Hour}, database)
 	router := gin.New()
 	handler.Register(router.Group("/pypi"))
 
@@ -246,7 +246,7 @@ func TestOptionsUseConfiguredUpstreamSimplePath(t *testing.T) {
 			t.Errorf("close cache manager: %v", err)
 		}
 	})
-	handler, err := NewWithOptions(manager, upstream.NewPrioritySelector(pool), config.CacheConfig{
+	handler, err := NewWithOptions(manager, upstream.NewPassiveRecoverySelector(pool), config.CacheConfig{
 		TTLIndex: time.Hour,
 		TTLBlob:  72 * time.Hour,
 	}, database, Options{
@@ -329,7 +329,7 @@ func TestExtraIndexSigningKeyRotationDoesNotReuseSignedIndex(t *testing.T) {
 	newHandler := func(manager *cache.Manager, signingKey []byte) *Handler {
 		handler, handlerErr := NewWithOptions(
 			manager,
-			upstream.NewPrioritySelector(pool),
+			upstream.NewPassiveRecoverySelector(pool),
 			config.CacheConfig{TTLIndex: time.Millisecond, TTLBlob: time.Hour},
 			database,
 			Options{
@@ -794,7 +794,7 @@ func TestPackageIndexLinksTakeOnlyAnHTTPSchemeFromForwardedProto(t *testing.T) {
 			t.Errorf("close cache manager: %v", err)
 		}
 	})
-	handler := New(manager, upstream.NewPrioritySelector(pool), config.CacheConfig{TTLIndex: time.Hour, TTLBlob: 72 * time.Hour}, database)
+	handler := New(manager, upstream.NewPassiveRecoverySelector(pool), config.CacheConfig{TTLIndex: time.Hour, TTLBlob: 72 * time.Hour}, database)
 	router := gin.New()
 	handler.Register(router.Group("/pypi"))
 
