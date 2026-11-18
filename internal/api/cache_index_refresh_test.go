@@ -17,6 +17,7 @@ import (
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
+	"depsilo/internal/rules"
 	"depsilo/internal/upstream"
 )
 
@@ -208,7 +209,7 @@ func TestCacheIndexRefresherForcesFreshPyPIEntryThroughProxy(t *testing.T) {
 			t.Errorf("close cache manager: %v", err)
 		}
 	})
-	handler := pypi.New(manager, upstream.NewPrioritySelector(pool), config.CacheConfig{
+	handler := pypi.New(manager, upstream.NewPassiveRecoverySelector(pool), config.CacheConfig{
 		TTLIndex: 5 * time.Minute,
 		TTLBlob:  72 * time.Hour,
 	}, database)
@@ -274,6 +275,76 @@ func TestCacheIndexRefresherForcesFreshPyPIEntryThroughProxy(t *testing.T) {
 	}
 }
 
+// The refresher enters the same Gin engine as client requests, so package
+// rules middleware applies to it: a package-level deny stops the refresh
+// before any upstream exchange.
+func TestCacheIndexRefresherHonorsPackageDenyRules(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var upstreamCalls atomic.Int64
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamCalls.Add(1)
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = io.WriteString(w, `<html></html>`)
+	}))
+	defer upstreamServer.Close()
+
+	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "refresh-deny.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(database); err != nil {
+		t.Fatal(err)
+	}
+	ruleStore := rules.NewStore(database)
+	if err := ruleStore.Create(&db.PackageRule{
+		Ecosystem: "pypi", PackageName: "pillow", Version: "*", Action: "deny", Reason: "denied for the test",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	storage, err := cache.NewLocalStorage(filepath.Join(t.TempDir(), "cache"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := pypi.IndexCacheKey("pypi", "pillow")
+	entry := db.CacheEntry{
+		Key: key, AdapterType: "pypi", CacheKind: db.CacheKindMetadata,
+		PackageName: "pillow", StoragePath: key, ContentType: "text/html",
+		ExpiresAt: time.Now().Add(time.Hour), LastAccessed: time.Now(),
+	}
+	if err := database.Create(&entry).Error; err != nil {
+		t.Fatal(err)
+	}
+	pool, err := upstream.NewPool([]config.UpstreamConfig{{
+		Name: "mock", URL: upstreamServer.URL, Priority: 1, ProbeMode: "passive",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := cache.NewManager(storage, database, cache.NewEventBus(), 72*time.Hour)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := manager.Close(ctx); err != nil {
+			t.Errorf("close cache manager: %v", err)
+		}
+	})
+	handler := pypi.New(manager, upstream.NewPassiveRecoverySelector(pool), config.CacheConfig{
+		TTLIndex: 5 * time.Minute,
+		TTLBlob:  72 * time.Hour,
+	}, database)
+	router := gin.New()
+	router.Use(rules.Middleware(rules.NewEngine(ruleStore, nil)))
+	handler.Register(router.Group("/pypi"))
+
+	refresher := NewCacheIndexRefresher(router, nil, config.DockerConfig{})
+	if _, err := refresher(context.Background(), entry); err == nil || !strings.Contains(err.Error(), "HTTP 403") {
+		t.Fatalf("refresh of a denied package error = %v, want HTTP 403", err)
+	}
+	if upstreamCalls.Load() != 0 {
+		t.Fatalf("upstream calls = %d, want 0 for a denied package", upstreamCalls.Load())
+	}
+}
+
 func TestCacheIndexRefresherReturnsProxyFailureWithoutTouchingExpiry(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -320,7 +391,7 @@ func TestCacheIndexRefresherReturnsProxyFailureWithoutTouchingExpiry(t *testing.
 			t.Errorf("close cache manager: %v", err)
 		}
 	})
-	handler := pypi.New(manager, upstream.NewPrioritySelector(pool), config.CacheConfig{
+	handler := pypi.New(manager, upstream.NewPassiveRecoverySelector(pool), config.CacheConfig{
 		TTLIndex: 5 * time.Minute,
 		TTLBlob:  72 * time.Hour,
 	}, database)

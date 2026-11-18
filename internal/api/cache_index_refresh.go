@@ -58,6 +58,13 @@ func (w *indexRefreshResponseWriter) Status() int {
 
 // NewCacheIndexRefresher returns the shared proxy-aware refresh seam used by
 // both manual index refreshes and the proactive update producer.
+//
+// A refresh enters router, the same Gin engine as client requests, so package
+// rules middleware decides it exactly as it decides a client's metadata
+// request. It deliberately bypasses the server's RequestScope: a background
+// metadata refresh is not client traffic, so it writes no access log, audit
+// entry, or request metrics, and it never fetches the versioned artifacts that
+// quarantine and the npm tarball rule gate evaluate.
 func NewCacheIndexRefresher(
 	router *gin.Engine,
 	extraIndexes []config.ExtraIndexConfig,
