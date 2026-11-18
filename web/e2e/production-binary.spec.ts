@@ -20,11 +20,21 @@ test('Go binary serves and executes its embedded production frontend', async ({ 
   expect(browserRoute?.status()).toBe(200)
   expect(await browserRoute?.text()).not.toContain('/@vite/client')
 
-  const missingMachineRoute = await request.get('/api/v1/production-smoke-missing', {
+  // Machine routes never fall through to the SPA, even for a browser Accept
+  // header: an unknown API route answers with the JSON error envelope that
+  // points at discover, and other machine prefixes with a plain-text 404.
+  const missingApiRoute = await request.get('/api/v1/production-smoke-missing', {
     headers: { Accept: 'text/html' },
   })
-  expect(missingMachineRoute.status()).toBe(404)
-  expect(missingMachineRoute.headers()['content-type']).toContain('text/plain')
+  expect(missingApiRoute.status()).toBe(404)
+  expect(missingApiRoute.headers()['content-type']).toContain('application/json')
+  expect((await missingApiRoute.json()).code).toBe('NOT_FOUND')
+
+  const missingPackageRoute = await request.get('/pypi/production-smoke-missing/file.whl', {
+    headers: { Accept: 'text/html' },
+  })
+  expect(missingPackageRoute.status()).toBe(404)
+  expect(missingPackageRoute.headers()['content-type']).toContain('text/plain')
 })
 
 test('free project creation works through the embedded UI and enforces capacity on the server', async ({ page, request }, testInfo) => {

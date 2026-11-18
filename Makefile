@@ -451,7 +451,7 @@ verify-scripts:                 # 内部：安装、开发与发布脚本回归�
 
 check: lint test verify-web verify-build test-ui  ## 日常提交前快速检查
 
-verify: lint verify-modules test-full test-race test-integration verify-web verify-build verify-ui verify-scripts  ## 完整离线验证
+verify: lint verify-modules test-full test-race test-integration verify-web verify-build verify-ui test-ui-production verify-scripts  ## 完整离线验证
 
 # These aggregate targets share web/dist between Vite and Go's embed package.
 # Keep their prerequisites serialized even when a caller passes `make -j`.

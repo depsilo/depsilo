@@ -17,7 +17,7 @@ the changed interface.
 | Production UI smoke | `make test-ui-production` | No | One browser flow against the built Go binary and its embedded frontend |
 | Tagged integration | `make test-integration` | No | Local Depsilo process plus mock Upstream over HTTP |
 | Normal gate | `make check` | No | Lint, fast Go, frontend unit/build/bundle, binary, UI smoke |
-| Complete gate | `make verify` | No | Full Go plus focused race coverage, integration, full Playwright, scripts, build and module checks |
+| Complete gate | `make verify` | No | Full Go plus focused race coverage, integration, full Playwright, the production-binary UI smoke, scripts, build and module checks |
 | Dependency security | `make security` | Yes | Go vulnerability data and the npm audit gate over all frontend dependencies (see **Frontend advisory exceptions**) |
 | One real client | `make test-docker-<ecosystem>` | Yes | Native package manager against live Upstreams |
 | All real clients | `make test-e2e` | Yes | Scheduled/opt-in package-client matrix |
