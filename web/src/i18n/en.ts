@@ -512,7 +512,7 @@ const en = {
       proxyUnavailable: "A required database or storage check failed. Dependency downloads may be affected.",
       viewServiceStatus: "View service status",
       upstreamAttention: "Related upstreams need attention: {{names}}. Origin requests may be affected; other sources or cached artifacts may still work.",
-      upstreamFakeIP: "The DNS that Depsilo uses resolves the hosts of {{names}} into fake-IP ranges such as 198.18.0.0/15 and 2001:2::/48. Proxy software in fake-IP mode answers this way, and Depsilo does not connect to such addresses by default.",
+      upstreamFakeIP: "The DNS that Depsilo uses resolves the hosts of {{names}} into fake-IP ranges such as 198.18.0.0/15 and 2001:2::/48, as proxy software in fake-IP mode does, and Depsilo could not connect to those addresses: nothing carried the connections, [egress] allow_fake_ip is off, or the answers mixed fake-IP and other addresses or held unique-local IPv6 fake-IP addresses, which Depsilo always refuses.",
       viewUpstreams: "View upstreams",
       healthUnknown: "Service check results are currently unavailable.",
       instanceAddress: "Current instance",
@@ -1416,10 +1416,10 @@ const en = {
       sharedFailureTitle: '{{count}} upstreams cannot connect for the same reason',
       failure: {
         egress_fake_ip: {
-          title: 'DNS resolved this upstream to {{address}}, in the fake-IP range {{range}}. Proxy software in fake-IP mode answers with such addresses, and Depsilo does not connect to them by default.',
+          title: 'DNS resolved this upstream to {{address}}, in the fake-IP range {{range}} that proxy software in fake-IP mode answers from, and Depsilo could not connect to it: nothing carried the connection, [egress] allow_fake_ip is off, or the answer mixed fake-IP and other addresses or held a unique-local IPv6 fake-IP address, which Depsilo always refuses.',
           short: 'DNS returned the fake-IP address {{address}}; not connected.',
-          shared: 'DNS resolves the hosts of these upstreams into fake-IP ranges such as 198.18.0.0/15 and 2001:2::/48. Proxy software in fake-IP mode answers this way, and Depsilo does not connect to such addresses by default.',
-          action: 'Set upstream_proxy under [egress] in config.toml (or the environment variable DEPSILO_EGRESS_UPSTREAM_PROXY) to the proxy software\'s HTTP port (for example http://127.0.0.1:7890) and restart, or give Depsilo a DNS server that returns real addresses. Inside a container, 127.0.0.1 is the container itself: remove the container and run it again with DEPSILO_EGRESS_UPSTREAM_PROXY=http://host.docker.internal:7890 (docker restart keeps the old environment), adding --add-host=host.docker.internal:host-gateway on Docker Engine for Linux. Details: "Upstream network egress" in the deployment guide.',
+          shared: 'DNS resolves the hosts of these upstreams into fake-IP ranges such as 198.18.0.0/15 and 2001:2::/48, as proxy software in fake-IP mode does, and Depsilo could not connect to those addresses: nothing carried the connections, [egress] allow_fake_ip is off, or the answers mixed fake-IP and other addresses or held unique-local IPv6 fake-IP addresses, which Depsilo always refuses.',
+          action: 'Turn on the proxy software\'s TUN mode, which carries connections to fake-IP addresses, or set upstream_proxy under [egress] in config.toml (or the environment variable DEPSILO_EGRESS_UPSTREAM_PROXY) to the proxy software\'s HTTP port (for example http://127.0.0.1:7890) and restart. Inside a container, 127.0.0.1 is the container itself: remove the container and run it again with DEPSILO_EGRESS_UPSTREAM_PROXY=http://host.docker.internal:7890 (docker restart keeps the old environment), adding --add-host=host.docker.internal:host-gateway on Docker Engine for Linux. If [egress] allow_fake_ip or DEPSILO_EGRESS_ALLOW_FAKE_IP is false, Depsilo does not connect to fake-IP addresses itself: check whether it was turned off on purpose, for a network that really uses these ranges; if not, set it to true, or use the proxy port. If DNS also returns IPv6 fake-IP addresses from a unique-local range such as fdfe:dcba:9876::/48, set the proxy software\'s IPv6 fake-IP range to 2001:2::/48. Details: "Upstream network egress" in the deployment guide.',
         },
         egress_shared_address: {
           title: 'This upstream resolved to {{address}}, in the shared address space {{range}} used by carrier-grade NAT and overlay networks such as Tailscale. Depsilo does not connect to it by default.',

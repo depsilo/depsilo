@@ -58,10 +58,13 @@ func (d *relayDialer) DialContext(ctx context.Context, network, address string) 
 	if err != nil {
 		return nil, fmt.Errorf("resolve relay target: %w", err)
 	}
-	// Relay targets must be public; declared private ranges stay out of reach.
+	// Relay targets must be public; declared private ranges stay out of reach,
+	// and so do fake-IP answers, which resolvedNetworkScope calls unsafe. The
+	// relay dials the addresses it checked here itself: a guardedDialer with
+	// the zero egress.Policy would dial fake-IP answers, because the zero
+	// policy has allow_fake_ip on.
 	if scope := resolvedNetworkScope(egress.Policy{}, addresses); scope != networkPublic {
 		return nil, errors.New("relay target is not a public address")
 	}
-	inner := &guardedDialer{resolver: d.resolver, dialContext: d.dialContext}
-	return inner.dialResolved(ctx, network, port, addresses)
+	return raceDial(ctx, d.dialContext, network, port, interleaveIPFamilies(addresses))
 }

@@ -49,9 +49,21 @@ func unresolvedTarget(text string, lookupErr error) error {
 	return &refusal{text: text, cause: lookupErr}
 }
 
-type ipResolver interface {
+// hostNetwork is the view of this machine's network that the registry
+// clients check every target against: the DNS answer for a host, and the
+// addresses of this machine's network interfaces, which a fake-IP answer may
+// not hold (see classifyAnswer). systemNetwork is the machine's own; tests
+// stand in for it.
+type hostNetwork interface {
 	LookupIPAddr(context.Context, string) ([]net.IPAddr, error)
+	InterfaceAddrs() ([]net.Addr, error)
 }
+
+// systemNetwork is this machine's network: the system resolver and the
+// addresses that net.InterfaceAddrs lists, read at every check.
+type systemNetwork struct{ *net.Resolver }
+
+func (systemNetwork) InterfaceAddrs() ([]net.Addr, error) { return net.InterfaceAddrs() }
 
 // Egress routes of a registry, named in its startup log line.
 const (
@@ -60,15 +72,23 @@ const (
 	egressRouteDirect       = "direct"
 )
 
-// Remedies that a direct fake-IP refusal names. A registry without any proxy
-// needs one; a registry that [egress] keeps direct already has a default
-// proxy it may not use, so it needs real DNS answers instead.
+// Remedies that the fake-IP refusals of a direct client name. With [egress]
+// allow_fake_ip off, a refused answer needs a proxy, or, for a registry that
+// [egress] keeps off its default proxy, real DNS answers. When the client
+// dialed the placeholders and nothing carried them, the proxy software's TUN
+// mode is the first remedy.
 const (
 	fakeIPRemedySetProxy = "set [egress] upstream_proxy or DEPSILO_EGRESS_UPSTREAM_PROXY to the proxy software's HTTP port and restart, " +
 		"see docs/deployment.md#upstream-network-egress"
 	fakeIPRemedyKeptDirect = "[egress] no_proxy or a loopback registry URL keeps this registry off the proxy, " +
 		"so give its host names real DNS answers, for example with fake-ip-filter in the proxy software, " +
 		"or remove the registry from no_proxy, see docs/deployment.md#upstream-network-egress"
+	fakeIPRemedyTUN = "turn on the proxy software's TUN mode, " +
+		"or set [egress] upstream_proxy or DEPSILO_EGRESS_UPSTREAM_PROXY to its HTTP port and restart, " +
+		"see docs/deployment.md#upstream-network-egress"
+	fakeIPRemedyTUNKeptDirect = "turn on the proxy software's TUN mode, " +
+		"or, as [egress] no_proxy or a loopback URL keeps this registry off the proxy, give its host names real DNS answers, " +
+		"for example with fake-ip-filter, or remove it from no_proxy, see docs/deployment.md#upstream-network-egress"
 )
 
 // registryEgress is a registry's route, chosen once per registry from its
@@ -77,7 +97,7 @@ const (
 type registryEgress struct {
 	proxy  string // empty for a direct registry
 	route  string // named in the startup log line
-	remedy string // advice of a direct client's fake-IP refusal
+	fakeIP fakeIPRule
 	// privateDirect routes each request by its own host's answer instead:
 	// private and loopback answers are dialed directly, and only public and
 	// fake-IP answers go through proxy. Only the [egress] default proxy sets
@@ -85,11 +105,45 @@ type registryEgress struct {
 	privateDirect bool
 }
 
+// fakeIPRule is how a registry's direct client treats a host name whose DNS
+// answer is a fake-IP answer (see egress.FakeIPAnswer). A proxied client
+// leaves the name to its proxy instead.
+type fakeIPRule struct {
+	// dial is [egress] allow_fake_ip: the client dials the placeholders, as
+	// other programs on the machine do, for the TUN of proxy software to
+	// carry. Otherwise it refuses the answer before anything is dialed.
+	dial bool
+	// timeout bounds each connection attempt to a placeholder; zero, as
+	// registryEgressFor leaves it, means egress.FakeIPConnectTimeout.
+	timeout time.Duration
+	// keptDirect marks a registry that no_proxy or a loopback URL keeps off a
+	// configured upstream_proxy, which a remedy cannot suggest; its remedies
+	// ask for real DNS answers instead.
+	keptDirect bool
+}
+
+// refusedRemedy is the advice of an answer refused with allow_fake_ip off.
+func (rule fakeIPRule) refusedRemedy() string {
+	if rule.keptDirect {
+		return fakeIPRemedyKeptDirect
+	}
+	return fakeIPRemedySetProxy
+}
+
+// notCarriedRemedy is the advice of placeholders that nothing carried.
+func (rule fakeIPRule) notCarriedRemedy() string {
+	if rule.keptDirect {
+		return fakeIPRemedyTUNKeptDirect
+	}
+	return fakeIPRemedyTUN
+}
+
 // registryEgressFor chooses a registry's route. The registry's own proxy
 // wins. Otherwise the [egress] default applies exactly as it does to a
 // package Upstream, so loopback and no_proxy hosts stay direct, and a
 // registry that the default proxy carries still dials the hosts whose
-// answers are private or loopback directly.
+// answers are private or loopback directly. A direct registry follows
+// [egress] allow_fake_ip.
 func registryEgressFor(registry config.RegistryConfig, policy egress.Policy) registryEgress {
 	if registry.Proxy != "" {
 		return registryEgress{proxy: registry.Proxy, route: egressRouteOwnProxy}
@@ -97,10 +151,10 @@ func registryEgressFor(registry config.RegistryConfig, policy egress.Policy) reg
 	if proxy := policy.UpstreamProxyFor(registry.URL); proxy != "" {
 		return registryEgress{proxy: proxy, route: egressRouteDefaultProxy, privateDirect: true}
 	}
-	if policy.HasUpstreamProxy() {
-		return registryEgress{route: egressRouteDirect, remedy: fakeIPRemedyKeptDirect}
-	}
-	return registryEgress{route: egressRouteDirect, remedy: fakeIPRemedySetProxy}
+	return registryEgress{route: egressRouteDirect, fakeIP: fakeIPRule{
+		dial:       policy.AllowsFakeIP(),
+		keptDirect: policy.HasUpstreamProxy(),
+	}}
 }
 
 // logRegistryEgress names a registry's route in the manner of the Upstream
@@ -114,15 +168,17 @@ func logRegistryEgress(name, route, proxy string) {
 	zap.L().Info("docker registry egress", fields...)
 }
 
-// newRegistryClient builds the client of a registry that no [egress] policy
-// keeps direct: with proxy, the proxy carries every request, as a registry's
-// own proxy does; without one, its fake-IP refusal suggests setting one.
+// newRegistryClient builds the client of a registry under the default
+// [egress] policy, which has no default proxy: with proxy, the proxy carries
+// every request, as a registry's own proxy does; without one, the client
+// dials fake-IP answers itself, and its fake-IP refusals suggest a proxy.
 func newRegistryClient(
 	origin, proxy string,
-	resolver ipResolver,
+	resolver hostNetwork,
 	dialContext func(context.Context, string, string) (net.Conn, error),
 ) (*http.Client, error) {
-	return buildRegistryClient("", origin, registryEgress{proxy: proxy, remedy: fakeIPRemedySetProxy}, resolver, dialContext)
+	route := registryEgressFor(config.RegistryConfig{URL: origin, Proxy: proxy}, egress.Policy{})
+	return buildRegistryClient("", origin, route, resolver, dialContext)
 }
 
 // buildRegistryClient builds the client of the registry name on route. A
@@ -133,7 +189,7 @@ func newRegistryClient(
 func buildRegistryClient(
 	name, origin string,
 	route registryEgress,
-	resolver ipResolver,
+	resolver hostNetwork,
 	dialContext func(context.Context, string, string) (net.Conn, error),
 ) (*http.Client, error) {
 	originURL, err := url.Parse(origin)
@@ -147,10 +203,10 @@ func buildRegistryClient(
 	}
 	if route.proxy == "" {
 		guard := &guardedDialer{
-			pin:          &originPin{origin: originURL, resolver: resolver},
-			resolver:     resolver,
-			dialContext:  dialContext,
-			fakeIPRemedy: route.remedy,
+			pin:         &originPin{origin: originURL, resolver: resolver, placeholders: route.fakeIP.dial, pinsOnConnect: true},
+			resolver:    resolver,
+			dialContext: dialContext,
+			fakeIP:      route.fakeIP,
 		}
 		transport := newRegistryTransport()
 		transport.DialContext = guard.DialContext
@@ -168,7 +224,7 @@ func buildRegistryClient(
 	proxied.OnProxyConnectResponse = refuseProxyConnect
 	proxied.DialContext = dialContext
 	preflight := &scopePreflightRoundTripper{
-		pin:       &originPin{origin: originURL, resolver: resolver, proxied: true},
+		pin:       &originPin{origin: originURL, resolver: resolver, placeholders: true},
 		resolver:  resolver,
 		transport: proxied,
 	}
@@ -202,14 +258,24 @@ func newRegistryTransport() *http.Transport {
 // registry's own host pins it for the client's lifetime: every later answer
 // for that host must have the same scope, and any other host is reached only
 // where scopeAllows lets the pinned scope reach it. On the default-proxy
-// route, the preflight and the direct leg share one pin.
+// route, the preflight and the direct leg share one pin. On the direct route
+// (pinsOnConnect), a fake-IP answer for the registry's own host pins its
+// scope only once a connection to its placeholders succeeded (see
+// guardedDialer), so real DNS answers given after nothing carried them take
+// effect without a restart.
 type originPin struct {
 	origin   *url.URL
-	resolver ipResolver
-	// proxied classifies the registry's own answer as proxiedScope does,
-	// which counts a fake-IP answer as public, because a proxy may carry the
-	// registry; otherwise as resolvedScope does.
-	proxied bool
+	resolver hostNetwork
+	// placeholders counts a fake-IP answer for the registry's own host as
+	// public (see classifyAnswer), as the client's targets count: on a
+	// proxied route, because the proxy carries it, and on the direct route
+	// with [egress] allow_fake_ip, because the TUN of proxy software does.
+	placeholders bool
+	// pinsOnConnect is set on the direct route, where only a connection that
+	// the TUN carried pins a fake-IP answer for the registry's own host (see
+	// guardedDialer): originScope then counts such an answer as public for
+	// the check at hand without pinning it.
+	pinsOnConnect bool
 
 	mu    sync.Mutex
 	scope networkScope
@@ -228,8 +294,17 @@ func (pin *originPin) pinScope(scope networkScope) bool {
 	return pin.scope == scope
 }
 
+// admits reports whether scope is the registry's pinned scope, or whether
+// nothing is pinned yet, without pinning it.
+func (pin *originPin) admits(scope networkScope) bool {
+	pin.mu.Lock()
+	defer pin.mu.Unlock()
+	return !pin.set || pin.scope == scope
+}
+
 // originScope returns the pinned scope. While nothing is pinned, it resolves
-// the registry's host and pins the scope of that answer.
+// the registry's host and pins the scope of that answer, except a fake-IP
+// answer under pinsOnConnect, which counts as public without being pinned.
 func (pin *originPin) originScope(ctx context.Context) (networkScope, error) {
 	pin.mu.Lock()
 	if pin.set {
@@ -244,15 +319,15 @@ func (pin *originPin) originScope(ctx context.Context) (networkScope, error) {
 	if err != nil || len(addresses) == 0 {
 		return networkUnsafe, errUnresolvedRegistry
 	}
-	scope := resolvedScope(addresses)
-	if pin.proxied {
-		scope = proxiedScope(host, addresses)
-	}
+	scope, fakeIP, localCause := classifyAnswer(pin.resolver, host, addresses, pin.placeholders)
 	if scope == networkUnsafe {
 		if refusal := uniqueLocalFakeIPError(host, addresses); refusal != nil {
 			return networkUnsafe, refusal
 		}
-		return networkUnsafe, errUnsafeRegistryScope
+		return networkUnsafe, withCause(errUnsafeRegistryScope, localCause)
+	}
+	if fakeIP && pin.pinsOnConnect {
+		return scope, nil
 	}
 	if !pin.pinScope(scope) {
 		return networkUnsafe, errUnsafeRegistryScope
@@ -293,7 +368,7 @@ func (pin *originPin) allowsPrivate() bool {
 // checks the answer against the registry's origin pin.
 type scopePreflightRoundTripper struct {
 	pin       *originPin
-	resolver  ipResolver
+	resolver  hostNetwork
 	transport http.RoundTripper
 }
 
@@ -310,15 +385,16 @@ func (transport *scopePreflightRoundTripper) validateTarget(request *http.Reques
 }
 
 // targetCheck is what the preflight learned about a request's host: the
-// network scope of its local answer, and whether that answer consisted of
-// fake-IP placeholders only, which proxiedScope counts as public.
+// network scope of its local answer, and whether that answer was a fake-IP
+// answer, which counts as public (see classifyAnswer).
 type targetCheck struct {
 	scope  networkScope
 	fakeIP bool
 }
 
 // checkTarget resolves the host of request and returns its network scope. It
-// refuses a failed lookup, an unsafe or mixed answer, a change of the
+// refuses a failed lookup, an unsafe or mixed answer, a fake-IP answer that
+// holds an address of this machine's network interfaces, a change of the
 // registry's own scope, and a target outside the scope that the registry's
 // pinned scope may reach.
 func (transport *scopePreflightRoundTripper) checkTarget(request *http.Request) (targetCheck, error) {
@@ -331,12 +407,14 @@ func (transport *scopePreflightRoundTripper) checkTarget(request *http.Request) 
 	if err != nil || len(addresses) == 0 {
 		return targetCheck{}, unresolvedTarget("resolve Docker proxy target", err)
 	}
-	check := targetCheck{scope: proxiedScope(host, addresses), fakeIP: dnsHostName(host) && allFakeIP(addresses)}
+	var check targetCheck
+	var localCause error
+	check.scope, check.fakeIP, localCause = classifyAnswer(transport.resolver, host, addresses, true)
 	if check.scope == networkUnsafe {
 		if refusal := uniqueLocalFakeIPError(host, addresses); refusal != nil {
 			return targetCheck{}, refusal
 		}
-		return targetCheck{}, errUnsafeProxyTarget
+		return targetCheck{}, withCause(errUnsafeProxyTarget, localCause)
 	}
 
 	if sameHTTPOrigin(transport.pin.origin, request.URL) {
@@ -442,7 +520,7 @@ func proxyGatewayStatus(status int) bool {
 // dialed.
 type privateLegDialer struct {
 	pin         *originPin
-	resolver    ipResolver
+	resolver    hostNetwork
 	dialContext func(context.Context, string, string) (net.Conn, error)
 	dials       *directDialLog
 }
@@ -522,77 +600,55 @@ func originRefusal(originErr, fallback error) error {
 	return fallback
 }
 
-// proxiedScope classifies a host that a proxy will carry. It keeps every rule
-// of resolvedScope with one exception: a host name whose every DNS answer is a
-// fake-IP placeholder (see allFakeIP), from 198.18.0.0/15, 2001:2::/48 or
-// both and in any order, counts as public. Proxy software in TUN/fake-IP mode
-// answers that way for public hosts; the placeholder says nothing about the
-// real address, and the proxy resolves the name itself. An address literal is
-// not a DNS answer, and an answer that mixes placeholders with any other
-// address stays unsafe.
-func proxiedScope(host string, addresses []net.IPAddr) networkScope {
-	if dnsHostName(host) && allFakeIP(addresses) {
-		return networkPublic
+// classifyAnswer returns the network scope of host's DNS answer. It keeps
+// every rule of resolvedScope with one exception when placeholders is set: a
+// fake-IP answer (see egress.FakeIPAnswer), from 198.18.0.0/15, 2001:2::/48
+// or both and in any order, counts as public, and fakeIP reports it. Proxy
+// software in TUN/fake-IP mode answers that way for host names; the
+// placeholder says nothing about the real address, and the proxy that
+// carries the request, or on the direct route the software's TUN, maps it
+// back to the name. An address literal is no DNS answer, and an answer that
+// mixes placeholders with any other address stays unsafe. So does a fake-IP
+// answer that holds an address of this machine's network interfaces (see
+// egress.LocalAddress), such as the TUN address of the proxy software;
+// localCause then says why, for the server log only.
+func classifyAnswer(network hostNetwork, host string, answer []net.IPAddr, placeholders bool) (scope networkScope, fakeIP bool, localCause error) {
+	scope = resolvedScope(answer)
+	if !placeholders || !egress.FakeIPAnswer(host, answer) {
+		return scope, false, nil
 	}
-	return resolvedScope(addresses)
+	local, err := egress.LocalAddress(answer, network.InterfaceAddrs)
+	switch {
+	case err != nil:
+		return networkUnsafe, false, fmt.Errorf("%s resolved to fake-IP addresses that Depsilo could not check: %w", host, err)
+	case local.IsValid():
+		return networkUnsafe, false, fmt.Errorf("%s resolved to %s, an address of this machine's network interfaces", host, local)
+	}
+	return networkPublic, true, nil
 }
 
-// dnsHostName reports whether only DNS can resolve host: it is neither
-// localhost nor an address in a form that URL parsers and resolvers read as
-// one. IPv6 literals contain a colon, and a host whose last label is a number,
-// such as 198.18.0.5, 3323068421, 0xc6120005 or 198.18.5, is an IPv4 address
-// to them.
-func dnsHostName(host string) bool {
-	host = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
-	if host == "" || host == "localhost" || strings.HasSuffix(host, ".localhost") ||
-		strings.ContainsAny(host, ":%[]") {
-		return false
+// withCause is sentinel, a refusal whose fixed text a 502 body may state,
+// with cause added for the server log, or sentinel itself without one.
+func withCause(sentinel *refusal, cause error) error {
+	if cause == nil {
+		return sentinel
 	}
-	labels := strings.Split(host, ".")
-	last := labels[len(labels)-1]
-	if hex, ok := strings.CutPrefix(last, "0x"); ok {
-		return strings.Trim(hex, "0123456789abcdef") != ""
-	}
-	return strings.Trim(last, "0123456789") != ""
+	return &refusal{text: sentinel.text, cause: cause}
 }
 
-// allFakeIP reports whether a DNS answer consists of fake-IP placeholders
-// only: addresses in a benchmarking range (egress.FakeIPRange), IPv4, IPv6 or
-// both. Unique-local fake-IP addresses are no placeholders, since they cannot
-// be told from a private network; see uniqueLocalFakeIPError.
-func allFakeIP(addresses []net.IPAddr) bool {
-	for _, address := range addresses {
-		ip, ok := netip.AddrFromSlice(address.IP)
-		if !ok {
-			return false
-		}
-		if _, placeholder := egress.FakeIPRange(ip); !placeholder {
-			return false
-		}
-	}
-	return len(addresses) > 0
+// firstPlaceholder is the placeholder of a fake-IP answer that a refusal
+// names: the first one that a direct client dials, an IPv4 one when the
+// answer has one.
+func firstPlaceholder(answer []net.IPAddr) netip.Addr {
+	ip, _ := netip.AddrFromSlice(egress.IPv4First(answer)[0].IP)
+	return ip.Unmap()
 }
 
 // fakeIPDialError refuses a direct dial to a host name answered only with
-// fake-IP placeholders and names the remedy; see fakeIPRefusal. It names an
-// IPv4 placeholder when the answer has one, and otherwise the first IPv6
-// placeholder.
+// fake-IP placeholders while [egress] allow_fake_ip is off, and names the
+// remedy; see fakeIPRefusal.
 func fakeIPDialError(host string, addresses []net.IPAddr, remedy string) error {
-	if remedy == "" {
-		remedy = fakeIPRemedySetProxy
-	}
-	var named netip.Addr
-	for _, address := range addresses {
-		ip, _ := netip.AddrFromSlice(address.IP)
-		if ip = ip.Unmap(); ip.Is4() {
-			named = ip
-			break
-		}
-		if !named.IsValid() {
-			named = ip
-		}
-	}
-	return &fakeIPRefusal{host: host, address: named, remedy: remedy}
+	return &fakeIPRefusal{host: host, address: firstPlaceholder(addresses), remedy: remedy}
 }
 
 // uniqueLocalRange is RFC 4193's unique-local IPv6 range.
@@ -611,7 +667,7 @@ var uniqueLocalRange = netip.MustParsePrefix("fc00::/7")
 // does not rely on that: a unique-local answer outside the documented ranges
 // and without placeholders is a private network and gets nil.
 func uniqueLocalFakeIPError(host string, addresses []net.IPAddr) error {
-	if !dnsHostName(host) {
+	if !egress.DNSHostName(host) {
 		return nil
 	}
 	refusal := &uniqueLocalFakeIPRefusal{host: host}
@@ -660,13 +716,21 @@ func secureRegistryRedirectCheck(origin string) func(*http.Request, []*http.Requ
 }
 
 // guardedDialer dials for a registry on the direct route. It resolves each
-// host when it dials, refuses unsafe answers, fake-IP answers with
-// fakeIPRemedy, and checks the answer against the registry's origin pin.
+// host when it dials, refuses unsafe answers, and checks the answer against
+// the registry's origin pin. A fake-IP answer follows fakeIP: with [egress]
+// allow_fake_ip, it counts as public and is dialed at its placeholders for
+// the TUN of proxy software to carry; otherwise it is refused with the
+// rule's remedy. A fake-IP answer for the registry's own host is checked
+// against the pin before the dial and pins public only after a connection
+// succeeded, as a package Upstream's origin pins: when nothing carried the
+// placeholders, the registry keeps no scope, and a real DNS answer that the
+// refusal's remedy asks for, such as a private one for a registry on the
+// local network, is then accepted without a restart.
 type guardedDialer struct {
-	pin          *originPin
-	resolver     ipResolver
-	dialContext  func(context.Context, string, string) (net.Conn, error)
-	fakeIPRemedy string
+	pin         *originPin
+	resolver    hostNetwork
+	dialContext func(context.Context, string, string) (net.Conn, error)
+	fakeIP      fakeIPRule
 }
 
 func (dialer *guardedDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
@@ -678,24 +742,69 @@ func (dialer *guardedDialer) DialContext(ctx context.Context, network, address s
 	if err != nil || len(addresses) == 0 {
 		return nil, unresolvedTarget("resolve Docker dial target", err)
 	}
-	targetScope := resolvedScope(addresses)
+	targetScope, placeholders, localCause := classifyAnswer(dialer.resolver, host, addresses, dialer.fakeIP.dial)
 	if targetScope == networkUnsafe {
-		// Only the answer that proxiedScope accepts is worth the proxy
-		// remedy. Mixed answers and address literals stay refused through
-		// a proxy too, so they keep the plain refusal, except unique-local
-		// fake-IP, whose refusal names the proxy software's setting.
-		if dnsHostName(host) && allFakeIP(addresses) {
-			return nil, fakeIPDialError(host, addresses, dialer.fakeIPRemedy)
+		switch {
+		case localCause != nil:
+			return nil, withCause(errUnsafeDialTarget, localCause)
+		case egress.FakeIPAnswer(host, addresses):
+			// allow_fake_ip is off. Only the answer that a proxy, or with
+			// the setting on a TUN, carries is worth these remedies. Mixed
+			// answers and address literals stay refused on every route, so
+			// they keep the plain refusal, except unique-local fake-IP,
+			// whose refusal names the proxy software's setting.
+			return nil, fakeIPDialError(host, addresses, dialer.fakeIP.refusedRemedy())
 		}
 		if refusal := uniqueLocalFakeIPError(host, addresses); refusal != nil {
 			return nil, refusal
 		}
 		return nil, errUnsafeDialTarget
 	}
+	if placeholders && sameDialAddress(address, dialer.pin.origin) {
+		if !dialer.pin.admits(networkPublic) {
+			return nil, errRegistryChangedScope
+		}
+		connection, err := dialer.dialPlaceholders(ctx, network, host, addresses, port)
+		if err != nil {
+			return nil, err
+		}
+		if !dialer.pin.pinScope(networkPublic) {
+			_ = connection.Close()
+			return nil, errRegistryChangedScope
+		}
+		return connection, nil
+	}
 	if err := dialer.pin.admitDial(ctx, address, targetScope); err != nil {
 		return nil, err
 	}
+	if placeholders {
+		return dialer.dialPlaceholders(ctx, network, host, addresses, port)
+	}
 	return dialAddresses(ctx, dialer.dialContext, network, addresses, port)
+}
+
+// dialPlaceholders dials the placeholders of host's fake-IP answer through
+// upstream.DialFakeIP, as a package Upstream's guarded dialer does, each
+// attempt for at most the rule's timeout. The TUN of proxy software
+// completes such a connection locally and at once, so when no attempt
+// connects while ctx is live, nothing carries placeholders on this machine,
+// for example because only the system DNS points at the proxy software. The
+// refusal then names the host, the placeholder dialed first and the remedy;
+// the dial errors reach the server log only.
+func (dialer *guardedDialer) dialPlaceholders(ctx context.Context, network, host string, answer []net.IPAddr, port string) (net.Conn, error) {
+	connection, err := upstream.DialFakeIP(ctx, dialer.dialContext, network, port, answer, dialer.fakeIP.timeout)
+	switch {
+	case err == nil:
+		return connection, nil
+	case ctx.Err() != nil:
+		return nil, fmt.Errorf("dial Docker target: %w", err)
+	}
+	return nil, &fakeIPNotCarried{
+		host:    host,
+		address: firstPlaceholder(answer),
+		remedy:  dialer.fakeIP.notCarriedRemedy(),
+		dialErr: err,
+	}
 }
 
 // dialAddresses dials the checked addresses of a host, in their order, until

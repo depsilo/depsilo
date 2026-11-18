@@ -52,6 +52,10 @@ func TestClientErrorMessageFallsBackForUnknownErrors(t *testing.T) {
 // the server log nor text that wraps it reaches the 502 body.
 func TestClientErrorMessageKeepsOnlyDepsilosOwnText(t *testing.T) {
 	fakeIP := &fakeIPRefusal{host: "cdn.example", address: netip.MustParseAddr("198.18.0.12"), remedy: fakeIPRemedySetProxy}
+	notCarried := &fakeIPNotCarried{
+		host: "cdn.example", address: netip.MustParseAddr("198.18.0.12"), remedy: fakeIPRemedyTUN,
+		dialErr: errors.New("dial tcp 198.18.0.12:80: INJECTED i/o timeout"),
+	}
 	for _, tt := range []struct {
 		name string
 		err  error
@@ -83,7 +87,15 @@ func TestClientErrorMessageKeepsOnlyDepsilosOwnText(t *testing.T) {
 			err: &registryFailure{stage: stageBlob, hop: mustParseURL(t, "http://cdn.example/blob?Signature=INJECTED"),
 				cause: &url.Error{Op: "Get", URL: "http://cdn.example/blob?Signature=INJECTED", Err: fakeIP}},
 			want: "blob failed at http://cdn.example: cdn.example resolved to 198.18.0.12, a fake-IP address from proxy " +
-				"software in TUN/fake-IP mode; " + fakeIPRemedySetProxy,
+				"software in TUN/fake-IP mode, and [egress] allow_fake_ip is off; " + fakeIPRemedySetProxy,
+		},
+		{
+			// The dial error stays in the server log.
+			name: "fake-IP placeholders that nothing carried",
+			err: &registryFailure{stage: stageBlob, hop: mustParseURL(t, "http://cdn.example/blob?Signature=INJECTED"),
+				cause: &url.Error{Op: "Get", URL: "http://cdn.example/blob?Signature=INJECTED", Err: notCarried}},
+			want: "blob failed at http://cdn.example: cdn.example resolved to 198.18.0.12, a fake-IP address from proxy " +
+				"software, but nothing carried the connection to it; " + fakeIPRemedyTUN,
 		},
 		{
 			// Every cause of a registryFailure that is not Depsilo's own
@@ -147,17 +159,44 @@ func TestClientErrorMessageIsCappedOnARuneBoundary(t *testing.T) {
 		}
 	}
 
-	// The cap is a safety net: a fake-IP refusal of Docker Hub's CDN host
-	// with the no_proxy remedy keeps its remedy whole.
+	// The cap is a safety net: the fake-IP refusals of Docker Hub's CDN host
+	// with the no_proxy remedies, the longest realistic messages, keep their
+	// remedies whole, also with the longest IPv6 placeholder.
 	const cdnHost = "production.cloudfront.docker.com"
-	cdn := &registryFailure{
-		stage: stageBlob,
-		hop:   mustParseURL(t, "https://"+cdnHost+"/registry-v2/data"),
-		cause: &fakeIPRefusal{host: cdnHost, address: netip.MustParseAddr("198.18.0.12"), remedy: fakeIPRemedyKeptDirect},
-	}
-	if got := clientErrorMessage(cdn, testRequestID); !strings.HasSuffix(got, fakeIPRemedyKeptDirect+testRequestSuffix) ||
-		len(got) > maxClientMessageBytes+len(testRequestSuffix) {
-		t.Fatalf("message of %d bytes = %q, want the whole remedy within %d bytes", len(got), got, maxClientMessageBytes+len(testRequestSuffix))
+	for _, tt := range []struct {
+		name   string
+		cause  error
+		remedy string
+		bytes  int // the message's length with its request suffix
+	}{
+		{
+			name:   "allow_fake_ip off",
+			cause:  &fakeIPRefusal{host: cdnHost, address: netip.MustParseAddr("198.18.0.12"), remedy: fakeIPRemedyKeptDirect},
+			remedy: fakeIPRemedyKeptDirect,
+			bytes:  551,
+		},
+		{
+			name: "placeholders that nothing carried",
+			cause: &fakeIPNotCarried{host: cdnHost, address: netip.MustParseAddr("198.18.0.12"), remedy: fakeIPRemedyTUNKeptDirect,
+				dialErr: errors.New("i/o timeout")},
+			remedy: fakeIPRemedyTUNKeptDirect,
+			bytes:  540,
+		},
+		{
+			name: "the longest IPv6 placeholder that nothing carried",
+			cause: &fakeIPNotCarried{host: cdnHost, address: netip.MustParseAddr("2001:2:0:ffff:ffff:ffff:ffff:ffff"),
+				remedy: fakeIPRemedyTUNKeptDirect, dialErr: errors.New("i/o timeout")},
+			remedy: fakeIPRemedyTUNKeptDirect,
+			bytes:  562,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cdn := &registryFailure{stage: stageBlob, hop: mustParseURL(t, "https://"+cdnHost+"/registry-v2/data"), cause: tt.cause}
+			got := clientErrorMessage(cdn, testRequestID)
+			if !strings.HasSuffix(got, tt.remedy+testRequestSuffix) || len(got) > maxClientMessageBytes+len(testRequestSuffix) || len(got) != tt.bytes {
+				t.Fatalf("message of %d bytes = %q, want the whole remedy in %d bytes, within %d", len(got), got, tt.bytes, maxClientMessageBytes+len(testRequestSuffix))
+			}
+		})
 	}
 }
 
@@ -216,6 +255,18 @@ func TestOriginKeepsOnlySchemeHostAndPort(t *testing.T) {
 	}
 	if got := refusal.Error(); !strings.HasPrefix(got, `evil"<b>.example resolved to`) {
 		t.Fatalf("logged refusal = %q, want the host the log can name", got)
+	}
+	notCarried := &fakeIPNotCarried{
+		host: `evil"<b>.example`, address: netip.MustParseAddr("198.18.0.12"), remedy: fakeIPRemedyTUN,
+		dialErr: errors.Join(errors.New("dial tcp 198.18.0.12:443: i/o timeout"), errors.New("dial tcp [2001:2::c]:443: connect: no route to host")),
+	}
+	if got := notCarried.clientReason(); !strings.HasPrefix(got, "*** resolved to 198.18.0.12, ") || strings.Contains(got, "dial tcp") {
+		t.Fatalf("client reason = %q, want the unusual host and the dial error left out", got)
+	}
+	if got, want := notCarried.Error(), `evil"<b>.example resolved to 198.18.0.12, a fake-IP address from proxy software, `+
+		`but nothing carried the connection to it; `+fakeIPRemedyTUN+` (dial error: dial tcp 198.18.0.12:443: i/o timeout; `+
+		`dial tcp [2001:2::c]:443: connect: no route to host)`; got != want {
+		t.Fatalf("logged refusal = %q, want %q", got, want)
 	}
 	uniqueLocal := &uniqueLocalFakeIPRefusal{
 		host:   `evil"<b>.example`,

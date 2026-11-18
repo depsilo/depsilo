@@ -31,6 +31,9 @@ func TestResolverClientDoesNotApplyWholeResponseTimeout(t *testing.T) {
 	}
 }
 
+// staticIPResolver stands in for this machine's network: it answers each
+// host with its addresses, and the machine's network interfaces hold none
+// of them.
 type staticIPResolver map[string][]net.IPAddr
 
 func (resolver staticIPResolver) LookupIPAddr(_ context.Context, host string) ([]net.IPAddr, error) {
@@ -41,10 +44,36 @@ func (resolver staticIPResolver) LookupIPAddr(_ context.Context, host string) ([
 	return addresses, nil
 }
 
+func (staticIPResolver) InterfaceAddrs() ([]net.Addr, error) { return nil, nil }
+
+// ipResolverFunc stands in for this machine's network with a lookup
+// function; the machine's network interfaces hold no address it returns.
 type ipResolverFunc func(context.Context, string) ([]net.IPAddr, error)
 
 func (resolve ipResolverFunc) LookupIPAddr(ctx context.Context, host string) ([]net.IPAddr, error) {
 	return resolve(ctx, host)
+}
+
+func (ipResolverFunc) InterfaceAddrs() ([]net.Addr, error) { return nil, nil }
+
+// interfacesHolding stands in for this machine's network as answers does,
+// except that its network interfaces hold the given addresses, or cannot be
+// listed when listErr is set.
+type interfacesHolding struct {
+	hostNetwork
+	addresses []string
+	listErr   error
+}
+
+func (machine interfacesHolding) InterfaceAddrs() ([]net.Addr, error) {
+	if machine.listErr != nil {
+		return nil, machine.listErr
+	}
+	held := make([]net.Addr, 0, len(machine.addresses))
+	for _, address := range machine.addresses {
+		held = append(held, &net.IPAddr{IP: net.ParseIP(address)})
+	}
+	return held, nil
 }
 
 func TestRegistryClientRejectsRealmDNSRebindingToLoopback(t *testing.T) {

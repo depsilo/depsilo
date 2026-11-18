@@ -47,11 +47,12 @@ const (
 	// server-generated UUIDs, so the suffix adds 82 bytes and a whole message
 	// stays within 594 bytes. The cap is a safety net, not a limit realistic
 	// messages reach: a fake-IP refusal of Docker Hub's CDN host
-	// (production.cloudfront.docker.com) with the no_proxy remedy is 516
-	// bytes with its suffix, so a 512-byte cap on the whole message would cut
-	// that remedy. A proxy hint names its host twice, in the origin and in
-	// the advice; it stays whole for host names of up to 111 characters on
-	// any port.
+	// (production.cloudfront.docker.com) with allow_fake_ip off and the
+	// no_proxy remedy is 551 bytes with its suffix, and the same host's
+	// placeholders that nothing carried, with that remedy, 540, so a 512-byte
+	// cap on the whole message would cut either remedy. A proxy hint names its
+	// host twice, in the origin and in the advice; it stays whole for host
+	// names of up to 111 characters on any port.
 	maxClientMessageBytes = 512
 	// maxSpecErrorCodes caps the error codes a 502 message repeats.
 	maxSpecErrorCodes = 3
@@ -236,9 +237,9 @@ func (r *refusal) clientReason() string {
 }
 
 // fakeIPRefusal refuses a direct dial to a host name answered only with
-// fake-IP addresses, the one answer a proxy would carry, and names the remedy.
-// It holds the dialed host, one placeholder of its answer (an IPv4 one when
-// the answer has one; see fakeIPDialError), and a fixed remedy.
+// fake-IP addresses while [egress] allow_fake_ip is off, and names the
+// remedy. It holds the dialed host, one placeholder of its answer (an IPv4
+// one when the answer has one; see firstPlaceholder), and a fixed remedy.
 type fakeIPRefusal struct {
 	host    string
 	address netip.Addr
@@ -254,7 +255,36 @@ func (e *fakeIPRefusal) clientReason() string { return e.explain(displayHost(e.h
 
 func (e *fakeIPRefusal) explain(host string) string {
 	return host + " resolved to " + e.address.String() +
-		", a fake-IP address from proxy software in TUN/fake-IP mode; " + e.remedy
+		", a fake-IP address from proxy software in TUN/fake-IP mode, and [egress] allow_fake_ip is off; " + e.remedy
+}
+
+// fakeIPNotCarried is a host name answered only with fake-IP placeholders
+// that a direct client dialed and that nothing carried: no placeholder
+// connected in time, so no TUN of proxy software runs. It holds the host,
+// the placeholder dialed first, a fixed remedy, and the dial errors, which
+// reach the server log only; it does not wrap them, so their timeouts do not
+// read as the request's own.
+type fakeIPNotCarried struct {
+	host    string
+	address netip.Addr
+	remedy  string
+	dialErr error
+}
+
+func (e *fakeIPNotCarried) Error() string {
+	if e.dialErr == nil {
+		return e.explain(e.host)
+	}
+	return e.explain(e.host) + " (dial error: " + strings.ReplaceAll(e.dialErr.Error(), "\n", "; ") + ")"
+}
+
+// clientReason names the host only when it is a plain host name, as
+// fakeIPRefusal does, and never the dial error.
+func (e *fakeIPNotCarried) clientReason() string { return e.explain(displayHost(e.host)) }
+
+func (e *fakeIPNotCarried) explain(host string) string {
+	return host + " resolved to " + e.address.String() +
+		", a fake-IP address from proxy software, but nothing carried the connection to it; " + e.remedy
 }
 
 // uniqueLocalFakeIPRemedy is the advice of a uniqueLocalFakeIPRefusal. Only a

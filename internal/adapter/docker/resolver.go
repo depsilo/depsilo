@@ -32,17 +32,19 @@ type Resolver struct {
 // NewResolver builds one HTTP client per configured registry. A registry
 // without its own proxy follows policy's default proxy, as a package Upstream
 // does, except that the hosts whose answers are private or loopback are
-// dialed directly.
+// dialed directly, and a registry that no proxy carries follows policy's
+// allow_fake_ip.
 func NewResolver(cfg config.DockerConfig, policy egress.Policy) *Resolver {
-	return newResolver(cfg, policy, net.DefaultResolver, nil)
+	return newResolver(cfg, policy, systemNetwork{net.DefaultResolver}, nil)
 }
 
-// newResolver builds the registry clients, which resolve hosts with lookup and
-// connect with dialContext, or with a net.Dialer when dialContext is nil.
+// newResolver builds the registry clients, which resolve hosts and list this
+// machine's interface addresses with lookup and connect with dialContext, or
+// with a net.Dialer when dialContext is nil.
 func newResolver(
 	cfg config.DockerConfig,
 	policy egress.Policy,
-	lookup ipResolver,
+	lookup hostNetwork,
 	dialContext func(context.Context, string, string) (net.Conn, error),
 ) *Resolver {
 	if dialContext == nil {

@@ -76,11 +76,14 @@ func load(keyMode signingKeyLoadMode) (*Config, error) {
 		"distribution.storage.region",
 		"distribution.storage.access_key",
 		"distribution.storage.secret_key",
-		// [egress] has no defaults, so AutomaticEnv alone never surfaces these
-		// keys to Unmarshal. The two lists take comma-separated values.
+		// The first three [egress] keys have no defaults, so AutomaticEnv
+		// alone never surfaces them to Unmarshal. The two lists take
+		// comma-separated values. allow_fake_ip, whose default is true, is
+		// bound with them.
 		"egress.upstream_proxy",
 		"egress.no_proxy",
 		"egress.private_ranges",
+		"egress.allow_fake_ip",
 	} {
 		if err := v.BindEnv(key); err != nil {
 			return nil, fmt.Errorf("bind %s environment override: %w", key, err)
@@ -638,6 +641,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("cascade.max_hops", cascade.DefaultMaxHops)
 	v.SetDefault("cascade.max_ttl", "168h")
 	v.SetDefault("cascade.allow_insecure_http", false)
+	v.SetDefault("egress.allow_fake_ip", true)
 	// Access log rollup. retention_days bounds the raw access_logs table
 	// at 7 days of detail (the admin "recent logs" page); rollup retention
 	// keeps a year of aggregated dashboards. Operators who upgrade and

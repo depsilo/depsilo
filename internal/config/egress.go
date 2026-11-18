@@ -17,9 +17,16 @@ type EgressConfig struct {
 	// PrivateRanges declares parts of 100.64.0.0/10 private networks, for
 	// overlay networks such as Tailscale, Headscale, or NetBird.
 	PrivateRanges []string `mapstructure:"private_ranges"`
+	// AllowFakeIP lets Depsilo connect, where no proxy carries a request, to
+	// a host name whose DNS answer consists of fake-IP placeholders
+	// (198.18.0.0/15, 2001:2::/48), for the TUN of proxy software to carry,
+	// as other programs on the machine do. It defaults to true; false refuses
+	// such answers unless a proxy carries the request. See
+	// egress.Policy.AllowsFakeIP.
+	AllowFakeIP bool `mapstructure:"allow_fake_ip"`
 }
 
 // Policy validates the section into the runtime egress policy.
 func (c EgressConfig) Policy() (egress.Policy, error) {
-	return egress.NewPolicy(c.UpstreamProxy, c.NoProxy, c.PrivateRanges)
+	return egress.NewPolicy(c.UpstreamProxy, c.NoProxy, c.PrivateRanges, egress.AllowFakeIP(c.AllowFakeIP))
 }

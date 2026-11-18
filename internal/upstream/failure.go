@@ -17,14 +17,21 @@ import (
 
 // Failure codes explain why an upstream check failed. They are stable API
 // values that Admin maps to operator guidance. The egress_ codes other than
-// FailureEgressProxy are refusals by the outbound guard; FailureEgressProxy
-// is a failure at the proxy that carries the upstream.
+// FailureEgressProxy are refusals by the outbound guard, and FailureFakeIP
+// also a fake-IP answer that nothing carried; FailureEgressProxy is a failure
+// at the proxy that carries the upstream.
 const (
 	// FailureFakeIP: DNS answered from a range that local proxies in fake-IP
 	// mode answer public hosts from: a benchmarking range, 198.18.0.0/15
 	// (RFC 2544) or 2001:2::/48 (RFC 5180 as corrected by RFC Errata 1752),
 	// or a documented unique-local range of proxy software (see
-	// egress.UniqueLocalProxyRange).
+	// egress.UniqueLocalProxyRange). Depsilo dials a host name answered only
+	// with benchmarking placeholders itself while [egress] allow_fake_ip is
+	// on, so the code means that no connection to them was carried (see
+	// fakeIPNotCarriedError), that allow_fake_ip is off, or that the guard
+	// always refuses the answer: it mixes placeholders with other addresses,
+	// holds a unique-local address of proxy software (which unsafeDenial
+	// names first), or is an address literal in a fake-IP range.
 	FailureFakeIP = "egress_fake_ip"
 	// FailureSharedAddress: the host resolved into 100.64.0.0/10, used by
 	// carrier-grade NAT and overlay networks, and no range was declared.
@@ -60,7 +67,8 @@ const (
 // It never carries a URL, credential, header or response body.
 type Failure struct {
 	Code string
-	// Address is the resolved address the outbound guard refused.
+	// Address is the resolved address the outbound guard refused, or the
+	// fake-IP placeholder that nothing carried.
 	Address string
 	// Range is the special-purpose range containing Address.
 	Range string
@@ -80,6 +88,19 @@ type EgressDeniedError struct {
 }
 
 func (e *EgressDeniedError) Error() string { return e.message }
+
+// fakeIPNotCarriedError reports a host name answered only with fake-IP
+// placeholders that Depsilo dialed and that nothing carried: no placeholder
+// connected in time, so no TUN of proxy software runs, for example because
+// only the system DNS points at the proxy software. It names the first
+// placeholder dialed, an IPv4 one when the answer had one. Its text is fixed,
+// and it does not wrap the dial errors, whose timeouts would otherwise read
+// as the upstream's own.
+type fakeIPNotCarriedError struct{ address netip.Addr }
+
+func (e *fakeIPNotCarriedError) Error() string {
+	return "nothing carried the connection to the fake-IP dial target"
+}
 
 // StatusError reports an upstream response status that marks it unhealthy.
 type StatusError struct{ Code int }
@@ -106,14 +127,27 @@ func refuseProxyConnect(_ context.Context, _ *url.URL, _ *http.Request, response
 	return nil
 }
 
-// unsafeDenial names the first refused address among a resolver answer, and
-// the range that makes it unsafe when one does.
+// unsafeDenial names a refused address among a resolver answer, and the range
+// that makes it unsafe when one does: the first address in a documented
+// unique-local range of proxy software (see egress.UniqueLocalProxyRange),
+// which no setting lets Depsilo reach, and otherwise the first unsafe
+// address. An answer that puts fake-IP placeholders next to such an address,
+// as proxy software with unique-local IPv6 fake-IP gives, is then reported
+// by the unique-local address, whose range the proxy software's setting must
+// move, whichever family DNS lists first: without it, the placeholders alone
+// could be dialed.
 func unsafeDenial(policy egress.Policy, addresses []netip.Addr, message string) *EgressDeniedError {
 	denial := &EgressDeniedError{unsafe: true, message: message}
 	for _, address := range addresses {
-		if addrNetworkScope(policy, address) == networkUnsafe {
+		if addrNetworkScope(policy, address) != networkUnsafe {
+			continue
+		}
+		_, proxySoftware := egress.UniqueLocalProxyRange(address)
+		if proxySoftware || !denial.Address.IsValid() {
 			denial.Address = address
 			denial.Range = refusedRange(address)
+		}
+		if proxySoftware {
 			break
 		}
 	}
@@ -182,6 +216,14 @@ func ClassifyFailure(err error) *Failure {
 					failure.Code = FailureSharedAddress
 				}
 			}
+		}
+		return failure
+	}
+	var notCarried *fakeIPNotCarriedError
+	if errors.As(err, &notCarried) {
+		failure := &Failure{Code: FailureFakeIP, Address: notCarried.address.String()}
+		if prefix, ok := egress.FakeIPRange(notCarried.address); ok {
+			failure.Range = prefix.String()
 		}
 		return failure
 	}

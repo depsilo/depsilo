@@ -259,9 +259,15 @@ func TestDoctorExplainsUpstreamFailures(t *testing.T) {
 			adminList:   adminList,
 			wantMessage: "failure codes: egress_fake_ip x2, other x1, timeout x1",
 			// A container operator sets the service's environment rather than
-			// a file inside the volume, so both forms are named.
-			wantHint: []string{"set upstream_proxy under [egress] in config.toml, or DEPSILO_EGRESS_UPSTREAM_PROXY in the service's environment, " +
-				"or give Depsilo a DNS server that returns real addresses; see docs/deployment.md#upstream-network-egress",
+			// a file inside the volume, so both forms are named. Each cause
+			// that the code records is named with its remedy.
+			wantHint: []string{"egress_fake_ip means DNS answered with fake-IP addresses, as proxy software in fake-IP mode does, " +
+				"and Depsilo could not connect to them: nothing carried its connections, [egress] allow_fake_ip is off, " +
+				"or the answer mixed fake-IP and other addresses or held a unique-local IPv6 fake-IP address, which Depsilo always refuses. " +
+				"Turn on the proxy software's TUN mode, or set upstream_proxy under [egress] in config.toml, " +
+				"or DEPSILO_EGRESS_UPSTREAM_PROXY in the service's environment, or check allow_fake_ip; " +
+				"for unique-local IPv6 fake-IP addresses, set the proxy software's IPv6 fake-IP range to 2001:2::/48; " +
+				"see docs/deployment.md#upstream-network-egress",
 				"open /admin/upstreams"},
 		},
 		{
@@ -284,9 +290,10 @@ func TestDoctorExplainsUpstreamFailures(t *testing.T) {
 			rejectHint: []string{"DEPSILO_TOKEN", "token", "fake-IP"},
 		},
 		{
-			name:       "no token",
-			adminList:  adminList,
-			wantHint:   []string{"open /admin/upstreams or verify network reachability", "fake-IP", "docs/deployment.md#upstream-network-egress", "DEPSILO_TOKEN"},
+			name:      "no token",
+			adminList: adminList,
+			wantHint: []string{"open /admin/upstreams or verify network reachability",
+				"If proxy software in fake-IP mode answers this host's DNS while its TUN mode is off", "docs/deployment.md#upstream-network-egress", "DEPSILO_TOKEN"},
 			rejectHint: []string{"egress_fake_ip"},
 		},
 		{

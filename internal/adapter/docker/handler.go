@@ -70,10 +70,11 @@ type Handler struct {
 }
 
 // New builds the Docker Registry handler. egressPolicy supplies the default
-// proxy for registries without their own. dial opens every connection of the
-// registry clients, to a proxy or to an address that a client resolved and
-// checked itself; nil selects a net.Dialer. The composition root's tests pass
-// their own to keep those connections on the test machine.
+// proxy for registries without their own and, for registries that no proxy
+// carries, allow_fake_ip. dial opens every connection of the registry
+// clients, to a proxy or to an address that a client resolved and checked
+// itself; nil selects a net.Dialer. The composition root's tests pass their
+// own to keep those connections on the test machine.
 func New(
 	cacheMgr *cache.Manager,
 	cacheCfg config.CacheConfig,
@@ -86,7 +87,7 @@ func New(
 		cacheMgr:     cacheMgr,
 		cacheCfg:     cacheCfg,
 		db:           database,
-		resolver:     newResolver(dockerCfg, egressPolicy, net.DefaultResolver, dial),
+		resolver:     newResolver(dockerCfg, egressPolicy, systemNetwork{net.DefaultResolver}, dial),
 		auth:         NewAuthManager(),
 		observations: newObservationStore(database),
 	}

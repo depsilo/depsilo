@@ -251,12 +251,26 @@ type ipResolver interface {
 	LookupIPAddr(context.Context, string) ([]net.IPAddr, error)
 }
 
+// guardedDialer dials for an upstream without a proxy. It resolves each host
+// when it dials, refuses unsafe answers, and checks the answer against the
+// network scope that the configured origin's first answer pinned. With
+// [egress] allow_fake_ip (see answerScope), a host name answered only with
+// fake-IP placeholders is dialed at those placeholders for the TUN of proxy
+// software to carry.
 type guardedDialer struct {
 	origin      *url.URL
 	resolver    ipResolver
 	dialContext func(context.Context, string, string) (net.Conn, error)
-	// policy carries the operator's declared private ranges.
+	// policy carries the operator's declared private ranges and whether
+	// fake-IP placeholders are dialed.
 	policy egress.Policy
+	// interfaceAddrs lists the addresses of this machine's network
+	// interfaces, which a fake-IP answer that is dialed may not hold; nil
+	// reads net.InterfaceAddrs.
+	interfaceAddrs func() ([]net.Addr, error)
+	// fakeIPTimeout bounds each connection attempt to a placeholder; zero
+	// means egress.FakeIPConnectTimeout.
+	fakeIPTimeout time.Duration
 
 	policyMu       sync.Mutex
 	originScope    networkScope
@@ -374,7 +388,10 @@ func (d *guardedDialer) DialContext(
 	if err != nil {
 		return nil, fmt.Errorf("resolve dial target: %w", err)
 	}
-	targetScope := resolvedNetworkScope(d.policy, targetAddresses)
+	targetScope, placeholders, localDenial := d.answerScope(host, targetAddresses)
+	if localDenial != nil {
+		return nil, localDenial.with("unsafe dial target")
+	}
 
 	exactOrigin := sameDialAddress(address, d.origin)
 	if targetScope == networkUnsafe {
@@ -399,7 +416,12 @@ func (d *guardedDialer) DialContext(
 		}
 	}
 
-	connection, err := d.dialResolved(ctx, network, port, targetAddresses)
+	var connection net.Conn
+	if placeholders {
+		connection, err = d.dialPlaceholders(ctx, network, port, targetAddresses)
+	} else {
+		connection, err = d.dialResolved(ctx, network, port, targetAddresses)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -408,6 +430,89 @@ func (d *guardedDialer) DialContext(
 		return nil, errors.New("configured origin changed network scope")
 	}
 	return connection, nil
+}
+
+// answerScope classifies the DNS answer for host. It keeps every rule of
+// resolvedNetworkScope with one exception, while [egress] allow_fake_ip is
+// on: a fake-IP answer (see egress.FakeIPAnswer), which proxy software in
+// TUN/fake-IP mode gives for a host name and which says nothing about the
+// real address, counts as public, and placeholders reports it. The TUN maps
+// each placeholder back to its host name and applies the software's rules,
+// as it does for every other program on the machine, so a public origin may
+// reach it, and an origin with such an answer reaches no target whose answer
+// is private or loopback, as through a proxy. Such an answer pins the origin
+// only once a connection to it succeeded; where the name then connects is
+// the TUN's decision. An address literal is no DNS answer, and an answer that
+// mixes placeholders with any other address stays unsafe.
+// A fake-IP answer that holds an address of this machine's network
+// interfaces is refused with localDenial instead, which names that address
+// without a range, so a check records egress_reserved: such an address is
+// no placeholder, and a connection to it could reach a service on this
+// machine.
+func (d *guardedDialer) answerScope(host string, answer []net.IPAddr) (scope networkScope, placeholders bool, localDenial *localAnswerDenial) {
+	scope = resolvedNetworkScope(d.policy, answer)
+	if scope != networkUnsafe || !d.policy.AllowsFakeIP() || !egress.FakeIPAnswer(host, answer) {
+		return scope, false, nil
+	}
+	if local, _ := egress.LocalAddress(answer, d.interfaceAddrs); local.IsValid() {
+		return networkUnsafe, false, &localAnswerDenial{address: local}
+	}
+	return networkPublic, true, nil
+}
+
+// localAnswerDenial is a fake-IP answer that answerScope refused because it
+// holds an address of this machine's network interfaces.
+type localAnswerDenial struct{ address netip.Addr }
+
+// with is the refusal of the answer under message, the guard's wording. It
+// names the address without its range, so ClassifyFailure gives
+// egress_reserved rather than egress_fake_ip: no remedy for fake-IP applies.
+func (denial *localAnswerDenial) with(message string) *EgressDeniedError {
+	return &EgressDeniedError{Address: denial.address, unsafe: true, message: message}
+}
+
+// dialPlaceholders dials the placeholders of a fake-IP answer through
+// DialFakeIP. When no attempt connects while ctx is live, nothing carries
+// placeholders on this machine, and the error is a fakeIPNotCarriedError,
+// which a check records as egress_fake_ip.
+func (d *guardedDialer) dialPlaceholders(ctx context.Context, network, port string, answer []net.IPAddr) (net.Conn, error) {
+	connection, err := DialFakeIP(ctx, d.dialContext, network, port, answer, d.fakeIPTimeout)
+	if err == nil || ctx.Err() != nil {
+		return connection, err
+	}
+	placeholder, _ := netip.AddrFromSlice(egress.IPv4First(answer)[0].IP)
+	return nil, &fakeIPNotCarriedError{address: placeholder.Unmap()}
+}
+
+// DialFakeIP dials the placeholders of a fake-IP answer (see
+// egress.FakeIPAnswer) with dial, for the TUN of proxy software to carry. The
+// guarded dialers of package Upstreams and of Docker registries both dial
+// fake-IP answers through it. The attempts follow egress.IPv4First, the IPv4
+// placeholders first, each started happyEyeballsFallbackDelay after the one
+// before unless a connection has won, and each bounded by timeout, which is
+// egress.FakeIPConnectTimeout when zero. The TUN completes such a connection
+// locally and at once, so an attempt that does not connect in time is
+// carried by nothing. net/http dials apart from the request: the request's
+// own deadline ends only its wait for the connection, and the timeout bounds
+// the dial. DialFakeIP returns the first connection, ctx's error once ctx
+// ends, or the errors of every attempt joined.
+func DialFakeIP(
+	ctx context.Context,
+	dial func(context.Context, string, string) (net.Conn, error),
+	network string,
+	port string,
+	answer []net.IPAddr,
+	timeout time.Duration,
+) (net.Conn, error) {
+	if timeout <= 0 {
+		timeout = egress.FakeIPConnectTimeout
+	}
+	bounded := func(ctx context.Context, network, address string) (net.Conn, error) {
+		attempt, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		return dial(attempt, network, address)
+	}
+	return raceDial(ctx, bounded, network, port, egress.IPv4First(answer))
 }
 
 func (d *guardedDialer) pinnedOriginScope() (networkScope, bool) {
@@ -438,9 +543,18 @@ func (d *guardedDialer) originScopeForPolicy(ctx context.Context) (networkScope,
 	if err != nil {
 		return networkUnsafe, fmt.Errorf("resolve configured origin: %w", err)
 	}
-	scope := resolvedNetworkScope(d.policy, addresses)
+	scope, placeholders, localDenial := d.answerScope(d.origin.Hostname(), addresses)
+	if localDenial != nil {
+		return networkUnsafe, localDenial.with("configured origin resolved to unsafe scope")
+	}
 	if scope == networkUnsafe {
 		return networkUnsafe, unsafeDenial(d.policy, ipAddrs(addresses), "configured origin resolved to unsafe scope")
+	}
+	if placeholders {
+		// Only a connection to the placeholders pins a fake-IP answer, as
+		// DialContext pins the origin after it dialed; until then it counts
+		// as public for this check alone.
+		return scope, nil
 	}
 	if !d.pinOriginScope(scope) {
 		return networkUnsafe, errors.New("configured origin changed network scope")
@@ -505,13 +619,27 @@ func (s *dialRaceState) abandon() {
 	}
 }
 
+// dialResolved dials the checked addresses of a host, the families
+// interleaved from the first address's.
 func (d *guardedDialer) dialResolved(
 	ctx context.Context,
 	network string,
 	port string,
 	addresses []net.IPAddr,
 ) (net.Conn, error) {
-	ordered := interleaveIPFamilies(addresses)
+	return raceDial(ctx, d.dialContext, network, port, interleaveIPFamilies(addresses))
+}
+
+// raceDial dials the checked addresses of a host with dial, in the order of
+// ordered, each attempt started happyEyeballsFallbackDelay after the
+// previous one, and returns the first connection.
+func raceDial(
+	ctx context.Context,
+	dial func(context.Context, string, string) (net.Conn, error),
+	network string,
+	port string,
+	ordered []net.IPAddr,
+) (net.Conn, error) {
 	if len(ordered) == 0 {
 		return nil, errors.New("dial target resolved without usable addresses")
 	}
@@ -535,7 +663,7 @@ func (d *guardedDialer) dialResolved(
 				}
 			}
 
-			connection, dialErr := d.dialContext(raceCtx, network, literal)
+			connection, dialErr := dial(raceCtx, network, literal)
 			if dialErr == nil && connection == nil {
 				dialErr = errors.New("dialer returned no connection")
 			}

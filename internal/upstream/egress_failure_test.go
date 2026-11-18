@@ -48,15 +48,25 @@ func declaredSharedAddressSpace(t *testing.T) egress.Policy {
 	return policy
 }
 
+// fakeIPRefused is the [egress] policy with allow_fake_ip off.
+func fakeIPRefused(t *testing.T) egress.Policy {
+	t.Helper()
+	policy, err := egress.NewPolicy("", nil, nil, egress.AllowFakeIP(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return policy
+}
+
 func TestGuardExplainsFakeIPAndSharedAddressDenials(t *testing.T) {
 	for _, test := range []struct {
 		name, origin, address string
 		policy                egress.Policy
 		want                  Failure
 	}{
-		{"fake-IP answer for a public origin", "https://pypi.org", "198.18.0.65", egress.Policy{},
+		{"fake-IP answer for a public origin with allow_fake_ip off", "https://pypi.org", "198.18.0.65", fakeIPRefused(t),
 			Failure{Code: FailureFakeIP, Address: "198.18.0.65", Range: "198.18.0.0/15"}},
-		{"IPv6 fake-IP answer for a public origin", "https://pypi.org", "2001:2::46", egress.Policy{},
+		{"IPv6 fake-IP answer for a public origin with allow_fake_ip off", "https://pypi.org", "2001:2::46", fakeIPRefused(t),
 			Failure{Code: FailureFakeIP, Address: "2001:2::46", Range: "2001:2::/48"}},
 		// A unique-local range of proxy software is no private network: it
 		// used to pin the origin as private and was dialed.
@@ -94,7 +104,8 @@ func TestGuardExplainsFakeIPAndSharedAddressDenials(t *testing.T) {
 }
 
 // Go's resolver merges A and AAAA answers and sorts them by RFC 6724, so either
-// family's placeholder can come first; the refusal reads as fake-IP either way.
+// family's placeholder can come first; with allow_fake_ip off, the refusal
+// reads as fake-IP either way.
 func TestGuardExplainsDualStackFakeIPAnswersInEitherOrder(t *testing.T) {
 	for _, test := range []struct {
 		answer []string
@@ -115,6 +126,7 @@ func TestGuardExplainsDualStackFakeIPAnswersInEitherOrder(t *testing.T) {
 				return answer, nil
 			}),
 			dialContext: recordingDial(&dialed),
+			policy:      fakeIPRefused(t),
 		}
 		_, err := dialer.DialContext(context.Background(), "tcp", "pypi.org:443")
 		if err == nil || len(dialed) != 0 {

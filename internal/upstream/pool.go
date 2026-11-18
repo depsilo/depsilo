@@ -233,9 +233,25 @@ type PoolOptions struct {
 	// cascade transport is available: Via values are reported but ignored, and
 	// the upstream keeps direct egress.
 	Peers *PeerSet
-	// Egress supplies declared private ranges and the default upstream proxy.
-	// The zero value keeps the built-in guard and direct egress.
+	// Egress supplies declared private ranges, the default upstream proxy and
+	// [egress] allow_fake_ip. The zero value is the default configuration:
+	// the built-in guard, direct egress, and allow_fake_ip on, so the guarded
+	// dialer of a direct upstream dials fake-IP answers. Pass the configured
+	// policy, or allow_fake_ip = false is ignored.
 	Egress egress.Policy
+	// network is what the guarded dialer of a direct upstream resolves and
+	// dials through; the zero value is this machine's. Tests stand in for it.
+	network directNetwork
+}
+
+// directNetwork is the network that the guarded dialer of a direct upstream,
+// extra index or cascade parent resolves host names and dials through. A nil
+// field means this machine's: the system resolver, a net.Dialer, and the
+// addresses that net.InterfaceAddrs lists.
+type directNetwork struct {
+	resolver       ipResolver
+	dialContext    func(context.Context, string, string) (net.Conn, error)
+	interfaceAddrs func() ([]net.Addr, error)
 }
 
 // NewPoolFromRecordsWithOptions creates a pool that can egress selected
@@ -337,7 +353,7 @@ func newUpstreamFromRecord(record db.UpstreamRecord, options PoolOptions) (*Upst
 	if record.Via != "" && options.Peers != nil {
 		peer, ok := options.Peers.Resolve(record.Via)
 		if ok {
-			client, err = buildPeerClient(record.Proxy, peer, record.URL, options.Egress)
+			client, err = buildPeerClient(record.Proxy, peer, record.URL, options)
 		} else {
 			zap.L().Warn("cascade peer is not configured; upstream keeps direct egress",
 				zap.String("upstream", record.Name),
@@ -359,7 +375,7 @@ func newUpstreamFromRecord(record db.UpstreamRecord, options PoolOptions) (*Upst
 				proxySource = ProxyFromDefault
 			}
 		}
-		client, err = buildClient(proxy, record.URL, options.Egress)
+		client, err = buildClient(proxy, record.URL, options)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("build client for %s: %w", record.Name, err)
@@ -392,8 +408,8 @@ func (u *Upstream) sameConfig(record db.UpstreamRecord) bool {
 // every outbound exchange into an authenticated relay call. The guarded dialer
 // pins the peer origin, so private LAN peers work while relayed target URLs
 // never become direct dial targets on this hop.
-func buildPeerClient(proxy string, peer PeerEgress, source string, policy egress.Policy) (*http.Client, error) {
-	client, err := buildClient(proxy, peer.URL.String(), policy)
+func buildPeerClient(proxy string, peer PeerEgress, source string, options PoolOptions) (*http.Client, error) {
+	client, err := buildClient(proxy, peer.URL.String(), options)
 	if err != nil {
 		return nil, err
 	}
@@ -764,7 +780,10 @@ func (u *Upstream) IsHealthy() bool {
 	return u.HealthSnapshot().Healthy
 }
 
-func buildClient(proxy, origin string, policy egress.Policy) (*http.Client, error) {
+// buildClient builds the client of an upstream or cascade parent at origin:
+// through proxy when one is set, and otherwise through a guarded dialer that
+// applies options.Egress on options.network.
+func buildClient(proxy, origin string, options PoolOptions) (*http.Client, error) {
 	originURL, err := url.Parse(origin)
 	if err != nil || !validOriginURL(origin) {
 		return nil, fmt.Errorf("parse origin URL %s: invalid URL", safeURLOrigin(origin))
@@ -788,15 +807,23 @@ func buildClient(proxy, origin string, policy egress.Policy) (*http.Client, erro
 		transport.OnProxyConnectResponse = refuseProxyConnect
 		zap.L().Info("using proxy", zap.String("proxy", safeURLOrigin(proxy)))
 	} else {
-		dialer := &net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
+		network := options.network
+		if network.resolver == nil {
+			network.resolver = net.DefaultResolver
+		}
+		if network.dialContext == nil {
+			dialer := &net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}
+			network.dialContext = dialer.DialContext
 		}
 		guard := &guardedDialer{
-			origin:      originURL,
-			resolver:    net.DefaultResolver,
-			dialContext: dialer.DialContext,
-			policy:      policy,
+			origin:         originURL,
+			resolver:       network.resolver,
+			dialContext:    network.dialContext,
+			policy:         options.Egress,
+			interfaceAddrs: network.interfaceAddrs,
 		}
 		transport.DialContext = guard.DialContext
 	}

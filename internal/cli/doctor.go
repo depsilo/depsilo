@@ -345,7 +345,10 @@ const (
 	upstreamGenericHint = "open /admin/upstreams or verify network reachability"
 	egressGuideAnchor   = "docs/deployment.md#upstream-network-egress"
 	// failureFakeIP mirrors upstream.FailureFakeIP, the stable Admin API
-	// value for a DNS answer from a local proxy in fake-IP mode.
+	// value for a DNS answer from a local proxy in fake-IP mode that Depsilo
+	// could not use: nothing carried the connection, [egress] allow_fake_ip
+	// is off, or the outbound guard always refuses the answer, such as one
+	// that mixes fake-IP and other addresses.
 	failureFakeIP = "egress_fake_ip"
 )
 
@@ -423,7 +426,8 @@ func formatFailureCodes(codes map[string]int) string {
 // the thing to fix.
 func upstreamFailureHint(codes map[string]int, asked bool) string {
 	if !asked {
-		return upstreamGenericHint + ". If proxy software in TUN/fake-IP mode runs on this host, every upstream fails until Depsilo is routed around it: see " +
+		return upstreamGenericHint + ". If proxy software in fake-IP mode answers this host's DNS while its TUN mode is off, " +
+			"every upstream fails until the TUN or a proxy carries Depsilo's connections: see " +
 			egressGuideAnchor + " (doctor names the failure codes when DEPSILO_TOKEN or ~/.config/depsilo/token holds a valid Admin token)"
 	}
 	if len(codes) == 0 {
@@ -432,9 +436,12 @@ func upstreamFailureHint(codes map[string]int, asked bool) string {
 	if codes[failureFakeIP] == 0 {
 		return upstreamGenericHint
 	}
-	hint := failureFakeIP + " means DNS answered with fake-IP addresses, as proxy software in TUN/fake-IP mode does: " +
-		"set upstream_proxy under [egress] in config.toml, or DEPSILO_EGRESS_UPSTREAM_PROXY in the service's environment, " +
-		"or give Depsilo a DNS server that returns real addresses; see " + egressGuideAnchor
+	hint := failureFakeIP + " means DNS answered with fake-IP addresses, as proxy software in fake-IP mode does, " +
+		"and Depsilo could not connect to them: nothing carried its connections, [egress] allow_fake_ip is off, " +
+		"or the answer mixed fake-IP and other addresses or held a unique-local IPv6 fake-IP address, which Depsilo always refuses. " +
+		"Turn on the proxy software's TUN mode, or set upstream_proxy under [egress] in config.toml, " +
+		"or DEPSILO_EGRESS_UPSTREAM_PROXY in the service's environment, or check allow_fake_ip; " +
+		"for unique-local IPv6 fake-IP addresses, set the proxy software's IPv6 fake-IP range to 2001:2::/48; see " + egressGuideAnchor
 	if len(codes) > 1 {
 		hint += ". For the other codes, " + upstreamGenericHint
 	}

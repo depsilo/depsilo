@@ -117,8 +117,12 @@ func challengeWith(header string) http.HandlerFunc {
 	}
 }
 
-const fakeIPSetProxyRemedy = ", a fake-IP address from proxy software in TUN/fake-IP mode; " +
-	"set [egress] upstream_proxy or DEPSILO_EGRESS_UPSTREAM_PROXY to the proxy software's HTTP port and restart, " +
+// fakeIPNotCarriedReason follows the placeholder in the 502 reason of a
+// fake-IP answer that a registry without a proxy dialed and that nothing
+// carried.
+const fakeIPNotCarriedReason = ", a fake-IP address from proxy software, but nothing carried the connection to it; " +
+	"turn on the proxy software's TUN mode, " +
+	"or set [egress] upstream_proxy or DEPSILO_EGRESS_UPSTREAM_PROXY to its HTTP port and restart, " +
 	"see docs/deployment.md#upstream-network-egress"
 
 // A 502 body names the stage, the origin of the hop that failed and a reason
@@ -155,14 +159,17 @@ func TestBadGatewayMessageNamesOnlyTheStageOriginAndReason(t *testing.T) {
 			hiddenFromLog: []string{"SECRET-SIGNATURE", "K2EXAMPLEKEY", "1763400000"},
 		},
 		{
-			name: "presigned redirect whose host has only a fake-IP answer",
+			// The placeholder is dialed, and the test's dialer refuses it,
+			// as a network without a TUN would.
+			name: "presigned redirect whose host has only a fake-IP answer that nothing carried",
 			path: blob,
 			registry: redirectTo("http://cdn.example/bucket/blob?X-Amz-Algorithm=AWS4-HMAC-SHA256" +
 				"&X-Amz-Credential=AKIAEXAMPLE%2F20261117%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Signature=SECRET-SIGNATURE"),
-			fakeIP:        []string{"cdn.example"},
-			want:          "blob failed at http://cdn.example: cdn.example resolved to 198.18.0.12" + fakeIPSetProxyRemedy,
-			hidden:        []string{"X-Amz", "AKIAEXAMPLE", "SECRET-SIGNATURE", "/bucket"},
-			wantLogged:    []string{"X-Amz-Credential=REDACTED&X-Amz-Signature=REDACTED"},
+			fakeIP: []string{"cdn.example"},
+			want:   "blob failed at http://cdn.example: cdn.example resolved to 198.18.0.12" + fakeIPNotCarriedReason,
+			hidden: []string{"X-Amz", "AKIAEXAMPLE", "SECRET-SIGNATURE", "/bucket", "unexpected dial", "dial error"},
+			wantLogged: []string{"X-Amz-Credential=REDACTED&X-Amz-Signature=REDACTED",
+				"(dial error: unexpected dial to 198.18.0.12:80)"},
 			hiddenFromLog: []string{"AKIAEXAMPLE", "SECRET-SIGNATURE"},
 		},
 		{

@@ -242,7 +242,7 @@ func newRoutedDockerRouter(
 	t *testing.T,
 	registry config.RegistryConfig,
 	policy egress.Policy,
-	lookup ipResolver,
+	lookup hostNetwork,
 	dialContext func(context.Context, string, string) (net.Conn, error),
 	observationRequired bool,
 ) (*gin.Engine, *gorm.DB) {
@@ -276,9 +276,10 @@ func newRoutedDockerRouter(
 
 // A HEAD answer has no body, and the observation gate's tag resolution fails
 // before any fetch is logged, so the server log is where an operator reads
-// why such a manifest request answered 502, for example the fake-IP remedy.
-// The log line and the access log carry the request ID that the 502 message
-// names, so Admin, MCP and the log lead to each other.
+// why such a manifest request answered 502, for example that nothing carried
+// the connection to a fake-IP placeholder, and the dial error. The log line
+// and the access log carry the request ID that the 502 message names, so
+// Admin, MCP and the log lead to each other.
 func TestManifestBadGatewayLogsItsReason(t *testing.T) {
 	registry := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.URL.Path == "/v2/" {
@@ -290,9 +291,6 @@ func TestManifestBadGatewayLogsItsReason(t *testing.T) {
 	}))
 	t.Cleanup(registry.Close)
 
-	const remedy = ", a fake-IP address from proxy software in TUN/fake-IP mode; " +
-		"set [egress] upstream_proxy or DEPSILO_EGRESS_UPSTREAM_PROXY to the proxy software's HTTP port and restart, " +
-		"see docs/deployment.md#upstream-network-egress"
 	fakeIPRegistry := staticIPResolver{"registry.example": {{IP: net.ParseIP("198.18.0.10")}}}
 	for _, tt := range []struct {
 		name        string
@@ -308,8 +306,9 @@ func TestManifestBadGatewayLogsItsReason(t *testing.T) {
 			method:      http.MethodHead,
 			answers:     fakeIPRegistry,
 			wantCode:    "AUTH_FAILED",
-			wantMessage: "auth discovery failed at http://registry.example: registry.example resolved to 198.18.0.10" + remedy,
-			wantLogged:  "registry.example resolved to 198.18.0.10, a fake-IP address",
+			wantMessage: "auth discovery failed at http://registry.example: registry.example resolved to 198.18.0.10" + fakeIPNotCarriedReason,
+			wantLogged: "registry.example resolved to 198.18.0.10, a fake-IP address from proxy software, but nothing carried " +
+				"the connection to it; " + fakeIPRemedyTUN + " (dial error: dial tcp 198.18.0.10:80: connect: no route to host)",
 		},
 		{
 			name:   "HEAD whose redirect is refused",
@@ -319,8 +318,8 @@ func TestManifestBadGatewayLogsItsReason(t *testing.T) {
 				"cdn.example":      {{IP: net.ParseIP("198.18.0.12")}},
 			},
 			wantCode:    "UPSTREAM_UNAVAILABLE",
-			wantMessage: "manifest HEAD failed at http://cdn.example: cdn.example resolved to 198.18.0.12" + remedy,
-			wantLogged:  "cdn.example resolved to 198.18.0.12, a fake-IP address",
+			wantMessage: "manifest HEAD failed at http://cdn.example: cdn.example resolved to 198.18.0.12" + fakeIPNotCarriedReason,
+			wantLogged:  "cdn.example resolved to 198.18.0.12, a fake-IP address from proxy software, but nothing carried",
 		},
 		{
 			name:        "GET whose tag resolution for the observation gate is refused",
@@ -328,8 +327,8 @@ func TestManifestBadGatewayLogsItsReason(t *testing.T) {
 			observation: true,
 			answers:     fakeIPRegistry,
 			wantCode:    "UPSTREAM_UNAVAILABLE",
-			wantMessage: "auth discovery failed at http://registry.example: registry.example resolved to 198.18.0.10" + remedy,
-			wantLogged:  "registry.example resolved to 198.18.0.10, a fake-IP address",
+			wantMessage: "auth discovery failed at http://registry.example: registry.example resolved to 198.18.0.10" + fakeIPNotCarriedReason,
+			wantLogged:  "(dial error: dial tcp 198.18.0.10:80: connect: no route to host)",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -337,7 +336,7 @@ func TestManifestBadGatewayLogsItsReason(t *testing.T) {
 			t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
 			dialer := &routedDialer{direct: registry.Listener.Addr().String()}
 			router, database := newRoutedDockerRouter(t, config.RegistryConfig{Name: "hub", URL: "http://registry.example"},
-				egress.Policy{}, tt.answers, dialer.DialContext, tt.observation)
+				egress.Policy{}, tt.answers, withoutTUN(dialer.DialContext), tt.observation)
 
 			response := serveWithRequestID(router, tt.method, "/v2/library/widget/manifests/latest", testRequestID)
 			code, message := badGatewayBody(t, response)

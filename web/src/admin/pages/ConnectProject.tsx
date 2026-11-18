@@ -42,7 +42,7 @@ function ConnectionHealth({ ecosystem, onNavigate }: { ecosystem: string; onNavi
   const ready = useQuery({ queryKey: ['admin', 'readiness'], queryFn: async ({ signal }) => (await getReadiness({ signal })).data, refetchInterval: 30_000, retry: false })
   const upstreams = useQuery({ queryKey: ['admin', 'connect-upstreams'], queryFn: async ({ signal }) => (await adminApi.listUpstreams({ signal })).data, refetchInterval: 30_000, retry: false })
   const affected = upstreams.data?.items.filter(upstream => upstream.adapter_type === ecosystem && upstream.healthy === false)
-  // Fake-IP DNS fails every public upstream at once and has one fix, so name it here instead of only on the Upstreams page.
+  // Fake-IP DNS that Depsilo cannot connect through fails every public upstream at once, with the same fixes for all, so name them here instead of only on the Upstreams page.
   const fakeIP = affected?.filter(upstream => upstream.last_failure?.code === 'egress_fake_ip')
   return <>
     {ready.data?.status === 'not_ready' && <p role="alert" className="connection-notice connection-danger"><Icon name="warning" size="sm" /><span>

@@ -63,4 +63,43 @@ describe('upstream failure copy', () => {
       }
     }
   })
+
+  // Depsilo dials fake-IP answers by default, so egress_fake_ip means that
+  // nothing carried the connection, that [egress] allow_fake_ip is off, or
+  // that the guard always refuses the answer, which mixes fake-IP and other
+  // addresses or holds a unique-local IPv6 fake-IP address. The remedy turns
+  // on the proxy software's TUN mode, sets the proxy port with the container
+  // form, checks allow_fake_ip without undoing a deliberate choice, or moves
+  // the IPv6 fake-IP range.
+  it('explains egress_fake_ip with every cause the code records and every remedy', () => {
+    const notCarried: Record<string, string> = { en: 'nothing carried', zh: '没有被接管' }
+    const switchOff: Record<string, string> = { en: '[egress] allow_fake_ip is off', zh: '[egress] allow_fake_ip 已关闭' }
+    const refused: Record<string, string> = { en: 'which Depsilo always refuses', zh: '这类应答 Depsilo 一律拒绝' }
+    for (const key of ['upstreams.failure.egress_fake_ip.title', 'upstreams.failure.egress_fake_ip.shared', 'onboarding.upstreamFakeIP']) {
+      for (const [name, value] of Object.entries(copy(key))) {
+        expect(value, `${name}: ${key}`).toContain(notCarried[name])
+        expect(value, `${name}: ${key}`).toContain(switchOff[name])
+        expect(value, `${name}: ${key}`).toContain(refused[name])
+      }
+    }
+    // The card line holds for every cause, so it names none.
+    const notConnected: Record<string, string> = { en: 'not connected', zh: '未连接' }
+    for (const [name, value] of Object.entries(copy('upstreams.failure.egress_fake_ip.short'))) {
+      expect(value, `${name}: short`).toContain('{{address}}')
+      expect(value, `${name}: short`).toContain(notConnected[name])
+      expect(value, `${name}: short`).not.toContain(notCarried[name])
+    }
+    for (const [name, value] of Object.entries(copy('upstreams.failure.egress_fake_ip.title'))) {
+      expect(value, `${name}: title`).toContain('{{address}}')
+      expect(value, `${name}: title`).toContain('{{range}}')
+    }
+    const tunMode: Record<string, string> = { en: 'TUN mode', zh: 'TUN 模式' }
+    const onPurpose: Record<string, string> = { en: 'turned off on purpose', zh: '特意关闭' }
+    for (const [name, value] of Object.entries(copy('upstreams.failure.egress_fake_ip.action'))) {
+      for (const part of [tunMode[name], 'upstream_proxy', 'DEPSILO_EGRESS_UPSTREAM_PROXY=http://host.docker.internal:7890',
+        '--add-host=host.docker.internal:host-gateway', 'allow_fake_ip', 'DEPSILO_EGRESS_ALLOW_FAKE_IP', onPurpose[name], '2001:2::/48']) {
+        expect(value, `${name}: action`).toContain(part)
+      }
+    }
+  })
 })

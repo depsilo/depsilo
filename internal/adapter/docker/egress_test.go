@@ -341,7 +341,8 @@ func clientReasonOf(err error) string {
 
 // A placeholder mixed with any other address stays unsafe, and an address
 // literal is no DNS answer, so a redirect to such a target is refused through
-// a proxy and without one, and nothing reaches it.
+// a proxy and without one, where [egress] allow_fake_ip is on, and nothing
+// reaches it.
 func TestFakeIPMixedAndLiteralTargetsAreRefusedWithAndWithoutProxy(t *testing.T) {
 	const ipv6Placeholder = "2001:2::c"
 	unsafeTarget := map[string]string{"proxied": "unsafe Docker proxy target", "direct": "unsafe Docker dial target"}
@@ -393,7 +394,7 @@ func TestFakeIPMixedAndLiteralTargetsAreRefusedWithAndWithoutProxy(t *testing.T)
 					response.WriteHeader(http.StatusTemporaryRedirect)
 				}
 				// Through a proxy the registry itself has a fake-IP answer;
-				// without one it must have a real one.
+				// without one, a public one here.
 				answers := staticIPResolver{"registry.example": dnsAnswer("198.18.0.10"), tt.host: tt.answer}
 				var proxy *recordingProxy
 				dialer := &routedDialer{}
@@ -460,14 +461,29 @@ func TestFakeIPRegistryWithProxyRefusesAddressAndLocalhostOrigins(t *testing.T) 
 	}
 }
 
-func TestDirectRegistryRefusesFakeIPAnswerWithTheRemedy(t *testing.T) {
+// fakeIPOffPolicy is the [egress] policy with allow_fake_ip off, and with
+// proxy and noProxy as its default proxy settings.
+func fakeIPOffPolicy(t *testing.T, proxy string, noProxy ...string) egress.Policy {
+	t.Helper()
+	policy, err := egress.NewPolicy(proxy, noProxy, nil, egress.AllowFakeIP(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return policy
+}
+
+// With [egress] allow_fake_ip off, a registry that no proxy carries refuses a
+// host name answered only with fake-IP placeholders before anything is
+// dialed, as it did before the setting existed, and the refusal names a
+// proxy as the remedy.
+func TestDirectRegistryWithAllowFakeIPOffRefusesFakeIPAnswerWithTheRemedy(t *testing.T) {
 	registry := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
 		response.Header().Set("Www-Authenticate", `Bearer realm="http://auth.example/token",service="registry.example"`)
 		response.WriteHeader(http.StatusUnauthorized)
 	}))
 	t.Cleanup(registry.Close)
 
-	const remedy = "a fake-IP address from proxy software in TUN/fake-IP mode; " +
+	const remedy = "a fake-IP address from proxy software in TUN/fake-IP mode, and [egress] allow_fake_ip is off; " +
 		"set [egress] upstream_proxy or DEPSILO_EGRESS_UPSTREAM_PROXY to the proxy software's HTTP port and restart, " +
 		"see docs/deployment.md#upstream-network-egress"
 	fakeIP := net.IPAddr{IP: net.ParseIP("198.18.0.10")}
@@ -563,7 +579,8 @@ func TestDirectRegistryRefusesFakeIPAnswerWithTheRemedy(t *testing.T) {
 				origin = "http://registry.example"
 			}
 			dialer := &routedDialer{direct: registry.Listener.Addr().String()}
-			client, err := newRegistryClient(origin, "", tt.resolver, dialer.DialContext)
+			route := registryEgressFor(config.RegistryConfig{URL: origin}, fakeIPOffPolicy(t, ""))
+			client, err := buildRegistryClient("registry", origin, route, tt.resolver, dialer.DialContext)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -586,9 +603,9 @@ func TestDirectRegistryRefusesFakeIPAnswerWithTheRemedy(t *testing.T) {
 }
 
 // A registry that no_proxy or a loopback URL keeps off an existing default
-// proxy cannot be helped by setting upstream_proxy, so its fake-IP refusal
-// asks for real DNS answers instead.
-func TestRegistryKeptDirectRefusesFakeIPAnswerWithTheDNSRemedy(t *testing.T) {
+// proxy cannot be helped by setting upstream_proxy, so with [egress]
+// allow_fake_ip off its fake-IP refusal asks for real DNS answers instead.
+func TestRegistryKeptDirectWithAllowFakeIPOffRefusesFakeIPAnswerWithTheDNSRemedy(t *testing.T) {
 	proxy := newRecordingProxy(t, nil)
 	registry := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
 		response.Header().Set("Www-Authenticate", `Bearer realm="http://auth.example/token",service="registry.local"`)
@@ -596,11 +613,8 @@ func TestRegistryKeptDirectRefusesFakeIPAnswerWithTheDNSRemedy(t *testing.T) {
 	}))
 	t.Cleanup(registry.Close)
 
-	policy, err := egress.NewPolicy(proxy.URL, []string{"mirror.lan"}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	const remedy = "a fake-IP address from proxy software in TUN/fake-IP mode; " +
+	policy := fakeIPOffPolicy(t, proxy.URL, "mirror.lan")
+	const remedy = "a fake-IP address from proxy software in TUN/fake-IP mode, and [egress] allow_fake_ip is off; " +
 		"[egress] no_proxy or a loopback registry URL keeps this registry off the proxy, " +
 		"so give its host names real DNS answers, for example with fake-ip-filter in the proxy software, " +
 		"or remove the registry from no_proxy, see docs/deployment.md#upstream-network-egress"
@@ -929,7 +943,7 @@ func defaultProxyRegistry(
 	t *testing.T,
 	registryURL string,
 	proxy *recordingProxy,
-	answers ipResolver,
+	answers hostNetwork,
 	dialContext func(context.Context, string, string) (net.Conn, error),
 ) *Registry {
 	t.Helper()
@@ -1422,7 +1436,7 @@ func registryOnRoute(
 	t *testing.T,
 	route, registryURL string,
 	proxy *recordingProxy,
-	answers ipResolver,
+	answers hostNetwork,
 	dialContext func(context.Context, string, string) (net.Conn, error),
 ) *Registry {
 	t.Helper()

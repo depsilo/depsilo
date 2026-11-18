@@ -386,7 +386,8 @@ func TestWritableUpstreamCheckRetainsOperationalError(t *testing.T) {
 }
 
 func TestUpstreamCheckExplainsEgressDenialToEveryRole(t *testing.T) {
-	// A fake-IP DNS answer is refused before any connection; the bounded
+	// An Upstream URL written with a fake-IP address is refused before any
+	// connection, whatever [egress] allow_fake_ip says; the bounded
 	// explanation is visible even where raw error text is withheld.
 	_, readonly := upstreamRouterFixtureWithPrincipal(t, 1, false, "http://198.18.0.65", "")
 	recorder := performJSON(readonly, http.MethodPost, "/upstreams/1/check", "")

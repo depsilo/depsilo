@@ -3,6 +3,7 @@ package upstream
 import (
 	"context"
 	"net"
+	"net/netip"
 	"net/url"
 	"strings"
 	"syscall"
@@ -41,6 +42,16 @@ func unhealthyPool(t *testing.T) *Pool {
 	return pool
 }
 
+// fakeIPUnhealthy is the message of a pool whose every upstream failed with
+// egress_fake_ip. It names each cause that the code records and its remedy.
+const fakeIPUnhealthy = "all upstreams are unhealthy: DNS returned fake-IP addresses for every upstream (egress_fake_ip), " +
+	"and Depsilo could not connect to them: nothing carried the connections, [egress] allow_fake_ip is off, " +
+	"or the answers mixed fake-IP and other addresses or held unique-local IPv6 fake-IP addresses, which Depsilo always refuses; " +
+	"turn on the proxy software's TUN mode, " +
+	"or set [egress] upstream_proxy in config.toml (in a container, the environment variable DEPSILO_EGRESS_UPSTREAM_PROXY) " +
+	"and restart, or check allow_fake_ip; for unique-local IPv6 fake-IP addresses, " +
+	"set the proxy software's IPv6 fake-IP range to 2001:2::/48, see docs/deployment.md#upstream-network-egress"
+
 func TestAllUnhealthyErrorNamesTheSharedEgressReason(t *testing.T) {
 	const plain = "all upstreams are unhealthy"
 	const docs = "docs/deployment.md#upstream-network-egress"
@@ -49,8 +60,7 @@ func TestAllUnhealthyErrorNamesTheSharedEgressReason(t *testing.T) {
 		addresses []string // one refused answer per upstream; "" fails without a guard refusal
 		want      []string
 	}{
-		{"fake-IP answers for every upstream", []string{"198.18.0.65", "198.19.4.1"},
-			[]string{plain + ": ", "(" + FailureFakeIP + ")", "set [egress] upstream_proxy in config.toml (in a container, the environment variable DEPSILO_EGRESS_UPSTREAM_PROXY) and restart", docs}},
+		{"fake-IP answers for every upstream", []string{"198.18.0.65", "198.19.4.1"}, []string{fakeIPUnhealthy}},
 		{"overlay addresses for every upstream", []string{"100.101.102.103", "100.101.102.104"},
 			[]string{plain + ": ", "(" + FailureSharedAddress + ")", "[egress] private_ranges", docs}},
 		{"reserved addresses for every upstream", []string{"192.0.2.10", "192.0.2.11"},
@@ -103,6 +113,57 @@ func TestAllUnhealthyErrorNamesTheSharedEgressReason(t *testing.T) {
 					}
 				}
 			})
+		}
+	}
+}
+
+// A fake-IP answer that nothing carried and one that the guard refused with
+// allow_fake_ip off record the same code, so a pool that failed either way
+// names it once, with every remedy and without an address or host.
+func TestAllUnhealthyErrorNamesFakeIPAnswersThatNothingCarried(t *testing.T) {
+	pool := unhealthyPool(t)
+	upstreams := pool.Snapshot()
+	upstreams[0].applyProbe(ProbeResult{
+		Healthy: false, CheckedAt: time.Now(),
+		Err: &url.Error{Op: "Head", URL: upstreams[0].URL, Err: &fakeIPNotCarriedError{address: netip.MustParseAddr("198.18.0.65")}},
+	})
+	refuseByGuard(t, upstreams[1], "198.18.0.66")
+	for _, selector := range []Selector{NewPrioritySelector(pool), NewPassiveRecoverySelector(pool)} {
+		_, err := selector.Select(context.Background())
+		if err == nil || err.Error() != fakeIPUnhealthy {
+			t.Fatalf("error = %v, want %q", err, fakeIPUnhealthy)
+		}
+	}
+}
+
+// Proxy software with unique-local IPv6 fake-IP puts a placeholder next to a
+// unique-local address in each answer. Its TUN may carry every connection,
+// yet the guard refuses such an answer before anything is dialed, so a pool
+// that failed this way gets the same message, whose remedies include the
+// IPv6 fake-IP range.
+func TestAllUnhealthyErrorNamesUniqueLocalFakeIPAnswers(t *testing.T) {
+	pool := unhealthyPool(t)
+	for index, u := range pool.Snapshot() {
+		var log dialLog
+		dialer := &guardedDialer{
+			origin: mustURL(t, u.URL),
+			resolver: dnsAnswers(map[string][]string{
+				mustURL(t, u.URL).Hostname(): {"198.18.0.20", "fdfe:dcba:9876::20"},
+			}),
+			dialContext:    log.connecting,
+			interfaceAddrs: noInterfaceAddresses,
+		}
+		_, err := dialer.DialContext(context.Background(), "tcp", mustURL(t, u.URL).Host+":443")
+		want := Failure{Code: FailureFakeIP, Address: "fdfe:dcba:9876::20", Range: "fdfe:dcba:9876::/48"}
+		if got := ClassifyFailure(err); err == nil || *got != want || len(log.addresses()) != 0 {
+			t.Fatalf("upstream %d: DialContext = %v (%+v) after dialing %v, want %+v without a dial", index, err, got, log.addresses(), want)
+		}
+		u.applyProbe(ProbeResult{Healthy: false, CheckedAt: time.Now(), Err: &url.Error{Op: "Head", URL: u.URL, Err: err}})
+	}
+	for _, selector := range []Selector{NewPrioritySelector(pool), NewPassiveRecoverySelector(pool)} {
+		_, err := selector.Select(context.Background())
+		if err == nil || err.Error() != fakeIPUnhealthy {
+			t.Fatalf("error = %v, want %q", err, fakeIPUnhealthy)
 		}
 	}
 }

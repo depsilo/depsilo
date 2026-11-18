@@ -13,7 +13,6 @@ import (
 
 	"depsilo/internal/cascade"
 	"depsilo/internal/db"
-	"depsilo/internal/egress"
 )
 
 func newPeerForServer(t *testing.T, server *httptest.Server, mutate func(*PeerEgress)) (*http.Client, PeerEgress) {
@@ -32,7 +31,7 @@ func newPeerForServer(t *testing.T, server *httptest.Server, mutate func(*PeerEg
 	if mutate != nil {
 		mutate(&peer)
 	}
-	client, err := buildPeerClient("", peer, "https://registry.npmjs.org", egress.Policy{})
+	client, err := buildPeerClient("", peer, "https://registry.npmjs.org", PoolOptions{})
 	if err != nil {
 		t.Fatalf("buildPeerClient: %v", err)
 	}

@@ -81,17 +81,18 @@ const egressDocs = "docs/deployment.md#upstream-network-egress"
 
 // allUnhealthyError is what a client receives when no pool member can be
 // selected. When every member's newest check failed for the same egress
-// reason, a refusal by the outbound guard or a failure at the egress proxy, it
-// names that reason: otherwise a host whose DNS returns fake-IP addresses, or
-// a proxy that is down, only ever says that everything is unhealthy. Only the
-// bounded failure code is added, never an address, a host name or a status.
+// reason, a refusal by the outbound guard, a fake-IP answer that nothing
+// carried, or a failure at the egress proxy, it names that reason: otherwise
+// a host whose DNS returns fake-IP addresses, or a proxy that is down, only
+// ever says that everything is unhealthy. Only the bounded failure code is
+// added, never an address, a host name or a status.
 func allUnhealthyError(upstreams []*Upstream) error {
 	const message = "all upstreams are unhealthy"
 	switch code := sharedEgressFailure(upstreams); code {
 	case "":
 		return errors.New(message)
 	case FailureFakeIP:
-		return fmt.Errorf("%s: the outbound guard refused every upstream (%s) because DNS returned fake-IP addresses; set [egress] upstream_proxy in config.toml (in a container, the environment variable DEPSILO_EGRESS_UPSTREAM_PROXY) and restart, see %s", message, code, egressDocs)
+		return fmt.Errorf("%s: DNS returned fake-IP addresses for every upstream (%s), and Depsilo could not connect to them: nothing carried the connections, [egress] allow_fake_ip is off, or the answers mixed fake-IP and other addresses or held unique-local IPv6 fake-IP addresses, which Depsilo always refuses; turn on the proxy software's TUN mode, or set [egress] upstream_proxy in config.toml (in a container, the environment variable DEPSILO_EGRESS_UPSTREAM_PROXY) and restart, or check allow_fake_ip; for unique-local IPv6 fake-IP addresses, set the proxy software's IPv6 fake-IP range to 2001:2::/48, see %s", message, code, egressDocs)
 	case FailureSharedAddress:
 		return fmt.Errorf("%s: the outbound guard refused every upstream (%s) because they resolve into the shared address space; declare your own range under [egress] private_ranges in config.toml and restart, see %s", message, code, egressDocs)
 	case FailureEgressProxy:
@@ -120,8 +121,9 @@ func sharedEgressFailure(upstreams []*Upstream) string {
 }
 
 // isEgressFailure reports whether code explains a failure on the way out of
-// Depsilo rather than at the upstream: a refusal by the outbound guard, or a
-// failure at the egress proxy. allUnhealthyError names each such code.
+// Depsilo rather than at the upstream: a refusal by the outbound guard, a
+// fake-IP answer that nothing carried, or a failure at the egress proxy.
+// allUnhealthyError names each such code.
 func isEgressFailure(code string) bool {
 	switch code {
 	case FailureFakeIP, FailureSharedAddress, FailureReserved, FailurePrivate, FailureEgressProxy:

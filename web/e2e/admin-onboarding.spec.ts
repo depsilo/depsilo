@@ -677,7 +677,7 @@ test('upstream warnings follow the selected ecosystem even when check timestamps
   await expect(page.getByText('Related upstreams need attention: python-official.', { exact: false })).toHaveCount(0)
 })
 
-test('upstreams refused for fake-IP DNS show the cause and the remedy before the link to Upstreams', async ({ page }) => {
+test('upstreams failing for fake-IP DNS show the cause and the remedy before the link to Upstreams', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 844 })
   await setUiPreferences(page, 'light', 'en')
   const fakeIP = { code: 'egress_fake_ip' as const, address: '198.18.0.65', range: '198.18.0.0/15' }
@@ -693,14 +693,21 @@ test('upstreams refused for fake-IP DNS show the cause and the remedy before the
   await page.goto('/admin/connect')
   const warning = page.locator('.connection-warning').filter({ hasText: 'Related upstreams need attention: tuna, official, lan-mirror.' })
   await expect(warning.locator('[data-connect-upstream-failure="egress_fake_ip"]')).toHaveText(
-    'The DNS that Depsilo uses resolves the hosts of tuna, official into fake-IP ranges such as 198.18.0.0/15 and 2001:2::/48. '
-    + 'Proxy software in fake-IP mode answers this way, and Depsilo does not connect to such addresses by default. '
-    + 'Set upstream_proxy under [egress] in config.toml (or the environment variable DEPSILO_EGRESS_UPSTREAM_PROXY) '
-    + 'to the proxy software\'s HTTP port (for example http://127.0.0.1:7890) and restart, '
-    + 'or give Depsilo a DNS server that returns real addresses. '
+    'The DNS that Depsilo uses resolves the hosts of tuna, official into fake-IP ranges such as 198.18.0.0/15 and 2001:2::/48, '
+    + 'as proxy software in fake-IP mode does, and Depsilo could not connect to those addresses: nothing carried the connections, '
+    + '[egress] allow_fake_ip is off, or the answers mixed fake-IP and other addresses or held unique-local IPv6 fake-IP addresses, '
+    + 'which Depsilo always refuses. '
+    + 'Turn on the proxy software\'s TUN mode, which carries connections to fake-IP addresses, '
+    + 'or set upstream_proxy under [egress] in config.toml (or the environment variable DEPSILO_EGRESS_UPSTREAM_PROXY) '
+    + 'to the proxy software\'s HTTP port (for example http://127.0.0.1:7890) and restart. '
     + 'Inside a container, 127.0.0.1 is the container itself: remove the container and run it again with '
     + 'DEPSILO_EGRESS_UPSTREAM_PROXY=http://host.docker.internal:7890 (docker restart keeps the old environment), '
     + 'adding --add-host=host.docker.internal:host-gateway on Docker Engine for Linux. '
+    + 'If [egress] allow_fake_ip or DEPSILO_EGRESS_ALLOW_FAKE_IP is false, Depsilo does not connect to fake-IP addresses itself: '
+    + 'check whether it was turned off on purpose, for a network that really uses these ranges; '
+    + 'if not, set it to true, or use the proxy port. '
+    + 'If DNS also returns IPv6 fake-IP addresses from a unique-local range such as fdfe:dcba:9876::/48, '
+    + 'set the proxy software\'s IPv6 fake-IP range to 2001:2::/48. '
     + 'Details: "Upstream network egress" in the deployment guide.',
   )
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
