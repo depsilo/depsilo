@@ -159,11 +159,6 @@ type RuleSpecificity struct {
 	ID     uint `json:"id"`
 }
 
-// RulePrecedence is a descriptive alias for callers that prefer the term
-// precedence over specificity. It intentionally remains an alias so values
-// can be passed to APIs using either name without conversion.
-type RulePrecedence = RuleSpecificity
-
 // Compare returns 1 when s wins over other, -1 when other wins, and 0 when
 // the tuples are identical. The comparison is lexicographic in the exact
 // order documented by RuleSpecificity.
@@ -259,8 +254,7 @@ type Engine struct {
 	mu        sync.RWMutex
 	refreshMu sync.Mutex
 	cache     []compiledRule
-	// lastLoad is the instant of the last successful snapshot load. Keep the
-	// name for compatibility with package-local tests and tooling.
+	// lastLoad is the instant of the last successful snapshot load.
 	lastLoad              time.Time
 	lastRefreshAttempt    time.Time
 	lastRefreshError      error
