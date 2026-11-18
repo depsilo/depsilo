@@ -2957,8 +2957,6 @@ const zh = {
       },
       events_list: {
         upstream_down: '上游源全部故障',
-        disk_high: '磁盘使用率过高',
-        vuln_critical: '严重安全漏洞',
         license_expiring: '许可证即将到期',
         quarantine_blocked: '供应链隔离拦截',
         malware_blocked: '恶意软件拦截',

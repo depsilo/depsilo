@@ -24,8 +24,6 @@ import { getApiError } from '@/lib/apiError'
 const PLATFORM_OPTIONS = ['slack', 'dingtalk', 'wecom', 'feishu', 'generic'] as const
 const WEBHOOK_EVENTS = [
   'upstream_down',
-  'disk_high',
-  'vuln_critical',
   'license_expiring',
   'quarantine_blocked',
   'malware_blocked',

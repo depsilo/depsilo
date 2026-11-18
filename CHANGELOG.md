@@ -324,7 +324,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - Blocklist sync logs one warning per sync with skipped advisories counted
   by ecosystem; set `server.log_level` to `debug` to list them.
 
+### Removed
+- Admin webhooks no longer offer "High Disk Usage" (`disk_high`) or
+  "Critical Vulnerability" (`vuln_critical`): Depsilo never sent either
+  event. A webhook saved with them keeps the values, which match nothing.
+
 ### Fixed
+- The webhook sent when a Pro license or trial expires no longer says that
+  audit logs, SBOM, security scanning, and rules are locked. The free
+  edition keeps every feature; the message now names its limits (one
+  project and the monthly transfer bundle export allowance).
 - `depsilo audit verify` runs instead of `Unknown command: audit`, accepts
   a DSN with `?` options, and without a configuration file or database says
   that no instance was found and where it looked.

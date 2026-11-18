@@ -124,7 +124,7 @@ func checkLicense(ctx context.Context, n *Notifier, checker *entitlement.Checker
 			Type:      EventLicenseExpiring,
 			Severity:  "critical",
 			Title:     "Depsilo Pro license has expired",
-			Message:   "Your Pro license expired. Pro features (audit logs, SBOM, security scanning, rules) are now locked.",
+			Message:   "Your Pro license or trial expired. The free edition's limits now apply: one project and the monthly transfer bundle export allowance. Existing projects and their traffic stay available.",
 			Timestamp: time.Now(),
 		}
 		logDispatchAdmission(ctx, event, n.Dispatch(event))
@@ -133,7 +133,7 @@ func checkLicense(ctx context.Context, n *Notifier, checker *entitlement.Checker
 			Type:      EventLicenseExpiring,
 			Severity:  "warning",
 			Title:     "Depsilo Pro license expiring soon",
-			Message:   "Your Pro license expires in " + itoa(daysLeft) + " day(s). Renew to keep Pro features.",
+			Message:   "Your Pro license expires in " + itoa(daysLeft) + " day(s). Renew to keep unlimited projects and transfer bundle exports.",
 			Detail:    "Expires: " + status.ExpiresAt.Format("2006-01-02"),
 			Timestamp: time.Now(),
 		}

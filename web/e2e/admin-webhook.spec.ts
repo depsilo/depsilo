@@ -157,7 +157,7 @@ test('hides mutation controls for an admin using a readonly API token', async ({
   await expect(page.getByRole('button', { name: /删除 ops/ })).toHaveCount(0)
 })
 
-test('does not infer wildcard from an explicit seven-item set with a custom member', async ({ page }) => {
+test('does not infer wildcard from an explicit five-item set with a custom member', async ({ page }) => {
   let payload: unknown
   const customWebhook = { ...webhookRows[1], enabled: true, events: 'tamper_detected,custom_specific' }
   await mockAdminApi(page, {
@@ -170,12 +170,12 @@ test('does not infer wildcard from an explicit seven-item set with a custom memb
   await openWebhookTab(page)
   await page.getByRole('button', { name: /编辑 audit/ }).click()
   await expect(page.getByRole('checkbox', { name: /检测到内容篡改/ })).toBeChecked()
-  for (const eventName of [/磁盘使用率过高/, /严重安全漏洞/, /许可证即将到期/, /供应链隔离拦截/, /恶意软件拦截/]) {
+  for (const eventName of [/许可证即将到期/, /供应链隔离拦截/, /恶意软件拦截/]) {
     await page.getByRole('checkbox', { name: eventName }).check()
   }
   await page.getByRole('button', { name: /^保存$/ }).click()
   await expect.poll(() => payload).toMatchObject({
-    events: 'tamper_detected,custom_specific,disk_high,vuln_critical,license_expiring,quarantine_blocked,malware_blocked',
+    events: 'tamper_detected,custom_specific,license_expiring,quarantine_blocked,malware_blocked',
   })
   expect(payload).not.toMatchObject({ events: '*' })
 })
@@ -196,7 +196,7 @@ test('keeps an untouched server wildcard while saving another field', async ({ p
   await expect.poll(() => payload).toMatchObject({ name: 'ops renamed', events: '*' })
 })
 
-test('serializes all seven explicitly selected events without wildcard', async ({ page }) => {
+test('serializes all five explicitly selected events without wildcard', async ({ page }) => {
   let payload: unknown
   const specificWebhook = { ...webhookRows[1], enabled: true }
   await mockAdminApi(page, {
@@ -208,12 +208,12 @@ test('serializes all seven explicitly selected events without wildcard', async (
   })
   await openWebhookTab(page)
   await page.getByRole('button', { name: /编辑 audit/ }).click()
-  for (const eventName of [/上游源全部故障/, /磁盘使用率过高/, /严重安全漏洞/, /许可证即将到期/, /供应链隔离拦截/, /恶意软件拦截/]) {
+  for (const eventName of [/上游源全部故障/, /许可证即将到期/, /供应链隔离拦截/, /恶意软件拦截/]) {
     await page.getByRole('checkbox', { name: eventName }).check()
   }
   await page.getByRole('button', { name: /^保存$/ }).click()
   await expect.poll(() => payload).toMatchObject({
-    events: 'tamper_detected,upstream_down,disk_high,vuln_critical,license_expiring,quarantine_blocked,malware_blocked',
+    events: 'tamper_detected,upstream_down,license_expiring,quarantine_blocked,malware_blocked',
   })
   expect(payload).not.toMatchObject({ events: '*' })
 })

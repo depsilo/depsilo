@@ -5,8 +5,6 @@ import "time"
 // Event types that can trigger a notification.
 const (
 	EventUpstreamDown    = "upstream_down"
-	EventDiskHigh        = "disk_high"
-	EventVulnCritical    = "vuln_critical"
 	EventLicenseExpiring = "license_expiring"
 	// EventQuarantineBlocked fires when the minimum-release-age policy
 	// refuses to serve a package. The webhook payload includes the

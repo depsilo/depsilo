@@ -388,7 +388,7 @@ func TestDispatchToOnlyDeliversPassedConfigAndDoesNotTouchCooldown(t *testing.T)
 		Platform:        "generic",
 		URL:             targetServer.URL,
 		Enabled:         false,
-		Events:          EventDiskHigh,
+		Events:          EventLicenseExpiring,
 		CooldownMinutes: 24 * 60,
 		LastSentAt:      &previousSentAt,
 	}
@@ -458,7 +458,7 @@ func TestDispatchToClosedRuntimeReturnsErrClosedWithoutDelivery(t *testing.T) {
 	notifier := New(nil, runtime)
 	config := db.WebhookConfig{
 		Name: "closed-runtime-target", Platform: "generic", URL: server.URL,
-		Enabled: false, Events: EventDiskHigh, CooldownMinutes: 30,
+		Enabled: false, Events: EventLicenseExpiring, CooldownMinutes: 30,
 	}
 	if err := notifier.DispatchTo(config, testEvent()); !errors.Is(err, asyncruntime.ErrClosed) {
 		t.Fatalf("DispatchTo error = %v, want ErrClosed", err)

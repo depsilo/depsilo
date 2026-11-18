@@ -98,9 +98,9 @@ func TestMatchEvent(t *testing.T) {
 		{"*", "upstream_down", true},
 		{"", "upstream_down", true},
 		{"upstream_down", "upstream_down", true},
-		{"upstream_down,disk_high", "disk_high", true},
-		{"upstream_down", "disk_high", false},
-		{"upstream_down,disk_high", "vuln_critical", false},
+		{"upstream_down,license_expiring", "license_expiring", true},
+		{"upstream_down", "license_expiring", false},
+		{"upstream_down,license_expiring", "malware_blocked", false},
 	}
 	for _, tt := range tests {
 		got := matchEvent(tt.filter, tt.event)
