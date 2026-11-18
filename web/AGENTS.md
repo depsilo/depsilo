@@ -39,6 +39,7 @@ These instructions apply under `web/`. Read the root `AGENTS.md` first.
 
 ```bash
 npm --prefix web run lint
+npm --prefix web run lint:dead   # knip: unused files, exports, dependencies
 npm --prefix web run test:unit
 npm --prefix web run test:ui -- <focused-spec>
 make lint-i18n

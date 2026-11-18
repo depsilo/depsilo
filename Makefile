@@ -387,8 +387,9 @@ lint-go: prepare-go             # 内部：检查 gofmt + go vet
 		test -z "$$unformatted" || { echo "gofmt required:"; echo "$$unformatted"; exit 1; }
 	go vet $(GO_TEST_PKGS)
 
-lint-web:                       # 内部：检查前端 ESLint
+lint-web:                       # 内部：检查前端 ESLint 与未使用的文件、导出和依赖
 	$(NPM_RUN) lint
+	$(NPM_RUN) lint:dead
 
 lint-i18n:                      ## 检查 zh.ts/en.ts 与 t() 调用是否一致
 	@python3 scripts/i18n-audit.py

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "e2e/fixtures/*.tsx",
+    "playwright.production.config.ts",
+    "src/lib/*.type-test.ts"
+  ],
+  "ignore": ["src/components/ui/**"],
+  "ignoreDependencies": ["@fontsource-variable/.+"],
+  "ignoreExportsUsedInFile": true,
+  "rules": {
+    "types": "off"
+  }
+}

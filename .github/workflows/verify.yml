@@ -79,6 +79,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Unused files, exports, and dependencies
+        run: npm run lint:dead
+
       - name: Type check browser contracts
         run: npm run type-check:e2e
 
