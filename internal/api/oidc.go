@@ -184,7 +184,7 @@ func (h *OIDCHandler) Identities(c *gin.Context) {
 		items = append(items, contract.LoginIdentity{
 			ID: row.ID, Provider: row.Provider, Protocol: contract.IdentityProtocol(protocol), ProviderName: name,
 			ProviderMatches: matches, LoginAvailable: matches && manager.Enabled(), DisplayName: row.DisplayName,
-			CreatedAt: row.CreatedAt, LastLoginAt: row.LastLoginAt, CanUnlink: local,
+			CreatedAt: row.CreatedAt, LastLoginAt: contract.NullableTime(row.LastLoginAt), CanUnlink: local,
 		})
 	}
 	source := user.PermissionSource

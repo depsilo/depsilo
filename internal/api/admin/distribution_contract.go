@@ -95,6 +95,6 @@ func toDistributionImportResult(result *distribution.ImportResult) contract.Dist
 func toDistributionExportUsage(usage distribution.ExportUsage) contract.DistributionExportUsage {
 	return contract.DistributionExportUsage{
 		Unlimited: usage.Unlimited, BundleLimit: usage.BundleLimit, MonthlyLimit: usage.MonthlyLimit,
-		UsedBytes: usage.UsedBytes, ResetsAt: usage.ResetsAt,
+		UsedBytes: usage.UsedBytes, ResetsAt: contract.NullableTime(usage.ResetsAt),
 	}
 }

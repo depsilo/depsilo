@@ -188,7 +188,7 @@ type LoginIdentity struct {
 	LoginAvailable  bool             `json:"login_available"`
 	DisplayName     string           `json:"display_name"`
 	CreatedAt       time.Time        `json:"created_at"`
-	LastLoginAt     time.Time        `json:"last_login_at"`
+	LastLoginAt     *time.Time       `json:"last_login_at" tstype:"string | null,required"`
 	CanUnlink       bool             `json:"can_unlink"`
 }
 

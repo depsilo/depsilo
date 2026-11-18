@@ -173,14 +173,13 @@ type DistributionPruneResponse struct {
 
 // DistributionExportUsage answers GET /admin/distribution/usage: the current
 // UTC month's transfer-bundle export allowance. The limits are absent when
-// exports are unlimited; ResetsAt is the zero time when exports are not
-// metered at all.
+// exports are unlimited; ResetsAt is null when exports are not metered at all.
 type DistributionExportUsage struct {
-	Unlimited    bool      `json:"unlimited"`
-	BundleLimit  int64     `json:"bundle_limit_bytes,omitempty"`
-	MonthlyLimit int64     `json:"monthly_limit_bytes,omitempty"`
-	UsedBytes    int64     `json:"used_bytes"`
-	ResetsAt     time.Time `json:"resets_at"`
+	Unlimited    bool       `json:"unlimited"`
+	BundleLimit  int64      `json:"bundle_limit_bytes,omitempty"`
+	MonthlyLimit int64      `json:"monthly_limit_bytes,omitempty"`
+	UsedBytes    int64      `json:"used_bytes"`
+	ResetsAt     *time.Time `json:"resets_at" tstype:"string | null,required"`
 }
 
 // DistributionImportResult answers POST /admin/distribution/import. A failed

@@ -96,13 +96,13 @@ func (h *AuditHandler) Integrity(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, contract.AuditIntegrityResponse{
 		AnchorFeed: contract.AuditAnchorFeed{
-			FileConfigured: feed.FileConfigured, FileLastSuccessAt: timeOrNil(feed.FileLastSuccessAt), FileLastError: feed.FileLastError,
-			RemoteConfigured: feed.RemoteConfigured, RemoteLastSuccessAt: timeOrNil(feed.RemoteLastSuccessAt),
+			FileConfigured: feed.FileConfigured, FileLastSuccessAt: contract.NullableTime(feed.FileLastSuccessAt), FileLastError: feed.FileLastError,
+			RemoteConfigured: feed.RemoteConfigured, RemoteLastSuccessAt: contract.NullableTime(feed.RemoteLastSuccessAt),
 			RemoteHeadID: feed.RemoteHeadID, RemoteLastError: feed.RemoteLastError,
 		},
 		Anchors: contract.AuditAnchorReport{
 			Configured: anchors.Configured, Path: anchors.Path, Checkpoints: anchors.Checkpoints,
-			InvalidLines: anchors.InvalidLines, LatestCheckedAt: timeOrNil(anchors.LatestCheckedAt),
+			InvalidLines: anchors.InvalidLines, LatestCheckedAt: contract.NullableTime(anchors.LatestCheckedAt),
 			LatestHeadID: anchors.LatestHeadID, LatestHeadHash: anchors.LatestHeadHash,
 			OK: anchors.OK, BrokenAtID: anchors.BrokenAtID, Reason: anchors.Reason,
 		},
@@ -113,15 +113,6 @@ func (h *AuditHandler) Integrity(c *gin.Context) {
 			Reason: report.Reason, ScannedAt: report.ScannedAt,
 		},
 	})
-}
-
-// timeOrNil sends "never" as null rather than Go's zero time, which a client
-// would read as a real, truthy timestamp.
-func timeOrNil(value time.Time) *time.Time {
-	if value.IsZero() {
-		return nil
-	}
-	return &value
 }
 
 func (h *AuditHandler) parseQuery(c *gin.Context) (audit.Query, error) {

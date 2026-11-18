@@ -184,7 +184,7 @@ export default function Account() {
                     {loginAvailable && Boolean(provider?.session_ttl_seconds) && <p>{t('account.sessionMinutes', { count: (provider?.session_ttl_seconds ?? 0) / 60 })}</p>}
                     <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
                       <div><dt>{t('account.boundAt')}</dt><dd className="mt-1 tabular-nums">{formatDate(identity.created_at)} {formatTime(identity.created_at, 'time')}</dd></div>
-                      <div><dt>{t('users.lastLogin')}</dt><dd className="mt-1 tabular-nums">{identity.last_login_at && !identity.last_login_at.startsWith('0001-') ? `${formatDate(identity.last_login_at)} ${formatTime(identity.last_login_at, 'time')}` : t('account.neverSignedIn')}</dd></div>
+                      <div><dt>{t('users.lastLogin')}</dt><dd className="mt-1 tabular-nums">{identity.last_login_at ? `${formatDate(identity.last_login_at)} ${formatTime(identity.last_login_at, 'time')}` : t('account.neverSignedIn')}</dd></div>
                     </dl>
                   </div>
                 </details>

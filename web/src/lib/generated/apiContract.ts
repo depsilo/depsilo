@@ -689,15 +689,14 @@ export interface DistributionPruneResponse {
 /**
  * DistributionExportUsage answers GET /admin/distribution/usage: the current
  * UTC month's transfer-bundle export allowance. The limits are absent when
- * exports are unlimited; ResetsAt is the zero time when exports are not
- * metered at all.
+ * exports are unlimited; ResetsAt is null when exports are not metered at all.
  */
 export interface DistributionExportUsage {
   unlimited: boolean;
   bundle_limit_bytes?: number /* int64 */;
   monthly_limit_bytes?: number /* int64 */;
   used_bytes: number /* int64 */;
-  resets_at: string;
+  resets_at: string | null;
 }
 /**
  * DistributionImportResult answers POST /admin/distribution/import. A failed
@@ -903,7 +902,7 @@ export interface LoginIdentity {
   login_available: boolean;
   display_name: string;
   created_at: string;
-  last_login_at: string;
+  last_login_at: string | null;
   can_unlink: boolean;
 }
 /**
