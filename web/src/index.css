@@ -117,9 +117,11 @@
 }
 
 /* ── :root — Instrument LIGHT tokens ──────────────────────
-   These are the LIGHT mode values. Dark is the product default
-   and lives under [data-theme="dark"] below, which is set on
-   <html> by main.tsx before first paint to avoid FOUC.
+   These are the LIGHT mode values. Dark lives under
+   [data-theme="dark"] below. The pre-paint script in index.html
+   resolves the stored preference (default: follow the system) and
+   sets data-theme on <html> before first paint, so the tokens are
+   written once and never duplicated under prefers-color-scheme.
 
    Components use shadcn's role tokens (--background, --card,
    --muted, --foreground, --muted-foreground, --primary, ...)
@@ -269,7 +271,7 @@
   --sidebar-ring: var(--ring);
 }
 
-/* ── Dark mode — Instrument default ────────────────────── */
+/* ── Dark mode ─────────────────────────────────────────── */
 html.dark,
 [data-theme="dark"] {
   color-scheme: dark;
@@ -355,97 +357,6 @@ html.dark,
   --code-accent: oklch(0.87 0 0);
   --code-danger: oklch(0.704 0.191 22.216);
   --code-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.6);
-}
-
-/* Auto-follow OS when user has selected "system" mode (i.e. no
-   class="light"/"dark" and no data-theme="light"/"dark" on <html>).
-   With dark now being the product default, this branch only kicks in
-   on a fresh install where the user has selected "system" and the OS
-   reports dark — which then matches the standard dark Instrument
-   tokens. Pulls in the same values as [data-theme="dark"] to keep
-   the two paths in lockstep. */
-@media (prefers-color-scheme: dark) {
-  html:not(.light):not([data-theme="light"]) {
-    color-scheme: dark;
-    --logo-mark: #3b82f6;
-    --logo-mark-light: #60a5fa;
-    --logo-mark-accent: #22c55e;
-    --logo-mark-accent-deep: #16a34a;
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: #2b5fda;
-    --primary-foreground: #ffffff;
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --input: oklch(1 0 0 / 15%);
-    --ring: #6b93f7;
-    --radius: 0.625rem;
-
-    --admin-rail: oklch(0.205 0 0);
-
-    --border:        oklch(1 0 0 / 10%);
-    --border-strong: oklch(1 0 0 / 20%);
-
-    --brand:        #6b93f7;
-    --brand-soft:   #16234a;
-    --brand-border: #2b4090;
-    --brand-text:   #a8c3fb;
-
-    --primary-press: #1e47b8;
-
-    --spec-1: oklch(0.87 0 0);
-    --spec-2: oklch(0.556 0 0);
-    --spec-3: oklch(0.439 0 0);
-    --spec-4: oklch(0.371 0 0);
-
-    --ok:          oklch(0.696 0.17 162.48);
-    --ok-fill:     oklch(0.262 0.051 172.552);
-    --ok-border:   oklch(0.432 0.095 166.913);
-    --ok-text:     oklch(0.765 0.177 163.223);
-
-    --warn:        oklch(0.828 0.189 84.429);
-    --warn-fill:   oklch(0.279 0.077 45.635);
-    --warn-border: oklch(0.473 0.137 46.201);
-    --warn-text:   oklch(0.879 0.169 91.605);
-
-    --danger:        oklch(0.704 0.191 22.216);
-    --sev-critical:  #e5484d;
-    --sev-high:      #ff9b45;
-    --sev-medium:    #ffe066;
-    --sev-low:       var(--muted-foreground);
-    --sev-unknown:   var(--border-strong);
-    --danger-fill:   oklch(0.258 0.092 26.042);
-    --danger-border: oklch(0.444 0.177 26.899);
-    --danger-text:   oklch(0.808 0.114 19.571);
-    --focus-ring:    #6b93f7;
-
-    --bg:        oklch(0.145 0 0);
-    --hit:       var(--ok);
-    --on-hit:    var(--ok-text);
-    --grid:      color-mix(in oklab, var(--border) 35%, transparent);
-
-    --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.4);
-    --shadow-surface: 0 1px 3px 0 rgb(0 0 0 / 0.5), 0 1px 2px -1px rgb(0 0 0 / 0.5);
-    --shadow-pop: 0 10px 15px -3px rgb(0 0 0 / 0.6), 0 4px 6px -4px rgb(0 0 0 / 0.6);
-
-    --code-bg: oklch(0.141 0.005 285.823);
-    --code-header: oklch(0.21 0.006 285.885);
-    --code-line: oklch(1 0 0 / 10%);
-    --code-fg: oklch(0.985 0 0);
-    --code-muted: oklch(0.705 0.015 286.067);
-    --code-accent: oklch(0.87 0 0);
-    --code-danger: oklch(0.704 0.191 22.216);
-    --code-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.6);
-  }
 }
 
 /* ── Body defaults ── */
@@ -852,12 +763,6 @@ details[open] > summary:not(.list-none):not(:has(> .icon))::before {
 html.dark .dashboard-surface {
   --dash-hit: #1fae52;
   --dash-miss: #4f7df0;
-}
-@media (prefers-color-scheme: dark) {
-  html:not(.light):not([data-theme="light"]) .dashboard-surface {
-    --dash-hit: #1fae52;
-    --dash-miss: #4f7df0;
-  }
 }
 .dash-focus:focus-visible {
   outline: 2px solid var(--dash-accent);

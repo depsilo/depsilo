@@ -43,8 +43,12 @@ Standard source includes these deliberate project adaptations:
 `web/src/index.css` owns the theme. Route-specific layout CSS loads with its
 route (including PortalApp, Dashboard, and ConnectProject), keeping it out of
 the initial shared assets. Generic components use shadcn semantic
-roles. Existing compatibility aliases resolve to those roles; Dashboard
-surfaces and status colors also resolve through this shared theme. Chart
+roles directly; Dashboard surfaces and status colors also resolve through
+this shared theme. Light tokens live on `:root` and dark tokens once under
+`[data-theme="dark"]`: the pre-paint script in `web/index.html` resolves the
+stored preference (default: follow the system) and sets `data-theme` and the
+`color-scheme` meta before first paint, so do not repeat dark tokens under
+`prefers-color-scheme`. Chart
 series, the blue Dashboard action accent, and Portal branding retain explicit
 semantic roles rather than creating another generic component layer.
 

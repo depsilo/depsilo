@@ -27,10 +27,13 @@ test('Portal mounts and language switching works when Web Storage is blocked', a
     }),
   }))
 
+  // With no stored preference the theme follows the system.
+  await page.emulateMedia({ colorScheme: 'dark' })
   await page.goto('/')
 
   await expect(page.locator('#root')).not.toBeEmpty()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await expect(page.locator('meta[name="color-scheme"]')).toHaveAttribute('content', 'dark')
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN')
 
   await page.locator('[data-language-toggle="portal"]').click()

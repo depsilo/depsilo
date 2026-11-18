@@ -59,6 +59,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   did; `config.example.toml` shows the key commented out.
 
 ### Changed
+- The Portal and Admin appearance follows the system light or dark setting
+  until you pick Light or Dark; it used to start dark. Earlier builds saved
+  that dark default on every visit, so a browser that has opened Depsilo
+  before stays dark until you choose System once. The page declares
+  `<meta name="color-scheme">`, so the browser draws its background and
+  native controls in the chosen scheme before the styles load. The
+  appearance saved under the old `theme` browser key is no longer read.
 - Development: `make security` and the CI frontend job audit frontend
   dependencies with `scripts/npm-audit-gate.py`, which fails on advisories of
   moderate or higher severity, as `npm audit --audit-level=moderate` did,

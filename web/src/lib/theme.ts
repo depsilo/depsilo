@@ -4,10 +4,10 @@ import { readLocalStorage, writeLocalStorage } from './storage'
 export type ThemePreference = 'light' | 'dark' | 'system'
 export type ResolvedTheme = 'light' | 'dark'
 
+// Keep in step with the pre-paint script in index.html.
 const STORAGE_KEY = 'depsilo-theme'
-const LEGACY_STORAGE_KEY = 'theme'
-const DEFAULT_THEME: ThemePreference = 'dark'
-const DEFAULT_RESOLVED_THEME: ResolvedTheme = 'dark'
+const DEFAULT_THEME: ThemePreference = 'system'
+const DEFAULT_RESOLVED_THEME: ResolvedTheme = 'light'
 
 let memoryPreference: ThemePreference | undefined
 const subscribers = new Set<() => void>()
@@ -23,13 +23,6 @@ function readThemePreference(): ThemePreference {
   if (isThemePreference(stored)) {
     memoryPreference = stored
     return stored
-  }
-
-  const legacy = readLocalStorage(LEGACY_STORAGE_KEY)
-  if (isThemePreference(legacy)) {
-    writeLocalStorage(STORAGE_KEY, legacy)
-    memoryPreference = legacy
-    return legacy
   }
 
   memoryPreference = DEFAULT_THEME
@@ -49,7 +42,7 @@ function resolvedThemeSnapshot(): ResolvedTheme {
   if (typeof document === 'undefined') return DEFAULT_RESOLVED_THEME
   const declared = document.documentElement.getAttribute('data-theme')
   if (declared === 'light' || declared === 'dark') return declared
-  return document.documentElement.classList.contains('light') ? 'light' : 'dark'
+  return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
 }
 
 function applyThemePreference(theme: ThemePreference) {
@@ -58,6 +51,7 @@ function applyThemePreference(theme: ThemePreference) {
   root.classList.remove('light', 'dark')
   root.classList.add(resolved)
   root.setAttribute('data-theme', resolved)
+  document.querySelector<HTMLMetaElement>('meta[name="color-scheme"]')?.setAttribute('content', resolved)
 }
 
 function announceThemeChange() {
@@ -65,7 +59,7 @@ function announceThemeChange() {
 }
 
 function handleStorage(event: StorageEvent) {
-  if (event.key !== STORAGE_KEY && event.key !== LEGACY_STORAGE_KEY) return
+  if (event.key !== STORAGE_KEY) return
   memoryPreference = undefined
   applyThemePreference(readThemePreference())
   announceThemeChange()
@@ -92,7 +86,6 @@ export function useThemePreference(): readonly [ThemePreference, (theme: ThemePr
 
   useEffect(() => {
     applyThemePreference(theme)
-    writeThemePreference(theme)
     announceThemeChange()
 
     if (theme !== 'system') return

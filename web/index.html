@@ -7,30 +7,28 @@
     <title>Depsilo</title>
     <!-- Machine-readable description of this service for scripts and AI agents. -->
     <link rel="alternate" type="application/json" href="/api/v1/discover" />
+    <!-- Lets the browser paint its canvas and native controls in the right
+         scheme before any CSS loads; the script below narrows it. -->
+    <meta name="color-scheme" content="light dark" />
     <script>
-      // Pre-paint theme init — runs before React mounts so the user
-      // never sees a flash of the wrong theme. Reads the new
-      // "depsilo-theme" key, falls back to the legacy "theme" key
-      // for users with the previous build, and defaults to "dark"
-      // when neither exists (Instrument default).
+      // Pre-paint theme init, before React mounts, so the page never flashes
+      // the wrong scheme. A stored "light" or "dark" pins the scheme; anything
+      // else, including no stored value, follows the system preference.
       (function(){
-        var KEY = 'depsilo-theme';
-        var t = 'dark';
+        var t = 'system';
         try {
-          t = window.localStorage.getItem(KEY) || window.localStorage.getItem('theme') || t;
+          t = window.localStorage.getItem('depsilo-theme') || t;
         } catch (_) {
-          // Storage may be blocked in hardened browser contexts. Theme
-          // persistence is optional, so keep the Instrument default.
+          // Storage may be blocked in hardened browser contexts; persistence
+          // is optional, so follow the system preference.
         }
-        if (t !== 'light' && t !== 'dark' && t !== 'system') t = 'dark';
-        var resolved = t;
-        if (t === 'system') {
-          resolved = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
-        }
-        document.documentElement.classList.add(resolved);
-        document.documentElement.setAttribute('data-theme', resolved);
+        var resolved = t === 'light' || t === 'dark' ? t
+          : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        var root = document.documentElement;
+        root.classList.add(resolved);
+        root.setAttribute('data-theme', resolved);
+        document.querySelector('meta[name="color-scheme"]').content = resolved;
       })();
-
     </script>
   </head>
   <body>
