@@ -361,6 +361,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   event. A webhook saved with them keeps the values, which match nothing.
 
 ### Fixed
+- Admin's audit integrity notice no longer reports the remote anchor as
+  synced when it has never succeeded. `GET /api/v1/admin/audit/integrity`
+  now sends `null`, not `0001-01-01T00:00:00Z`, for a sink or checkpoint
+  that has never succeeded (`latest_checked_at`, `file_last_success_at`,
+  `remote_last_success_at`).
 - The webhook sent when a Pro license or trial expires no longer says that
   audit logs, SBOM, security scanning, and rules are locked. The free
   edition keeps every feature; the message now names its limits (one

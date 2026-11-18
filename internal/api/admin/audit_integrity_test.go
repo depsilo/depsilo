@@ -64,3 +64,39 @@ func TestAuditIntegrityEndpointReportsChain(t *testing.T) {
 		t.Fatalf("tampered integrity = %+v", body.Integrity)
 	}
 }
+
+// A sink or checkpoint that has never succeeded is sent as null; Go's zero
+// time would read as a real, truthy timestamp in the Admin UI.
+func TestAuditIntegrityEndpointSendsNeverAsNull(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "audit-never.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(database); err != nil {
+		t.Fatal(err)
+	}
+	router := gin.New()
+	router.GET("/audit/integrity", NewAuditHandler(database).Integrity)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/audit/integrity", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var body struct {
+		Anchors    map[string]json.RawMessage `json:"anchors"`
+		AnchorFeed map[string]json.RawMessage `json:"anchor_feed"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	for name, value := range map[string]json.RawMessage{
+		"anchors.latest_checked_at":          body.Anchors["latest_checked_at"],
+		"anchor_feed.file_last_success_at":   body.AnchorFeed["file_last_success_at"],
+		"anchor_feed.remote_last_success_at": body.AnchorFeed["remote_last_success_at"],
+	} {
+		if string(value) != "null" {
+			t.Errorf("%s = %s, want null", name, value)
+		}
+	}
+}

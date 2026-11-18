@@ -706,15 +706,14 @@ export interface AuditChainReport {
 }
 /**
  * AuditAnchorReport cross-checks chain-head checkpoints against the database.
- * LatestCheckedAt is the zero time (0001-01-01T00:00:00Z) before the first
- * checkpoint.
+ * LatestCheckedAt is null before the first checkpoint.
  */
 export interface AuditAnchorReport {
   configured: boolean;
   path?: string;
   checkpoints: number /* int */;
   invalid_lines?: number /* int */;
-  latest_checked_at: string;
+  latest_checked_at: string | null;
   latest_head_id?: number /* uint */;
   latest_head_hash?: string;
   ok: boolean;
@@ -722,15 +721,15 @@ export interface AuditAnchorReport {
   reason?: string;
 }
 /**
- * AuditAnchorFeed reports the checkpoint sinks. A *LastSuccessAt is the zero
- * time (0001-01-01T00:00:00Z) until that sink first succeeds.
+ * AuditAnchorFeed reports the checkpoint sinks. A *LastSuccessAt is null until
+ * that sink first succeeds.
  */
 export interface AuditAnchorFeed {
   file_configured: boolean;
-  file_last_success_at: string;
+  file_last_success_at: string | null;
   file_last_error?: string;
   remote_configured: boolean;
-  remote_last_success_at: string;
+  remote_last_success_at: string | null;
   remote_head_id?: number /* uint */;
   remote_last_error?: string;
 }

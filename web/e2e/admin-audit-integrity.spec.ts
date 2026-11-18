@@ -14,12 +14,12 @@ function integrity(overrides: Partial<AuditChainReport>): AuditIntegrityResponse
       scanned_at: '2026-10-06T10:00:00Z',
       ...overrides,
     },
-    anchors: { configured: false, checkpoints: 0, latest_checked_at: '0001-01-01T00:00:00Z', ok: true },
+    anchors: { configured: false, checkpoints: 0, latest_checked_at: null, ok: true },
     anchor_feed: {
       file_configured: false,
-      file_last_success_at: '0001-01-01T00:00:00Z',
+      file_last_success_at: null,
       remote_configured: false,
-      remote_last_success_at: '0001-01-01T00:00:00Z',
+      remote_last_success_at: null,
     },
   }
 }
@@ -46,6 +46,19 @@ test('audit page surfaces a broken chain with the offending row', async ({ page 
 
   await expect(page.getByText(/审计链在第 842 行断裂/)).toBeVisible()
   await expect(page.getByText(/hash does not match the row content/)).toBeVisible()
+})
+
+test('audit page does not claim a remote anchor that never succeeded', async ({ page }) => {
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/audit/integrity': {
+      ...integrity({}),
+      anchor_feed: { file_configured: false, file_last_success_at: null, remote_configured: true, remote_last_success_at: null },
+    },
+  })
+  await page.goto('/admin/audit')
+
+  await expect(page.getByText(/审计链已校验：1,180 行/)).toBeVisible()
+  await expect(page.getByText(/远程锚点已同步/)).toHaveCount(0)
 })
 
 test('audit page warns when the remote anchor feed is behind', async ({ page }) => {

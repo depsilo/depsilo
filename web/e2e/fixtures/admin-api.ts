@@ -323,14 +323,14 @@ const canonicalAdminApiDefaults = {
     anchors: {
       configured: false,
       checkpoints: 0,
-      latest_checked_at: '0001-01-01T00:00:00Z',
+      latest_checked_at: null,
       ok: true,
     },
     anchor_feed: {
       file_configured: false,
-      file_last_success_at: '0001-01-01T00:00:00Z',
+      file_last_success_at: null,
       remote_configured: false,
-      remote_last_success_at: '0001-01-01T00:00:00Z',
+      remote_last_success_at: null,
     },
   } satisfies AuditIntegrityResponse,
 }

@@ -103,31 +103,30 @@ type AuditChainReport struct {
 }
 
 // AuditAnchorReport cross-checks chain-head checkpoints against the database.
-// LatestCheckedAt is the zero time (0001-01-01T00:00:00Z) before the first
-// checkpoint.
+// LatestCheckedAt is null before the first checkpoint.
 type AuditAnchorReport struct {
-	Configured      bool      `json:"configured"`
-	Path            string    `json:"path,omitempty"`
-	Checkpoints     int       `json:"checkpoints"`
-	InvalidLines    int       `json:"invalid_lines,omitempty"`
-	LatestCheckedAt time.Time `json:"latest_checked_at"`
-	LatestHeadID    uint      `json:"latest_head_id,omitempty"`
-	LatestHeadHash  string    `json:"latest_head_hash,omitempty"`
-	OK              bool      `json:"ok"`
-	BrokenAtID      uint      `json:"broken_at_id,omitempty"`
-	Reason          string    `json:"reason,omitempty"`
+	Configured      bool       `json:"configured"`
+	Path            string     `json:"path,omitempty"`
+	Checkpoints     int        `json:"checkpoints"`
+	InvalidLines    int        `json:"invalid_lines,omitempty"`
+	LatestCheckedAt *time.Time `json:"latest_checked_at" tstype:"string | null,required"`
+	LatestHeadID    uint       `json:"latest_head_id,omitempty"`
+	LatestHeadHash  string     `json:"latest_head_hash,omitempty"`
+	OK              bool       `json:"ok"`
+	BrokenAtID      uint       `json:"broken_at_id,omitempty"`
+	Reason          string     `json:"reason,omitempty"`
 }
 
-// AuditAnchorFeed reports the checkpoint sinks. A *LastSuccessAt is the zero
-// time (0001-01-01T00:00:00Z) until that sink first succeeds.
+// AuditAnchorFeed reports the checkpoint sinks. A *LastSuccessAt is null until
+// that sink first succeeds.
 type AuditAnchorFeed struct {
-	FileConfigured      bool      `json:"file_configured"`
-	FileLastSuccessAt   time.Time `json:"file_last_success_at"`
-	FileLastError       string    `json:"file_last_error,omitempty"`
-	RemoteConfigured    bool      `json:"remote_configured"`
-	RemoteLastSuccessAt time.Time `json:"remote_last_success_at"`
-	RemoteHeadID        uint      `json:"remote_head_id,omitempty"`
-	RemoteLastError     string    `json:"remote_last_error,omitempty"`
+	FileConfigured      bool       `json:"file_configured"`
+	FileLastSuccessAt   *time.Time `json:"file_last_success_at" tstype:"string | null,required"`
+	FileLastError       string     `json:"file_last_error,omitempty"`
+	RemoteConfigured    bool       `json:"remote_configured"`
+	RemoteLastSuccessAt *time.Time `json:"remote_last_success_at" tstype:"string | null,required"`
+	RemoteHeadID        uint       `json:"remote_head_id,omitempty"`
+	RemoteLastError     string     `json:"remote_last_error,omitempty"`
 }
 
 // AuditIntegrityResponse answers GET /admin/audit/integrity.
