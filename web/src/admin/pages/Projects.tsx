@@ -551,6 +551,7 @@ export default function Projects() {
               ) : (
                 <DataTable
                   columns={pkgColumns}
+                  rowHeader="package_name"
                   data={packages.map((pkg) => ({ ...pkg }))}
                   rowKey={(row) => `${row.ecosystem}:${row.package_name}:${row.version}`}
                   ariaLabel={t('projects.packagesTable')}

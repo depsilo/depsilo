@@ -81,11 +81,16 @@ function TableHead({ className, ...props }: React.ComponentProps<'th'>) {
   )
 }
 
-function TableCell({ className, ...props }: React.ComponentProps<'td'>) {
+// `rowHeader` marks the cell that identifies its row (a name, or the time of
+// a log event) as <th scope="row">, so screen readers announce it while
+// moving across the row. It looks like any other cell.
+function TableCell({ className, rowHeader = false, ...props }: React.ComponentProps<'td'> & { rowHeader?: boolean }) {
+  const Cell = rowHeader ? 'th' : 'td'
   return (
-    <td
+    <Cell
       data-slot="table-cell"
-      className={cn('p-2 align-middle whitespace-nowrap', className)}
+      scope={rowHeader ? 'row' : undefined}
+      className={cn('p-2 align-middle whitespace-nowrap', rowHeader && 'text-left font-normal', className)}
       {...props}
     />
   )

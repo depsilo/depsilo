@@ -316,7 +316,7 @@ function EventsTab(props: {
             <TableBody>
               {items.map((ev) => (
                 <TableRow key={ev.id} style={{ borderTop: '1px solid var(--border)' }}>
-                  <Td>
+                  <Td rowHeader>
                     <span className="text-[12px] font-mono whitespace-nowrap" style={{ color: 'var(--muted-foreground)' }}>
                       {formatTime(ev.created_at)}
                     </span>
@@ -511,7 +511,7 @@ function ApprovalsTab(props: {
                   <span className="text-[12px]">{ecosystemLabel(row.ecosystem)}</span>
                 </div>
               </Td>
-              <Td><span className="text-[13px] font-mono">{row.package}</span></Td>
+              <Td rowHeader><span className="text-[13px] font-mono">{row.package}</span></Td>
               <Td><span className="text-[13px] font-mono" style={{ color: 'var(--muted-foreground)' }}>{row.version}</span></Td>
               <Td><span className="text-[12px]" style={{ color: 'var(--muted-foreground)' }}>{row.reason}</span></Td>
               <Td>
@@ -799,7 +799,7 @@ function BlocklistTab() {
                           <span className="text-[12px]">{ecosystemLabel(row.ecosystem)}</span>
                         </div>
                       </Td>
-                      <Td><span className="text-[13px] font-mono">{row.package}</span></Td>
+                      <Td rowHeader><span className="text-[13px] font-mono">{row.package}</span></Td>
                       <Td>
                         <span className="text-[13px] font-mono" style={{ color: 'var(--muted-foreground)' }}>
                           {row.version || t('quarantine.blocklist.all_versions')}
@@ -962,8 +962,8 @@ function Th({ children }: { children: React.ReactNode }) {
   )
 }
 
-function Td({ children }: { children: React.ReactNode }) {
-  return <TableCell className="px-3 py-2 align-middle">{children}</TableCell>
+function Td({ children, rowHeader }: { children: React.ReactNode; rowHeader?: boolean }) {
+  return <TableCell rowHeader={rowHeader} className="px-3 py-2 align-middle">{children}</TableCell>
 }
 
 function MobilePackageIdentity(props: { ecosystem: string; packageName: string; version: string }) {

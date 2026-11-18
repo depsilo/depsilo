@@ -54,7 +54,7 @@ export function TopPackagesCard({ query }: { query: BreakdownQuery }) {
                   const share = pkg.total_bytes > 0 ? pkg.hit_bytes / pkg.total_bytes : null
                   return (
                     <tr key={`${pkg.ecosystem}:${pkg.package_name}`}>
-                      <td><span className="dash-pkg" title={pkg.package_name}>{pkg.package_name}</span></td>
+                      <th scope="row"><span className="dash-pkg" title={pkg.package_name}>{pkg.package_name}</span></th>
                       <td className="is-mute">{ecosystemLabel(pkg.ecosystem)}</td>
                       <td>{pkg.requests.toLocaleString(locale)}</td>
                       <td>{formatBytes(pkg.total_bytes)}</td>
@@ -108,7 +108,7 @@ export function EcosystemsCard({ query }: { query: BreakdownQuery }) {
                   const bytes = eco.hit_bytes + eco.miss_bytes
                   return (
                     <tr key={eco.ecosystem} data-ecosystem={eco.ecosystem}>
-                      <td><EcoName id={eco.ecosystem} /></td>
+                      <th scope="row"><EcoName id={eco.ecosystem} /></th>
                       <td>{(eco.hit_requests + eco.miss_requests).toLocaleString(locale)}</td>
                       <td>{formatBytes(bytes)}</td>
                       <td>
@@ -172,7 +172,7 @@ export function OriginByUpstream({ query, originMeasured, originPartial }: { que
                     <tbody>
                       {rows.slice(0, UPSTREAM_ROWS).map(row => (
                         <tr key={`${row.ecosystem}:${row.upstream}`} data-upstream={`${row.ecosystem}/${row.upstream}`}>
-                          <td>{row.upstream} <span className="is-mute">{ecosystemLabel(row.ecosystem)}</span></td>
+                          <th scope="row">{row.upstream} <span className="is-mute">{ecosystemLabel(row.ecosystem)}</span></th>
                           <td><RankBar ratio={row.upstream_bytes / widest} kind="miss" />{formatBytes(row.upstream_bytes)}</td>
                           <td>{row.upstream_requests.toLocaleString(locale)}</td>
                           <td>{row.miss_requests > 0 ? formatLatency(row.avg_miss_latency_ms) : '—'}</td>

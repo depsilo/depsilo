@@ -13,6 +13,8 @@ interface DataTableProps<T> {
   rowKey: (row: T, index: number) => Key
   ariaLabel: string
   minWidth?: number
+  // Key of the column that identifies a row; defaults to the first column.
+  rowHeader?: string
 }
 
 export default function DataTable<T extends Record<string, unknown>>({
@@ -21,6 +23,7 @@ export default function DataTable<T extends Record<string, unknown>>({
   rowKey,
   ariaLabel,
   minWidth,
+  rowHeader = columns[0]?.key,
 }: DataTableProps<T>) {
   return (
     <TableContainer label={ariaLabel} minWidth={minWidth}>
@@ -36,7 +39,7 @@ export default function DataTable<T extends Record<string, unknown>>({
           {data.map((row, rowIndex) => (
             <TableRow key={rowKey(row, rowIndex)}>
               {columns.map((col) => (
-                <TableCell key={col.key}>
+                <TableCell key={col.key} rowHeader={col.key === rowHeader}>
                   {col.render
                     ? col.render(row[col.key], row, rowIndex)
                     : (row[col.key] as ReactNode)}

@@ -207,7 +207,7 @@ export default function SnapshotSection() {
               <TableBody>
                 {snapshots.map((snapshot) => (
                   <TableRow key={snapshot.id} style={{ borderTop: '1px solid var(--border)' }}>
-                    <TableCell className="px-2 py-2">
+                    <TableCell rowHeader className="px-2 py-2">
                       <div className="flex min-w-0 items-center gap-2">
                         <span className="min-w-0 truncate" style={{ color: 'var(--foreground)' }}>{snapshot.name}</span>
                         {snapshot.id === activeId && <Badge variant="success">{t('snapshot.active')}</Badge>}

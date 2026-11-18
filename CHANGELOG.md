@@ -66,6 +66,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   `<meta name="color-scheme">`, so the browser draws its background and
   native controls in the chosen scheme before the styles load. The
   appearance saved under the old `theme` browser key is no longer read.
+- Admin and Overview tables mark the cell that names each row (or, in event
+  logs, its time) as a row header, so screen readers announce it while
+  moving across the row.
 - Development: `make security` and the CI frontend job audit frontend
   dependencies with `scripts/npm-audit-gate.py`, which fails on advisories of
   moderate or higher severity, as `npm audit --audit-level=moderate` did,

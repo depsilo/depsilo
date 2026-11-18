@@ -137,7 +137,7 @@ export default function CacheIndexes() {
           <Table>
             <TableHeader><TableRow>{['packageName','ecosystem','status','size','expiresAt','actions'].map(key => <TableHead key={key}>{t(`cacheIndexes.${key}`)}</TableHead>)}</TableRow></TableHeader>
             <TableBody>{items.map(item => <TableRow key={item.id}>
-              <TableCell className="max-w-64"><Button variant="link" className="h-auto max-w-full justify-start px-0 text-left" onClick={() => setSelected(item)}><span className="truncate">{item.package_name || item.key}</span></Button><p className="truncate text-xs text-muted-foreground">{item.key}</p></TableCell>
+              <TableCell rowHeader className="max-w-64"><Button variant="link" className="h-auto max-w-full justify-start px-0 text-left" onClick={() => setSelected(item)}><span className="truncate">{item.package_name || item.key}</span></Button><p className="truncate text-xs text-muted-foreground">{item.key}</p></TableCell>
               <TableCell>{ecosystemLabel(item.adapter_type)}</TableCell>
               <TableCell><Badge variant={statusBadgeVariant(item.status)}>{t(item.status === 'fresh' ? 'cacheIndexes.statusFresh' : 'cacheIndexes.statusStale')}</Badge></TableCell>
               <TableCell className="font-mono tabular-nums">{formatBytes(item.size)}</TableCell>

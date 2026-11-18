@@ -56,7 +56,7 @@ export default function StorageCard({ runtime, runtimePending, runtimeError, onR
             <tbody>
               {types.map(type => (
                 <tr key={type.type}>
-                  <td><EcoName id={type.type} /></td>
+                  <th scope="row"><EcoName id={type.type} /></th>
                   <td><RankBar ratio={type.size / widest} />{formatBytes(type.size)}</td>
                   <td>{type.file_count.toLocaleString(locale)}</td>
                 </tr>

@@ -275,12 +275,14 @@
 .dash-scroll { overflow-x: auto; overscroll-behavior-x: contain; border-radius: 4px; }
 .dash-scroll:focus-visible { outline: 2px solid var(--dash-accent); outline-offset: 2px; }
 .dash-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-.dash-table th { padding: 0 0 2px 8px; color: var(--dash-muted); font-size: 12px; font-weight: 500; text-align: right; white-space: nowrap; }
-.dash-table td { height: 22px; padding: 0 0 0 8px; text-align: right; white-space: nowrap; }
-.dash-table th:first-child,
-.dash-table td:first-child { padding-left: 0; text-align: left; }
-.dash-table td:first-child { width: 99%; max-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.dash-table tbody tr + tr td { border-top: 1px solid var(--dash-grid); }
+.dash-table thead th { padding: 0 0 2px 8px; color: var(--dash-muted); font-size: 12px; font-weight: 500; text-align: right; white-space: nowrap; }
+/* A body row's first cell is its row header (<th scope="row">) and looks
+   like a data cell. */
+.dash-table td,
+.dash-table tbody th { height: 22px; padding: 0 0 0 8px; font-weight: inherit; text-align: right; white-space: nowrap; }
+.dash-table tr > :first-child { padding-left: 0; text-align: left; }
+.dash-table tbody tr > :first-child { width: 99%; max-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.dash-table tbody tr + tr > * { border-top: 1px solid var(--dash-grid); }
 .dash-table .is-mute { color: var(--dash-muted); }
 .dash-table .dash-split,
 .dash-table .dash-rank { display: inline-flex; width: 30px; margin-right: 6px; vertical-align: middle; }
@@ -296,10 +298,11 @@
 .dash-reqs tr { cursor: pointer; }
 .dash-reqs tbody tr { border-top: 1px solid var(--dash-grid); }
 .dash-reqs tbody tr:hover { background: var(--dash-soft); }
-.dash-reqs td { height: var(--dash-target); padding: 0 0 0 8px; text-align: right; white-space: nowrap; }
-.dash-reqs td:first-child { padding-left: 12px; text-align: left; }
-.dash-reqs td:last-child { padding-right: 12px; }
-.dash-reqs td.is-name { width: 99%; max-width: 0; text-align: left; }
+.dash-reqs td,
+.dash-reqs tbody th { height: var(--dash-target); padding: 0 0 0 8px; font-weight: inherit; text-align: right; white-space: nowrap; }
+.dash-reqs tbody tr > :first-child { padding-left: 12px; text-align: left; }
+.dash-reqs tbody tr > :last-child { padding-right: 12px; }
+.dash-reqs .is-name { width: 99%; max-width: 0; text-align: left; }
 .dash-reqs td.is-mute { color: var(--dash-muted); }
 .dash-reqs-open {
   display: block;

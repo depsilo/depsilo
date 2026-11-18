@@ -386,6 +386,7 @@ export default function Rules() {
           {items.map(rule => <li key={rule.id} className="space-y-2 py-4"><div className="flex items-start justify-between gap-3"><Button variant="link" className="p-0 h-auto min-h-10 text-left whitespace-normal break-all" onClick={() => setDetail(rule)}>{rule.package_name}</Button><Badge variant={rule.action === 'allow' ? 'success' : 'destructive'}>{t(`rules.${rule.action}`)}</Badge></div><p className="font-mono text-[13px] break-all">{rule.ecosystem} · {rule.version}</p><p className="line-clamp-2 text-[14px] text-muted-foreground">{rule.reason || '—'}</p></li>)}
         </ul><div className="hidden sm:block"><DataTable
           columns={columns}
+          rowHeader="package_name"
           data={items.map((rule) => ({ ...rule }))}
           rowKey={(row) => row.id as number}
           ariaLabel={t('rules.table')}

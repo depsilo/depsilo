@@ -540,7 +540,7 @@ export default function UpstreamUpdates() {
                         key={event.id}
                         className="border-b border-[var(--border)] transition-colors duration-75 hover:bg-[var(--muted)]"
                       >
-                        <TableCell className="w-[290px] px-3 py-3 pl-0 align-top">
+                        <TableCell rowHeader className="w-[290px] px-3 py-3 pl-0 align-top">
                           {observation(event)}
                         </TableCell>
                         <TableCell className="max-w-[220px] px-3 py-3 align-top" style={{ color: 'var(--muted-foreground)' }}>

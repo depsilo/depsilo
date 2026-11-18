@@ -268,7 +268,7 @@ export default function Cascade() {
                                 {ecosystemLabel(upstream.adapter_type)}
                               </span>
                             </TableCell>
-                            <TableCell className={`${tableCellClass} font-[500]`} style={{ color: 'var(--foreground)' }}>
+                            <TableCell rowHeader className={`${tableCellClass} font-[500]`} style={{ color: 'var(--foreground)' }}>
                               {upstream.name}
                             </TableCell>
                             <TableCell className={`${tableCellClass} font-mono`} style={{ color: 'var(--muted-foreground)' }}>

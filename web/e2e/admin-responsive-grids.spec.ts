@@ -359,7 +359,7 @@ test('Overview status entry, its details and recent table stay readable at 1024 
   const fit = await recent.evaluate(card => {
     const table = card.querySelector('table')!
     const cardRect = card.getBoundingClientRect()
-    const cells = [...table.querySelectorAll('tbody td')].filter(cell => cell.getClientRects().length > 0)
+    const cells = [...table.querySelectorAll('tbody :is(td, th)')].filter(cell => cell.getClientRects().length > 0)
     return {
       tableFits: table.getBoundingClientRect().right <= cardRect.right + 1 && table.scrollWidth <= card.clientWidth + 1,
       cellsInside: cells.every(cell => cell.getBoundingClientRect().right <= cardRect.right + 1),

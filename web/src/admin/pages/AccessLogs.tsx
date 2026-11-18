@@ -322,7 +322,7 @@ export default function AccessLogs() {
                   style={{ borderBottom: '1px solid var(--border, var(--border))' }}
                 >
                   {/* Time */}
-                  <TableCell className="py-2 px-3 pl-0 whitespace-nowrap">
+                  <TableCell rowHeader className="py-2 px-3 pl-0 whitespace-nowrap">
                     <span className="font-mono tabular-nums" style={{ color: 'var(--muted-foreground)' }}>{formatTime(row.created_at)}</span>
                   </TableCell>
 

@@ -72,7 +72,7 @@ export default function RecentRequests({ query, limit, onOpenDetails }: RecentRe
                   <td>
                     <span className="dash-outcome" data-outcome={outcome}><i aria-hidden />{t(`overview.outcomeShort.${outcome}`)}</span>
                   </td>
-                  <td className="is-name">
+                  <th scope="row" className="is-name">
                     <button
                       type="button"
                       className="dash-reqs-open dash-focus"
@@ -81,7 +81,7 @@ export default function RecentRequests({ query, limit, onOpenDetails }: RecentRe
                     >
                       <span className="dash-pkg">{name}{item.version && <span>@{item.version}</span>}</span>
                     </button>
-                  </td>
+                  </th>
                   <td className="is-wide">
                     {isAdminEcosystem(item.adapter_type) && <EcosystemIcon type={item.adapter_type} size={13} decorative />}
                     <span className="sr-only">{ecosystemLabel(item.adapter_type)}</span>

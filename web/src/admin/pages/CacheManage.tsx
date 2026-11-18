@@ -269,7 +269,7 @@ export default function CacheManage() {
                   className="transition-colors duration-75 hover:bg-[var(--muted)]"
                   style={{ borderBottom: '1px solid var(--border, var(--border))' }}
                 >
-                  <TableCell className="py-2 px-3 pl-0 max-w-[260px]">
+                  <TableCell rowHeader className="py-2 px-3 pl-0 max-w-[260px]">
                     <details className="min-w-0"><summary className="cursor-pointer break-all font-medium">{row.package_name || row.key.split('/').pop() || row.key}</summary><code className="mt-2 block break-all text-xs text-muted-foreground">{row.key}</code></details>
                     {row.cache_kind && <span className="text-xs text-muted-foreground">{t(row.cache_kind === 'metadata' ? 'cache.metadata' : 'cache.artifact')}</span>}
                   </TableCell>
