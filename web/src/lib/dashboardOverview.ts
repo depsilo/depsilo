@@ -39,7 +39,7 @@ export function hitRateValue(period: DashboardPeriod | undefined): number | null
   return period.hit_rate
 }
 
-export type DashboardUsageState = 'unknown' | 'active' | 'empty-period' | 'no-recent-evidence' | 'waiting-first-request'
+export type DashboardActivityState = 'unknown' | 'active' | 'empty-period' | 'no-recent-evidence' | 'waiting-first-request'
 
 /** Only durable, complete history can establish that no request has succeeded. */
 export function deriveUsageState({ period, hasHistoricalRequests, hasSuccessfulRequest = false, usage }: {
@@ -48,7 +48,7 @@ export function deriveUsageState({ period, hasHistoricalRequests, hasSuccessfulR
   /** Prior durable "used" evidence; generic request records do not suffice. */
   hasSuccessfulRequest?: boolean
   usage?: DashboardUsage
-}): DashboardUsageState {
+}): DashboardActivityState {
   if (!period || !Number.isFinite(period.total_requests) || period.total_requests < 0) return 'unknown'
   // Generic requests include metadata, failures, and HEAD probes. They cannot
   // override complete evidence that no artifact download has succeeded yet.

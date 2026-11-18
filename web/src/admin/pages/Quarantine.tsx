@@ -3,7 +3,6 @@ import { isKnownEcosystemId } from '@/admin/operatorEcosystems'
 import EcosystemChips from '@/admin/components/EcosystemChips'
 import RefreshControl from '@/admin/components/RefreshControl'
 import { parseEcosystemList, serializeEcosystemList } from '@/admin/listFilters'
-import type { EcosystemCount } from '@/lib/adminApi.types'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Field, FieldLabel } from '@/components/ui/field'
@@ -13,7 +12,7 @@ import { Link, useSearchParams } from 'react-router'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { getAdminRouteHref } from '@/admin/routes'
 import { useTranslation } from 'react-i18next'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
 import { formatTime } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -30,64 +29,12 @@ import AdminPagination from '@/admin/components/AdminPagination'
 import { useAppToast } from '@/components/Toast'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
-import { isAdminEcosystem } from '@/lib/adminApi.types'
+import { isAdminEcosystem, type BlocklistOverrideListResponse, type QuarantineApproval, type MalwareOverride, type QuarantineApprovalListResponse, type QuarantineEvent, type QuarantineEventListResponse } from '@/lib/adminApi.types'
 import { maliciousBlocklistEcosystems } from '@/admin/operatorEcosystems'
 import { ecosystemLabel } from '@/admin/operatorEcosystems'
 
-// Backend mirrors db.QuarantineEvent + db.ApprovedVersion. We keep
-// the shape narrow to avoid leaking schema details into TS — extra
-// fields are fine to ignore at the parsing boundary.
-type QuarantineEvent = {
-  id: number
-  ecosystem: string
-  package: string
-  version: string
-  action: string
-  reason: string
-  threshold_seconds: number
-  age_at_call_seconds: number
-  actor_id: number
-  client_ip: string
-  created_at: string
-}
-
-type ApprovedVersion = {
-  id: number
-  ecosystem: string
-  package: string
-  version: string
-  reason: string
-  approved_by: number
-  created_at: string
-}
-
 const ACTIONS = ['blocked', 'malware_blocked', 'tamper_detected', 'served_eligible', 'bypassed', 'malware_bypassed', 'warned', 'malware_warned', 'approved', 'approval_revoked', 'override_created', 'override_revoked']
 const PAGE_SIZE = 20
-
-type BlocklistStatus = {
-  enabled: boolean
-  mode: string
-  last_sync_at: string | null
-  last_success_at: string | null
-  last_error: string
-  duration_ms: number
-  entry_count: number
-  per_ecosystem: Record<string, number>
-  ecosystems: string[]
-  running?: boolean
-  next_sync_at?: string | null
-}
-
-type MalwareOverride = {
-  id: number
-  ecosystem: string
-  package: string
-  version: string
-  reason: string
-  actor_id: number
-  created_at: string
-  expires_at: string
-}
 
 function actionBadge(action: string, t: (k: string) => string) {
   switch (action) {
@@ -140,7 +87,7 @@ export default function Quarantine() {
   const setApprovalsPage = (page: number) => updateParams({ approvals_page: String(page) })
 
   const [revokeOpen, setRevokeOpen] = useState(false)
-  const [revokeTarget, setRevokeTarget] = useState<ApprovedVersion | null>(null)
+  const [revokeTarget, setRevokeTarget] = useState<QuarantineApproval | null>(null)
   const [revokeReason, setRevokeReason] = useState('')
 
   // ── Data ──────────────────────────────────────────────────────
@@ -154,7 +101,7 @@ export default function Quarantine() {
     queryKey: ['admin', 'quarantine', 'events', eventsParams],
     queryFn: async ({ signal }) => {
       const res = await adminApi.listQuarantineEvents(eventsParams, { signal })
-      return res.data as { items: QuarantineEvent[]; total: number; ecosystems?: EcosystemCount[] }
+      return res.data
     },
     enabled: tab === 'events',
     refetchInterval: 30_000,
@@ -165,7 +112,7 @@ export default function Quarantine() {
     queryKey: ['admin', 'quarantine', 'approvals', approvalsPage],
     queryFn: async ({ signal }) => {
       const res = await adminApi.listQuarantineApprovals({ limit: PAGE_SIZE, offset: (approvalsPage - 1) * PAGE_SIZE }, { signal })
-      return res.data as { items: ApprovedVersion[]; total: number }
+      return res.data
     },
     enabled: tab === 'approvals',
     refetchInterval: 30_000,
@@ -278,14 +225,14 @@ export default function Quarantine() {
 // ── Events tab ─────────────────────────────────────────────────────
 
 function EventsTab(props: {
-  eventsQ: ReturnType<typeof useQuery>
+  eventsQ: UseQueryResult<QuarantineEventListResponse>
   page: number; setPage: (page: number) => void
   ecoFilter: string[]; setEcoFilter: (ids: string[]) => void
   actionFilter: string; setActionFilter: (v: string) => void
   pkgSearch: string; setPkgSearch: (v: string) => void
 }) {
   const { t } = useTranslation()
-  const data = props.eventsQ.data as { items: QuarantineEvent[]; total: number; ecosystems?: EcosystemCount[] } | undefined
+  const data = props.eventsQ.data
   const items = data?.items ?? []
   const [searchDraft, setSearchDraft] = useState(props.pkgSearch)
   const [selected, setSelected] = useState<QuarantineEvent | null>(null)
@@ -424,10 +371,10 @@ function EventsTab(props: {
 // ── Approvals tab ──────────────────────────────────────────────────
 
 function ApprovalsTab(props: {
-  approvalsQ: ReturnType<typeof useQuery>
+  approvalsQ: UseQueryResult<QuarantineApprovalListResponse>
   page: number; setPage: (page: number) => void
   canWrite: boolean
-  onRevoke: (row: ApprovedVersion) => void
+  onRevoke: (row: QuarantineApproval) => void
 }) {
   const { t } = useTranslation()
   const qc = useQueryClient()
@@ -462,7 +409,7 @@ function ApprovalsTab(props: {
       toast.show({ tone: 'success', message: t('quarantine.approvals.createSuccess') })
     },
   })
-  const data = props.approvalsQ.data as { items: ApprovedVersion[]; total: number } | undefined
+  const data = props.approvalsQ.data
   const items = data?.items ?? []
 
   if (props.approvalsQ.isPending) {
@@ -646,13 +593,13 @@ function BlocklistTab() {
 
   const statusQ = useQuery({
     queryKey: ['admin', 'blocklist', 'status'],
-    queryFn: async ({ signal }) => (await adminApi.getBlocklistStatus({ signal })).data as BlocklistStatus,
+    queryFn: async ({ signal }) => (await adminApi.getBlocklistStatus({ signal })).data,
     refetchInterval: 15_000,
     retry: false,
   })
   const overridesQ = useQuery({
     queryKey: ['admin', 'blocklist', 'overrides'],
-    queryFn: async ({ signal }) => (await adminApi.listBlocklistOverrides({ signal })).data as { items: MalwareOverride[]; now: string },
+    queryFn: async ({ signal }) => (await adminApi.listBlocklistOverrides({ signal })).data,
     refetchInterval: 30_000,
     retry: false,
   })
@@ -666,9 +613,9 @@ function BlocklistTab() {
     },
   })
   const createM = useMutation({
-    mutationFn: async () => (await adminApi.createBlocklistOverride({ ...form, package: form.package.trim(), version: allVersions ? '' : form.version.trim(), reason: form.reason.trim() })).data as MalwareOverride,
+    mutationFn: async () => (await adminApi.createBlocklistOverride({ ...form, package: form.package.trim(), version: allVersions ? '' : form.version.trim(), reason: form.reason.trim() })).data,
     onSuccess: (created) => {
-      qc.setQueryData<{ items: MalwareOverride[]; now: string }>(['admin', 'blocklist', 'overrides'], (current) => current ? {
+      qc.setQueryData<BlocklistOverrideListResponse>(['admin', 'blocklist', 'overrides'], (current) => current ? {
         ...current,
         items: [...current.items.filter((item) => item.id !== created.id), created],
       } : { items: [created], now: created.created_at })
@@ -689,9 +636,11 @@ function BlocklistTab() {
   })
 
   const st = statusQ.data
-  const overrides = overridesQ.data?.items ?? []
-  const now = overridesQ.data?.now ? new Date(overridesQ.data.now).getTime() : mountedAt
-  const reportedEcosystems = new Set(st?.ecosystems ?? [])
+  // A disabled blocklist answers both reads with only {enabled: false}.
+  const overrideList = overridesQ.data && 'items' in overridesQ.data ? overridesQ.data : undefined
+  const overrides = overrideList?.items ?? []
+  const now = overrideList?.now ? new Date(overrideList.now).getTime() : mountedAt
+  const reportedEcosystems = new Set(st?.enabled ? st.ecosystems : [])
   const overrideEcosystems = maliciousBlocklistEcosystems.filter(ecosystem => reportedEcosystems.has(ecosystem.id))
 
   return (
