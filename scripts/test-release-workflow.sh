@@ -74,6 +74,22 @@ if [ "$windows_embed_line" -ge "$windows_daemon_line" ]; then
     echo "Windows verification must prepare Go embed assets before compiling CLI tests" >&2
     exit 1
 fi
+# The npm audit gate runs from the repository root, after the frontend tests,
+# so that a newly published advisory cannot skip them.
+frontend_job=$(sed -n '/^  frontend:/,/^  windows-cli:/p' "$VERIFY_WORKFLOW")
+audit_step=$(sed -n '/- name: Audit dependencies/,/^$/p' <<<"$frontend_job")
+if ! grep -Fqx '        working-directory: .' <<<"$audit_step" ||
+    ! grep -Fqx '        run: python3 scripts/npm-audit-gate.py' <<<"$audit_step" ||
+    grep -Fq 'npm audit --audit-level' "$VERIFY_WORKFLOW"; then
+    echo "the frontend job must run scripts/npm-audit-gate.py from the repository root instead of npm audit" >&2
+    exit 1
+fi
+browser_tests_line=$(grep -n -m1 -- '- name: Browser tests' <<<"$frontend_job" | cut -d: -f1)
+audit_line=$(grep -n -m1 -- '- name: Audit dependencies' <<<"$frontend_job" | cut -d: -f1)
+if [ -z "$browser_tests_line" ] || [ "$audit_line" -le "$browser_tests_line" ]; then
+    echo "the frontend job must audit dependencies after the browser tests" >&2
+    exit 1
+fi
 release_job=$(sed -n '/^  release:/,/^  [a-zA-Z0-9_-]*:/p' "$WORKFLOW")
 if ! grep -q 'needs:.*client-contracts' <<<"$release_job"; then
     echo "release assets must wait for real-client qualification" >&2

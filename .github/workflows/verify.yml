@@ -76,9 +76,6 @@ jobs:
         working-directory: .
         run: make verify-scripts
 
-      - name: Audit dependencies
-        run: npm audit --audit-level=moderate
-
       - name: Lint
         run: npm run lint
 
@@ -107,6 +104,13 @@ jobs:
       - name: i18n audit
         working-directory: .
         run: python3 scripts/i18n-audit.py
+
+      # Runs after the tests so that a newly published advisory cannot hide
+      # their results. Moderate or higher advisories fail the job unless
+      # web/npm-audit-allowlist.json lists them with a reason and an expiry.
+      - name: Audit dependencies
+        working-directory: .
+        run: python3 scripts/npm-audit-gate.py
 
       - name: Upload browser test report
         if: always()

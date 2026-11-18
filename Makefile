@@ -415,7 +415,7 @@ verify-ui:                      # 内部：运行完整 Playwright 浏览器测�
 
 security: prepare-go            ## 扫描 Go 与全部前端依赖漏洞（需要联网）
 	go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 $(GO_PROD_PKGS)
-	npm --prefix $(WEB_DIR) audit --audit-level=moderate
+	python3 scripts/npm-audit-gate.py --web-dir $(WEB_DIR)
 
 verify-scripts:                 # 内部：安装、开发与发布脚本回归测试
 	for script in install.sh scripts/*.sh; do bash -n "$$script" || exit 1; done
@@ -434,6 +434,7 @@ verify-scripts:                 # 内部：安装、开发与发布脚本回归�
 	bash scripts/test-install-linux.sh
 	bash scripts/test-benchmark-install.sh
 	python3 scripts/test-benchmark-cascade.py
+	python3 scripts/test-npm-audit-gate.py
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s testground/offline-pypi -p 'test_*.py'
 
 verify-installer: verify-scripts # 兼容别名

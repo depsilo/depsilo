@@ -1,0 +1,10 @@
+{
+  "advisories": [
+    {
+      "id": "GHSA-fc5q-39xc-vjpf",
+      "package": "picomatch",
+      "reason": "ReDoS through single-branch repeated extglobs; every picomatch release up to 4.0.7 is affected and none is patched. picomatch reaches the tree only through development tooling (vite, vitest, typescript-eslint, tinyglobby, fdir), which matches globs from this repository, and is not part of the embedded production frontend: npm audit --omit=dev reports no advisory. Remove this entry once a patched picomatch is locked.",
+      "expires": "2027-01-31"
+    }
+  ]
+}
