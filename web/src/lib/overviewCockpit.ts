@@ -136,7 +136,7 @@ export function findActivityBursts(points: DashboardTrendPoint[], limit: number,
   const bursts: ActivityBucket[] = []
   let current: ActivityBucket | null = null
   let quiet = 0
-  for (const point of [...points].sort((a, b) => a.bucket - b.bucket)) {
+  for (const point of points.toSorted((a, b) => a.bucket - b.bucket)) {
     if (point.requests > 0) {
       if (!current) {
         current = emptyBucket(point.bucket, point.bucket + step)
@@ -361,7 +361,7 @@ export function groupUpstreamFleet(
   return [...groups.entries()]
     .sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b))
     .map(([ecosystem, upstreams]) => {
-      const ordered = [...upstreams].sort((a, b) => (
+      const ordered = upstreams.toSorted((a, b) => (
         (priority.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (priority.get(b.id) ?? Number.MAX_SAFE_INTEGER) || a.id - b.id
       ))
       const primary = ordered.find(upstream => upstream.state !== 'unavailable')

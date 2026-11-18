@@ -24,7 +24,7 @@ export default function StorageCard({ runtime, runtimePending, runtimeError, onR
   const locale = useNumberLocale()
   const cache = runtime?.cache
   const disk = runtime?.disk
-  const types = [...(distribution.data?.by_type ?? [])].sort((a, b) => b.size - a.size).slice(0, TYPE_ROWS)
+  const types = (distribution.data?.by_type ?? []).toSorted((a, b) => b.size - a.size).slice(0, TYPE_ROWS)
   const widest = Math.max(1, ...types.map(type => type.size))
   const inventoryKnown = cache?.packages != null && cache.entries != null
 
