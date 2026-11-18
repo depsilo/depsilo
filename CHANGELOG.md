@@ -373,6 +373,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   the signed-in administrator's own password.
 - Admin: error notifications stay until dismissed instead of disappearing
   after five seconds; success and warning notices still time out.
+- Admin: copying the OIDC callback URL works when Admin is opened over
+  plain HTTP on a LAN address, like the other copy buttons.
 - Admin's audit integrity notice no longer reports the remote anchor as
   synced when it has never succeeded. `GET /api/v1/admin/audit/integrity`
   now sends `null`, not `0001-01-01T00:00:00Z`, for a sink or checkpoint

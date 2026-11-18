@@ -15,6 +15,7 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { authenticationApi } from '@/lib/authenticationApi'
+import { copyText } from '@/lib/clipboard'
 import { getApiError } from '@/lib/apiError'
 import { identityAuthorizationURL } from '@/lib/identityAuth'
 import { rememberOIDCTrial } from '@/lib/oidcTrialContext'
@@ -96,8 +97,7 @@ export default function AuthenticationEditor({ source, creating, configWritable,
     setError(code === 'INVALID_SETTING' ? (fallback === 'authentication.checkError' ? 'authentication.checkInvalid' : 'authentication.invalid') : code === 'AUTH_SOURCE_CONFLICT' ? 'authentication.createInvalid' : fallback)
   }
   async function copyCallback() {
-    try { await navigator.clipboard.writeText(draft.redirect_url); setCopyStatus('authentication.callbackCopied') }
-    catch { setCopyStatus('authentication.copyFailed') }
+    setCopyStatus(await copyText(draft.redirect_url) ? 'authentication.callbackCopied' : 'authentication.copyFailed')
   }
   async function save() {
     if ((!dirty && !creating) || readOnly || !impactReady) return
