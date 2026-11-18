@@ -29,8 +29,6 @@ const measuredNow: NowResponse = {
   version: 'dev',
   rate: {
     requests_per_min: 12,
-    ingress_bps: 112947,
-    egress_bps: 1572864,
     has_data: true,
     measured: true,
     window_seconds: 60,

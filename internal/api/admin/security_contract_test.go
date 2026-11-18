@@ -146,7 +146,7 @@ func TestSecurityApproveSuggestionRequiresExplicitReviewedSelector(t *testing.T)
 	}
 }
 
-func TestSecurityVulnerabilityPackageQueryAndDeprecatedAlias(t *testing.T) {
+func TestSecurityVulnerabilityPackageQuery(t *testing.T) {
 	r, database := newSecurityContractRouter(t)
 	for _, vuln := range []db.Vulnerability{
 		{OSVID: "OSV-REQUESTS", Ecosystem: "pypi", PackageName: "requests", Severity: "high", CVSSScore: 8.1},
@@ -159,8 +159,7 @@ func TestSecurityVulnerabilityPackageQueryAndDeprecatedAlias(t *testing.T) {
 
 	for _, path := range []string{
 		"/security/vulnerabilities?package=requests",
-		"/security/vulnerabilities?q=requests",
-		"/security/vulnerabilities?package=requests&q=flask",
+		"/security/vulnerabilities?package=requests&ecosystem=pypi",
 	} {
 		rec := httptest.NewRecorder()
 		r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
@@ -181,23 +180,6 @@ func TestSecurityVulnerabilityPackageQueryAndDeprecatedAlias(t *testing.T) {
 		if _, exists := body.Items[0]["package"]; exists {
 			t.Fatalf("GET %s leaked noncanonical package field", path)
 		}
-	}
-
-	rec := httptest.NewRecorder()
-	path := "/security/vulnerabilities?package=&q=requests"
-	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET %s status = %d, body = %s", path, rec.Code, rec.Body.String())
-	}
-	var body struct {
-		Items []map[string]any `json:"items"`
-		Total int64            `json:"total"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatalf("decode %s: %v", path, err)
-	}
-	if body.Total != 2 || len(body.Items) != 2 {
-		t.Fatalf("GET %s applied q despite package presence: %#v", path, body)
 	}
 }
 

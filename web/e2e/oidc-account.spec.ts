@@ -4,12 +4,12 @@ import type { Request } from '@playwright/test'
 import type { LoginIdentitiesResponse, OIDCCompleteResponse, Principal } from '../src/lib/adminApi.types'
 
 const localPrincipal: Principal = { id: 1, username: 'admin', enabled: true, role: 'admin', auth_method: 'jwt', token_permissions: null, can_write: true, permission_source: 'local', login_method: 'password', can_manage_credentials: true }
-const provider = { id: 'oidc', name: 'Casdoor', enabled: true, issuer: 'http://127.0.0.1:18000', redirect_url: 'http://localhost:23333/api/v1/auth/oidc/callback', session_ttl_seconds: 1800 }
+const provider = { id: 'oidc', name: 'Casdoor', enabled: true, can_link: true, session_ttl_seconds: 1800 }
 const identity = { id: 7, provider: 'oidc', provider_name: 'Casdoor', display_name: 'Test operator', created_at: '2026-10-22T08:00:00Z', last_login_at: null, can_unlink: true }
-const localIdentities: LoginIdentitiesResponse = { permission_source: 'local', password_enabled: true, can_link: true, identities: [], provider }
+const localIdentities: LoginIdentitiesResponse = { permission_source: 'local', password_enabled: true, can_link: true, identities: [], providers: [provider] }
 const teamSource = { id: 'team', name: 'Team login', protocol: 'oidc' as const, enabled: true, can_link: true, session_ttl_seconds: 1800 }
 const labSource = { id: 'lab', name: 'Homelab', protocol: 'oidc' as const, enabled: true, can_link: true, session_ttl_seconds: 3600 }
-const multiIdentities: LoginIdentitiesResponse = { ...localIdentities, provider: null, providers: [teamSource, labSource] }
+const multiIdentities: LoginIdentitiesResponse = { ...localIdentities, providers: [teamSource, labSource] }
 const choice: Extract<OIDCCompleteResponse, { mode: 'choice' }> = { mode: 'choice', provider: teamSource, display_name: 'External operator', role: 'readonly', return_to: '/admin/account', expires_at: 1_950_000_000 }
 
 test('a consumed trial can return to its source after refresh without replacing the administrator session', async ({ page }) => {
@@ -402,7 +402,7 @@ test('account loading and a binding with unknown source availability never appea
     'GET /api/v1/auth/me': localPrincipal,
     'GET /api/v1/auth/identities': async () => {
       await pending
-      return { ...localIdentities, provider: null, providers: [], can_link: false, identities: [{ ...identity, provider: 'unknown', provider_name: 'OIDC' }] }
+      return { ...localIdentities, providers: [], can_link: false, identities: [{ ...identity, provider: 'unknown', provider_name: 'OIDC' }] }
     },
   })
   await page.goto('/admin/account')
@@ -462,7 +462,7 @@ test('link completion keeps the existing local session and remains reachable bef
   await mockAdminApi(page, {
     'GET /api/v1/auth/me': localPrincipal,
     'GET /api/v1/admin/onboarding/status': { status: 'not_started' },
-    'GET /api/v1/auth/identities': { ...localIdentities, can_link: false, identities: [identity] },
+    'GET /api/v1/auth/identities': { ...localIdentities, can_link: false, providers: [{ ...provider, can_link: false }], identities: [identity] },
     'POST /api/v1/auth/identity/complete': { mode: 'link', result: 'linked', return_to: '/admin/account' },
   })
   await page.goto('/admin/auth/complete')
@@ -503,7 +503,7 @@ test('unlink explains revocation and refreshes the remaining password method', a
   let linked = true
   await mockAdminApi(page, {
     'GET /api/v1/auth/me': localPrincipal,
-    'GET /api/v1/auth/identities': () => ({ ...localIdentities, can_link: !linked, identities: linked ? [identity] : [] }),
+    'GET /api/v1/auth/identities': () => ({ ...localIdentities, can_link: !linked, providers: [{ ...provider, can_link: !linked }], identities: linked ? [identity] : [] }),
     'POST /api/v1/auth/identities/7/unlink': (request: Request) => {
       expect(request.postDataJSON()).toEqual({ password: 'correct' })
       linked = false
@@ -536,7 +536,7 @@ for (const code of ['LOGIN_EXPIRED', 'ACCESS_DENIED', 'OIDC_UNAVAILABLE']) {
 test('managed identities cannot be unlinked or given local credentials; user operations require local credential authority', async ({ page }) => {
   await mockAdminApi(page, {
     'GET /api/v1/auth/me': { ...localPrincipal, permission_source: 'oidc', login_method: 'oidc', can_manage_credentials: false },
-    'GET /api/v1/auth/identities': { ...localIdentities, permission_source: 'oidc', password_enabled: false, can_link: false, identities: [{ ...identity, can_unlink: false }] },
+    'GET /api/v1/auth/identities': { ...localIdentities, permission_source: 'oidc', password_enabled: false, can_link: false, providers: [{ ...provider, can_link: false }], identities: [{ ...identity, can_unlink: false }] },
   })
   await page.goto('/admin/account')
   await expect(page.getByText('此账户不使用本地密码。')).toBeVisible()
@@ -574,7 +574,7 @@ for (const role of ['admin', 'readonly'] as const) {
     await setUiPreferences(page, 'light', 'zh')
     await mockAdminApi(page, {
       'GET /api/v1/auth/me': { ...localPrincipal, role, can_write: role === 'admin', can_manage_credentials: role === 'admin' },
-      'GET /api/v1/auth/identities': { ...localIdentities, can_link: false, provider: null, providers: [] },
+      'GET /api/v1/auth/identities': { ...localIdentities, can_link: false, providers: [] },
     })
     await page.goto('/admin/account')
     await expect(page.getByText('外部登录尚未启用。启用后，可在这里绑定你的外部账户。')).toBeVisible()
@@ -601,7 +601,7 @@ test('a disabled provider preserves its linked identity and allows password-conf
   let linked = true
   await mockAdminApi(page, {
     'GET /api/v1/auth/me': localPrincipal,
-    'GET /api/v1/auth/identities': () => ({ ...localIdentities, can_link: false, identities: linked ? [identity] : [], provider: { ...provider, enabled: false } }),
+    'GET /api/v1/auth/identities': () => ({ ...localIdentities, can_link: false, identities: linked ? [identity] : [], providers: [{ ...provider, enabled: false, can_link: false }] }),
     'POST /api/v1/auth/identities/7/unlink': (request: Request) => {
       expect(request.postDataJSON()).toEqual({ password: 'correct' })
       linked = false
@@ -627,7 +627,7 @@ for (const permissionSource of ['local', 'oidc'] as const) {
       'GET /api/v1/auth/me': { ...localPrincipal, permission_source: permissionSource, login_method: local ? 'password' : 'oidc', can_manage_credentials: local },
       'GET /api/v1/auth/identities': {
         ...localIdentities, permission_source: permissionSource, password_enabled: local, can_link: false,
-        provider: { ...provider, name: 'Replacement provider', issuer: 'https://replacement.example' },
+        providers: [{ ...provider, name: 'Replacement provider', can_link: false }],
         identities: [{ ...identity, provider_name: 'OIDC', provider_matches: false, login_available: false, can_unlink: local }],
       },
     })
@@ -669,7 +669,7 @@ for (const sample of [{ width: 1440, theme: 'dark' as const, lang: 'zh' as const
   test(`account and proof dialog are accessible at ${sample.width}px ${sample.theme}`, async ({ page }) => {
     await page.setViewportSize({ width: sample.width, height: 900 })
     await setUiPreferences(page, sample.theme, sample.lang)
-    await mockAdminApi(page, { 'GET /api/v1/auth/me': localPrincipal, 'GET /api/v1/auth/identities': { ...localIdentities, can_link: false, identities: [identity] } })
+    await mockAdminApi(page, { 'GET /api/v1/auth/me': localPrincipal, 'GET /api/v1/auth/identities': { ...localIdentities, can_link: false, providers: [{ ...provider, can_link: false }], identities: [identity] } })
     await page.goto('/admin/account')
     await expect(page.getByRole('heading', { name: sample.lang === 'zh' ? '账户安全' : 'Account security', exact: true })).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)

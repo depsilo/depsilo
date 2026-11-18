@@ -61,15 +61,13 @@ func (h *CompileCacheHandler) Status(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "STORAGE_UNAVAILABLE", "message": "compiler-cache stats are unavailable"})
 		return
 	}
-	ccacheEndpoint := h.compileCacheEndpoint("{namespace}")
 	c.JSON(http.StatusOK, gin.H{
 		"enabled": true,
 		"endpoints": gin.H{
-			"ccache":  ccacheEndpoint,
+			"ccache":  h.compileCacheEndpoint("{namespace}"),
 			"sccache": h.sccacheEndpoint("{namespace}"),
 		},
-		"endpoint": ccacheEndpoint,
-		"stats":    stats,
+		"stats": stats,
 	})
 }
 
@@ -168,7 +166,6 @@ func (h *CompileCacheHandler) CreateCredential(c *gin.Context) {
 	}
 	ccacheEndpoint := h.compileCacheEndpoint(namespace)
 	sccacheEndpoint := h.sccacheEndpoint(namespace)
-	remoteStorage := compileCacheRemoteStorage(ccacheEndpoint, plainToken, credential.Permissions)
 	c.JSON(http.StatusCreated, gin.H{
 		"id": credential.ID, "name": credential.Name, "namespace": credential.Namespace,
 		"permissions": credential.Permissions, "expires_at": credential.ExpiresAt,
@@ -177,13 +174,8 @@ func (h *CompileCacheHandler) CreateCredential(c *gin.Context) {
 			"ccache":  ccacheEndpoint,
 			"sccache": sccacheEndpoint,
 		},
-		"ccache_remote_storage": remoteStorage,
+		"ccache_remote_storage": compileCacheRemoteStorage(ccacheEndpoint, plainToken, credential.Permissions),
 		"sccache_config":        compileCacheSCCacheConfig(sccacheEndpoint, plainToken),
-		// Keep the original ccache-only fields while existing Operators and API
-		// clients move to the explicit per-client fields above.
-		"endpoint":       ccacheEndpoint,
-		"remote_storage": remoteStorage,
-		"warning":        "save this token now — it will not be shown again",
 	})
 }
 

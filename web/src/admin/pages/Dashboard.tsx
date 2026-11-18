@@ -236,7 +236,7 @@ export default function Dashboard() {
   // makes it stale, but cannot turn a never-loaded snapshot into a failure.
   const policyPayloadIdle = policy.status?.status === 'unavailable'
     && policy.status.degraded === false && policy.status.refresh_failures === 0
-    && !(policy.status.snapshot_loaded_at ?? policy.status.last_successful_refresh)
+    && !policy.status.snapshot_loaded_at
     && !policy.status.using_stale_snapshot
 
   const status = deriveServiceStatus({

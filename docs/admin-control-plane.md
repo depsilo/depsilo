@@ -301,14 +301,12 @@ logout contract is implied.
 
 ## Contract compatibility
 
-`GET /api/v1/admin/security/vulnerabilities` uses `package`; the legacy `q` alias
-remains accepted only when `package` is absent. No removal date has been announced.
-Security policy responses and writes use `auto_block_enabled` and
+`GET /api/v1/admin/security/vulnerabilities` filters by package name with
+`package`. Security policy responses and writes use `auto_block_enabled` and
 `min_cvss_score`, with the score constrained to `0..10`.
 
-`GET /api/v1/admin/audit-logs` and `GET /api/v1/admin/audit-logs/export` use `package`;
-the legacy `search` alias remains accepted only when `package` is absent. No
-removal date has been announced. `GET /api/v1/admin/logs/export` accepts the
+`GET /api/v1/admin/audit-logs` and `GET /api/v1/admin/audit-logs/export` filter
+by package name with `package`. `GET /api/v1/admin/logs/export` accepts the
 same filters as the access-log list and exports at most 10,000 matching rows.
 
 Project package responses use `ecosystem`, `package_name`, `version`, `first_seen_at`,

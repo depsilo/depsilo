@@ -189,7 +189,6 @@ func (h *OIDCHandler) Identities(c *gin.Context) {
 		source = "local"
 	}
 	providers := make([]gin.H, 0)
-	var legacy gin.H
 	canLink := false
 	for _, manager := range h.registry.Managers() {
 		cfg := manager.Config()
@@ -199,27 +198,9 @@ func (h *OIDCHandler) Identities(c *gin.Context) {
 			provider["session_ttl_seconds"] = int64(cfg.SessionTTL / time.Second)
 		}
 		providers = append(providers, provider)
-		if manager.ID() == identity.ProviderID {
-			legacy = provider
-		}
 		canLink = canLink || allowed
 	}
-	// Keep the singleton field for old clients without inventing a default
-	// when several explicitly named sources are available.
-	if legacy == nil && len(providers) == 1 {
-		legacy = providers[0]
-	}
-	if legacy != nil {
-		manager := h.registry.Manager(legacy["id"].(string))
-		cfg := manager.Config()
-		if cfg.Issuer != "" && manager.Protocol() == "oidc" {
-			legacy["issuer"] = cfg.Issuer
-		}
-		if cfg.RedirectURL != "" {
-			legacy["redirect_url"] = cfg.RedirectURL
-		}
-	}
-	response := gin.H{"permission_source": source, "password_enabled": local, "can_link": canLink, "identities": items, "providers": providers, "provider": legacy}
+	response := gin.H{"permission_source": source, "password_enabled": local, "can_link": canLink, "identities": items, "providers": providers}
 	if principal.CurrentIdentityID != 0 {
 		response["current_identity_id"], response["current_provider_id"] = principal.CurrentIdentityID, principal.CurrentProviderID
 	}

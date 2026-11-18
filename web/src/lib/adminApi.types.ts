@@ -58,8 +58,6 @@ export interface NowResponse {
   last_activity?: NowLastActivity
   rate: {
     requests_per_min: number
-    egress_bps: number
-    ingress_bps: number
     has_data: boolean
     /** True when the process meter supplied the byte rates (idle vs not-collected). */
     measured: boolean
@@ -90,10 +88,7 @@ export interface PolicyStatus {
   status: PolicyStatusKind
   degraded?: boolean
   using_stale_snapshot: boolean
-  /** Preferred name in the Admin contract. */
   snapshot_loaded_at?: string | null
-  /** Compatibility alias emitted by older status handlers. */
-  last_successful_refresh?: string | null
   snapshot_age_seconds: number
   refresh_failures: number
   on_load_error: string
@@ -351,7 +346,7 @@ export interface CompileCacheEndpoints {
 
 export type CompileCacheStatusResponse =
   | { enabled: false }
-  | { enabled: true; endpoints: CompileCacheEndpoints; endpoint: string; stats: CompileCacheStats }
+  | { enabled: true; endpoints: CompileCacheEndpoints; stats: CompileCacheStats }
 
 export interface CompileCacheCredential {
   id: number
@@ -387,10 +382,6 @@ export interface CreateCompileCacheCredentialResponse {
   endpoints: CompileCacheEndpoints
   ccache_remote_storage: string
   sccache_config: string
-  /** Deprecated ccache-only aliases retained for API compatibility. */
-  endpoint: string
-  remote_storage: string
-  warning: string
 }
 
 export interface CompileCacheCleanupResponse {
@@ -1289,8 +1280,7 @@ export interface LoginIdentitiesResponse {
   current_identity_id?: number | null
   current_provider_id?: string | null
   identities: LoginIdentity[]
-  providers?: (IdentityProvider & { enabled: boolean; can_link: boolean; session_ttl_seconds?: number })[]
-  provider: (IdentityProvider & { enabled: boolean; issuer?: string; redirect_url?: string; session_ttl_seconds?: number }) | null
+  providers: (IdentityProvider & { enabled: boolean; can_link: boolean; session_ttl_seconds?: number })[]
 }
 export type OIDCCompleteResponse =
   | { mode: 'login'; token: string; expires_at: number; return_to: string }

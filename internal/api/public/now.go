@@ -59,12 +59,6 @@ type lastActivity struct {
 type rateBlock struct {
 	// RequestsPerMin is the rolling 60-second client request count.
 	RequestsPerMin int64 `json:"requests_per_min"`
-	// EgressBps/IngressBps are legacy aliases. Egress is delivered-to-client
-	// bytes per second; Ingress is measured upstream-read bytes per second.
-	// They were previously a miss-path proxy for origin traffic; both now come
-	// from the shared meter when it is available.
-	EgressBps  float64 `json:"egress_bps"`
-	IngressBps float64 `json:"ingress_bps"`
 	// HasData is false when the window observed zero requests; the frontend
 	// renders "—" instead of a misleading "0".
 	HasData bool `json:"has_data"`
@@ -186,29 +180,23 @@ func (h *NowHandler) lastActivity(ctx context.Context, now time.Time) (*lastActi
 }
 
 // rate computes the rolling 60-second rates. The request count comes from a
-// bounded scan of raw access_logs; the byte rates come from the shared meter,
-// which counts delivered-to-client bytes and measured upstream-read bytes
-// independently. Without a meter (isolated tests) the legacy DB proxy is kept.
+// bounded scan of raw access_logs; the byte and per-leg request rates come
+// from the shared meter, which counts delivered-to-client bytes and measured
+// upstream-read bytes independently. Without a meter, Measured stays false.
 func (h *NowHandler) rate(ctx context.Context, now time.Time) (rateBlock, error) {
 	since := now.Add(-60 * time.Second)
-	var agg struct {
-		Requests int64
-		Egress   int64
-		Ingress  int64
-	}
+	var requests int64
 	err := h.db.WithContext(ctx).Model(&db.AccessLog{}).
-		Select(`COUNT(*) AS requests,
-			COALESCE(SUM(bytes_sent), 0) AS egress,
-			COALESCE(SUM(CASE WHEN hit = 0 THEN bytes_sent ELSE 0 END), 0) AS ingress`).
+		Select("COUNT(*) AS requests_per_min").
 		Where("created_at >= ?", since).
-		Scan(&agg).Error
+		Scan(&requests).Error
 	if err != nil {
 		return rateBlock{}, err
 	}
 
 	out := rateBlock{
-		RequestsPerMin: agg.Requests,
-		HasData:        agg.Requests > 0,
+		RequestsPerMin: requests,
+		HasData:        requests > 0,
 		WindowSeconds:  60,
 	}
 	if h.meter != nil {
@@ -218,14 +206,7 @@ func (h *NowHandler) rate(ctx context.Context, now time.Time) (rateBlock, error)
 		out.ServiceBytesPerSec = measured.ServiceBytesPerSec()
 		out.OriginRequestsPerSec = measured.OriginRequestsPerSec()
 		out.OriginBytesPerSec = measured.OriginBytesPerSec()
-		out.EgressBps = out.ServiceBytesPerSec
-		out.IngressBps = out.OriginBytesPerSec
-		return out, nil
 	}
-	// Compatibility fallback for callers constructing the handler without a
-	// meter. These are client-side totals, not measured origin traffic.
-	out.EgressBps = float64(agg.Egress) / 60.0
-	out.IngressBps = float64(agg.Ingress) / 60.0
 	return out, nil
 }
 

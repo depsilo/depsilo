@@ -336,7 +336,7 @@ test('Overview keeps cached measurements but does not claim health after its foc
             status: 'healthy',
             last_activity: null,
             rate: {
-              requests_per_min: 7, ingress_bps: 10, egress_bps: 20, has_data: true, measured: true,
+              requests_per_min: 7, has_data: true, measured: true,
               window_seconds: 60, service_requests_per_sec: 0.1, service_bytes_per_sec: 128,
               origin_requests_per_sec: 0, origin_bytes_per_sec: 0,
             },

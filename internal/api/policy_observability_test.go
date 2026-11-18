@@ -57,7 +57,6 @@ func TestReadinessIncludesDegradedPolicyWithoutChangingHTTPReadiness(t *testing.
 			Status             string `json:"status"`
 			UsingStaleSnapshot bool   `json:"using_stale_snapshot"`
 			SnapshotLoadedAt   string `json:"snapshot_loaded_at"`
-			LastRefresh        string `json:"last_successful_refresh"`
 		} `json:"policy"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
@@ -70,8 +69,8 @@ func TestReadinessIncludesDegradedPolicyWithoutChangingHTTPReadiness(t *testing.
 		t.Fatalf("policy status = %#v, want degraded/stale", body.Policy)
 	}
 	wantLoadedAt := loadedAt.Format(time.RFC3339Nano)
-	if body.Policy.SnapshotLoadedAt != wantLoadedAt || body.Policy.LastRefresh != wantLoadedAt {
-		t.Fatalf("policy loaded timestamps = snapshot:%q last:%q, want %q", body.Policy.SnapshotLoadedAt, body.Policy.LastRefresh, wantLoadedAt)
+	if body.Policy.SnapshotLoadedAt != wantLoadedAt {
+		t.Fatalf("policy snapshot_loaded_at = %q, want %q", body.Policy.SnapshotLoadedAt, wantLoadedAt)
 	}
 }
 

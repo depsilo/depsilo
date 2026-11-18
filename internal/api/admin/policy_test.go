@@ -39,12 +39,12 @@ func TestPolicyStatusReturnsFreshnessAndFallbackDetails(t *testing.T) {
 		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
 	}
 	var body struct {
-		Status                string  `json:"status"`
-		UsingStaleSnapshot    bool    `json:"using_stale_snapshot"`
-		LastSuccessfulRefresh *string `json:"last_successful_refresh"`
-		SnapshotAgeSeconds    float64 `json:"snapshot_age_seconds"`
-		RefreshFailures       uint64  `json:"refresh_failures"`
-		OnLoadError           string  `json:"on_load_error"`
+		Status             string  `json:"status"`
+		UsingStaleSnapshot bool    `json:"using_stale_snapshot"`
+		SnapshotLoadedAt   *string `json:"snapshot_loaded_at"`
+		SnapshotAgeSeconds float64 `json:"snapshot_age_seconds"`
+		RefreshFailures    uint64  `json:"refresh_failures"`
+		OnLoadError        string  `json:"on_load_error"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode response: %v; body=%s", err, recorder.Body.String())
@@ -52,8 +52,8 @@ func TestPolicyStatusReturnsFreshnessAndFallbackDetails(t *testing.T) {
 	if body.Status != "degraded" || !body.UsingStaleSnapshot {
 		t.Fatalf("policy state = %#v, want degraded/stale", body)
 	}
-	if body.LastSuccessfulRefresh == nil || *body.LastSuccessfulRefresh != loadedAt.Format(time.RFC3339Nano) {
-		t.Fatalf("last_successful_refresh = %#v, want %s", body.LastSuccessfulRefresh, loadedAt.Format(time.RFC3339Nano))
+	if body.SnapshotLoadedAt == nil || *body.SnapshotLoadedAt != loadedAt.Format(time.RFC3339Nano) {
+		t.Fatalf("snapshot_loaded_at = %#v, want %s", body.SnapshotLoadedAt, loadedAt.Format(time.RFC3339Nano))
 	}
 	if body.SnapshotAgeSeconds < 179 || body.SnapshotAgeSeconds > 190 {
 		t.Fatalf("snapshot_age_seconds = %v, want approximately 180", body.SnapshotAgeSeconds)

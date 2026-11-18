@@ -73,13 +73,12 @@ func (h *PolicyHandler) Status(c *gin.Context) {
 
 	c.Header("Cache-Control", "no-store")
 	c.JSON(http.StatusOK, gin.H{
-		"status":                  state,
-		"degraded":                status.Degraded,
-		"using_stale_snapshot":    status.UsingStaleSnapshot,
-		"last_successful_refresh": last,
-		"snapshot_loaded_at":      last,
-		"snapshot_age_seconds":    age,
-		"refresh_failures":        status.RefreshFailures,
-		"on_load_error":           mode,
+		"status":               state,
+		"degraded":             status.Degraded,
+		"using_stale_snapshot": status.UsingStaleSnapshot,
+		"snapshot_loaded_at":   last,
+		"snapshot_age_seconds": age,
+		"refresh_failures":     status.RefreshFailures,
+		"on_load_error":        mode,
 	})
 }

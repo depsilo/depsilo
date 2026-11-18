@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"depsilo/internal/audit"
@@ -101,21 +100,13 @@ func (h *AuditHandler) parseQuery(c *gin.Context) (audit.Query, error) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "50"))
 
-	packageName, hasPackage := c.GetQuery("package")
-	if !hasPackage {
-		packageName = c.Query("search")
-		if packageName != "" {
-			zap.L().Warn("deprecated admin query parameter", zap.String("endpoint", "audit-logs"), zap.String("parameter", "search"), zap.String("replacement", "package"))
-		}
-	}
-
 	ecosystems, err := parseEcosystemFilter(c, "ecosystem")
 	if err != nil {
 		return audit.Query{}, err
 	}
 	q := audit.Query{
 		Ecosystems:  ecosystems,
-		PackageName: packageName,
+		PackageName: c.Query("package"),
 		ClientIP:    c.Query("ip"),
 		CacheResult: c.Query("result"),
 		Page:        page,

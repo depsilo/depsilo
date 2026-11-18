@@ -59,7 +59,7 @@ export function usePolicyStatus(): PolicyStatusSignal {
   // when the first policy load has never succeeded.
   const isStale = status?.using_stale_snapshot === true
   const unavailable = query.isError
-  const snapshotLoadedAt = status?.snapshot_loaded_at ?? status?.last_successful_refresh
+  const snapshotLoadedAt = status?.snapshot_loaded_at
   const isIdle = status?.status === 'unavailable'
     && status.degraded === false
     && status.refresh_failures === 0

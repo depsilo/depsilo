@@ -139,13 +139,12 @@ func TestOIDCMultipleSourceProofAndMetadata(t *testing.T) {
 	response := oidcRequest(r, http.MethodGet, "/api/v1/auth/identities", "", token, "")
 	var body struct {
 		CanLink   bool `json:"can_link"`
-		Provider  any  `json:"provider"`
 		Providers []struct {
 			ID      string `json:"id"`
 			CanLink bool   `json:"can_link"`
 		} `json:"providers"`
 	}
-	if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &body) != nil || !body.CanLink || body.Provider != nil || len(body.Providers) != 2 {
+	if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &body) != nil || !body.CanLink || len(body.Providers) != 2 {
 		t.Fatalf("sources metadata: %s", response.Body)
 	}
 	for _, source := range body.Providers {

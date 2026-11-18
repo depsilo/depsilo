@@ -18,8 +18,7 @@ const (
 )
 
 // Status is the unified view used by frontend code and the GetStatus admin
-// endpoint. See spec §7.2 for field semantics and
-// §16.2 for the deprecated-alias compatibility window.
+// endpoint. See spec §7.2 for field semantics.
 type Status struct {
 	IsPro            bool       `json:"is_pro"`
 	Source           Source     `json:"source"`
@@ -30,10 +29,6 @@ type Status struct {
 	LicenseKeyMasked string     `json:"license_key_masked,omitempty"`
 	LicenseError     string     `json:"license_error,omitempty"`
 	LastChecked      time.Time  `json:"last_checked"`
-
-	// Deprecated aliases retained for compatibility with older clients.
-	KeyMasked   string     `json:"key_masked,omitempty"`
-	ActivatedAt *time.Time `json:"activated_at,omitempty"`
 }
 
 // Checker is the only abstraction the rest of the codebase reaches for
@@ -89,7 +84,6 @@ func (c *Checker) Status() Status {
 		TrialUsed:        trialUsed,
 		TrialAvailable:   !trialUsed,
 		LicenseKeyMasked: licStatus.KeyMasked,
-		KeyMasked:        licStatus.KeyMasked, // deprecated alias
 		LicenseError:     licStatus.Error,
 		LastChecked:      licStatus.LastChecked,
 	}
@@ -100,7 +94,6 @@ func (c *Checker) Status() Status {
 	case licPro:
 		s.Source = SourcePaid
 		s.ExpiresAt = licStatus.ExpiresAt
-		s.ActivatedAt = licStatus.ActivatedAt
 		if licStatus.ExpiresAt != nil {
 			s.DaysLeft = daysBetween(now, *licStatus.ExpiresAt)
 		}
@@ -108,19 +101,17 @@ func (c *Checker) Status() Status {
 		s.Source = SourceTrial
 		if rec := c.trial.Record(); rec != nil {
 			s.ExpiresAt = &rec.ExpiresAt
-			s.ActivatedAt = &rec.ActivatedAt
 			s.DaysLeft = daysBetween(now, rec.ExpiresAt)
 		}
 	default:
 		s.Source = SourceNone
 		// Even when the trial is expired (no longer granting Pro), expose the
-		// historical ExpiresAt + ActivatedAt so the UI can render
+		// historical ExpiresAt so the UI can render
 		// "Trial ended on <date>". DaysLeft stays 0 (the helper returns 0 for
 		// non-positive deltas).
 		if trialUsed && c.trial != nil {
 			if rec := c.trial.Record(); rec != nil {
 				s.ExpiresAt = &rec.ExpiresAt
-				s.ActivatedAt = &rec.ActivatedAt
 			}
 		}
 	}

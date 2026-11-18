@@ -325,6 +325,26 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   by ecosystem; set `server.log_level` to `debug` to list them.
 
 ### Removed
+- Compatibility aliases in the HTTP and MCP interfaces (the interfaces are
+  not stable before 1.0). Read the current fields instead:
+  - License status: `key_masked` and `activated_at` are gone; read
+    `license_key_masked`.
+  - Admin overview rate (`/api/v1/now`): `egress_bps` and `ingress_bps` are
+    gone; read `service_bytes_per_sec` and `origin_bytes_per_sec`.
+  - Policy status, readiness, and rule-test responses: `last_successful_refresh`
+    is gone; read `snapshot_loaded_at`.
+  - Compiler-cache status and new-credential responses: `endpoint`,
+    `remote_storage`, and `warning` are gone; read `endpoints.ccache`,
+    `endpoints.sccache`, and `ccache_remote_storage`.
+  - Login identities (`GET /api/v1/auth/identities`): the single `provider`
+    object is gone; read the `providers` list.
+  - The MCP tool `depsilo_request` is gone; call `depsilo_recent` with
+    `request_id`.
+  - Admin audit logs no longer accept `search`, and security
+    vulnerabilities no longer accept `q`; filter with `package`.
+- The `cmd/server` entry point and the `build-server`, `proxy-env`, and
+  `verify-installer` Make targets. `depsilo` serves when run without
+  arguments; use `make build`, `make cli-activate`, and `make verify-scripts`.
 - Admin webhooks no longer offer "High Disk Usage" (`disk_high`) or
   "Critical Vulnerability" (`vuln_critical`): Depsilo never sent either
   event. A webhook saved with them keeps the values, which match nothing.

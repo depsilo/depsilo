@@ -382,9 +382,6 @@ export interface EntitlementStatus {
   license_key_masked?: string
   license_error?: string
   last_checked: string
-  // Deprecated aliases retained for compatibility with older servers.
-  key_masked?: string
-  activated_at?: string
 }
 
 export const licenseApi = {

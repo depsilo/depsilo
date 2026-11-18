@@ -213,13 +213,12 @@ func policyStatusPayload(status rules.PolicyStatus) gin.H {
 		mode = rules.DefaultOnLoadErrorPolicy
 	}
 	return gin.H{
-		"status":                  state,
-		"degraded":                status.Degraded,
-		"using_stale_snapshot":    status.UsingStaleSnapshot,
-		"last_successful_refresh": loadedAt,
-		"snapshot_loaded_at":      loadedAt,
-		"snapshot_age_seconds":    age,
-		"refresh_failures":        status.RefreshFailures,
-		"on_load_error":           mode,
+		"status":               state,
+		"degraded":             status.Degraded,
+		"using_stale_snapshot": status.UsingStaleSnapshot,
+		"snapshot_loaded_at":   loadedAt,
+		"snapshot_age_seconds": age,
+		"refresh_failures":     status.RefreshFailures,
+		"on_load_error":        mode,
 	}
 }

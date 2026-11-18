@@ -50,8 +50,7 @@ func TestAuditPackageQueryAndDeprecatedSearchAlias(t *testing.T) {
 	}
 	for _, path := range []string{
 		"/audit-logs?package=requests",
-		"/audit-logs?search=requests",
-		"/audit-logs?package=requests&search=flask",
+		"/audit-logs?package=requests&ecosystem=pypi",
 	} {
 		rec := httptest.NewRecorder()
 		r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
@@ -88,21 +87,8 @@ func TestAuditPackageQueryAndDeprecatedSearchAlias(t *testing.T) {
 		}
 	}
 
-	emptyPackageRec := httptest.NewRecorder()
-	r.ServeHTTP(emptyPackageRec, httptest.NewRequest(http.MethodGet, "/audit-logs?package=&search=requests", nil))
-	var emptyPackageBody struct {
-		Items []map[string]any `json:"items"`
-		Total int64            `json:"total"`
-	}
-	if err := json.Unmarshal(emptyPackageRec.Body.Bytes(), &emptyPackageBody); err != nil {
-		t.Fatalf("decode explicit empty package: %v", err)
-	}
-	if emptyPackageRec.Code != http.StatusOK || emptyPackageBody.Total != 2 || len(emptyPackageBody.Items) != 2 {
-		t.Fatalf("explicit empty package status = %d, body = %#v", emptyPackageRec.Code, emptyPackageBody)
-	}
-
 	exportRec := httptest.NewRecorder()
-	r.ServeHTTP(exportRec, httptest.NewRequest(http.MethodGet, "/audit-logs/export?search=requests", nil))
+	r.ServeHTTP(exportRec, httptest.NewRequest(http.MethodGet, "/audit-logs/export?package=requests", nil))
 	records, err := csv.NewReader(strings.NewReader(exportRec.Body.String())).ReadAll()
 	if err != nil {
 		t.Fatalf("read csv: %v", err)

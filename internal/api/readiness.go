@@ -59,13 +59,7 @@ func readinessHandler(database *gorm.DB, storage cache.Storage, policyProviders 
 				// These two fields are safe, useful freshness context for operators
 				// polling /ready; fallback mode and internal errors stay on the
 				// authenticated Admin status route.
-				loadedAt := loadedTime.UTC().Format(time.RFC3339Nano)
-				// Keep both names during the 0.9.x contract transition. The
-				// canonical operator-facing name is snapshot_loaded_at; the
-				// last_successful_refresh alias is retained for clients that
-				// consumed the initial status endpoint draft.
-				policy["snapshot_loaded_at"] = loadedAt
-				policy["last_successful_refresh"] = loadedAt
+				policy["snapshot_loaded_at"] = loadedTime.UTC().Format(time.RFC3339Nano)
 				policy["snapshot_age_seconds"] = policySnapshotAge(statusValue, time.Now())
 			}
 			response["policy"] = policy

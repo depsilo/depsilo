@@ -17,7 +17,7 @@ import (
 )
 
 func TestNowQueryFailuresDoNotBecomeIdleStatistics(t *testing.T) {
-	for _, query := range []string{"strftime", "created_at, adapter_type", "SUM(bytes_sent)"} {
+	for _, query := range []string{"strftime", "created_at, adapter_type", "requests_per_min"} {
 		t.Run(query, func(t *testing.T) {
 			database := newStatsTestDB(t)
 			if err := database.AutoMigrate(&db.AccessLog{}); err != nil {

@@ -29,8 +29,6 @@ const unmeasuredNow: NowResponse = {
   version: 'dev',
   rate: {
     requests_per_min: 0,
-    ingress_bps: 0,
-    egress_bps: 0,
     has_data: false,
     measured: false,
     window_seconds: 60,

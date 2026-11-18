@@ -22,7 +22,6 @@ import (
 type LicenseStatus struct {
 	IsPro       bool       `json:"is_pro"`
 	KeyMasked   string     `json:"key_masked"`
-	ActivatedAt *time.Time `json:"activated_at"`
 	ExpiresAt   *time.Time `json:"expires_at"`
 	LastChecked time.Time  `json:"last_checked"`
 	Error       string     `json:"error,omitempty"`
@@ -74,7 +73,6 @@ func newManager(tasks asyncruntime.Submitter, cfg config.LicenseConfig, database
 		m.status = LicenseStatus{
 			IsPro:       true,
 			KeyMasked:   "dev-mode",
-			ActivatedAt: &now,
 			LastChecked: now,
 		}
 		zap.L().Warn("DEPSILO_DEV_PRO is set — Pro features activated without license validation")
@@ -157,10 +155,6 @@ func (m *Manager) doValidate() {
 	}
 
 	m.status.IsPro = true
-	if m.status.ActivatedAt == nil {
-		now := time.Now().UTC()
-		m.status.ActivatedAt = &now
-	}
 	// No upstream ExpiresAt to honour — contract expiry is tracked
 	// out-of-band today. Leaving m.status.ExpiresAt nil signals "no
 	// known expiry" to the frontend, which suppresses the "expires

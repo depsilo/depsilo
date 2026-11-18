@@ -47,7 +47,7 @@ test('insecure remote origins cannot submit either LDAP binding proof', async ({
   await serveInsecureOrigin(page, baseURL)
   await mockAdminApi(page, {
     'GET /api/v1/auth/me': principal,
-    'GET /api/v1/auth/identities': { permission_source: 'local', password_enabled: true, can_link: true, provider: null, providers: [provider], identities: [] },
+    'GET /api/v1/auth/identities': { permission_source: 'local', password_enabled: true, can_link: true, providers: [provider], identities: [] },
     'POST /api/v1/auth/identities/ldap/link': () => { bindings++; return { status: 403, body: {} } },
   })
   await page.goto('http://depsilo.example.test/admin/account')
@@ -227,7 +227,7 @@ test('local accounts link a directory identity using two separate proofs without
   const identity: LoginIdentity = { id: 12, provider: 'directory', protocol: 'ldap', provider_name: provider.name, provider_matches: true, login_available: true, display_name: 'Directory operator', created_at: '2026-10-23T10:00:00Z', last_login_at: null, can_unlink: true }
   await mockAdminApi(page, {
     'GET /api/v1/auth/me': principal,
-    'GET /api/v1/auth/identities': () => ({ permission_source: 'local', password_enabled: true, can_link: true, provider: null, providers: [provider], identities: linked ? [identity] : [] }),
+    'GET /api/v1/auth/identities': () => ({ permission_source: 'local', password_enabled: true, can_link: true, providers: [provider], identities: linked ? [identity] : [] }),
     'POST /api/v1/auth/identities/ldap/link': (request: Request) => {
       expect(request.postDataJSON()).toEqual({ provider_id: 'directory', password: 'local-proof', username: 'directory-user', directory_password: 'directory-proof' })
       linked = true

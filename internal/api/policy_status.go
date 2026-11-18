@@ -62,7 +62,6 @@ func policyStatusView(status rules.PolicyStatus, includeDetails bool) gin.H {
 		if !loadedAt.IsZero() {
 			last = loadedAt.UTC().Format(time.RFC3339Nano)
 		}
-		view["last_successful_refresh"] = last
 		view["snapshot_loaded_at"] = last
 		view["snapshot_age_seconds"] = age
 		view["refresh_failures"] = status.RefreshFailures

@@ -52,7 +52,6 @@ func TestCompileCacheStatusListsClientEndpoints(t *testing.T) {
 		t.Fatalf("status = %d, body=%s", response.Code, response.Body.String())
 	}
 	var body struct {
-		Endpoint  string `json:"endpoint"`
 		Endpoints struct {
 			CCache  string `json:"ccache"`
 			SCCache string `json:"sccache"`
@@ -64,9 +63,6 @@ func TestCompileCacheStatusListsClientEndpoints(t *testing.T) {
 	if body.Endpoints.CCache != "https://cache.example.test/ccache/v1/{namespace}" ||
 		body.Endpoints.SCCache != "https://cache.example.test/sccache/v1/{namespace}" {
 		t.Fatalf("endpoints = %+v", body.Endpoints)
-	}
-	if body.Endpoint != body.Endpoints.CCache {
-		t.Fatalf("legacy endpoint = %q, ccache endpoint = %q", body.Endpoint, body.Endpoints.CCache)
 	}
 }
 
@@ -111,26 +107,18 @@ func TestCompileCacheCredentialLifecycleUsesConfiguredEndpoint(t *testing.T) {
 		} `json:"endpoints"`
 		CCacheRemoteStorage string     `json:"ccache_remote_storage"`
 		SCCacheConfig       string     `json:"sccache_config"`
-		Endpoint            string     `json:"endpoint"`
-		RemoteStorage       string     `json:"remote_storage"`
 		ExpiresAt           *time.Time `json:"expires_at"`
 	}
 	if err := json.Unmarshal(created.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	if response.Endpoint != "https://cache.example.test/ccache/v1/team-a" {
-		t.Fatalf("endpoint = %q", response.Endpoint)
-	}
-	if response.RemoteStorage != response.Endpoint+"|@bearer-token="+response.Token {
-		t.Fatalf("remote_storage = %q", response.RemoteStorage)
-	}
-	if response.Endpoints.CCache != response.Endpoint {
+	if response.Endpoints.CCache != "https://cache.example.test/ccache/v1/team-a" {
 		t.Fatalf("endpoints.ccache = %q", response.Endpoints.CCache)
 	}
 	if response.Endpoints.SCCache != "https://cache.example.test/sccache/v1/team-a" {
 		t.Fatalf("endpoints.sccache = %q", response.Endpoints.SCCache)
 	}
-	if response.CCacheRemoteStorage != response.RemoteStorage {
+	if response.CCacheRemoteStorage != response.Endpoints.CCache+"|@bearer-token="+response.Token {
 		t.Fatalf("ccache_remote_storage = %q", response.CCacheRemoteStorage)
 	}
 	wantSCCacheConfig := "[cache.webdav]\n" +
@@ -142,7 +130,7 @@ func TestCompileCacheCredentialLifecycleUsesConfiguredEndpoint(t *testing.T) {
 	if strings.Contains(response.SCCacheConfig, "RW_MODE") || strings.Contains(response.SCCacheConfig, "rw_mode") {
 		t.Fatalf("sccache_config included unsupported RW_MODE: %q", response.SCCacheConfig)
 	}
-	if strings.Contains(response.Endpoint, request.Host) {
+	if strings.Contains(response.Endpoints.CCache, request.Host) || strings.Contains(response.Endpoints.SCCache, request.Host) {
 		t.Fatal("endpoint trusted the request Host header")
 	}
 	if response.ExpiresAt == nil || time.Until(*response.ExpiresAt) < 89*24*time.Hour || time.Until(*response.ExpiresAt) > 91*24*time.Hour {

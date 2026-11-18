@@ -4,7 +4,6 @@ import { expect, mockAdminApi, setUiPreferences, test } from './fixtures/admin-a
 
 const enabledStatus = {
   enabled: true,
-  endpoint: 'https://cache.example.test/ccache/v1/{namespace}',
   endpoints: {
     ccache: 'https://cache.example.test/ccache/v1/{namespace}',
     sccache: 'https://cache.example.test/sccache/v1/{namespace}',
@@ -43,9 +42,6 @@ test('creates a scoped credential and clears both one-time client configurations
         },
         ccache_remote_storage: remoteStorage,
         sccache_config: sccacheConfig,
-        endpoint: 'https://cache.example.test/ccache/v1/linux-ci',
-        remote_storage: remoteStorage,
-        warning: 'save this token now',
       }
     },
   })

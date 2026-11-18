@@ -133,15 +133,7 @@ func (h *SecurityHandler) ListVulnerabilities(c *gin.Context) {
 	if sev := c.Query("severity"); sev != "" {
 		query = query.Where("severity = ?", sev)
 	}
-	pkg := c.Query("package")
-	_, packagePresent := c.Request.URL.Query()["package"]
-	if !packagePresent {
-		pkg = c.Query("q")
-		if pkg != "" {
-			zap.L().Warn("deprecated admin query parameter", zap.String("endpoint", "security/vulnerabilities"), zap.String("parameter", "q"), zap.String("replacement", "package"))
-		}
-	}
-	if pkg != "" {
+	if pkg := c.Query("package"); pkg != "" {
 		query = query.Where("package_name LIKE ?", "%"+pkg+"%")
 	}
 

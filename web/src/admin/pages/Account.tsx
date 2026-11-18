@@ -47,9 +47,7 @@ export default function Account() {
     retry: false,
   })
   const data = identities.data
-  // The array is authoritative when present, including an empty array. Keep
-  // compatibility with instances that still expose the single-provider DTO.
-  const providers: AccountProvider[] = data?.providers ?? (data?.provider ? [{ ...data.provider, can_link: data.can_link }] : [])
+  const providers: AccountProvider[] = data?.providers ?? []
   const boundSources = new Set(data?.identities.map(identity => identity.provider))
   const unboundProviders = providers.filter(provider => !boundSources.has(provider.id))
   const availableProviders = unboundProviders.filter(provider => provider.enabled)

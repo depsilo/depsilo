@@ -302,8 +302,6 @@ test('Overview status entry, its details and recent table stay readable at 1024 
       version: 'dev',
       rate: {
         requests_per_min: 744,
-        ingress_bps: 3_400_000,
-        egress_bps: 380_000,
         has_data: true,
         measured: true,
         window_seconds: 60,
@@ -406,8 +404,6 @@ test('Overview surfaces a degraded upstream as an actionable centered dialog', a
       last_activity: null,
       rate: {
         requests_per_min: 1,
-        ingress_bps: 0,
-        egress_bps: 0,
         has_data: true,
         measured: true,
         window_seconds: 60,

@@ -355,8 +355,6 @@ describe('buildRequestFlow', () => {
     version: 'dev',
     rate: {
       requests_per_min: 12,
-      ingress_bps: 10,
-      egress_bps: 20,
       has_data: true,
       measured: true,
       window_seconds: 60,
