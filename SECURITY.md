@@ -98,6 +98,32 @@ The following are known limitations, not vulnerabilities:
   public cross-origin Bearer realm, so registry credentials also trust that
   authentication delegation; this is required for registries such as Docker
   Hub.
+- Where no proxy carries a request (package Upstreams, extra indexes and
+  cascade parents without one, their checks, and Docker registries that no
+  proxy carries), Depsilo connects to a host name whose every answer is a
+  fake-IP address in `198.18.0.0/15` or `2001:2::/48` itself, as other
+  programs on the machine do, while `[egress] allow_fake_ip` is on, which is
+  the default. The TUN of proxy software captures the connection, resolves
+  the name itself and connects where its rules send it, so that software is
+  a trusted egress component, as `upstream_proxy` would be, without
+  configuration. Depsilo checks such an answer as public, which covers only
+  the local answer: a registry or Upstream with such an answer reaches no
+  target whose local answer is private or loopback, but a realm, redirect
+  or Upstream host name with a fake-IP answer, a hostile one included,
+  reaches whatever the proxy software resolves it to, loopback and private
+  addresses of the TUN's host and network included. Configure the proxy
+  software's DNS policy and rules to reject loopback, link-local, metadata,
+  and unintended private targets for such names, as for a forward proxy.
+  Depsilo refuses a fake-IP answer that holds an address of its own
+  machine's network interfaces, such as the TUN address, but not the TUN
+  address of another host whose TUN carries its connections, such as the
+  Docker host of a Depsilo container or a gateway that runs the proxy
+  software: a name whose answer is that address, for example one that the
+  proxy software's fake-ip-filter passes with its real record, reaches that
+  host's services that listen on all addresses or on the TUN address. A
+  network that really uses these ranges is dialed for any name that resolves
+  there. Set `allow_fake_ip = false` (or `DEPSILO_EGRESS_ALLOW_FAKE_IP=false`)
+  to refuse fake-IP answers wherever no proxy carries the request.
 
 ## Security Best Practices
 

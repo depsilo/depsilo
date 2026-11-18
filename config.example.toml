@@ -57,9 +57,16 @@ lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
 
 # 上游出站网络（重启生效，详见 docs/deployment.md#upstream-network-egress）。
 # 本机代理软件开启 TUN/fake-IP 时，公网域名会被解析到 198.18.0.0/15
-# （开启 IPv6 fake-IP 时还有 2001:2::/48 等 IPv6 地址段），
-# Depsilo 默认不连接这类地址：把 upstream_proxy 设为代理软件的 HTTP 端口。
-# 它是所有未单独配置代理、也未走级联的包上游，以及未单独配置 proxy 的
+# （开启 IPv6 fake-IP 时还有 2001:2::/48 等 IPv6 地址段）。
+# 和本机其他程序一样，Depsilo 默认直接连接这类地址，由代理软件的 TUN 接管
+# （先连 IPv4 地址，每个地址最多等 5 秒）；URL 里直接写的这类地址、
+# 混有其他地址的应答，以及含本机网卡地址（例如 TUN 自身地址）的应答仍会被拒绝。
+# 没有 TUN 接管时（例如只把系统 DNS 指向代理软件），请打开代理软件的 TUN 模式，
+# 或把 upstream_proxy 设为代理软件的 HTTP 端口。
+# 经 TUN 连接时，这些域名实际连到哪里由代理软件的 DNS 和规则决定，可能是回环或内网地址：
+# 请在代理软件里拒绝回环、链路本地、云元数据和不该访问的内网目标，和配置代理时一样。
+# allow_fake_ip = false 时 Depsilo 不自己连接 fake-IP 地址，只有经代理的请求可用。
+# upstream_proxy 是所有未单独配置代理、也未走级联的包上游，以及未单独配置 proxy 的
 # Docker registry 的默认代理；no_proxy 中的上游和 registry 主机保持直连，
 # IP 和 CIDR 只匹配 URL 里直接写 IP 地址的上游和 registry。
 # 走默认代理的 registry 按每个请求的主机（registry、Bearer realm、重定向目标）
@@ -67,22 +74,25 @@ lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
 # 所以解析到私网地址的私有 registry 不必写进 no_proxy。fake-IP 模式下，
 # 用代理软件的 fake-ip-filter 让私有 registry 的域名得到真实的私网应答即可，
 # 改完后重启 Depsilo。只有代理能到达、或要让全部流量都经代理时，
-# 给该 registry 单独配置 proxy。保持直连的 registry 在 fake-IP 模式下
-# 需要真实的 DNS 应答。URL 写 localhost 或回环地址的始终直连。
+# 给该 registry 单独配置 proxy。保持直连的 registry 和没有代理的 registry 一样
+# 自己连接 fake-IP 地址；没有 TUN 接管时，需要真实的 DNS 应答。
+# URL 写 localhost 或回环地址的始终直连。
 # 代理软件的 IPv6 fake-IP 地址段请设为 2001:2::/48，或关闭 IPv6 fake-IP：
 # fdfe:dcba:9876::/48、fd00:6152::/32、fc00::/18 这类唯一本地地址段
 # 无法与私网区分，Depsilo 一律拒绝，经代理的 Docker registry 也不例外。
 # Tailscale / Headscale / NetBird 节点地址在 100.64.0.0/10，
 # 需要在 private_ranges 中声明后才能作为上游或级联父节点
 # （Docker registry 不使用 private_ranges）。
-# 这三项也可以用环境变量设置，环境变量优先于本文件：DEPSILO_EGRESS_UPSTREAM_PROXY、
-# DEPSILO_EGRESS_NO_PROXY、DEPSILO_EGRESS_PRIVATE_RANGES（后两项用逗号分隔）。
+# 这四项也可以用环境变量设置，环境变量优先于本文件：DEPSILO_EGRESS_UPSTREAM_PROXY、
+# DEPSILO_EGRESS_NO_PROXY、DEPSILO_EGRESS_PRIVATE_RANGES（这两项用逗号分隔）、
+# DEPSILO_EGRESS_ALLOW_FAKE_IP（true 或 false）。
 # 在容器里 127.0.0.1 指的是容器自己，代理在宿主机上时要填宿主机的地址，
 # 例如 http://host.docker.internal:7890（Linux 上的写法见上面的文档链接）。
 # [egress]
 # upstream_proxy = "http://127.0.0.1:7890"
 # no_proxy = ["mirror.lan", "192.168.0.0/16"]
 # private_ranges = ["100.64.0.0/10"]
+# allow_fake_ip = false   # 默认 true
 
 # Package-policy snapshot refresh behavior. A stale, last-known-good snapshot
 # is preferred when the policy store is temporarily unavailable; change to
@@ -430,15 +440,19 @@ url      = "https://registry-1.docker.io"
 # dialed directly and only public and fake-IP answers go through the proxy;
 # set the registry's own proxy to send all of its requests through a proxy.
 # A hostname whose every answer is a fake-IP address (198.18.0.0/15 or
-# 2001:2::/48) is left to the proxy to resolve; without a proxy such an answer
-# is refused. Unique-local IPv6 fake-IP ranges (fdfe:dcba:9876::/48,
+# 2001:2::/48) is left to the proxy to resolve; without a proxy, Depsilo dials
+# those addresses itself for the proxy software's TUN to carry, unless
+# [egress] allow_fake_ip = false, which refuses such an answer. An answer that
+# holds an address of this machine's network interfaces is refused either way.
+# Unique-local IPv6 fake-IP ranges (fdfe:dcba:9876::/48,
 # fd00:6152::/32, fc00::/18) are refused with or without a proxy: set the proxy
 # software's IPv6 fake-IP range to 2001:2::/48 or turn IPv6 fake-IP off.
 # A forward proxy can resolve the same hostname differently, so its DNS policy
 # and egress ACL remain a trust boundary for the hosts it carries and must
-# reject unintended internal targets. Registries may nominate a public
-# cross-origin Bearer realm (Docker Hub uses auth.docker.io); configuring
-# credentials trusts that delegation.
+# reject unintended internal targets; so do the DNS policy and rules of proxy
+# software whose TUN carries a fake-IP connection. Registries may nominate a
+# public cross-origin Bearer realm (Docker Hub uses auth.docker.io);
+# configuring credentials trusts that delegation.
 
 # [[docker.registries]]
 # name     = "ghcr"

@@ -182,6 +182,23 @@ consequence.
   Upstream. The package-route `502` message `all upstreams are unhealthy`
   names `egress_proxy` when every Upstream of an ecosystem failed at the
   proxy.
+- With `[egress] allow_fake_ip` on, the default, a package Upstream without
+  a proxy whose host name resolves only to fake-IP addresses
+  (`198.18.0.0/15`, `2001:2::/48`) is checked and fetched through those
+  addresses and no longer records `egress_fake_ip` when they connect. The
+  code now records that none of them connected within 5 seconds (`address`
+  is the one dialed first, an IPv4 one when the answer had one, and `range`
+  its range), that `allow_fake_ip` is off, or, as before, an answer that the
+  guard always refuses: one that mixes fake-IP and other addresses, holds a
+  unique-local address of proxy software, or is an address from these ranges
+  written in the URL. When the answer holds such a unique-local address,
+  `address` and `range` name it, whichever address DNS listed first. A
+  fake-IP answer that holds an address of the machine's network interfaces
+  records `egress_reserved` with that `address` and no `range`. The check's
+  `error` reads `nothing carried the connection to the fake-IP dial target`
+  for addresses that did not connect. The package-route `502` message for
+  `egress_fake_ip` reads
+  `all upstreams are unhealthy: DNS returned fake-IP addresses for every upstream (egress_fake_ip), and Depsilo could not connect to them: nothing carried the connections, [egress] allow_fake_ip is off, or the answers mixed fake-IP and other addresses or held unique-local IPv6 fake-IP addresses, which Depsilo always refuses; turn on the proxy software's TUN mode, or set [egress] upstream_proxy in config.toml (in a container, the environment variable DEPSILO_EGRESS_UPSTREAM_PROXY) and restart, or check allow_fake_ip; for unique-local IPv6 fake-IP addresses, set the proxy software's IPv6 fake-IP range to 2001:2::/48, see docs/deployment.md#upstream-network-egress`.
 
 ## Configuration
 
@@ -206,11 +223,24 @@ consequence.
   distinct characters; startup refuses any other value. The variable is not
   read once setup is complete.
 - `[egress]` follows the same file/environment precedence as other settings:
-  `DEPSILO_EGRESS_UPSTREAM_PROXY`, `DEPSILO_EGRESS_NO_PROXY`, and
-  `DEPSILO_EGRESS_PRIVATE_RANGES` override `upstream_proxy`, `no_proxy`, and
-  `private_ranges`. The two lists take comma-separated values, and an
-  environment list replaces the file list as a whole. Environment values pass
-  the same validation as file values, so an invalid one fails startup.
+  `DEPSILO_EGRESS_UPSTREAM_PROXY`, `DEPSILO_EGRESS_NO_PROXY`,
+  `DEPSILO_EGRESS_PRIVATE_RANGES`, and `DEPSILO_EGRESS_ALLOW_FAKE_IP` override
+  `upstream_proxy`, `no_proxy`, `private_ranges`, and `allow_fake_ip`. The two
+  lists take comma-separated values, and an environment list replaces the
+  file list as a whole. Environment values pass the same validation as file
+  values, so an invalid one fails startup.
+- `[egress] allow_fake_ip` is new and `true` unless the file or
+  `DEPSILO_EGRESS_ALLOW_FAKE_IP` sets it to `false`; like the rest of
+  `[egress]`, it is read at startup. Where no proxy carries a request
+  (package Upstreams, extra indexes and cascade parents without one, their
+  checks, and Docker registries that no proxy carries), Depsilo then dials a
+  host name whose DNS answer consists only of fake-IP addresses in
+  `198.18.0.0/15` or `2001:2::/48`, IPv4 ones first and a quarter second
+  apart, each for at most 5 seconds, instead of refusing it. An address from
+  these ranges written in a URL, an answer that mixes them with other
+  addresses, and an answer that holds an address of the machine's network
+  interfaces stay refused. Set it to `false` to keep the earlier refusal; a
+  proxy that carries a request resolves such names whatever the setting.
 - `[egress] upstream_proxy` is also the proxy of every `[[docker.registries]]`
   entry without its own `proxy`, chosen from the registry URL as for a package
   Upstream: an entry whose URL names `localhost` or a loopback address, or
@@ -226,13 +256,26 @@ consequence.
   answers `502` instead of passing the status on. A failure of
   `upstream_proxy` can add a hint to the reason, which asks for a real DNS
   answer or a `no_proxy` entry.
-  When a proxy carries a registry request, a host name whose every DNS answer
-  lies in `198.18.0.0/15` or `2001:2::/48` counts as public; without a proxy
-  such an answer is refused, and the reason in the `502` message names the
-  host, one address (an IPv4 one when the answer has one), and
-  `[egress] upstream_proxy`, or, when `no_proxy` or a loopback URL keeps the
-  registry off a configured `upstream_proxy`, asks for real DNS answers for
-  its host names.
+  A host name whose every DNS answer lies in `198.18.0.0/15` or `2001:2::/48`
+  counts as public: a proxy that carries the request resolves it, and
+  without a proxy, Depsilo dials those addresses itself while
+  `allow_fake_ip` is on. When none of them connects, the reason in the `502`
+  message names the host and the address dialed first and reads
+  `<host> resolved to <address>, a fake-IP address from proxy software, but nothing carried the connection to it;`,
+  followed by the proxy software's TUN mode and `[egress] upstream_proxy`,
+  or, when `no_proxy` or a loopback URL keeps the registry off a configured
+  `upstream_proxy`, by the TUN mode and real DNS answers for its host names.
+  On this direct route, the registry's own fake-IP answer pins its network
+  scope only once a connection to it succeeded, so a real answer that
+  replaces placeholders nothing carried, a private one included, is used at
+  the next pull without a restart.
+  With `allow_fake_ip` off, such an answer is refused as before, and the
+  reason reads
+  `<host> resolved to <address>, a fake-IP address from proxy software in TUN/fake-IP mode, and [egress] allow_fake_ip is off;`
+  before the earlier remedies. A fake-IP
+  answer that holds an address of the machine's network interfaces reads
+  `unsafe Docker dial target`, or `unsafe Docker proxy target` through a
+  proxy.
 - A Docker Bearer realm or redirect target written as a private or loopback
   IP address is no longer refused for a registry configured by host name:
   the network scope that the registry's own answer pinned decides, as it

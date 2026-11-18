@@ -408,20 +408,35 @@ follow a private address, one pinned loopback also a loopback address, and
 one pinned public neither. `localhost`, `.localhost` names and addresses
 written with a trailing dot are still refused by their form, because a
 resolver, a proxy's included, may answer them with any address.
-One exception applies only when a proxy
-carries the request: a host name (not localhost, and not an address in any
-notation) whose every DNS answer lies in the benchmarking ranges
-`198.18.0.0/15` or `2001:2::/48`, from either family or both, counts as
-public, because proxy software in TUN/fake-IP mode answers that way for
-public hosts, such an answer says nothing about the real address, and the
-proxy resolves the name itself. An answer that mixes such addresses with any
-other address is still refused, and without a proxy a fake-IP answer is
-refused too. Unique-local fake-IP addresses get no exception, because they
-cannot be told from a private network: the unique-local ranges that proxy
-software documents for IPv6 fake-IP and for its own TUN, VIF and DNS
-addresses (`fdfe:dcba:9876::/48`, `fd00:6152::/32`, `fc00::/18`) are unsafe
-for every package Upstream, cascade parent and Docker registry, never
-private. A fake answer from them used to pin a public Docker registry, with or
+One exception concerns fake-IP answers: a host name (not localhost, and not
+an address in any notation) whose every DNS answer lies in the benchmarking
+ranges `198.18.0.0/15` or `2001:2::/48`, from either family or both, counts
+as public, because proxy software in TUN/fake-IP mode answers that way for
+public hosts, and such an answer says nothing about the real address. When a
+proxy carries the request, the proxy resolves the name itself. Where Depsilo
+dials itself (package Upstreams, extra indexes and cascade parents without a
+proxy, their checks, and Docker registries that no proxy carries), it dials
+the placeholders, IPv4 ones first and each for at most 5 seconds, while
+`[egress] allow_fake_ip` is on, which is the default: the proxy software's
+TUN captures the connection, maps the placeholder back to the name, resolves
+it and connects where its rules send it, as it does for every program on the
+machine. Wherever Depsilo checks such an answer, it counts as public: any
+origin may reach it, and an origin with such an answer reaches no target
+whose local answer is private or loopback. The check covers only the local
+answer; where the name itself connects is the proxy's or the TUN's decision
+(see the residuals below). Where Depsilo dials itself, a fake-IP answer pins
+the origin's network scope only once a connection to it succeeded.
+An answer that mixes such addresses with any other address is still refused,
+and so is a fake-IP answer that holds an address of this machine's network
+interfaces, such as the TUN address of the proxy software, which would
+otherwise reach a service on this machine; with `allow_fake_ip` off, a
+fake-IP answer is refused wherever no proxy carries the request. Unique-local
+fake-IP addresses get no exception, because they cannot be told from a
+private network: the unique-local ranges that proxy software documents for
+IPv6 fake-IP and for its own TUN, VIF and DNS addresses
+(`fdfe:dcba:9876::/48`, `fd00:6152::/32`, `fc00::/18`) are unsafe for every
+package Upstream, cascade parent and Docker registry, never private. A fake
+answer from them used to pin a public Docker registry, with or
 without a proxy, or a direct package Upstream as a private origin, after
 which its Bearer realm or redirect could reach private addresses. A Docker
 host name answered from these ranges, or with fake-IP addresses next to any
@@ -434,21 +449,50 @@ caller-supplied hosts.
 upstreams, for every host of a Docker registry with its own proxy, and for
 the hosts with public or fake-IP answers of a registry under
 `[egress] upstream_proxy`; it is the only resolver for a registry host whose
-local answer was fake-IP. Registry Bearer realms may be cross-origin by
-protocol (both documented in `SECURITY.md`). The private and loopback targets
-of a registry under `[egress] upstream_proxy` are dialed directly, so the
-proxy's egress ACL does not apply to them: a registry whose own answer is
-private may reach every private address directly, by name or by address
-literal in a realm or redirect. Only the registry's own proxy keeps those
-targets behind the proxy's ACL. The fake-IP exception has the following
-limits:
+local answer was fake-IP. Without a proxy, the proxy software whose TUN
+carries a fake-IP connection is that resolver. Registry Bearer realms may be
+cross-origin by protocol (both documented in `SECURITY.md`). The private and
+loopback targets of a registry under `[egress] upstream_proxy` are dialed
+directly, so the proxy's egress ACL does not apply to them: a registry whose
+own answer is private may reach every private address directly, by name or
+by address literal in a realm or redirect. Only the registry's own proxy
+keeps those targets behind the proxy's ACL. The fake-IP exception has the
+following limits:
 
-- `2001:2::/48` is accepted under a proxy exactly like `198.18.0.0/15`, so a
-  hostile realm or redirect name can publish AAAA records there, and the
-  proxy is then asked to connect to that address.
-- A proxy's own TUN address inside an accepted range, such as `198.18.0.1` or
-  a user's `2001:2::1/126`, can be reached through the proxy when a name
-  really resolves to it.
+- Without a proxy, `allow_fake_ip` delegates a fake-IP name to the proxy
+  software whose TUN carries the connection, which resolves the name itself
+  and applies its own rules, as `upstream_proxy` delegates it to a configured
+  proxy, but now without configuration. The software's DNS policy and rules
+  become part of the boundary for these names: a realm, redirect or Upstream
+  host name with a fake-IP answer, a hostile one included, reaches whatever
+  the software resolves it to under a rule that connects directly, loopback
+  and private addresses of the TUN's host and network included, although
+  its origin counts as public. Restricting loopback, link-local,
+  metadata-service and unintended private destinations there is the
+  operator's part, as for a configured proxy; `allow_fake_ip = false` keeps
+  such names to a configured proxy.
+- A network that really uses `198.18.0.0/15` or `2001:2::/48` is dialed for
+  any host name whose answer lies there, including a hostile realm or
+  redirect name that publishes such records, when no TUN captures the
+  connection. `allow_fake_ip = false` (or `DEPSILO_EGRESS_ALLOW_FAKE_IP=false`)
+  restores the refusal wherever no proxy carries the request.
+- `2001:2::/48` is accepted exactly like `198.18.0.0/15`, so a hostile realm
+  or redirect name can publish AAAA records there, and a proxy, or the TUN, is
+  then asked to connect to that address.
+- An address of Depsilo's own machine is refused in a fake-IP answer, read
+  from its network interfaces at every check, and an answer that Depsilo
+  cannot check because the interfaces cannot be listed is refused. Another
+  host's own TUN address inside an accepted range, such as `198.18.0.1` or a
+  user's `2001:2::1/126`, is not refused. A proxy on another machine can be
+  asked to connect to it, and without a proxy Depsilo dials it itself when
+  the TUN of another host carries its connections: inside a container, whose
+  network interfaces do not hold the Docker host's TUN address, or behind a
+  gateway that runs the proxy software. A name whose answer is that address,
+  for example one that the proxy software's fake-ip-filter passes with its
+  real record, then reaches that host's services that listen on all
+  addresses or on the TUN address. Fake-IP pools do not hand out the TUN
+  address, so only such a name answers with it; `allow_fake_ip = false`
+  removes the direct case.
 - A unique-local fake-IP range that an operator chose outside the documented
   list still counts as a private network, so a fake answer from it alone can
   still pin a public Docker registry or direct package Upstream as private.
@@ -512,7 +556,9 @@ These are deliberate, documented, and not vulnerabilities:
 - Login starts and local password proofs have bounded in-process attempt
   limits. General traffic/abuse rate limiting remains a reverse-proxy concern.
 - A configured HTTP forward proxy and cross-origin registry Bearer realms
-  are trusted egress components.
+  are trusted egress components, and so, while `[egress] allow_fake_ip` is
+  on, is the proxy software whose TUN carries Depsilo's connections to
+  fake-IP answers.
 
 ## 7. Verification map
 
@@ -522,7 +568,7 @@ These are deliberate, documented, and not vulnerabilities:
 | Minimum release age provenance | `internal/adapter/*/provenance_test.go` (including Docker's tag-resolve/observe/pin flow), `internal/quarantine/policy_capability_test.go`, `docs/specs/2026-10-06-min-release-age-provenance.md` |
 | Tamper detection | `internal/tamper/recorder_test.go`, `internal/cache` tamper paths |
 | Snapshot-only mode | `internal/snapshot`, `internal/quarantine/snapshot_gate_test.go`, `docs/specs/2026-10-06-freeze-snapshot.md` |
-| SSRF and redirect guards | `internal/upstream/request` tests, `internal/upstream/egress_failure_test.go`, `internal/egress/egress_test.go` (fake-IP and proxy-software ranges), `internal/api/mcp_ssrf_test.go`, Docker resolver and egress tests (`internal/adapter/docker/egress_test.go`) |
+| SSRF and redirect guards | `internal/upstream/request` tests, `internal/upstream/egress_failure_test.go`, `internal/upstream/fake_ip_dial_test.go` (fake-IP answers dialed, not carried, or refused), `internal/egress/egress_test.go` (fake-IP and proxy-software ranges, local interface addresses), `internal/api/mcp_ssrf_test.go`, Docker resolver and egress tests (`internal/adapter/docker/egress_test.go`, `internal/adapter/docker/fake_ip_test.go`) |
 | Docker `502` text and its log redaction | `internal/adapter/docker/bad_gateway_test.go`, `internal/adapter/docker/failure_test.go` |
 | Capability groups and Pro gates | `internal/api/router_permissions_test.go`, `web/e2e` permission cases |
 | Preset bootstrap token rule | `internal/config/loader_test.go` |
