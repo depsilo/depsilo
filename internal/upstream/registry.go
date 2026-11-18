@@ -66,9 +66,6 @@ type Registry struct {
 	started        bool
 	closeDone      chan struct{}
 	closingWorkers []workerHandle
-
-	degradedMu sync.RWMutex
-	degraded   map[string]error
 }
 
 func NewRegistry(database *gorm.DB, active []string) (*Registry, error) {
@@ -90,7 +87,6 @@ func NewRegistryWithOptions(database *gorm.DB, active []string, options PoolOpti
 		poolOptions:   options,
 		mutationLocks: make(map[string]*sync.Mutex),
 		workers:       make(map[uint]workerHandle),
-		degraded:      make(map[string]error),
 	}
 	for _, ecosystem := range ordered {
 		var records []db.UpstreamRecord

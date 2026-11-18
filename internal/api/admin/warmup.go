@@ -100,7 +100,7 @@ type durableWarmupJob struct {
 func (h *WarmupHandler) loadPersistedJobs() error {
 	if h.db == nil {
 		return nil
-	} // isolated unit callers can run the fetch seam without an HTTP job store
+	} // a handler built without a database keeps job history in memory only
 	ctx, cancel := context.WithTimeout(context.Background(), warmupHistoryTimeout)
 	defer cancel()
 	var state depsdb.ControlPlaneState
@@ -215,13 +215,6 @@ func (h *WarmupHandler) saveHistoryLocked() error {
 		h.failHistoryLocked(err)
 	}
 	return err
-}
-
-// persistJobs is retained for focused package tests and non-HTTP callers.
-func (h *WarmupHandler) persistJobs() error {
-	h.jobsMu.Lock()
-	defer h.jobsMu.Unlock()
-	return h.saveHistoryLocked()
 }
 
 func (h *WarmupHandler) failHistoryLocked(err error) {
@@ -451,10 +444,6 @@ func (h *WarmupHandler) Retry(c *gin.Context) {
 	h.startWarmup(c, ecosystem, failed)
 }
 
-func (h *WarmupHandler) doWarmup(parent context.Context, ecosystem string, packages []string, pool *upstream.Pool) {
-	h.runWarmupJob(parent, nil, ecosystem, packages, pool)
-}
-
 func (h *WarmupHandler) runWarmupJob(parent context.Context, job *warmupJob, ecosystem string, packages []string, pool *upstream.Pool) {
 	normalized, err := normalizeWarmupPackages(ecosystem, packages)
 	if err != nil {
@@ -462,24 +451,22 @@ func (h *WarmupHandler) runWarmupJob(parent context.Context, job *warmupJob, eco
 		return
 	}
 	packages = normalized
-	if job != nil {
-		h.jobsMu.Lock()
-		if h.historyErr != nil {
-			h.jobsMu.Unlock()
-			return
-		}
-		if job.Status == "cancelling" {
-			h.finishWarmupJobLocked(job, "cancelled")
-			h.jobsMu.Unlock()
-			return
-		}
-		job.Status, job.UpdatedAt = "running", time.Now().UTC()
-		if h.saveHistoryLocked() != nil {
-			h.jobsMu.Unlock()
-			return
-		}
+	h.jobsMu.Lock()
+	if h.historyErr != nil {
 		h.jobsMu.Unlock()
+		return
 	}
+	if job.Status == "cancelling" {
+		h.finishWarmupJobLocked(job, "cancelled")
+		h.jobsMu.Unlock()
+		return
+	}
+	job.Status, job.UpdatedAt = "running", time.Now().UTC()
+	if h.saveHistoryLocked() != nil {
+		h.jobsMu.Unlock()
+		return
+	}
+	h.jobsMu.Unlock()
 	warmupContext, cancelWarmup := context.WithTimeout(parent, maxWarmupDuration)
 	defer cancelWarmup()
 	selector := upstream.NewPassiveRecoverySelector(pool)
@@ -491,7 +478,7 @@ func (h *WarmupHandler) runWarmupJob(parent context.Context, job *warmupJob, eco
 		}
 		cacheKey, upstreamPath, err := warmupTarget(ecosystem, pkg)
 		if err != nil {
-			if job != nil && !h.updateWarmupItem(job, pkg, "failed", "request failed") {
+			if !h.updateWarmupItem(job, pkg, "failed", "request failed") {
 				return
 			}
 			zap.L().Warn("warmup target invalid", zap.String("ecosystem", ecosystem), zap.Error(err))
@@ -546,7 +533,7 @@ func (h *WarmupHandler) runWarmupJob(parent context.Context, job *warmupJob, eco
 		cancel()
 
 		if err != nil {
-			if job != nil && !h.updateWarmupItem(job, pkg, "failed", "request failed") {
+			if !h.updateWarmupItem(job, pkg, "failed", "request failed") {
 				return
 			}
 			zap.L().Warn("warmup fetch failed",
@@ -555,7 +542,7 @@ func (h *WarmupHandler) runWarmupJob(parent context.Context, job *warmupJob, eco
 				zap.Error(err),
 			)
 		} else {
-			if job != nil && !h.updateWarmupItem(job, pkg, "succeeded", "metadata cached") {
+			if !h.updateWarmupItem(job, pkg, "succeeded", "metadata cached") {
 				return
 			}
 			zap.L().Debug("warmup cached",
@@ -564,20 +551,18 @@ func (h *WarmupHandler) runWarmupJob(parent context.Context, job *warmupJob, eco
 			)
 		}
 	}
-	if job != nil {
-		h.jobsMu.Lock()
-		status := job.Status
-		if warmupContext.Err() != nil || status == "cancelling" {
-			terminalStatus := "interrupted"
-			if status == "cancelling" {
-				terminalStatus = "cancelled"
-			}
-			h.finishWarmupJobLocked(job, terminalStatus)
-		} else if status != "interrupted" {
-			h.finishWarmupJobLocked(job, "succeeded")
+	h.jobsMu.Lock()
+	status := job.Status
+	if warmupContext.Err() != nil || status == "cancelling" {
+		terminalStatus := "interrupted"
+		if status == "cancelling" {
+			terminalStatus = "cancelled"
 		}
-		h.jobsMu.Unlock()
+		h.finishWarmupJobLocked(job, terminalStatus)
+	} else if status != "interrupted" {
+		h.finishWarmupJobLocked(job, "succeeded")
 	}
+	h.jobsMu.Unlock()
 
 	zap.L().Info("cache warmup completed",
 		zap.String("ecosystem", ecosystem),
@@ -599,12 +584,6 @@ func (h *WarmupHandler) updateWarmupItem(job *warmupJob, pkg, status, detail str
 	}
 	job.UpdatedAt = time.Now().UTC()
 	return h.saveHistoryLocked() == nil
-}
-
-func (h *WarmupHandler) finishWarmupJob(job *warmupJob, status string) {
-	h.jobsMu.Lock()
-	defer h.jobsMu.Unlock()
-	h.finishWarmupJobLocked(job, status)
 }
 
 func (h *WarmupHandler) finishWarmupJobLocked(job *warmupJob, status string) {

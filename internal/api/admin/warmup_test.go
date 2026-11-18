@@ -66,20 +66,12 @@ func TestWarmupMissPersistsNonEmptyBodyBeforeCompleting(t *testing.T) {
 	}
 	manager := cache.NewManager(storage, database, cache.NewEventBus(), 72*time.Hour)
 	closeWarmupTestManager(t, manager)
-	handler := NewWarmupHandler(nil, manager, map[string]*upstream.Pool{"pypi": pool}, &config.Config{
+	runner := &captureTaskRunner{}
+	handler := NewWarmupHandler(runner, manager, map[string]*upstream.Pool{"pypi": pool}, &config.Config{
 		Cache: config.CacheConfig{TTLIndex: time.Hour},
 	}, nil)
 
-	done := make(chan struct{})
-	go func() {
-		handler.doWarmup(context.Background(), "pypi", []string{"requests==2.32.0"}, pool)
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(3 * time.Second):
-		t.Fatal("warmup did not complete")
-	}
+	runWarmupThroughHandler(t, handler, runner, "pypi", "requests==2.32.0")
 
 	if calls.Load() != 1 {
 		t.Fatalf("upstream calls = %d, want 1", calls.Load())
@@ -145,9 +137,10 @@ func TestWarmupNPMUsesAdapterKeyAndRewritesTarballs(t *testing.T) {
 	}
 	manager := cache.NewManager(storage, database, cache.NewEventBus(), 72*time.Hour)
 	closeWarmupTestManager(t, manager)
-	handler := NewWarmupHandler(nil, manager, map[string]*upstream.Pool{"npm": pool}, &config.Config{Cache: config.CacheConfig{TTLIndex: time.Hour}}, nil)
+	runner := &captureTaskRunner{}
+	handler := NewWarmupHandler(runner, manager, map[string]*upstream.Pool{"npm": pool}, &config.Config{Cache: config.CacheConfig{TTLIndex: time.Hour}}, nil)
 
-	handler.doWarmup(context.Background(), "npm", []string{"@scope/widget@1.2.3"}, pool)
+	runWarmupThroughHandler(t, handler, runner, "npm", "@scope/widget@1.2.3")
 
 	reader, _, err := storage.Get(context.Background(), npmadapter.ScopedMetadataCacheKey("scope", "widget"))
 	if err != nil {
@@ -160,6 +153,49 @@ func TestWarmupNPMUsesAdapterKeyAndRewritesTarballs(t *testing.T) {
 	}
 	if !strings.Contains(string(got), `"tarball":"depsilo:npm-artifact-reference:v1:`) {
 		t.Fatalf("npm tarball reference was not provenance-prepared before caching: %s", got)
+	}
+}
+
+// runWarmupThroughHandler starts one warmup through the HTTP handler, runs the
+// task it submitted to completion, and requires every package to succeed.
+func runWarmupThroughHandler(t *testing.T, handler *WarmupHandler, runner *captureTaskRunner, ecosystem string, packages ...string) {
+	t.Helper()
+	body, err := json.Marshal(map[string]any{"ecosystem": ecosystem, "packages": packages})
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	ginContext, _ := gin.CreateTestContext(recorder)
+	ginContext.Request = httptest.NewRequest(http.MethodPost, "/api/v1/admin/cache/warmup", strings.NewReader(string(body)))
+	ginContext.Request.Header.Set("Content-Type", "application/json")
+	ginContext.Set(middleware.ContextKeyPrincipal, middleware.Principal{ID: 1, Role: "admin", CanWrite: true})
+	handler.Warmup(ginContext)
+	if recorder.Code != http.StatusAccepted || runner.task == nil {
+		t.Fatalf("warmup status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var accepted struct {
+		JobID string `json:"job_id"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &accepted); err != nil {
+		t.Fatal(err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		runner.task(context.Background())
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("warmup did not complete")
+	}
+
+	handler.jobsMu.Lock()
+	defer handler.jobsMu.Unlock()
+	job := handler.jobs[accepted.JobID]
+	if job == nil || job.Status != "succeeded" {
+		t.Fatalf("warmup job = %#v, want succeeded", job)
 	}
 }
 
@@ -322,8 +358,8 @@ func TestWarmupCancellationSettlesPendingItems(t *testing.T) {
 		ID: "cancelled", Status: "cancelling", CreatedAt: now,
 		UpdatedAt: now, Items: []warmupItem{{Package: "requests", Status: "queued"}},
 	}
-	handler.finishWarmupJob(job, "cancelled")
 	handler.jobsMu.Lock()
+	handler.finishWarmupJobLocked(job, "cancelled")
 	status, item := job.Status, job.Items[0]
 	handler.jobsMu.Unlock()
 	if status != "cancelled" || item.Status != "cancelled" || item.Detail == "" {
@@ -355,12 +391,12 @@ func TestWarmupJobRetentionPrunesOnlyOldTerminalJobs(t *testing.T) {
 func TestWarmupTerminalStatusDistinguishesAllFailureFromPartial(t *testing.T) {
 	allFailed := &warmupJob{Items: []warmupItem{{Status: "failed"}, {Status: "failed"}}}
 	handler := &WarmupHandler{}
-	handler.finishWarmupJob(allFailed, "succeeded")
+	handler.finishWarmupJobLocked(allFailed, "succeeded")
 	if allFailed.Status != "failed" {
 		t.Fatalf("all failed status = %q, want failed", allFailed.Status)
 	}
 	partial := &warmupJob{Items: []warmupItem{{Status: "succeeded"}, {Status: "failed"}}}
-	handler.finishWarmupJob(partial, "succeeded")
+	handler.finishWarmupJobLocked(partial, "succeeded")
 	if partial.Status != "partial" {
 		t.Fatalf("partial status = %q, want partial", partial.Status)
 	}
@@ -397,7 +433,10 @@ func TestWarmupHistoryMarksInterruptedJobsAfterRestart(t *testing.T) {
 	}
 	handler := NewWarmupHandler(nil, nil, nil, &config.Config{}, database)
 	handler.jobs["0123456789abcdef01234567"] = &warmupJob{ID: "0123456789abcdef01234567", Principal: 7, Ecosystem: "pypi", Status: "running", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(), Items: []warmupItem{{Package: "requests", Status: "queued"}}}
-	if err := handler.persistJobs(); err != nil {
+	handler.jobsMu.Lock()
+	err = handler.saveHistoryLocked()
+	handler.jobsMu.Unlock()
+	if err != nil {
 		t.Fatalf("persist warmup history: %v", err)
 	}
 	restarted := NewWarmupHandler(nil, nil, nil, &config.Config{}, database)

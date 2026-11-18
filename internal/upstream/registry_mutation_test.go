@@ -253,7 +253,7 @@ func TestRegistryPublishMismatchReloadsCommittedDatabase(t *testing.T) {
 	if err := database.Where("adapter_type = ?", "pypi").Find(&records).Error; err != nil {
 		t.Fatal(err)
 	}
-	wrong, err := buildPoolSnapshot(nil, registry.Pools()["pypi"].load())
+	wrong, err := buildPoolSnapshotWithOptions(nil, registry.Pools()["pypi"].load(), PoolOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +268,7 @@ func TestRegistryPublishMismatchReloadsCommittedDatabase(t *testing.T) {
 
 func TestRegistryPublishReturnsReconcileFailureWhenReloadFails(t *testing.T) {
 	database, registry := registryFixture(t, "pypi", 1)
-	wrong, err := buildPoolSnapshot(nil, registry.Pools()["pypi"].load())
+	wrong, err := buildPoolSnapshotWithOptions(nil, registry.Pools()["pypi"].load(), PoolOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,9 +283,6 @@ func TestRegistryPublishReturnsReconcileFailureWhenReloadFails(t *testing.T) {
 	err = registry.publish("pypi", preparedMutation{next: wrong, workers: planWorkers(current, wrong)})
 	if !errors.Is(err, ErrReconcileFailed) {
 		t.Fatalf("err=%v", err)
-	}
-	if registry.degradedError("pypi") == nil {
-		t.Fatal("ecosystem was not marked degraded")
 	}
 }
 

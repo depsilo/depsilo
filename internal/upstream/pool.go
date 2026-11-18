@@ -294,10 +294,6 @@ func (p *Pool) Find(id uint) (*Upstream, bool) {
 	return u, ok
 }
 
-func buildPoolSnapshot(records []db.UpstreamRecord, previous *poolSnapshot) (*poolSnapshot, error) {
-	return buildPoolSnapshotWithOptions(records, previous, PoolOptions{})
-}
-
 func buildPoolSnapshotWithOptions(records []db.UpstreamRecord, previous *poolSnapshot, options PoolOptions) (*poolSnapshot, error) {
 	next := &poolSnapshot{
 		upstreams: make([]*Upstream, 0, len(records)),

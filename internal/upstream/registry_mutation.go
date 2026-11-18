@@ -404,14 +404,12 @@ func (r *Registry) publish(ecosystem string, prepared preparedMutation) error {
 	r.pools[ecosystem].Replace(prepared.next)
 	r.applyWorkerPlanLocked(prepared.workers)
 	if err := r.verify(ecosystem); err == nil {
-		r.clearDegraded(ecosystem)
 		return nil
 	}
 	if err := r.reloadEcosystemLocked(ecosystem); err != nil {
-		r.markDegraded(ecosystem, err)
+		zap.L().Error("upstream registry ecosystem degraded", zap.String("ecosystem", ecosystem), zap.Error(err))
 		return fmt.Errorf("%w: %v", ErrReconcileFailed, err)
 	}
-	r.clearDegraded(ecosystem)
 	return nil
 }
 
@@ -496,23 +494,4 @@ func (r *Registry) reloadEcosystemLocked(ecosystem string) error {
 	pool.Replace(next)
 	r.applyWorkerPlanLocked(workers)
 	return r.verify(ecosystem)
-}
-
-func (r *Registry) markDegraded(ecosystem string, err error) {
-	r.degradedMu.Lock()
-	r.degraded[ecosystem] = err
-	r.degradedMu.Unlock()
-	zap.L().Error("upstream registry ecosystem degraded", zap.String("ecosystem", ecosystem), zap.Error(err))
-}
-
-func (r *Registry) clearDegraded(ecosystem string) {
-	r.degradedMu.Lock()
-	defer r.degradedMu.Unlock()
-	delete(r.degraded, ecosystem)
-}
-
-func (r *Registry) degradedError(ecosystem string) error {
-	r.degradedMu.RLock()
-	defer r.degradedMu.RUnlock()
-	return r.degraded[ecosystem]
 }

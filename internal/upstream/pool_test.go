@@ -15,7 +15,7 @@ func TestPoolReplaceChangesExistingSelectorWithoutChangingPoolIdentity(t *testin
 		t.Fatal(err)
 	}
 	selector := NewPrioritySelector(pool)
-	next, err := buildPoolSnapshot([]db.UpstreamRecord{{ID: 2, AdapterType: "pypi", Name: "two", URL: "https://two.example", Priority: 1, Healthy: true}}, pool.load())
+	next, err := buildPoolSnapshotWithOptions([]db.UpstreamRecord{{ID: 2, AdapterType: "pypi", Name: "two", URL: "https://two.example", Priority: 1, Healthy: true}}, pool.load(), PoolOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,11 +90,11 @@ func TestBuildPoolSnapshotReusesUnchangedConfigAndHealth(t *testing.T) {
 		t.Fatal("original upstream not found")
 	}
 
-	next, err := buildPoolSnapshot([]db.UpstreamRecord{{
+	next, err := buildPoolSnapshotWithOptions([]db.UpstreamRecord{{
 		ID: 1, AdapterType: "pypi", Name: "one", URL: "https://one.example",
 		Priority: 1, Healthy: false, AvgLatencyMs: 500, SuccessRate: 0,
 		CreatedAt: createdAt.Add(time.Hour), UpdatedAt: createdAt.Add(2 * time.Hour),
-	}}, pool.load())
+	}}, pool.load(), PoolOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestCriticalFailureStaysOutOfSelectorUntilConfigObjectReplacement(t *testin
 		t.Fatalf("selector chose critically failed upstream %d, want fallback 2", selected.ID)
 	}
 
-	unchanged, err := buildPoolSnapshot(records, pool.load())
+	unchanged, err := buildPoolSnapshotWithOptions(records, pool.load(), PoolOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,7 @@ func TestCriticalFailureStaysOutOfSelectorUntilConfigObjectReplacement(t *testin
 
 	replacementRecords := append([]db.UpstreamRecord(nil), records...)
 	replacementRecords[0].Name = "primary-reconfigured"
-	next, err := buildPoolSnapshot(replacementRecords, pool.load())
+	next, err := buildPoolSnapshotWithOptions(replacementRecords, pool.load(), PoolOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
