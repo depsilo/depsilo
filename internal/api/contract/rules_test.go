@@ -70,11 +70,16 @@ func checkField(t *testing.T, file, typeName string, field *ast.Field) {
 	if len(field.Names) > 0 && !hasJSON {
 		t.Errorf("%s: %s has no json tag", file, fieldName)
 	}
+	tsType, tsOptions, _ := strings.Cut(tag.Get("tstype"), ",")
+	switch tsOptions {
+	case "", "required", "readonly", "extends", "required,readonly", "readonly,required":
+	default:
+		t.Errorf("%s: %s tstype %q has a comma inside its type; tygo would split it", file, fieldName, tag.Get("tstype"))
+	}
 	if _, pointer := field.Type.(*ast.StarExpr); !pointer {
 		return
 	}
 	omitEmpty := strings.Contains(jsonTag, ",omitempty")
-	tsType, tsOptions, _ := strings.Cut(tag.Get("tstype"), ",")
 	nullable := strings.HasSuffix(strings.TrimSpace(tsType), "| null") && tsOptions == "required"
 	switch {
 	case omitEmpty && tsType != "":
