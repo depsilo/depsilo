@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"time"
 
 	"go.uber.org/zap"
@@ -148,156 +149,180 @@ func (m *Manager) backgroundRefresh(parentCtx context.Context, key string, adapt
 	ctx = cascade.WithFetchTTL(ctx, ttl)
 	ctx = cascade.WithFetchKind(ctx, relayFetchKind(adapterType, key))
 
-	err := func() error {
-		body, contentType, size, _, err := fetchFn(ctx)
-		if err != nil {
-			if body != nil {
-				_ = body.Close()
-			}
-			return err
-		}
-		if body == nil {
-			return errors.New("background refresh returned a nil body")
-		}
-		headers := responseMetadataFrom(body)
-		validators := responseValidatorsFromMetadata(headers)
-		body = WithBodyIdleTimeout(body, fetchIdleTimeoutFrom(ctx), cancelFetchWithCause)
-		defer body.Close()
-		closeDone := make(chan struct{})
-		stopClose := context.AfterFunc(ctx, func() {
+	err := m.refreshFromUpstream(ctx, key, adapterType, ttl, fetchFn, cancelFetchWithCause, writeGeneration)
+	// Every successful refresh path ends with a committed write generation.
+	writeFinished = err == nil
+
+	m.handleBackgroundRefreshError(parentCtx, key, err)
+}
+
+// refreshFromUpstream fetches key and applies the response to the cache while
+// the body stays bound to ctx: an immutable artifact under tamper detection is
+// verified in place, anything else overwrites the stored object.
+func (m *Manager) refreshFromUpstream(ctx context.Context, key, adapterType string, ttl time.Duration, fetchFn FetchFunc, cancelFetchWithCause context.CancelCauseFunc, writeGeneration uint64) error {
+	body, contentType, size, _, err := fetchFn(ctx)
+	if err != nil {
+		if body != nil {
 			_ = body.Close()
-			close(closeDone)
-		})
-		defer func() {
-			if !stopClose() {
-				<-closeDone
-			}
-		}()
-
-		cr := NewCountingReader(body)
-		var refreshReader io.Reader = cr
-		var exactReader *exactSizeReader
-		if size >= 0 {
-			exactReader = newExactSizeReader(cr, size)
-			refreshReader = exactReader
 		}
-
-		// Immutable + tamper on: verify-only. Drain to discard (do NOT
-		// overwrite storage — immutable bytes are supposed to be
-		// identical), then compare the hash. A mismatch keeps the
-		// trusted first-seen copy and alerts; a match just extends TTL.
-		if tamper := m.tamperRecorder(); tamper != nil &&
-			m.cacheKind(adapterType, key) == db.CacheKindArtifact &&
-			m.tamperEligible(adapterType, key, ttl) {
-			if _, copyErr := io.Copy(io.Discard, refreshReader); copyErr != nil {
-				return fmt.Errorf("bg verify read: %w", copyErr)
-			}
-			unlock, lockErr := m.lockMutation(ctx, key)
-			if lockErr != nil {
-				return lockErr
-			}
-			defer unlock()
-			if !m.invalidations.writeCurrent(key, writeGeneration) {
-				return errors.Join(errCacheWriteSuperseded, m.discardSupersededWrite(ctx, key))
-			}
-			entry, entryErr := m.refreshEntry(ctx, key)
-			if entryErr != nil {
-				return entryErr
-			}
-			pkgName := packagekey.ExtractName(adapterType, key)
-			res := tamper.Verify(ctx, key, adapterType, pkgName,
-				versionFromKey(adapterType, key), cr.SumHex(), cr.BytesRead(), "")
-			if res.KnownMismatch {
-				zap.L().Warn("tamper: refusing to overwrite tampered artifact", zap.String("key", key))
-				// Keep first-seen bytes (no storage.Put). Advance the TTL
-				// anyway so this stale entry stops re-triggering a refresh
-				// on every request — otherwise a hot tampered package would
-				// re-download the artifact and re-fire the critical webhook
-				// per request. Re-verification (and the alert) now recurs at
-				// most once per TTL.
-				now := time.Now()
-				update := m.db.WithContext(ctx).Model(&db.CacheEntry{}).Where("id = ? AND key = ?", entry.ID, key).Updates(map[string]interface{}{
-					"expires_at":    now.Add(ttl),
-					"last_accessed": now,
-					"cache_kind":    m.cacheKind(adapterType, key),
-				})
-				if err := refreshMetadataUpdateError(update, "bg tamper TTL update"); err != nil {
-					return err
-				}
-				if !m.invalidations.commitWrite(key, writeGeneration) {
-					return errors.Join(errCacheWriteSuperseded, m.discardSupersededWrite(ctx, key))
-				}
-				writeFinished = true
-				return nil
-			}
-			now := time.Now()
-			update := m.db.WithContext(ctx).Model(&db.CacheEntry{}).Where("id = ? AND key = ?", entry.ID, key).Updates(map[string]interface{}{
-				"expires_at":    now.Add(ttl),
-				"last_accessed": now,
-				"cache_kind":    m.cacheKind(adapterType, key),
-			})
-			if err := refreshMetadataUpdateError(update, "bg integrity TTL update"); err != nil {
-				return err
-			}
-			if !m.invalidations.commitWrite(key, writeGeneration) {
-				return errors.Join(errCacheWriteSuperseded, m.discardSupersededWrite(ctx, key))
-			}
-			writeFinished = true
-			zap.L().Debug("tamper: integrity verified", zap.String("key", key))
-			return nil
+		return err
+	}
+	if body == nil {
+		return errors.New("background refresh returned a nil body")
+	}
+	headers := responseMetadataFrom(body)
+	validators := responseValidatorsFromMetadata(headers)
+	body = WithBodyIdleTimeout(body, fetchIdleTimeoutFrom(ctx), cancelFetchWithCause)
+	defer body.Close()
+	closeDone := make(chan struct{})
+	stopClose := context.AfterFunc(ctx, func() {
+		_ = body.Close()
+		close(closeDone)
+	})
+	defer func() {
+		if !stopClose() {
+			<-closeDone
 		}
-
-		// Mutable (or tamper off): normal refresh — overwrite storage.
-		unlock, lockErr := m.lockMutation(ctx, key)
-		if lockErr != nil {
-			return lockErr
-		}
-		defer unlock()
-		if !m.invalidations.writeCurrent(key, writeGeneration) {
-			return errors.Join(errCacheWriteSuperseded, m.discardSupersededWrite(ctx, key))
-		}
-		entry, entryErr := m.refreshEntry(ctx, key)
-		if entryErr != nil {
-			return entryErr
-		}
-		putErr := m.storage.Put(ctx, key, refreshReader, size, contentType)
-		putSucceeded := putErr == nil
-		if putErr == nil && exactReader != nil {
-			putErr = exactReader.validateConsumed()
-		}
-		if putErr != nil {
-			putErr = fmt.Errorf("bg refresh put: %w", putErr)
-			if putSucceeded {
-				return m.removeUncommittedObject(ctx, key, putErr)
-			}
-			return putErr
-		}
-		if size < 0 {
-			size = cr.BytesRead()
-		}
-		now := time.Now()
-		update := m.db.WithContext(ctx).Model(&db.CacheEntry{}).Where("id = ? AND key = ?", entry.ID, key).Updates(map[string]interface{}{
-			"size":             size,
-			"content_type":     contentType,
-			"etag":             validators.ETag,
-			"last_modified":    validators.LastModified,
-			"response_headers": encodeResponseMetadata(headers),
-			"cache_kind":       m.cacheKind(adapterType, key),
-			"expires_at":       now.Add(ttl),
-			"last_accessed":    now,
-		})
-		if err := refreshMetadataUpdateError(update, "bg refresh metadata update"); err != nil {
-			return m.removeUncommittedObject(ctx, key, err)
-		}
-		if !m.invalidations.commitWrite(key, writeGeneration) {
-			return errors.Join(errCacheWriteSuperseded, m.discardSupersededWrite(ctx, key))
-		}
-		writeFinished = true
-
-		zap.L().Debug("background refresh done", zap.String("key", key))
-		return nil
 	}()
 
+	// Immutable + tamper on: verify-only. Drain to discard (do NOT
+	// overwrite storage — immutable bytes are supposed to be
+	// identical), then compare the hash. A mismatch keeps the
+	// trusted first-seen copy and alerts; a match just extends TTL.
+	if tamper := m.tamperRecorder(); tamper != nil &&
+		m.cacheKind(adapterType, key) == db.CacheKindArtifact &&
+		m.tamperEligible(adapterType, key, ttl) {
+		return m.verifyRefreshedArtifact(ctx, tamper, key, adapterType, ttl, writeGeneration, body, size)
+	}
+
+	// Mutable (or tamper off): normal refresh — overwrite storage.
+	return m.overwriteRefreshedEntry(ctx, key, adapterType, ttl, writeGeneration, body, size, contentType, validators, headers)
+}
+
+// verifyRefreshedArtifact drains a refreshed immutable artifact and checks it
+// against the tamper baseline without overwriting storage, then extends the
+// entry's TTL.
+func (m *Manager) verifyRefreshedArtifact(ctx context.Context, tamper TamperRecorder, key, adapterType string, ttl time.Duration, writeGeneration uint64, body io.Reader, size int64) error {
+	cr, refreshReader, _ := newSizedReader(body, size)
+	if _, copyErr := io.Copy(io.Discard, refreshReader); copyErr != nil {
+		return fmt.Errorf("bg verify read: %w", copyErr)
+	}
+	unlock, lockErr := m.lockMutation(ctx, key)
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock()
+	if !m.invalidations.writeCurrent(key, writeGeneration) {
+		return errors.Join(errCacheWriteSuperseded, m.discardSupersededWrite(ctx, key))
+	}
+	entry, entryErr := m.refreshEntry(ctx, key)
+	if entryErr != nil {
+		return entryErr
+	}
+	pkgName := packagekey.ExtractName(adapterType, key)
+	res := tamper.Verify(ctx, key, adapterType, pkgName,
+		versionFromKey(adapterType, key), cr.SumHex(), cr.BytesRead(), "")
+	if res.KnownMismatch {
+		zap.L().Warn("tamper: refusing to overwrite tampered artifact", zap.String("key", key))
+		// Keep first-seen bytes (no storage.Put). Advance the TTL
+		// anyway so this stale entry stops re-triggering a refresh
+		// on every request — otherwise a hot tampered package would
+		// re-download the artifact and re-fire the critical webhook
+		// per request. Re-verification (and the alert) now recurs at
+		// most once per TTL.
+		if err := m.extendRefreshedTTL(ctx, entry.ID, key, adapterType, ttl, "bg tamper TTL update"); err != nil {
+			return err
+		}
+		return m.commitRefreshWrite(ctx, key, writeGeneration)
+	}
+	if err := m.extendRefreshedTTL(ctx, entry.ID, key, adapterType, ttl, "bg integrity TTL update"); err != nil {
+		return err
+	}
+	if err := m.commitRefreshWrite(ctx, key, writeGeneration); err != nil {
+		return err
+	}
+	zap.L().Debug("tamper: integrity verified", zap.String("key", key))
+	return nil
+}
+
+// extendRefreshedTTL advances a verified entry's expiry without touching its
+// stored representation. The caller holds the key mutation gate.
+func (m *Manager) extendRefreshedTTL(ctx context.Context, entryID uint, key, adapterType string, ttl time.Duration, operation string) error {
+	now := time.Now()
+	update := m.db.WithContext(ctx).Model(&db.CacheEntry{}).Where("id = ? AND key = ?", entryID, key).Updates(map[string]interface{}{
+		"expires_at":    now.Add(ttl),
+		"last_accessed": now,
+		"cache_kind":    m.cacheKind(adapterType, key),
+	})
+	return refreshMetadataUpdateError(update, operation)
+}
+
+// overwriteRefreshedEntry replaces the stored object with the refreshed body
+// and updates its metadata row.
+func (m *Manager) overwriteRefreshedEntry(ctx context.Context, key, adapterType string, ttl time.Duration, writeGeneration uint64, body io.Reader, size int64, contentType string, validators ResponseValidators, headers http.Header) error {
+	cr, refreshReader, exactReader := newSizedReader(body, size)
+	unlock, lockErr := m.lockMutation(ctx, key)
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock()
+	if !m.invalidations.writeCurrent(key, writeGeneration) {
+		return errors.Join(errCacheWriteSuperseded, m.discardSupersededWrite(ctx, key))
+	}
+	entry, entryErr := m.refreshEntry(ctx, key)
+	if entryErr != nil {
+		return entryErr
+	}
+	putErr := m.storage.Put(ctx, key, refreshReader, size, contentType)
+	putSucceeded := putErr == nil
+	if putErr == nil && exactReader != nil {
+		putErr = exactReader.validateConsumed()
+	}
+	if putErr != nil {
+		putErr = fmt.Errorf("bg refresh put: %w", putErr)
+		if putSucceeded {
+			return m.removeUncommittedObject(ctx, key, putErr)
+		}
+		return putErr
+	}
+	if size < 0 {
+		size = cr.BytesRead()
+	}
+	now := time.Now()
+	update := m.db.WithContext(ctx).Model(&db.CacheEntry{}).Where("id = ? AND key = ?", entry.ID, key).Updates(map[string]interface{}{
+		"size":             size,
+		"content_type":     contentType,
+		"etag":             validators.ETag,
+		"last_modified":    validators.LastModified,
+		"response_headers": encodeResponseMetadata(headers),
+		"cache_kind":       m.cacheKind(adapterType, key),
+		"expires_at":       now.Add(ttl),
+		"last_accessed":    now,
+	})
+	if err := refreshMetadataUpdateError(update, "bg refresh metadata update"); err != nil {
+		return m.removeUncommittedObject(ctx, key, err)
+	}
+	if err := m.commitRefreshWrite(ctx, key, writeGeneration); err != nil {
+		return err
+	}
+
+	zap.L().Debug("background refresh done", zap.String("key", key))
+	return nil
+}
+
+// commitRefreshWrite publishes the refresh's write generation, discarding the
+// write when a newer generation superseded it. The caller holds the key
+// mutation gate.
+func (m *Manager) commitRefreshWrite(ctx context.Context, key string, writeGeneration uint64) error {
+	if !m.invalidations.commitWrite(key, writeGeneration) {
+		return errors.Join(errCacheWriteSuperseded, m.discardSupersededWrite(ctx, key))
+	}
+	return nil
+}
+
+// handleBackgroundRefreshError logs a failed refresh and invalidates the
+// cached entry when the Upstream answered authoritatively.
+func (m *Manager) handleBackgroundRefreshError(parentCtx context.Context, key string, err error) {
 	if errors.Is(err, errCacheEntryRemovedDuringRefresh) {
 		zap.L().Debug("background refresh skipped after cache entry removal", zap.String("key", key))
 	} else if err != nil {

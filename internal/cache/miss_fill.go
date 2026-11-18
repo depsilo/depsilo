@@ -364,84 +364,24 @@ func (m *Manager) storeAndCommit(ctx context.Context, state *missStreamState, ke
 	}()
 	unlock, lockErr := m.lockMutation(ctx, key)
 	if lockErr != nil {
-		ctxErr := ctx.Err()
-		cancelCause := context.Cause(ctx)
-		_ = storageR.CloseWithError(lockErr)
-		state.storageFailed()
-		if cancelCause != nil &&
-			!errors.Is(cancelCause, context.Canceled) &&
-			!errors.Is(cancelCause, context.DeadlineExceeded) {
-			m.logCacheStorageBackpressure(key, cancelCause)
-			m.releaseInflight(key, flight, &cachePersistenceError{cause: cancelCause})
-		} else if ctxErr != nil {
-			m.releaseInflight(key, flight, ctxErr)
-		} else {
-			m.releaseInflight(key, flight, &cachePersistenceError{cause: lockErr})
-		}
+		m.failStoreLock(ctx, state, key, storageR, flight, lockErr)
 		return
 	}
 	defer unlock()
 	if !m.invalidations.writeCurrent(key, writeGeneration) {
 		_ = storageR.CloseWithError(errCacheWriteSuperseded)
 		state.storageFailed()
-		cleanupErr := m.discardSupersededWrite(ctx, key)
-		m.releaseInflight(key, flight, &cachePersistenceError{cause: errors.Join(errCacheWriteSuperseded, cleanupErr)})
+		m.releaseSupersededFill(ctx, key, flight)
 		return
 	}
 
-	cr := NewCountingReader(storageR)
-	var storageReader io.Reader = cr
-	var exactReader *exactSizeReader
-	if declaredSize >= 0 {
-		exactReader = newExactSizeReader(cr, declaredSize)
-		storageReader = exactReader
-	}
-	putErr := m.storage.Put(ctx, key, storageReader, declaredSize, contentType)
-	putSucceeded := putErr == nil
-	if putErr == nil && exactReader != nil {
-		putErr = exactReader.validateConsumed()
-	}
+	cr, putSucceeded, putErr := m.putMissObject(ctx, key, contentType, declaredSize, storageR)
 	if putErr != nil {
-		ctxErr := ctx.Err()
-		cancelCause := context.Cause(ctx)
-		if putSucceeded {
-			// A backend that returned success without consuming the complete
-			// representation may already have published unsafe bytes. Remove
-			// both halves under the mutation gate instead of leaving an older
-			// metadata row pointing at the newly written object.
-			putErr = m.removeUncommittedObject(ctx, key, putErr)
-		}
-		// Detach the failed cache consumer. Normal downloads continue through the
-		// client pipe; persistence-required Prefetch/refresh operations cancel via
-		// missStreamState because they have no useful result without a commit.
-		_ = storageR.CloseWithError(putErr)
-		state.storageFailed()
-		if upstreamErr := state.upstreamFailure(); upstreamErr != nil {
-			m.releaseInflight(key, flight, upstreamErr)
-			return
-		}
-		if cancelCause != nil &&
-			!errors.Is(cancelCause, context.Canceled) &&
-			!errors.Is(cancelCause, context.DeadlineExceeded) {
-			m.logCacheStorageBackpressure(key, cancelCause)
-			m.releaseInflight(key, flight, &cachePersistenceError{cause: cancelCause})
-			return
-		}
-		if ctxErr != nil {
-			m.releaseInflight(key, flight, ctxErr)
-			return
-		}
-		persistenceErr := &cachePersistenceError{cause: putErr}
-		zap.L().Warn("cache put failed; downstream remains in pass-through mode",
-			zap.String("key", key),
-			zap.Error(putErr),
-		)
-		m.releaseInflight(key, flight, persistenceErr)
+		m.failStorePut(ctx, state, key, storageR, flight, putErr, putSucceeded)
 		return
 	}
 	if !m.invalidations.writeCurrent(key, writeGeneration) {
-		cleanupErr := m.discardSupersededWrite(ctx, key)
-		m.releaseInflight(key, flight, &cachePersistenceError{cause: errors.Join(errCacheWriteSuperseded, cleanupErr)})
+		m.releaseSupersededFill(ctx, key, flight)
 		return
 	}
 
@@ -449,6 +389,128 @@ func (m *Manager) storeAndCommit(ctx context.Context, state *missStreamState, ke
 	if size < 0 {
 		size = cr.BytesRead()
 	}
+	entry, persisted := m.persistMissEntry(ctx, key, adapterType, ttl, contentType, size, validators, headers, flight)
+	if !persisted {
+		return
+	}
+	m.verifyMissTamperBaseline(ctx, key, adapterType, ttl, cr, size)
+	if !m.invalidations.commitWrite(key, writeGeneration) {
+		m.releaseSupersededFill(ctx, key, flight)
+		return
+	}
+	writeFinished = true
+
+	m.publishEvent(key, adapterType, false, size)
+
+	m.enqueueScan(adapterType, packagekey.ExtractName(adapterType, key))
+
+	m.releaseInflight(key, flight, nil, entry)
+}
+
+// failStoreLock detaches the storage consumer and releases flight when the
+// key mutation gate could not be acquired.
+func (m *Manager) failStoreLock(ctx context.Context, state *missStreamState, key string, storageR *io.PipeReader, flight *inflightFetch, lockErr error) {
+	ctxErr := ctx.Err()
+	cancelCause := context.Cause(ctx)
+	_ = storageR.CloseWithError(lockErr)
+	state.storageFailed()
+	if m.releaseInterruptedFill(key, flight, ctxErr, cancelCause) {
+		return
+	}
+	m.releaseInflight(key, flight, &cachePersistenceError{cause: lockErr})
+}
+
+// putMissObject streams the storage pipe into storage.Put, enforcing the
+// declared size when one is known. It returns the counting reader for the
+// committed size and digest, and whether storage.Put itself succeeded even
+// when the size check then failed.
+func (m *Manager) putMissObject(ctx context.Context, key, contentType string, declaredSize int64, storageR *io.PipeReader) (*countingReader, bool, error) {
+	cr, storageReader, exactReader := newSizedReader(storageR, declaredSize)
+	putErr := m.storage.Put(ctx, key, storageReader, declaredSize, contentType)
+	putSucceeded := putErr == nil
+	if putErr == nil && exactReader != nil {
+		putErr = exactReader.validateConsumed()
+	}
+	return cr, putSucceeded, putErr
+}
+
+// newSizedReader wraps source in a counting reader and, when declaredSize is
+// known, an exact-size check. It returns the counting reader, the reader to
+// consume, and the exact-size reader (nil for an unknown size).
+func newSizedReader(source io.Reader, declaredSize int64) (*countingReader, io.Reader, *exactSizeReader) {
+	cr := NewCountingReader(source)
+	var reader io.Reader = cr
+	var exactReader *exactSizeReader
+	if declaredSize >= 0 {
+		exactReader = newExactSizeReader(cr, declaredSize)
+		reader = exactReader
+	}
+	return cr, reader, exactReader
+}
+
+// failStorePut detaches the storage consumer after a failed storage.Put and
+// releases flight with the most specific cause.
+func (m *Manager) failStorePut(ctx context.Context, state *missStreamState, key string, storageR *io.PipeReader, flight *inflightFetch, putErr error, putSucceeded bool) {
+	ctxErr := ctx.Err()
+	cancelCause := context.Cause(ctx)
+	if putSucceeded {
+		// A backend that returned success without consuming the complete
+		// representation may already have published unsafe bytes. Remove
+		// both halves under the mutation gate instead of leaving an older
+		// metadata row pointing at the newly written object.
+		putErr = m.removeUncommittedObject(ctx, key, putErr)
+	}
+	// Detach the failed cache consumer. Normal downloads continue through the
+	// client pipe; persistence-required Prefetch/refresh operations cancel via
+	// missStreamState because they have no useful result without a commit.
+	_ = storageR.CloseWithError(putErr)
+	state.storageFailed()
+	if upstreamErr := state.upstreamFailure(); upstreamErr != nil {
+		m.releaseInflight(key, flight, upstreamErr)
+		return
+	}
+	if m.releaseInterruptedFill(key, flight, ctxErr, cancelCause) {
+		return
+	}
+	persistenceErr := &cachePersistenceError{cause: putErr}
+	zap.L().Warn("cache put failed; downstream remains in pass-through mode",
+		zap.String("key", key),
+		zap.Error(putErr),
+	)
+	m.releaseInflight(key, flight, persistenceErr)
+}
+
+// releaseInterruptedFill releases flight when the store context ended the
+// fill: a custom cancel cause such as storage backpressure is a persistence
+// failure, while plain cancellation or deadline expiry is reported as is. It
+// reports false, releasing nothing, when the context was not interrupted.
+func (m *Manager) releaseInterruptedFill(key string, flight *inflightFetch, ctxErr, cancelCause error) bool {
+	if cancelCause != nil &&
+		!errors.Is(cancelCause, context.Canceled) &&
+		!errors.Is(cancelCause, context.DeadlineExceeded) {
+		m.logCacheStorageBackpressure(key, cancelCause)
+		m.releaseInflight(key, flight, &cachePersistenceError{cause: cancelCause})
+		return true
+	}
+	if ctxErr != nil {
+		m.releaseInflight(key, flight, ctxErr)
+		return true
+	}
+	return false
+}
+
+// releaseSupersededFill runs while the caller holds the key mutation gate. It
+// discards a fill that lost the write-generation race and releases flight
+// with that persistence failure.
+func (m *Manager) releaseSupersededFill(ctx context.Context, key string, flight *inflightFetch) {
+	cleanupErr := m.discardSupersededWrite(ctx, key)
+	m.releaseInflight(key, flight, &cachePersistenceError{cause: errors.Join(errCacheWriteSuperseded, cleanupErr)})
+}
+
+// persistMissEntry upserts the CacheEntry row for the stored object and
+// resolves its identity. On failure it logs, releases flight with a
+// persistence error, and reports false.
+func (m *Manager) persistMissEntry(ctx context.Context, key, adapterType string, ttl time.Duration, contentType string, size int64, validators ResponseValidators, headers http.Header, flight *inflightFetch) (db.CacheEntry, bool) {
 	now := time.Now()
 	entry := db.CacheEntry{
 		Key:             key,
@@ -496,23 +558,14 @@ func (m *Manager) storeAndCommit(ctx context.Context, state *missStreamState, ke
 			zap.Error(commitErr),
 		)
 		m.releaseInflight(key, flight, &cachePersistenceError{cause: commitErr})
-		return
+		return db.CacheEntry{}, false
 	}
 	if entry.ID == 0 {
 		// RETURNING is supported by the production SQLite/PostgreSQL dialects.
 		// Keep a defensive lookup for dialects or drivers that accept the clause
 		// without populating the destination model.
-		var identity struct {
-			ID uint
-		}
-		if identityErr := m.db.WithContext(ctx).
-			Model(&db.CacheEntry{}).
-			Select("id").
-			Where("key = ?", key).
-			Scan(&identity).Error; identityErr != nil || identity.ID == 0 {
-			if identityErr == nil {
-				identityErr = errors.New("persisted cache metadata has no identity")
-			}
+		id, identityErr := m.lookupCacheEntryID(ctx, key)
+		if identityErr != nil {
 			zap.L().Warn("cache metadata identity lookup failed",
 				zap.String("key", key),
 				zap.Error(identityErr),
@@ -522,11 +575,34 @@ func (m *Manager) storeAndCommit(ctx context.Context, state *missStreamState, ke
 				flight,
 				&cachePersistenceError{cause: identityErr},
 			)
-			return
+			return db.CacheEntry{}, false
 		}
-		entry.ID = identity.ID
+		entry.ID = id
 	}
+	return entry, true
+}
 
+// lookupCacheEntryID reads the identity of the persisted CacheEntry for key.
+func (m *Manager) lookupCacheEntryID(ctx context.Context, key string) (uint, error) {
+	var identity struct {
+		ID uint
+	}
+	if identityErr := m.db.WithContext(ctx).
+		Model(&db.CacheEntry{}).
+		Select("id").
+		Where("key = ?", key).
+		Scan(&identity).Error; identityErr != nil || identity.ID == 0 {
+		if identityErr == nil {
+			identityErr = errors.New("persisted cache metadata has no identity")
+		}
+		return 0, identityErr
+	}
+	return identity.ID, nil
+}
+
+// verifyMissTamperBaseline checks a freshly stored immutable artifact against
+// its first-seen tamper baseline.
+func (m *Manager) verifyMissTamperBaseline(ctx context.Context, key, adapterType string, ttl time.Duration, cr *countingReader, size int64) {
 	// Tamper baseline: first-seen SHA-256 of immutable artifacts.
 	if tamper := m.tamperRecorder(); tamper != nil &&
 		m.cacheKind(adapterType, key) == db.CacheKindArtifact &&
@@ -541,18 +617,6 @@ func (m *Manager) storeAndCommit(ctx context.Context, state *missStreamState, ke
 		_ = tamper.Verify(ctx, key, adapterType, pkgName,
 			versionFromKey(adapterType, key), cr.SumHex(), size, "")
 	}
-	if !m.invalidations.commitWrite(key, writeGeneration) {
-		cleanupErr := m.discardSupersededWrite(ctx, key)
-		m.releaseInflight(key, flight, &cachePersistenceError{cause: errors.Join(errCacheWriteSuperseded, cleanupErr)})
-		return
-	}
-	writeFinished = true
-
-	m.publishEvent(key, adapterType, false, size)
-
-	m.enqueueScan(adapterType, packagekey.ExtractName(adapterType, key))
-
-	m.releaseInflight(key, flight, nil, entry)
 }
 
 func (m *Manager) logCacheStorageBackpressure(key string, cause error) {
