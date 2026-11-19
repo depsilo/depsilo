@@ -24,6 +24,7 @@ const maxCascadeConfigBodyBytes int64 = 64 << 10
 type cascadeConfigStore interface {
 	CascadeConfig(ctx context.Context) (config.CascadeConfigState, error)
 	UpdateCascadeConfig(ctx context.Context, patch config.CascadeConfigPatch) (config.CascadeConfigUpdate, error)
+	CascadeSharedToken(ctx context.Context) (string, bool, error)
 }
 
 // CascadeConfigHandler exposes and updates the cascade section of config.toml.
@@ -32,10 +33,11 @@ type cascadeConfigStore interface {
 type CascadeConfigHandler struct {
 	store    cascadeConfigStore
 	registry *upstream.Registry
+	runtime  CascadeRuntime
 }
 
-func NewCascadeConfigHandler(store cascadeConfigStore, registry *upstream.Registry) *CascadeConfigHandler {
-	return &CascadeConfigHandler{store: store, registry: registry}
+func NewCascadeConfigHandler(store cascadeConfigStore, registry *upstream.Registry, runtime CascadeRuntime) *CascadeConfigHandler {
+	return &CascadeConfigHandler{store: store, registry: registry, runtime: runtime}
 }
 
 func (h *CascadeConfigHandler) Get(c *gin.Context) {
@@ -59,6 +61,7 @@ type cascadeConfigRequest struct {
 	MaxHops           *int                  `json:"max_hops"`
 	MaxTTL            *string               `json:"max_ttl"`
 	AllowInsecureHTTP *bool                 `json:"allow_insecure_http"`
+	DirectFallback    *bool                 `json:"direct_fallback"`
 	SharedToken       *string               `json:"shared_token"`
 	Peers             *[]cascadePeerRequest `json:"peers"`
 }
@@ -100,7 +103,8 @@ func toCascadeConfigState(state config.CascadeConfigState) contract.AdminCascade
 	}
 	return contract.AdminCascadeConfigState{
 		Enabled: state.Enabled, MaxHops: state.MaxHops, MaxTTL: state.MaxTTL,
-		AllowInsecureHTTP: state.AllowInsecureHTTP, TokenSet: state.TokenSet, Peers: peers,
+		AllowInsecureHTTP: state.AllowInsecureHTTP, DirectFallback: state.DirectFallback,
+		TokenSet: state.TokenSet, Peers: peers,
 		ConfigWritable: state.ConfigWritable, PendingRestart: state.PendingRestart,
 	}
 }
@@ -111,6 +115,7 @@ func (request cascadeConfigRequest) toPatch() config.CascadeConfigPatch {
 		MaxHops:           request.MaxHops,
 		MaxTTL:            request.MaxTTL,
 		AllowInsecureHTTP: request.AllowInsecureHTTP,
+		DirectFallback:    request.DirectFallback,
 		SharedToken:       request.SharedToken,
 	}
 	if request.Peers == nil {

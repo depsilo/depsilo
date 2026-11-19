@@ -3148,12 +3148,19 @@ export interface CheckUpstreamResponse {
 
 /**
  * AdminCascadePeer is one parent Depsilo this instance may relay through.
- * Peer tokens are never returned.
+ * Peer tokens are never returned. The remaining fields describe exchanges
+ * through the parent since the server started or cascade was last applied:
+ * LastFailure says why the newest one fell back to the origin and is empty
+ * once one succeeds through the parent again.
  */
 export interface AdminCascadePeer {
   name: string;
   url: string;
   forward_credentials: boolean;
+  last_success_at: string | null;
+  last_fallback_at: string | null;
+  last_failure: string;
+  fallback_count: number /* uint64 */;
 }
 /**
  * AdminCascadeInfo answers GET /admin/cascade: the cascade topology the
@@ -3166,6 +3173,7 @@ export interface AdminCascadeInfo {
   max_hops: number /* int */;
   max_ttl_seconds: number /* int64 */;
   allow_insecure_http: boolean;
+  direct_fallback: boolean;
   peers: AdminCascadePeer[];
 }
 /**
@@ -3190,6 +3198,7 @@ export interface AdminCascadeConfigState {
   max_hops: number /* int */;
   max_ttl: string;
   allow_insecure_http: boolean;
+  direct_fallback: boolean;
   token_set: boolean;
   peers: AdminCascadeConfigPeer[];
   config_writable: boolean;
@@ -3203,6 +3212,36 @@ export interface AdminCascadeConfigUpdateResponse {
   state: AdminCascadeConfigState;
   changed: string[] | null;
   restart_required: boolean;
+}
+/**
+ * AdminCascadePairingResponse answers POST /admin/cascade/pairing with the
+ * code a child pastes to use this node as its parent. The code carries the
+ * shared token. EnabledNow reports that the request turned cascade on.
+ * Loopback warns that URL reaches this node only from this machine.
+ */
+export interface AdminCascadePairingResponse {
+  code: string;
+  url: string;
+  enabled_now: boolean;
+  loopback: boolean;
+  restart_required: boolean;
+}
+/**
+ * AdminCascadeJoinResponse answers POST /admin/cascade/join. Peer is the
+ * configured parent's name; Bound counts upstreams now routed through it;
+ * Skipped names upstreams left direct because their origin is local or
+ * private. InsecureHTTPAllowed reports that joining turned on
+ * allow_insecure_http for a plain-HTTP parent.
+ */
+export interface AdminCascadeJoinResponse {
+  peer: string;
+  url: string;
+  parent_instance_id: string;
+  bound: number /* int */;
+  skipped: string[];
+  insecure_http_allowed: boolean;
+  restart_required: boolean;
+  state: AdminCascadeConfigState;
 }
 /**
  * DockerBootstrapState answers GET and POST /admin/docker/bootstrap with the

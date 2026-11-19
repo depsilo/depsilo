@@ -100,6 +100,10 @@ type CascadeConfig struct {
 	// hosts. The shared token is visible to anyone on the path unless the peer
 	// is reached over a trusted network or a TLS reverse proxy.
 	AllowInsecureHTTP bool `mapstructure:"allow_insecure_http"`
+	// DirectFallback sends an exchange to the origin directly when its parent
+	// cannot serve it (unreachable, cascade disabled, token rejected). Turn
+	// it off where this node must never reach origins itself.
+	DirectFallback bool `mapstructure:"direct_fallback"`
 	// Peers lists parent cache nodes this instance may dial.
 	Peers []CascadePeerConfig `mapstructure:"peers"`
 }

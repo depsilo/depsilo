@@ -146,6 +146,13 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
             />
             <FieldLabel>{t('cascade.config.allowInsecureHTTP')}</FieldLabel>
           </Field>
+          <Field orientation="horizontal">
+            <Switch
+              checked={draft.directFallback}
+              onCheckedChange={checked => update({ directFallback: checked })}
+            />
+            <FieldLabel>{t('cascade.config.directFallback')}</FieldLabel>
+          </Field>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Field invalid={Boolean(errors.maxHops ? t(errors.maxHops) : undefined)}>

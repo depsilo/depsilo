@@ -349,7 +349,7 @@ func newUpstreamFromRecord(record db.UpstreamRecord, options PoolOptions) (*Upst
 	if record.Via != "" && options.Peers != nil {
 		peer, ok := options.Peers.Resolve(record.Via)
 		if ok {
-			client, err = buildPeerClient(record.Proxy, peer, record.URL, options)
+			client, err = buildPeerClient(record, peer, options)
 		} else {
 			zap.L().Warn("cascade peer is not configured; upstream keeps direct egress",
 				zap.String("upstream", record.Name),
@@ -404,8 +404,11 @@ func (u *Upstream) sameConfig(record db.UpstreamRecord) bool {
 // every outbound exchange into an authenticated relay call. The guarded dialer
 // pins the peer origin, so private LAN peers work while relayed target URLs
 // never become direct dial targets on this hop.
-func buildPeerClient(proxy string, peer PeerEgress, source string, options PoolOptions) (*http.Client, error) {
-	client, err := buildClient(proxy, peer.URL.String(), options)
+//
+// With DirectFallback, the client also holds the direct client this upstream
+// would use without the peer, and falls back to it when the peer fails.
+func buildPeerClient(record db.UpstreamRecord, peer PeerEgress, options PoolOptions) (*http.Client, error) {
+	client, err := buildClient(record.Proxy, peer.URL.String(), options)
 	if err != nil {
 		return nil, err
 	}
@@ -413,11 +416,26 @@ func buildPeerClient(proxy string, peer PeerEgress, source string, options PoolO
 	if !ok || base == nil {
 		return nil, fmt.Errorf("build cascade client for %s: transport unavailable", peer.Name)
 	}
-	transport, err := newPeerTransport(base, peer, source)
+	transport, err := newPeerTransport(base, peer, record.URL)
 	if err != nil {
 		return nil, err
 	}
 	client.Transport = transport
+	if peer.DirectFallback {
+		proxy := record.Proxy
+		if proxy == "" {
+			proxy = options.Egress.UpstreamProxyFor(record.URL)
+		}
+		direct, err := buildClient(proxy, record.URL, options)
+		if err != nil {
+			return nil, err
+		}
+		status := peer.status
+		if status == nil {
+			status = newPeerStatus()
+		}
+		client.Transport = &peerFallbackTransport{peer: transport, direct: direct.Transport, status: status}
+	}
 	return client, nil
 }
 

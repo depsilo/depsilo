@@ -31,6 +31,48 @@ cache results. A chain of three or more levels works when each intermediate
 node has the same upstream source URL configured through its own peer; a node
 without a matching binding fetches directly.
 
+## Pair two nodes
+
+Pairing sets up a parent and a child in two pastes, without a restart on
+either side.
+
+1. On the parent, open **Admin → Upstreams → Cascade → Be a parent**, check
+   the address children reach it at (the page proposes the browser's address;
+   a loopback address works only on the same machine), and choose
+   **Generate pairing code**. The first code turns cascade on and creates the
+   shared token. From a shell: `depsilo cascade pair --url http://<parent-address>:23333`.
+2. On the child, open **Join a parent**, paste the code, and choose **Join**.
+   From a shell: `depsilo cascade join <code>`.
+
+Joining first checks that the parent serves the relay and accepts the token,
+and refuses the node's own code. It then adds the parent, turns cascade on
+with a token of the child's own, turns on `allow_insecure_http` when the parent
+uses plain HTTP on another host (and says so), and routes every direct
+upstream through the parent, except upstreams on a loopback, private, or
+local-only address, which the parent cannot reach for the child. Pass
+**Fetch every upstream through the parent** off (`--no-route-all`) to bind
+upstreams yourself.
+
+The code carries the shared token: anyone who holds it can fetch through the
+parent. Share it like a password. Both CLI commands need an administrator
+token (`DEPSILO_TOKEN`).
+
+A parent on an overlay network (`100.64.0.0/10`) still needs that range in
+`[egress] private_ranges` on the child; joining reports the refused dial.
+
+## Direct fallback
+
+`[cascade] direct_fallback` (default `true`) keeps a child working while its
+parent cannot serve: when the parent is unreachable, does not serve the relay
+(cascade off), rejects the token, detects a loop, or cannot reach the origin
+itself, the exchange goes to the origin directly through the child's normal
+egress. After such a failure the upstreams bound to that parent skip it for 30
+seconds and then try it again. An origin's own answer relayed by the parent,
+an error status included, is passed on as it is. The Cascade tab shows, for
+each parent, whether exchanges through it work or why they currently fall
+back. Set `direct_fallback = false` where the child must never reach origins
+itself; exchanges then fail while the parent is down.
+
 ## Parent configuration
 
 The parent must know which secret its children present. Everything else stays
@@ -49,7 +91,8 @@ max_ttl = "168h"
 allow_insecure_http = false
 ```
 
-The relay endpoint is `/_depsilo/relay/v1`. It requires the shared token,
+The relay endpoint is `/_depsilo/relay/v1`; it answers 404 while cascade is
+off. It requires the shared token,
 rejects requests that re-enter this node, and refuses to fetch private
 addresses unless the target is one of this node's configured upstreams.
 
@@ -74,13 +117,10 @@ url = "https://registry.npmjs.org"
 priority = 1
 via = "home"
 
-# Keep a direct path so an offline parent degrades to the internet instead of
-# failing. The health-tracked selector only uses it while the peer is down.
-[[npm.upstreams]]
-name = "direct"
-url = "https://registry.npmjs.org"
-priority = 2
 ```
+
+With `direct_fallback` (the default) the upstream reaches the origin itself
+while the parent is down, so it needs no second, direct copy.
 
 A parent on an overlay network such as Tailscale, Headscale or NetBird has an
 address in `100.64.0.0/10`, which the child refuses until that range is
@@ -95,16 +135,16 @@ fake-IP address.
 Existing installations can bind an upstream to a peer in
 **Admin → Upstreams** instead of editing `config.toml`; the peer list itself
 stays in the configuration file because it carries addresses and secrets.
-The **Admin → Upstreams → Cascade** tab is a read-only view of the cascade
-state: this node's role and instance ID, configured parents, which upstreams
+The **Admin → Upstreams → Cascade** tab shows the cascade state in effect: this node's role and instance ID, configured parents, which upstreams
 egress through them, and any binding whose parent has been removed from the
 configuration.
 
 The same tab edits the cascade section directly on the page — no dialog layer:
 
 - The page reads top to bottom as a live topology (clients → this node →
-  parents → upstream), the inline configuration, a tabbed quick-connect card,
-  and the upstream bindings table.
+  parents → upstream, with each parent's fallback state), the inline
+  configuration, the quick-connect card with pairing, and the upstream
+  bindings table.
 - The patch is written atomically into `config.toml`, preserving comments and
   every key outside `[cascade]` / `[[cascade.peers]]`.
 - Fields and peer rows are edited inline; a sticky save bar appears only while
@@ -114,8 +154,10 @@ The same tab edits the cascade section directly on the page — no dialog layer:
 - Saving validates the whole result before writing. Removing a peer that is
   still referenced by an upstream (in the file or in the database) is refused
   so no upstream silently falls back to direct egress.
-- Cascade values are read at startup, so a successful save marks the page
-  **pending restart** until Depsilo restarts.
+- A successful save takes effect at once: the relay endpoint, the parents,
+  and the upstreams bound to them change without a restart. Only when a
+  `DEPSILO_CASCADE_*` environment variable overrides the file does the page
+  show **pending restart**.
 - The API enforces the operator's write role. The page also checks the file
   itself: when the account is read-only or `config.toml` is not writable, the
   fields are disabled and the reason is shown inline. A write that races a
@@ -124,20 +166,8 @@ The same tab edits the cascade section directly on the page — no dialog layer:
   single select (direct or one of the running peers). That path changes only
   the database binding and applies immediately, without a restart.
 
-The **Quick connect** section generates copy-ready commands from an editable
-address field (defaulting to the browser origin):
-
-- Package-manager commands for npm, pip, and Go that point clients at this
-  node, plus a link to the full Connect page for the remaining ecosystems.
-- A child-Depsilo `config.toml` snippet and a relay probe command, so another
-  node can use this one as its parent without leaving the page.
-- A parent-Depsilo snippet with the matching `via` binding, a relay probe, and
-  a health check per configured parent.
-
-The address field is only a generator; it is kept in browser local storage and
-is never written to the server. The snippets use a placeholder for the shared
-secret and warn against pointing a node at itself, which the relay rejects
-with `508`.
+The **Quick connect** card holds the pairing steps above (**Join a parent**
+and **Be a parent**) and a link to the client connection guide.
 
 ## Operational notes
 

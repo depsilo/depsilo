@@ -44,6 +44,7 @@ var commands = []command{
 	{name: "reset-password", run: runResetPassword, usage: func() { fmt.Print(resetPasswordUsage) }},
 	{name: "distribution", run: runDistribution, usage: printDistributionHelp},
 	{name: "audit", run: runAudit, usage: entryUsage("audit", auditUsageDetails)},
+	{name: "cascade", run: runCascade, usage: printCascadeHelp},
 	{name: "help", aliases: []string{"--help", "-h"}, run: runHelp, usage: PrintHelp},
 }
 
@@ -188,6 +189,7 @@ Commands:
     reset-password [<username>] Set a local account's password; server must be stopped
     distribution <command>     Prepare and verify durable dependency-set drafts
     audit verify [--json]       Recompute the tamper-evident audit hash chain
+    cascade pair|join           Pair this node with a cascade parent in one step
     help                        Show this message
 
 Common serve flags (use depsilo serve --help for full detail):
@@ -199,7 +201,7 @@ Common serve flags (use depsilo serve --help for full detail):
 Other flags:
     --json, -j                  Machine-readable JSON output. Accepted by: status, doctor,
                                 diagnose, init-agent, version, warmup, flush, backup,
-                                restore, distribution, audit verify
+                                restore, distribution, audit verify, cascade
 
 Environment variables:
     DEPSILO_URL                 Used by status / doctor to find a remote server

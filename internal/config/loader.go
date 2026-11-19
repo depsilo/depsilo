@@ -628,6 +628,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("cascade.max_hops", cascade.DefaultMaxHops)
 	v.SetDefault("cascade.max_ttl", "168h")
 	v.SetDefault("cascade.allow_insecure_http", false)
+	v.SetDefault("cascade.direct_fallback", true)
 	v.SetDefault("egress.allow_fake_ip", true)
 	// Access log rollup. retention_days bounds the raw access_logs table
 	// at 7 days of detail (the admin "recent logs" page); rollup retention

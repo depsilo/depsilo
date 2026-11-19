@@ -54,6 +54,7 @@ type Registry struct {
 	commit        func(*gorm.DB) error
 	active        []string
 	pools         map[string]*Pool
+	optionsMu     sync.RWMutex
 	poolOptions   PoolOptions
 	mutationLocks map[string]*sync.Mutex
 

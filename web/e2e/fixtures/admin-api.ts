@@ -260,6 +260,7 @@ const canonicalAdminApiDefaults = {
     max_hops: 4,
     max_ttl_seconds: 604800,
     allow_insecure_http: false,
+    direct_fallback: true,
     peers: [],
   } satisfies AdminCascadeInfo,
   'GET /api/v1/admin/cascade/config': {
@@ -267,6 +268,7 @@ const canonicalAdminApiDefaults = {
     max_hops: 4,
     max_ttl: '168h',
     allow_insecure_http: false,
+    direct_fallback: true,
     token_set: false,
     peers: [],
     config_writable: true,

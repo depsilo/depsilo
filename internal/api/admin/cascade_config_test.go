@@ -79,7 +79,7 @@ func newCascadeConfigFixture(t *testing.T, document string, withRegistry bool) c
 		}
 	}
 
-	handler := NewCascadeConfigHandler(store, registry)
+	handler := NewCascadeConfigHandler(store, registry, staticCascadeRuntime{id: "node-1"})
 	router := gin.New()
 	router.GET("/cascade/config", handler.Get)
 	router.PUT("/cascade/config", handler.Update)

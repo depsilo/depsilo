@@ -58,7 +58,7 @@ func (r *Registry) validatePeerReference(via string) error {
 	if via == "" {
 		return nil
 	}
-	if _, ok := r.poolOptions.Peers.Resolve(via); !ok {
+	if _, ok := r.options().Peers.Resolve(via); !ok {
 		return fmt.Errorf("%w: cascade peer %q is not configured", ErrInvalidUpstream, via)
 	}
 	return nil
@@ -153,7 +153,7 @@ func (r *Registry) prepareAndCommit(ctx context.Context, ecosystem string, apply
 		if err := tx.Where("adapter_type = ?", ecosystem).Order("priority, id").Find(&records).Error; err != nil {
 			return err
 		}
-		next, err := buildPoolSnapshotWithOptions(records, previous, r.poolOptions)
+		next, err := buildPoolSnapshotWithOptions(records, previous, r.options())
 		if err != nil {
 			return err
 		}
@@ -486,7 +486,7 @@ func (r *Registry) reloadEcosystemLocked(ecosystem string) error {
 	}
 	pool := r.pools[ecosystem]
 	previous := pool.load()
-	next, err := buildPoolSnapshotWithOptions(records, previous, r.poolOptions)
+	next, err := buildPoolSnapshotWithOptions(records, previous, r.options())
 	if err != nil {
 		return err
 	}

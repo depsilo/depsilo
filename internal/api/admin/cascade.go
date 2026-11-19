@@ -8,35 +8,57 @@ import (
 	"depsilo/internal/api/contract"
 	"depsilo/internal/cascade"
 	"depsilo/internal/config"
+	"depsilo/internal/upstream"
 )
+
+// CascadeRuntime is the cascade state the server runs with. Admin changes it
+// without a restart.
+type CascadeRuntime interface {
+	Settings() config.CascadeConfig
+	InstanceID() string
+}
 
 // CascadeHandler exposes the deployment-level cascade topology to the Admin
 // UI. Peer tokens are intentionally never part of this response.
 type CascadeHandler struct {
-	settings   config.CascadeConfig
-	instanceID string
+	runtime  CascadeRuntime
+	registry *upstream.Registry
 }
 
-func NewCascadeHandler(settings config.CascadeConfig, instanceID string) *CascadeHandler {
-	return &CascadeHandler{settings: settings, instanceID: instanceID}
+func NewCascadeHandler(runtime CascadeRuntime, registry *upstream.Registry) *CascadeHandler {
+	return &CascadeHandler{runtime: runtime, registry: registry}
 }
 
 func (h *CascadeHandler) Info(c *gin.Context) {
+	settings := h.runtime.Settings()
 	response := contract.AdminCascadeInfo{
-		Enabled:           h.settings.Enabled,
-		InstanceID:        h.instanceID,
+		Enabled:           settings.Enabled,
+		InstanceID:        h.runtime.InstanceID(),
 		RelayPath:         cascade.RelayPath,
-		MaxHops:           h.settings.MaxHops,
-		MaxTTLSeconds:     int64(h.settings.MaxTTL.Seconds()),
-		AllowInsecureHTTP: h.settings.AllowInsecureHTTP,
-		Peers:             make([]contract.AdminCascadePeer, 0, len(h.settings.Peers)),
+		MaxHops:           settings.MaxHops,
+		MaxTTLSeconds:     int64(settings.MaxTTL.Seconds()),
+		AllowInsecureHTTP: settings.AllowInsecureHTTP,
+		DirectFallback:    settings.DirectFallback,
+		Peers:             make([]contract.AdminCascadePeer, 0, len(settings.Peers)),
 	}
-	for _, peer := range h.settings.Peers {
-		response.Peers = append(response.Peers, contract.AdminCascadePeer{
+	var peers *upstream.PeerSet
+	if h.registry != nil {
+		peers = h.registry.Peers()
+	}
+	for _, peer := range settings.Peers {
+		item := contract.AdminCascadePeer{
 			Name:               peer.Name,
 			URL:                peer.URL,
 			ForwardCredentials: peer.ForwardCredentials,
-		})
+		}
+		if status, ok := peers.Status(peer.Name); ok {
+			snapshot := status.Snapshot()
+			item.LastSuccessAt = contract.NullableTime(snapshot.LastSuccessAt)
+			item.LastFallbackAt = contract.NullableTime(snapshot.LastFallbackAt)
+			item.LastFailure = snapshot.LastFailure
+			item.FallbackCount = snapshot.FallbackCount
+		}
+		response.Peers = append(response.Peers, item)
 	}
 	c.JSON(http.StatusOK, response)
 }

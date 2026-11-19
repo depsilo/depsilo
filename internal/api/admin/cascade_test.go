@@ -16,7 +16,7 @@ import (
 
 func TestCascadeHandlerReturnsTopologyWithoutSecrets(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	handler := NewCascadeHandler(config.CascadeConfig{
+	handler := NewCascadeHandler(staticCascadeRuntime{id: "node-1", settings: config.CascadeConfig{
 		Enabled:           true,
 		Token:             "mesh-secret-token-0123456789",
 		MaxHops:           3,
@@ -28,7 +28,7 @@ func TestCascadeHandlerReturnsTopologyWithoutSecrets(t *testing.T) {
 			Token:              "peer-secret-token-0123456789",
 			ForwardCredentials: true,
 		}},
-	}, "node-1")
+	}}, nil)
 
 	recorder := httptest.NewRecorder()
 	context, _ := gin.CreateTestContext(recorder)
@@ -58,3 +58,12 @@ func TestCascadeHandlerReturnsTopologyWithoutSecrets(t *testing.T) {
 		t.Fatalf("peers = %#v", response.Peers)
 	}
 }
+
+// staticCascadeRuntime is a CascadeRuntime with fixed settings.
+type staticCascadeRuntime struct {
+	id       string
+	settings config.CascadeConfig
+}
+
+func (r staticCascadeRuntime) Settings() config.CascadeConfig { return r.settings }
+func (r staticCascadeRuntime) InstanceID() string             { return r.id }

@@ -134,6 +134,7 @@ export interface AdminCascadeConfigPatch {
   max_hops?: number
   max_ttl?: string
   allow_insecure_http?: boolean
+  direct_fallback?: boolean
   /** Omitted keeps the stored secret; "" clears it. */
   shared_token?: string
   peers?: AdminCascadeConfigPeerPatch[]

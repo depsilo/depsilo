@@ -3,13 +3,17 @@ package server
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
+	"sync"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"depsilo/internal/cascade"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
+	"depsilo/internal/relay"
 	"depsilo/internal/upstream"
 )
 
@@ -67,7 +71,81 @@ func cascadePeerSet(settings config.CascadeConfig, identity string) (*upstream.P
 			LocalInstanceID:    identity,
 			MaxHops:            settings.MaxHops,
 			ForwardCredentials: peer.ForwardCredentials,
+			DirectFallback:     settings.DirectFallback,
 		})
 	}
 	return upstream.NewPeerSet(entries), nil
+}
+
+// cascadeRuntime holds the cascade settings the server runs with and applies
+// a new section without a restart: it swaps the relay endpoint's handler and
+// the parents bound upstreams egress through.
+type cascadeRuntime struct {
+	identity string
+	registry *upstream.Registry
+	newRelay func(config.CascadeConfig) *relay.Handler
+
+	mu       sync.RWMutex
+	settings config.CascadeConfig
+	relay    *relay.Handler
+}
+
+func newCascadeRuntime(identity string, registry *upstream.Registry, settings config.CascadeConfig, newRelay func(config.CascadeConfig) *relay.Handler) *cascadeRuntime {
+	runtime := &cascadeRuntime{identity: identity, registry: registry, newRelay: newRelay, settings: settings}
+	if settings.Enabled {
+		runtime.relay = newRelay(settings)
+	}
+	return runtime
+}
+
+// Apply puts settings into effect.
+func (r *cascadeRuntime) Apply(settings config.CascadeConfig) error {
+	var peers *upstream.PeerSet
+	if settings.Enabled {
+		resolved, err := cascadePeerSet(settings, r.identity)
+		if err != nil {
+			return err
+		}
+		peers = resolved
+	}
+	if err := r.registry.SetPeers(peers); err != nil {
+		return err
+	}
+	var handler *relay.Handler
+	if settings.Enabled {
+		handler = r.newRelay(settings)
+	}
+	r.mu.Lock()
+	r.settings, r.relay = settings, handler
+	r.mu.Unlock()
+	zap.L().Info("cascade settings applied",
+		zap.Bool("relay_enabled", settings.Enabled),
+		zap.Int("peers", len(settings.Peers)),
+	)
+	return nil
+}
+
+// Settings returns the cascade settings in effect.
+func (r *cascadeRuntime) Settings() config.CascadeConfig {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	settings := r.settings
+	settings.Peers = append([]config.CascadePeerConfig(nil), r.settings.Peers...)
+	return settings
+}
+
+// InstanceID returns this node's cascade identity.
+func (r *cascadeRuntime) InstanceID() string { return r.identity }
+
+// ServeHTTP serves the relay endpoint while cascade is enabled and answers
+// 404 otherwise, as the route did before it existed at all.
+func (r *cascadeRuntime) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	r.mu.RLock()
+	handler := r.relay
+	r.mu.RUnlock()
+	if handler == nil {
+		http.NotFound(writer, request)
+		return
+	}
+	handler.ServeHTTP(writer, request)
 }

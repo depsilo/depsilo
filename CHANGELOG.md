@@ -5,6 +5,32 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+- Cascade pairing. On a parent, **Admin → Upstreams → Cascade → Be a parent**
+  (or `depsilo cascade pair --url <address>`) turns cascade on, generates the
+  shared token when none is set, and shows a pairing code. On a child, pasting
+  it under **Join a parent** (or `depsilo cascade join <code>`) checks that the
+  parent accepts the token, adds it, and routes every upstream whose origin is
+  not local or private through it. New endpoints:
+  `POST /api/v1/admin/cascade/pairing` and `POST /api/v1/admin/cascade/join`.
+  The code carries the shared token; share it like a password.
+- `[cascade] direct_fallback` (default `true`): an upstream bound to a parent
+  fetches from its origin directly while the parent is unreachable, does not
+  serve the relay, rejects the token, or cannot reach the origin, and tries
+  the parent again after 30 seconds. `GET /api/v1/admin/cascade` reports it
+  and, per parent, `last_success_at`, `last_fallback_at`, `last_failure`, and
+  `fallback_count`; the Cascade tab shows them. Relay errors now carry
+  `X-Depsilo-Relay-Error`, and a request with `X-Depsilo-Relay-Probe` checks
+  the token without fetching.
+
+### Changed
+- Cascade settings take effect without a restart. Saving the cascade section
+  in Admin, pairing, and joining switch the relay endpoint and the parents at
+  once; `pending_restart` is reported only while a `DEPSILO_CASCADE_*`
+  variable overrides the file. The relay route always exists and answers 404
+  while cascade is off, and every instance now records a cascade instance ID
+  at its first start.
+
 ## [0.15.1] - 2026-11-19
 
 ### Changed

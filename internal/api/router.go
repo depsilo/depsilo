@@ -50,22 +50,22 @@ type Deps struct {
 	Config           *config.Config
 	ConfigStore      *config.Store
 	Identity         *identity.Registry
-	// CascadeInstanceID is the runtime identity resolved at startup (auto-
-	// generated and persisted when configuration leaves it empty).
-	CascadeInstanceID string
-	Pools             map[string]*upstream.Pool
-	UpstreamRegistry  *upstream.Registry
-	Ecosystems        []string
-	CacheMgr          *cache.Manager
-	CacheRetention    *cache.Retention
-	CompileCache      CompileCacheRouteDependencies
-	IndexRefresher    upstreamupdates.Refresher
-	EventBus          *cache.EventBus
-	LicenseManager    *license.Manager
-	TrialManager      *trial.Manager       // NEW
-	Entitlement       *entitlement.Checker // NEW
-	RulesStore        *rules.Store
-	RulesEngine       *rules.Engine
+	// Cascade is the cascade state the server runs with; Admin changes it
+	// without a restart.
+	Cascade          admin.CascadeRuntime
+	Pools            map[string]*upstream.Pool
+	UpstreamRegistry *upstream.Registry
+	Ecosystems       []string
+	CacheMgr         *cache.Manager
+	CacheRetention   *cache.Retention
+	CompileCache     CompileCacheRouteDependencies
+	IndexRefresher   upstreamupdates.Refresher
+	EventBus         *cache.EventBus
+	LicenseManager   *license.Manager
+	TrialManager     *trial.Manager       // NEW
+	Entitlement      *entitlement.Checker // NEW
+	RulesStore       *rules.Store
+	RulesEngine      *rules.Engine
 	// PolicyStatusProvider is a read-only snapshot seam shared by readiness,
 	// Admin status, and Prometheus telemetry. It must not refresh the store.
 	PolicyStatusProvider PolicyStatusProvider
@@ -337,11 +337,14 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminWrite.POST("/upstreams/:id/check", upstreamHandler.Check)
 
 	// Cascade deployment topology (peer URLs and names; never tokens).
-	cascadeHandler := admin.NewCascadeHandler(deps.Config.Cascade, deps.CascadeInstanceID)
+	cascadeHandler := admin.NewCascadeHandler(deps.Cascade, deps.UpstreamRegistry)
 	adminRead.GET("/cascade", cascadeHandler.Info)
-	cascadeConfigHandler := admin.NewCascadeConfigHandler(deps.ConfigStore, deps.UpstreamRegistry)
+	cascadeConfigHandler := admin.NewCascadeConfigHandler(deps.ConfigStore, deps.UpstreamRegistry, deps.Cascade)
 	adminRead.GET("/cascade/config", cascadeConfigHandler.Get)
 	adminWrite.PUT("/cascade/config", middleware.CredentialManagementRequired(), cascadeConfigHandler.Update)
+	// Pairing reveals the shared token, so it needs credential management.
+	adminWrite.POST("/cascade/pairing", middleware.CredentialManagementRequired(), cascadeConfigHandler.Pairing)
+	adminWrite.POST("/cascade/join", middleware.CredentialManagementRequired(), cascadeConfigHandler.Join)
 
 	// Upstream latency history
 	latencyHandler := admin.NewLatencyHandler(deps.DB)

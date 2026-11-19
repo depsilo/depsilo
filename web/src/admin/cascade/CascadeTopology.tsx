@@ -116,6 +116,28 @@ export default function CascadeTopology({
       </span>,
     )
   }
+  if (info.enabled) {
+    for (const peer of peers) {
+      if (peer.last_failure) {
+        chips.push(
+          <span key={`peer-${peer.name}`} data-cascade-peer-fallback={peer.name} style={{ color: 'var(--warn-text)' }} title={peer.last_failure}>
+            {t('cascade.peerFallback', { name: peer.name, reason: peer.last_failure })}
+          </span>,
+        )
+      } else if (peer.last_success_at) {
+        chips.push(
+          <span key={`peer-${peer.name}`} data-cascade-peer-ok={peer.name}>
+            {t('cascade.peerHealthy', { name: peer.name })}
+          </span>,
+        )
+      }
+    }
+    if (peers.length > 0) {
+      chips.push(
+        <span key="fallback">{t(info.direct_fallback ? 'cascade.fallbackOn' : 'cascade.fallbackOff')}</span>,
+      )
+    }
+  }
   if (unresolved > 0) {
     chips.push(
       <span key="unresolved" style={{ color: 'var(--warn-text)' }}>

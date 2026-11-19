@@ -32,10 +32,13 @@ func (e *StoreError) Error() string { return e.Err.Error() }
 func (e *StoreError) Unwrap() error { return e.Err }
 
 type Store struct {
-	mu                  sync.Mutex
-	path                string
-	effective           SettingsSnapshot
-	effectiveCascade    cascadeFingerprint
+	mu               sync.Mutex
+	path             string
+	effective        SettingsSnapshot
+	effectiveCascade cascadeFingerprint
+	// applyCascade puts a written cascade section into effect in the running
+	// server; nil leaves it for the next start.
+	applyCascade        func(CascadeConfig) error
 	effectiveDocker     DockerConfig
 	effectiveSources    map[string]AuthenticationSourceConfig
 	sourceOverrides     map[string]map[string]string

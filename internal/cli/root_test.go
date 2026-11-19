@@ -113,7 +113,7 @@ func TestHelpListsTheCommandsThatAcceptJSON(t *testing.T) {
 		t.Fatalf("--json help does not say which commands accept it: %q", paragraph)
 	}
 	got := strings.Join(strings.Fields(list), " ")
-	want := "status, doctor, diagnose, init-agent, version, warmup, flush, backup, restore, distribution, audit verify"
+	want := "status, doctor, diagnose, init-agent, version, warmup, flush, backup, restore, distribution, audit verify, cascade"
 	if got != want {
 		t.Fatalf("--json help lists %q, want %q", got, want)
 	}

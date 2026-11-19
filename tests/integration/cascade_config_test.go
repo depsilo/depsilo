@@ -12,15 +12,15 @@ import (
 )
 
 // TestCascadeConfigIsManagedThroughAdminAPI proves the write path end to end:
-// the Admin API patches config.toml, never echoes secrets, and reports the
-// restart requirement while the running process keeps its old values.
+// the Admin API patches config.toml, never echoes secrets, and puts the
+// section into effect without a restart.
 func TestCascadeConfigIsManagedThroughAdminAPI(t *testing.T) {
 	const sharedSecret = "integration-cascade-token-0123456789"
 	body := `{
 		"max_hops": 3,
 		"max_ttl": "12h",
 		"peers": [
-			{"name": "home", "url": "http://127.0.0.1:23333", "forward_credentials": false},
+			{"name": "home", "url": "http://127.0.0.1:9", "forward_credentials": false},
 			{"name": "managed-example", "url": "https://cache.example", "token": "peer-managed-token-0123456789", "forward_credentials": true}
 		]
 	}`
@@ -51,7 +51,7 @@ func TestCascadeConfigIsManagedThroughAdminAPI(t *testing.T) {
 	if result.State.MaxHops != 3 || result.State.MaxTTL != "12h" || !result.State.ConfigWritable {
 		t.Fatalf("state = %+v", result.State)
 	}
-	if !result.State.PendingRestart || !result.RestartRequired {
+	if result.State.PendingRestart || result.RestartRequired {
 		t.Fatalf("restart flags = pending:%v required:%v", result.State.PendingRestart, result.RestartRequired)
 	}
 	if !result.State.TokenSet || len(result.State.Peers) != 2 {
@@ -80,5 +80,22 @@ func TestCascadeConfigIsManagedThroughAdminAPI(t *testing.T) {
 	getBody := readBody(t, getResponse)
 	if strings.Contains(getBody, "peer-managed-token") || !strings.Contains(getBody, `"name":"managed-example"`) {
 		t.Fatalf("GET body = %s", getBody)
+	}
+
+	// The running process uses the saved values at once.
+	infoResponse := adminGet(t, depsiloURL+"/api/v1/admin/cascade")
+	defer infoResponse.Body.Close()
+	assertStatus(t, infoResponse, http.StatusOK)
+	var info struct {
+		MaxHops int `json:"max_hops"`
+		Peers   []struct {
+			Name string `json:"name"`
+		} `json:"peers"`
+	}
+	if err := json.Unmarshal([]byte(readBody(t, infoResponse)), &info); err != nil {
+		t.Fatal(err)
+	}
+	if info.MaxHops != 3 || len(info.Peers) != 2 || info.Peers[1].Name != "managed-example" {
+		t.Fatalf("running cascade = %+v, want the saved values", info)
 	}
 }

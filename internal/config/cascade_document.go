@@ -71,6 +71,9 @@ func patchCascadeDocument(
 	if patch.AllowInsecureHTTP != nil {
 		updates = append(updates, cascadeKeyValue{"allow_insecure_http", settings.AllowInsecureHTTP})
 	}
+	if patch.DirectFallback != nil {
+		updates = append(updates, cascadeKeyValue{"direct_fallback", settings.DirectFallback})
+	}
 	if patch.SharedToken != nil && settings.Token == "" {
 		if existing, ok := index.values["token"]; ok {
 			edits = append(edits, documentEdit{start: existing.lineStart, end: existing.lineEnd})

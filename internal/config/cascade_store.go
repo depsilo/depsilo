@@ -34,6 +34,7 @@ type CascadeConfigState struct {
 	MaxHops           int                `json:"max_hops"`
 	MaxTTL            string             `json:"max_ttl"`
 	AllowInsecureHTTP bool               `json:"allow_insecure_http"`
+	DirectFallback    bool               `json:"direct_fallback"`
 	TokenSet          bool               `json:"token_set"`
 	Peers             []CascadePeerState `json:"peers"`
 	ConfigWritable    bool               `json:"config_writable"`
@@ -57,13 +58,14 @@ type CascadeConfigPatch struct {
 	MaxHops           *int
 	MaxTTL            *string
 	AllowInsecureHTTP *bool
+	DirectFallback    *bool
 	SharedToken       *string
 	Peers             *[]CascadePeerInput
 }
 
 func (p CascadeConfigPatch) empty() bool {
 	return p.Enabled == nil && p.MaxHops == nil && p.MaxTTL == nil &&
-		p.AllowInsecureHTTP == nil && p.SharedToken == nil && p.Peers == nil
+		p.AllowInsecureHTTP == nil && p.DirectFallback == nil && p.SharedToken == nil && p.Peers == nil
 }
 
 // CascadeConfigUpdate reports the masked state after a successful write and
@@ -81,6 +83,7 @@ type cascadeFingerprint struct {
 	MaxHops           int
 	MaxTTL            time.Duration
 	AllowInsecureHTTP bool
+	DirectFallback    bool
 	TokenHash         string
 	Peers             []cascadePeerFingerprint
 }
@@ -112,6 +115,7 @@ func fingerprintCascade(settings CascadeConfig) cascadeFingerprint {
 		MaxHops:           settings.MaxHops,
 		MaxTTL:            settings.MaxTTL,
 		AllowInsecureHTTP: settings.AllowInsecureHTTP,
+		DirectFallback:    settings.DirectFallback,
 		TokenHash:         cascadeTokenHash(settings.Token),
 		Peers:             make([]cascadePeerFingerprint, 0, len(settings.Peers)),
 	}
@@ -211,7 +215,59 @@ func (s *Store) UpdateCascadeConfig(ctx context.Context, patch CascadeConfigPatc
 		)
 	}
 
+	s.applyWrittenCascade(updatedConfig.Cascade)
 	return CascadeConfigUpdate{State: s.cascadeState(updatedConfig), Changed: changed}, nil
+}
+
+// SetCascadeApplier makes every later cascade write take effect at once
+// through apply, which receives the validated section as written.
+func (s *Store) SetCascadeApplier(apply func(CascadeConfig) error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.applyCascade = apply
+}
+
+// applyWrittenCascade puts a written section into effect. The process then
+// runs the file's values, so the state no longer reports a pending restart.
+// A DEPSILO_CASCADE_* variable overrides the file, so with one set the
+// section is left for the next start, as is a section apply rejects.
+func (s *Store) applyWrittenCascade(written CascadeConfig) {
+	if s.applyCascade == nil {
+		return
+	}
+	for _, entry := range os.Environ() {
+		if strings.HasPrefix(entry, "DEPSILO_CASCADE_") {
+			zap.L().Info("cascade settings come partly from the environment; the saved section applies at the next start")
+			return
+		}
+	}
+	settings := written
+	settings.Peers = append([]CascadePeerConfig(nil), written.Peers...)
+	normalized := Config{Cascade: settings}
+	if err := validateCascadeConfig(&normalized); err != nil {
+		zap.L().Warn("saved cascade section is not valid at runtime; it applies at the next start", zap.Error(err))
+		return
+	}
+	if err := s.applyCascade(normalized.Cascade); err != nil {
+		zap.L().Warn("could not apply the saved cascade section; it applies at the next start", zap.Error(err))
+		return
+	}
+	s.effectiveCascade = fingerprintCascade(normalized.Cascade)
+}
+
+// CascadeSharedToken returns the shared cascade secret stored in config.toml,
+// for an administrator who pairs another node with this one.
+func (s *Store) CascadeSharedToken(ctx context.Context) (string, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return "", false, err
+	}
+	cfg, _, _, err := s.readConfigDocument()
+	if err != nil {
+		return "", false, &StoreError{Code: StoreConfigReadFailed, Err: err}
+	}
+	return cfg.Cascade.Token, cfg.Cascade.Enabled, nil
 }
 
 func applyCascadePatch(settings *CascadeConfig, patch CascadeConfigPatch) error {
@@ -230,6 +286,9 @@ func applyCascadePatch(settings *CascadeConfig, patch CascadeConfigPatch) error 
 	}
 	if patch.AllowInsecureHTTP != nil {
 		settings.AllowInsecureHTTP = *patch.AllowInsecureHTTP
+	}
+	if patch.DirectFallback != nil {
+		settings.DirectFallback = *patch.DirectFallback
 	}
 	if patch.SharedToken != nil {
 		settings.Token = strings.TrimSpace(*patch.SharedToken)
@@ -279,6 +338,9 @@ func cascadeChangedFields(before, after CascadeConfig) []string {
 	if before.AllowInsecureHTTP != after.AllowInsecureHTTP {
 		changed = append(changed, "cascade.allow_insecure_http")
 	}
+	if before.DirectFallback != after.DirectFallback {
+		changed = append(changed, "cascade.direct_fallback")
+	}
 	if !reflect.DeepEqual(before.Peers, after.Peers) {
 		changed = append(changed, "cascade.peers")
 	}
@@ -300,6 +362,7 @@ func (s *Store) cascadeState(configured *Config) CascadeConfigState {
 		MaxHops:           configured.Cascade.MaxHops,
 		MaxTTL:            compactDuration(configured.Cascade.MaxTTL),
 		AllowInsecureHTTP: configured.Cascade.AllowInsecureHTTP,
+		DirectFallback:    configured.Cascade.DirectFallback,
 		TokenSet:          configured.Cascade.Token != "",
 		Peers:             peers,
 		ConfigWritable:    configWritable(s.path),
@@ -312,6 +375,7 @@ func (f cascadeFingerprint) equal(other cascadeFingerprint) bool {
 		f.MaxHops == other.MaxHops &&
 		f.MaxTTL == other.MaxTTL &&
 		f.AllowInsecureHTTP == other.AllowInsecureHTTP &&
+		f.DirectFallback == other.DirectFallback &&
 		f.TokenHash == other.TokenHash &&
 		reflect.DeepEqual(f.Peers, other.Peers)
 }

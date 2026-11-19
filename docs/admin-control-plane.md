@@ -394,13 +394,30 @@ with the `via` bindings from the upstream list.
 `GET /api/v1/admin/cascade/config` returns the cascade section of `config.toml`
 with `token_set` booleans instead of secrets and a `config_writable` flag.
 `PUT` accepts a partial patch (`enabled`, `max_hops`, `max_ttl`,
-`allow_insecure_http`, `shared_token`, and a full `peers` replacement), validates
-the resulting document, and writes it atomically; every change is reported as
-restart-required. The route sits on the Admin write group, so a read-only
+`allow_insecure_http`, `direct_fallback`, `shared_token`, and a full `peers`
+replacement), validates the resulting document, writes it atomically, and puts
+it into effect at once: the relay endpoint and the parents bound upstreams use
+change without a restart. Only when a `DEPSILO_CASCADE_*` variable overrides
+the file does the state report `pending_restart` and the response
+`restart_required`. The route sits on the Admin write group, so a read-only
 principal receives `403`; a read-only file returns `409 CONFIG_READ_ONLY`, and
 invalid values or a peer removal still referenced by an upstream return
 `422 INVALID_SETTING` before the file is touched. Stored secrets are never
 returned in any response.
+
+`POST /api/v1/admin/cascade/pairing` with `{"url": "<address children use>"}`
+turns cascade on (generating a shared token when none is set) and returns
+`code`, a pairing code that carries the address, the shared token, and this
+node's instance ID. `POST /api/v1/admin/cascade/join` with `{"code": ...,
+"name": ..., "route_all": true}` checks that the parent accepts the token,
+then adds or updates that parent (turning cascade on with a token of the
+child's own, and `allow_insecure_http` for a plain-HTTP parent on another
+host), and binds every direct upstream whose origin is not local or private to
+it. Both need credential management because the code reveals the token. Join
+refuses an invalid code (`400 INVALID_PAIRING_CODE`), the node's own code
+(`422 CASCADE_SELF_PAIRING`), and a parent that is unreachable, serves no
+relay, or rejects the token (`422 CASCADE_PARENT_UNREACHABLE`,
+`CASCADE_PARENT_NOT_RELAY`, `CASCADE_PARENT_UNAUTHORIZED`), writing nothing.
 
 Upstream validation and lifecycle errors use `400 BAD_REQUEST`, `404 NOT_FOUND`,
 `409 CONFLICT`, `409 LAST_UPSTREAM`, `409 ECOSYSTEM_NOT_ACTIVE`,

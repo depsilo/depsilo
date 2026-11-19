@@ -39,15 +39,17 @@ lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
 
 # 级联部署（多级缓存）：本机可把部分上游的出口流量交给另一台 Depsilo，
 # 由父节点回源并缓存，局域网内的其他设备再从父节点缓存读取。
-# 详见 docs/cascade.md；两端必须配置同一个 token。
-# 这些值也可以在 Admin → 上游源 → 级联 页面编辑：保存写回本文件并需要
-# 重启生效；token 只写不读，页面不会回显已保存的值。
+# 详见 docs/cascade.md。最快的方式是配对：在父节点 Admin → 上游源 → 级联
+# 生成配对码（或 depsilo cascade pair），在子节点粘贴（或 depsilo cascade join），
+# 两边都立即生效、无需重启。这些值也可以在该页面编辑，保存写回本文件并立即
+# 生效；token 只写不读，页面不会回显已保存的值。
 # [cascade]
 # enabled = true
 # token = "replace-with-a-random-shared-secret"
 # max_hops = 4              # 允许经过的级联节点层数
 # max_ttl = "168h"          # 父节点缓存新鲜度上限
 # allow_insecure_http = false  # 非回环地址使用 http:// peer 时必须显式开启
+# direct_fallback = true    # 父节点不可用时直接回源；设为 false 则请求失败
 #
 # [[cascade.peers]]
 # name = "home"

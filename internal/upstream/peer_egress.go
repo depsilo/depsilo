@@ -29,6 +29,12 @@ type PeerEgress struct {
 	// ForwardCredentials permits Authorization/Cookie headers to cross the
 	// peer. The default keeps upstream credentials local.
 	ForwardCredentials bool
+	// DirectFallback sends an exchange to the origin directly when this peer
+	// cannot serve it, instead of failing it.
+	DirectFallback bool
+	// status is shared by every upstream bound to this peer. NewPeerSet
+	// creates it.
+	status *PeerStatus
 }
 
 // PeerSet resolves configured peer names for pool construction and Admin
@@ -41,9 +47,16 @@ type PeerSet struct {
 func NewPeerSet(entries []PeerEgress) *PeerSet {
 	set := &PeerSet{peers: make(map[string]PeerEgress, len(entries))}
 	for _, entry := range entries {
+		entry.status = newPeerStatus()
 		set.peers[entry.Name] = entry
 	}
 	return set
+}
+
+// Status returns the exchange tracker of the named peer.
+func (s *PeerSet) Status(name string) (*PeerStatus, bool) {
+	peer, ok := s.Resolve(name)
+	return peer.status, ok
 }
 
 // Resolve returns a peer by its configured name.

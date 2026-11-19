@@ -26,6 +26,8 @@ export interface CascadeConfigDraft {
   maxHops: string
   maxTTL: string
   allowInsecureHTTP: boolean
+  /** Fetch from the origin directly while a parent cannot serve. */
+  directFallback: boolean
   /** New write-only shared secret typed in this dialog. */
   sharedToken: string
   /** A shared secret already exists in config.toml. */
@@ -71,6 +73,7 @@ export function draftFromState(state: AdminCascadeConfigState): CascadeConfigDra
     maxHops: String(state.max_hops),
     maxTTL: state.max_ttl,
     allowInsecureHTTP: state.allow_insecure_http,
+    directFallback: state.direct_fallback,
     sharedToken: '',
     sharedTokenSet: state.token_set,
     clearSharedToken: false,
@@ -206,6 +209,7 @@ export function buildCascadePatch(draft: CascadeConfigDraft): AdminCascadeConfig
     max_hops: Number(draft.maxHops),
     max_ttl: draft.maxTTL.trim(),
     allow_insecure_http: draft.allowInsecureHTTP,
+    direct_fallback: draft.directFallback,
     ...(sharedToken !== undefined ? { shared_token: sharedToken } : {}),
     peers: draft.peers.map(peer => ({
       name: peer.name.trim(),
@@ -218,5 +222,5 @@ export function buildCascadePatch(draft: CascadeConfigDraft): AdminCascadeConfig
 
 /** Compare editable server configuration without transient restart/file status. */
 export function cascadeConfigIdentity(state: AdminCascadeConfigState): string {
-  return JSON.stringify({ enabled:state.enabled, max_hops:state.max_hops, max_ttl:state.max_ttl, allow_insecure_http:state.allow_insecure_http, token_set:state.token_set, peers:state.peers })
+  return JSON.stringify({ enabled:state.enabled, max_hops:state.max_hops, max_ttl:state.max_ttl, allow_insecure_http:state.allow_insecure_http, direct_fallback:state.direct_fallback, token_set:state.token_set, peers:state.peers })
 }

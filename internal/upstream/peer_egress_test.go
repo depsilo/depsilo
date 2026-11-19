@@ -31,7 +31,7 @@ func newPeerForServer(t *testing.T, server *httptest.Server, mutate func(*PeerEg
 	if mutate != nil {
 		mutate(&peer)
 	}
-	client, err := buildPeerClient("", peer, "https://registry.npmjs.org", PoolOptions{})
+	client, err := buildPeerClient(db.UpstreamRecord{URL: "https://registry.npmjs.org"}, peer, PoolOptions{})
 	if err != nil {
 		t.Fatalf("buildPeerClient: %v", err)
 	}

@@ -87,6 +87,10 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		writeRelayError(writer, http.StatusUnauthorized, "CASCADE_UNAUTHORIZED", "cascade token is missing or invalid")
 		return
 	}
+	if request.Header.Get(cascade.HeaderProbe) != "" {
+		writer.WriteHeader(http.StatusNoContent)
+		return
+	}
 	exchange, err := h.planRequest(request)
 	if err != nil {
 		writeRelayError(writer, http.StatusBadRequest, "INVALID_RELAY_REQUEST", err.Error())
@@ -234,7 +238,10 @@ func (h *Handler) serveCached(writer http.ResponseWriter, request *http.Request,
 		}
 		var statusErr *originStatusError
 		if errors.As(err, &statusErr) {
-			writeRelayError(writer, statusErr.status, "UPSTREAM_ERROR", "origin returned an error status")
+			// The origin's own answer, not a relay failure: no error marker.
+			writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+			writer.WriteHeader(statusErr.status)
+			_, _ = io.WriteString(writer, `{"code":"UPSTREAM_ERROR","message":"origin returned an error status"}`)
 			return
 		}
 		zap.L().Warn("relay upstream fetch failed",
@@ -452,6 +459,7 @@ func sameOrigin(left, right *url.URL) bool {
 }
 
 func writeRelayError(writer http.ResponseWriter, status int, code, message string) {
+	writer.Header().Set(cascade.HeaderRelayError, code)
 	writer.Header().Set("Content-Type", "application/json; charset=utf-8")
 	writer.WriteHeader(status)
 	_, _ = io.WriteString(writer, fmt.Sprintf(`{"code":%q,"message":%q}`, code, message))

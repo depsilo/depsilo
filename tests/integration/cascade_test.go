@@ -26,7 +26,10 @@ import (
 
 // Each node has a new database and cache. Passive probes and a disabled
 // blocklist keep all source traffic attributable to this test's requests.
-func startCascadeNode(t *testing.T, originURL, parentURL string, directFallback bool) string {
+// startCascadeNode starts a node whose npm and pypi upstreams use originURL,
+// bound to parentURL when it is set. directRow adds a second, direct upstream
+// for the same origin; directFallback is [cascade] direct_fallback.
+func startCascadeNode(t *testing.T, originURL, parentURL string, directRow bool, directFallback ...bool) string {
 	t.Helper()
 	dir := t.TempDir()
 	port := getFreePort()
@@ -64,6 +67,9 @@ enabled = false
 enabled = true
 token = %q
 `, port, filepath.Join(dir, "node.db"), filepath.Join(dir, "cache"), integrationCascadeToken)
+	if len(directFallback) > 0 {
+		fmt.Fprintf(&config, "direct_fallback = %t\n", directFallback[0])
+	}
 	if parentURL != "" {
 		fmt.Fprintf(&config, "\n[[cascade.peers]]\nname = \"parent\"\nurl = %q\n", parentURL)
 	}
@@ -72,7 +78,7 @@ token = %q
 		if parentURL != "" {
 			config.WriteString("via = \"parent\"\n")
 		}
-		if directFallback {
+		if directRow {
 			fmt.Fprintf(&config, "\n[[%s.upstreams]]\nname = \"direct\"\nurl = %q\npriority = 2\nprobe_mode = \"passive\"\nprobe_interval = \"30m\"\n", ecosystem, originURL)
 		}
 	}
@@ -310,9 +316,22 @@ func TestCascadeConcurrentRequestsShareParentFill(t *testing.T) {
 	}
 }
 
-func TestCascadeDirectFallbackRequiresExplicitUpstream(t *testing.T) {
-	for _, fallback := range []bool{false, true} {
-		t.Run(fmt.Sprintf("direct_fallback_%t", fallback), func(t *testing.T) {
+// A bound upstream reaches its origin itself while the parent cannot serve,
+// unless direct_fallback is off; then only a separate direct upstream, which
+// selection uses after the failed exchange, serves.
+func TestCascadeDirectFallback(t *testing.T) {
+	for _, test := range []struct {
+		name           string
+		directFallback bool
+		directRow      bool
+		want           [2]int
+		wantOrigin     int64
+	}{
+		{name: "fallback on", directFallback: true, want: [2]int{http.StatusOK, http.StatusOK}, wantOrigin: 1},
+		{name: "fallback off", directFallback: false, want: [2]int{http.StatusBadGateway, http.StatusBadGateway}, wantOrigin: 0},
+		{name: "fallback off with a direct upstream", directFallback: false, directRow: true, want: [2]int{http.StatusBadGateway, http.StatusOK}, wantOrigin: 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
 			var originRequests, parentRequests atomic.Int64
 			origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				originRequests.Add(1)
@@ -325,34 +344,24 @@ func TestCascadeDirectFallbackRequiresExplicitUpstream(t *testing.T) {
 				http.Error(w, "parent unavailable", http.StatusServiceUnavailable)
 			}))
 			t.Cleanup(parent.Close)
-			child := startCascadeNode(t, origin.URL, parent.URL, fallback)
+			child := startCascadeNode(t, origin.URL, parent.URL, test.directRow, test.directFallback)
 
-			// npm records the failed parent exchange before selection can use
-			// the lower-priority direct source on the following request.
 			for attempt := 0; attempt < 2; attempt++ {
 				response := httpGet(t, child+"/npm/fallback-fixture")
 				body := readBody(t, response)
 				_ = response.Body.Close()
-				want := http.StatusBadGateway
-				if fallback && attempt == 1 {
-					want = http.StatusOK
-				}
-				if response.StatusCode != want {
-					t.Fatalf("attempt %d status=%d, want %d; body=%s", attempt+1, response.StatusCode, want, body)
+				if response.StatusCode != test.want[attempt] {
+					t.Fatalf("attempt %d status=%d, want %d; body=%s", attempt+1, response.StatusCode, test.want[attempt], body)
 				}
 			}
 			if parentRequests.Load() == 0 {
 				t.Fatal("child never attempted its configured parent")
 			}
-			wantOrigin := int64(0)
-			if fallback {
-				wantOrigin = 1
+			if got := originRequests.Load(); got != test.wantOrigin {
+				t.Errorf("direct origin requests = %d, want %d", got, test.wantOrigin)
 			}
-			if got := originRequests.Load(); got != wantOrigin {
-				t.Errorf("direct source requests = %d, want %d", got, wantOrigin)
-			}
-			if got := cascadeMetric(t, child, `depsilo_upstream_exchanges_total{route="direct"}`); got != float64(wantOrigin) {
-				t.Errorf("direct exchanges = %v, want %d", got, wantOrigin)
+			if got := cascadeMetric(t, child, `depsilo_upstream_exchanges_total{route="direct"}`); got != float64(test.wantOrigin) {
+				t.Errorf("direct exchanges = %v, want %d", got, test.wantOrigin)
 			}
 		})
 	}

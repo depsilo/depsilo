@@ -50,6 +50,13 @@ const (
 	HeaderChain = "X-Depsilo-Cascade-Chain"
 	// HeaderInstance identifies the relaying instance in relay responses.
 	HeaderInstance = "X-Depsilo-Instance"
+	// HeaderRelayError carries the code of an error the relay produced
+	// itself, as opposed to an origin status it passes on. A child that may
+	// fall back to direct egress does so only for these.
+	HeaderRelayError = "X-Depsilo-Relay-Error"
+	// HeaderProbe asks the relay to check the token and answer 204 without
+	// fetching anything, so a joining child can test the pairing first.
+	HeaderProbe = "X-Depsilo-Relay-Probe"
 
 	CacheHit    = "HIT"
 	CacheMiss   = "MISS"

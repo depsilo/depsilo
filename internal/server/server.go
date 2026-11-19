@@ -178,12 +178,13 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		return nil, err
 	}
 	registryOptions := upstream.PoolOptions{Egress: egressPolicy}
-	var cascadeIdentity string
+	// The identity exists even while cascade is off, so turning cascade on
+	// from Admin needs no restart.
+	cascadeIdentity, err := resolveCascadeIdentity(database, cfg.Cascade.InstanceID)
+	if err != nil {
+		return nil, fmt.Errorf("configure cascade identity: %w", err)
+	}
 	if cfg.Cascade.Enabled {
-		cascadeIdentity, err = resolveCascadeIdentity(database, cfg.Cascade.InstanceID)
-		if err != nil {
-			return nil, fmt.Errorf("configure cascade identity: %w", err)
-		}
 		peers, peerErr := cascadePeerSet(cfg.Cascade, cascadeIdentity)
 		if peerErr != nil {
 			return nil, fmt.Errorf("configure cascade peers: %w", peerErr)
@@ -703,19 +704,24 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 
 	// Cascade relay: authenticated parent endpoints that serve raw upstream
 	// exchanges to child Depsilo nodes. Registered before API and frontend
-	// routes so the SPA fallback can never swallow it.
-	if cfg.Cascade.Enabled {
-		relayHandler := &relay.Handler{
+	// routes so the SPA fallback can never swallow it. The route always
+	// exists; it answers 404 while cascade is off, and Admin turns cascade on
+	// and off without a restart.
+	cascadeState := newCascadeRuntime(cascadeIdentity, registry, cfg.Cascade, func(settings config.CascadeConfig) *relay.Handler {
+		return &relay.Handler{
 			DB:            database,
 			Cache:         cacheMgr,
 			Identity:      cascadeIdentity,
-			Token:         cfg.Cascade.Token,
-			MaxHops:       cfg.Cascade.MaxHops,
-			MaxTTL:        cfg.Cascade.MaxTTL,
+			Token:         settings.Token,
+			MaxHops:       settings.MaxHops,
+			MaxTTL:        settings.MaxTTL,
 			DefaultClient: upstream.NewRelayClient(),
 			ResolveEgress: registry.RelayEgress,
 		}
-		r.Any(cascade.RelayPath, gin.WrapH(relayHandler))
+	})
+	r.Any(cascade.RelayPath, gin.WrapH(cascadeState))
+	settingsStore.SetCascadeApplier(cascadeState.Apply)
+	if cfg.Cascade.Enabled {
 		zap.L().Info("cascade relay enabled",
 			zap.String("instance_id", cascadeIdentity),
 			zap.Int("peers", len(cfg.Cascade.Peers)),
@@ -740,7 +746,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		Config:                     cfg,
 		ConfigStore:                settingsStore,
 		Identity:                   identityManager,
-		CascadeInstanceID:          cascadeIdentity,
+		Cascade:                    cascadeState,
 		Pools:                      pools,
 		UpstreamRegistry:           registry,
 		Ecosystems:                 ecosystemNames,

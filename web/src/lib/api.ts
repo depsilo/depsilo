@@ -10,6 +10,8 @@ import type {
   AdminCascadeConfigPatch,
   AdminCascadeConfigState,
   AdminCascadeConfigUpdateResponse,
+  AdminCascadeJoinResponse,
+  AdminCascadePairingResponse,
   DockerBootstrapState,
   AdminUpstreamLatenciesResponse,
   AdminUpstreamListResponse,
@@ -245,6 +247,9 @@ export const adminApi = {
   getCascadeConfig: (options: ApiGetOptions = {}) => api.get<AdminCascadeConfigState>('/admin/cascade/config', options),
   updateCascadeConfig: (data: AdminCascadeConfigPatch) =>
     api.put<AdminCascadeConfigUpdateResponse>('/admin/cascade/config', data),
+  createCascadePairing: (url: string) => api.post<AdminCascadePairingResponse>('/admin/cascade/pairing', { url }),
+  joinCascade: (data: { code: string; name?: string; route_all: boolean }) =>
+    api.post<AdminCascadeJoinResponse>('/admin/cascade/join', data),
   getUpstreamLatencies: (range_: string = '24h', options: ApiGetOptions = {}) =>
     api.get<AdminUpstreamLatenciesResponse>('/admin/upstreams/latency', { ...options, params: { range: range_ } }),
   listUpstreamUpdates: (params: AdminUpstreamUpdateQuery, options: ApiGetOptions = {}) =>

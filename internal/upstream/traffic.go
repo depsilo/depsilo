@@ -106,8 +106,13 @@ func MeterResponse(client *http.Client, request *http.Request, response *http.Re
 	}
 	route := traffic.RouteDirect
 	if client != nil {
-		if _, peer := client.Transport.(*peerTransport); peer {
+		switch client.Transport.(type) {
+		case *peerTransport:
 			route = traffic.RoutePeer
+		case *peerFallbackTransport:
+			if !routedDirect(response) {
+				route = traffic.RoutePeer
+			}
 		}
 	}
 	redirect := response.StatusCode >= 300 && response.StatusCode != http.StatusNotModified

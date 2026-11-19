@@ -211,7 +211,14 @@ export default function Cascade() {
                 ) : null}
               </section>
 
-              <CascadeQuickConnect info={info} config={config} />
+              <CascadeQuickConnect
+                canWrite={canManageCredentials}
+                onChanged={() => {
+                  void queryClient.invalidateQueries({ queryKey: ['admin', 'cascade-config'] })
+                  void queryClient.invalidateQueries({ queryKey: ['admin', 'cascade'] })
+                  void queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] })
+                }}
+              />
             </div>
 
             {(
