@@ -109,26 +109,24 @@ test('Security suggestions use total-count pagination and disable Next on the la
   await expect(pagination.getByRole('button', { name: /下一页|Next/ })).toBeDisabled()
 })
 
-test('Security views are deep-linkable and preserve browser back navigation', async ({ page }) => {
+test('Security views are deep-linkable, preserve back navigation, and canonicalize an invalid tab', async ({ page }) => {
   await page.goto('/admin/security?tab=suggestions')
-  await expect(page.getByRole('combobox', { name: /情报视图|Intelligence view/ })).toHaveValue('suggestions')
+  const view = page.getByRole('combobox', { name: /情报视图|Intelligence view/ })
+  await expect(view).toHaveValue('suggestions')
 
-  await page.getByRole('combobox', { name: /情报视图|Intelligence view/ }).selectOption('policies')
+  await view.selectOption('policies')
   await expect(page).toHaveURL(/\/admin\/security\?tab=policies$/)
-  await expect(page.getByRole('combobox', { name: /情报视图|Intelligence view/ })).toHaveValue('policies')
+  await expect(view).toHaveValue('policies')
 
   await page.goBack()
   await expect(page).toHaveURL(/\/admin\/security\?tab=suggestions$/)
-  await expect(page.getByRole('combobox', { name: /情报视图|Intelligence view/ })).toHaveValue('suggestions')
-})
+  await expect(view).toHaveValue('suggestions')
 
-test('Security replaces an invalid tab with the canonical overview URL', async ({ page }) => {
+  // An invalid tab is replaced, not pushed, so Back leaves the page.
   await page.goto('/admin')
   await page.goto('/admin/security?tab=not-a-security-tab')
-
   await expect(page).toHaveURL(/\/admin\/security$/)
-  await expect(page.getByRole('combobox', { name: /情报视图|Intelligence view/ })).toHaveValue('overview')
-
+  await expect(view).toHaveValue('overview')
   await page.goBack()
   await expect(page).toHaveURL(/\/admin$/)
 })

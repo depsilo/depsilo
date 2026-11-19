@@ -31,6 +31,7 @@ test('expired session and failed login stay in-app, then return to the deep link
   await expect(page).toHaveURL(/\/admin\/login$/)
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem('document-load-count'))).toBe('1')
 
+  await expect(page.getByLabel('密码')).toHaveAttribute('type', 'password')
   await page.getByLabel('用户名').fill('admin')
   await page.getByLabel('密码').fill('wrong-password')
   await page.getByRole('button', { name: '登录' }).click()
@@ -254,7 +255,7 @@ for (const labels of [
   })
 }
 
-for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+for (const viewport of [{ width: 390, height: 844 }]) {
   test(`a rejected token is focused with its label in view at ${viewport.width}x${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport)
     await setUiPreferences(page, 'light', 'zh')

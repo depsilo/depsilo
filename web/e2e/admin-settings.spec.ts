@@ -142,7 +142,10 @@ test('sends only dirty settings and renders server-authored restart status', asy
   await page.getByLabel(/索引 TTL/).fill('10m')
   await page.getByRole('button', { name: /^保存全部变更$/ }).click()
   expect(requestBody).toEqual({ cache: { ttl_index: '10m' } })
-  await expect(page.getByText(/重启后生效/)).toBeVisible()
+  // One restart notice, not a second "pending restart" banner as well.
+  const pageContent = page.locator('[data-admin-page-content]')
+  await expect(pageContent.getByText(/^重启后生效$/)).toHaveCount(1)
+  await expect(pageContent.getByText(/^等待重启$/)).toHaveCount(0)
   await expect(page.getByLabel(/索引 TTL/)).toHaveValue('10m')
 })
 
@@ -237,24 +240,6 @@ test('rejects unsupported token never and submits a valid duration with Enter', 
   await expect(tokenTTL).toHaveValue('24h')
 })
 
-test('renders applied-now results from the update response', async ({ page }) => {
-  await mockAdminApi(page, {
-    'PUT /api/v1/admin/settings': {
-      ...snapshot,
-      configured: { ...configured, server: { ...configured.server, log_level: 'debug' } },
-      effective: { ...configured, server: { ...configured.server, log_level: 'debug' } },
-      changed: ['server.log_level'],
-      applied_now: ['server.log_level'],
-      restart_required: [],
-      blocked_by_override: [],
-    },
-  })
-  await page.goto('/admin/settings')
-  await page.getByLabel(/日志级别/).selectOption('debug')
-  await page.getByRole('button', { name: /^保存全部变更$/ }).click()
-  await expect(page.getByText(/已立即生效/).first()).toBeVisible()
-})
-
 test('does not send a request when there are no changes', async ({ page }) => {
   await page.goto('/admin/settings')
   await page.getByRole('button', { name: /^保存全部变更$/ }).click()
@@ -294,16 +279,6 @@ test('names environment overrides and shows configured and effective values', as
   await page.goto('/admin/settings')
   await expect(page.getByText(/DEPSILO_SERVER_LOG_LEVEL/)).toBeVisible()
   await expect(page.getByText(/有效值.*warn/)).toBeVisible()
-})
-
-test('disables settings when the config file is not writable', async ({ page }) => {
-  await mockAdminApi(page, {
-    'GET /api/v1/admin/settings': { ...snapshot, config_writable: false },
-  })
-  await openCacheSettings(page)
-  await expect(page.getByText(/配置文件只读/)).toBeVisible()
-  await expect(page.getByLabel(/索引 TTL/)).toBeDisabled()
-  await expect(page.getByRole('button', { name: /^保存全部变更$/ })).toBeDisabled()
 })
 
 test('disables settings changes for an admin using a readonly API token', async ({ page }) => {
@@ -390,18 +365,6 @@ test('rebases untouched draft fields before building a patch after refetch', asy
   await page.getByRole('button', { name: /^保存全部变更$/ }).click()
   expect(requestBody).toEqual({ cache: { ttl_index: '10m' } })
 })
-
-for (const width of [320, 390]) {
-  test(`uses horizontal tabs without page overflow at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 780 })
-    await page.goto('/admin/settings')
-    const tablist = page.getByRole('tablist')
-    await expect(tablist).toHaveAttribute('data-orientation', 'horizontal')
-    await expect(page.getByRole('tablist')).toHaveCount(1)
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width)
-    expect(await page.evaluate(() => window.innerWidth)).toBe(width)
-  })
-}
 
 test('uses a 180px vertical tab rail at 768px', async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 900 })

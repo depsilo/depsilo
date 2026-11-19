@@ -2,15 +2,6 @@ import { test, expect, mockAdminApi, adminApiDefaults } from './fixtures/admin-a
 import type { Request } from '@playwright/test'
 import type { AdminSettingsResponse, EntitlementStatus, UpdateAdminSettingsRequest, WebhookConfig } from '../src/lib/adminApi.types'
 
-test('webhooks remain accessible when configuration cannot be read', async ({ page }) => {
-  await mockAdminApi(page, { 'GET /api/v1/admin/settings': { status: 500, body: { code: 'CONFIG_READ_FAILED', message: 'config unavailable' } } })
-  await page.goto('/admin/settings')
-  await expect(page.getByRole('alert')).toContainText('无法加载设置')
-  await page.getByRole('tab', { name: 'Webhook 通知' }).click()
-  await expect(page.getByRole('button', { name: '添加 Webhook' })).toBeVisible()
-  await expect(page.getByText('无法加载设置')).toHaveCount(0)
-})
-
 test('settings review covers all sections and restores only this account’s draft across navigation', async ({ page }) => {
   const base = adminApiDefaults['GET /api/v1/admin/settings'] as AdminSettingsResponse
   let saved: UpdateAdminSettingsRequest | undefined

@@ -131,7 +131,10 @@ test('activity chart is one keyboard stop and stays mounted while a new range lo
   await expect(tooltip).toHaveCount(0)
 
   const chartElement = await chart.elementHandle()
-  await page.getByRole('group', { name: '统计周期' }).getByRole('button', { name: '24 小时' }).click()
+  const nextRange = page.getByRole('group', { name: '统计周期' }).getByRole('button', { name: '24 小时' })
+  await nextRange.click()
+  await expect(nextRange).toHaveAttribute('aria-pressed', 'true')
+  await expect(card).toHaveAttribute('data-trend-range', '1h')
   await expect(card).toHaveAttribute('data-trend-pending', 'true')
   await expect(card).toHaveAttribute('aria-busy', 'true')
   await expect(card.getByRole('status').filter({ hasText: '正在切换统计周期，当前仍显示上一周期的数据。' })).toBeVisible()
@@ -140,7 +143,9 @@ test('activity chart is one keyboard stop and stays mounted while a new range lo
   await expect(columns).toHaveCount(60)
 
   release()
+  await expect(card).toHaveAttribute('data-trend-range', '24h')
   await expect(card).not.toHaveAttribute('data-trend-pending', 'true')
+  await expect(card).not.toHaveAttribute('aria-busy', 'true')
   await expect(chart).toHaveAccessibleName('24 小时的请求活动，每格 30 分钟。按左右方向键查看各时间段。')
   await expect(columns).toHaveCount(48)
   expect(await chartElement!.evaluate(element => element.isConnected)).toBe(true)

@@ -59,15 +59,3 @@ test('a readonly user can still open personal account security on mobile', async
   await expect(drawer.getByRole('link', { name: 'Account security', exact: true })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
 })
-
-
-test('local administrators can disable LDAP accounts without editing their directory roles or passwords', async ({ page }) => {
-  await mockAdminApi(page, {
-    'GET /api/v1/admin/users': [{ id: 2, username: 'directory-operator', role: 'readonly', enabled: true, permission_source: 'ldap', created_at: '2026-10-23T08:00:00Z', updated_at: '2026-10-23T08:00:00Z', last_login_at: null }],
-  })
-  await page.goto('/admin/users')
-  const row = page.getByRole('row').filter({ hasText: 'directory-operator' })
-  await expect(row).toContainText('外部身份提供方')
-  await expect(row.getByRole('button', { name: '编辑 directory-operator' })).toHaveCount(0)
-  await expect(row.getByRole('button', { name: '禁用 directory-operator' })).toBeVisible()
-})

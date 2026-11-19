@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import type { AdminSettingsResponse, UpdateAdminSettingsResponse } from '../src/lib/adminApi.types'
+import type { AdminSettingsResponse } from '../src/lib/adminApi.types'
 import {
   adminApiDefaults,
   expect,
@@ -56,6 +56,11 @@ test('keeps stable Admin page chrome when the initial settings request fails', a
 
   await expect(page.getByText(/无法加载设置/)).toBeVisible()
   await expectSettingsPageChrome(page)
+
+  // Webhooks do not depend on the configuration file.
+  await page.getByRole('tab', { name: 'Webhook 通知' }).click()
+  await expect(page.getByRole('button', { name: '添加 Webhook' })).toBeVisible()
+  await expect(page.getByText('无法加载设置')).toHaveCount(0)
 })
 
 test('owns Save at page level and keeps Add Webhook inside the Webhook tab', async ({ page }) => {
@@ -89,6 +94,8 @@ test('scopes config-file read-only feedback to configuration tabs', async ({ pag
   const configReadOnly = page.getByText(/配置文件只读/)
   await expect(configReadOnly).toBeVisible()
   await expect(page.locator('[data-admin-page-actions]').getByRole('button', { name: /^保存全部变更$/ })).toBeDisabled()
+  await page.getByRole('tab', { name: /缓存策略/ }).click()
+  await expect(page.getByLabel(/索引 TTL/)).toBeDisabled()
 
   await page.getByRole('tab', { name: /Webhook/ }).click()
 
@@ -97,54 +104,6 @@ test('scopes config-file read-only feedback to configuration tabs', async ({ pag
   await expect(addWebhook).toBeEnabled()
   await addWebhook.click()
   await expect(page.getByRole('dialog', { name: /添加 Webhook/ })).toBeVisible()
-})
-
-test('hides Webhook mutation controls for an admin using a readonly API token', async ({ page }) => {
-  await mockAdminApi(page, {
-    'GET /api/v1/auth/me': {
-      id: 2,
-      username: 'admin',
-      role: 'admin',
-      enabled: true,
-      auth_method: 'api_token',
-      token_permissions: 'readonly',
-      can_write: false,
-    },
-    'GET /api/v1/admin/settings': settingsResponse({ pending_restart: [] }),
-  })
-  await page.goto('/admin/settings')
-  await page.getByRole('tab', { name: /Webhook/ }).click()
-
-  await expect(page.getByText(/当前账号为只读/)).toBeVisible()
-  await expect(page.getByRole('button', { name: /添加 Webhook/ })).toHaveCount(0)
-})
-
-test('renders one restart notice after a save that requires restart', async ({ page }) => {
-  const initial = settingsResponse({ pending_restart: [] })
-  const updated: UpdateAdminSettingsResponse = {
-    ...initial,
-    configured: {
-      ...initial.configured,
-      cache: { ...initial.configured.cache, ttl_index: '10m' },
-    },
-    pending_restart: ['cache.ttl_index'],
-    changed: ['cache.ttl_index'],
-    applied_now: [],
-    restart_required: ['cache.ttl_index'],
-    blocked_by_override: [],
-  }
-  await mockAdminApi(page, {
-    'GET /api/v1/admin/settings': initial,
-    'PUT /api/v1/admin/settings': updated,
-  })
-  await page.goto('/admin/settings')
-  await page.getByRole('tab', { name: /缓存策略/ }).click()
-  await page.getByLabel(/索引 TTL/).fill('10m')
-  await page.locator('[data-admin-page-actions]').getByRole('button', { name: /^保存全部变更$/ }).click()
-
-  const pageContent = page.locator('[data-admin-page-content]')
-  await expect(pageContent.getByText(/^重启后生效$/)).toHaveCount(1)
-  await expect(pageContent.getByText(/^等待重启$/)).toHaveCount(0)
 })
 
 test('formats English setting field lists without Chinese punctuation', async ({ page }) => {
@@ -172,6 +131,9 @@ test('has no root overflow across Settings and Webhooks at 320px in English', as
   await page.goto('/admin/settings')
 
   await expect(page.getByRole('button', { name: /^Save all changes$/ })).toBeVisible()
+  // Phones get one horizontal tab list instead of the vertical rail.
+  await expect(page.getByRole('tablist')).toHaveCount(1)
+  await expect(page.getByRole('tablist')).toHaveAttribute('data-orientation', 'horizontal')
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
 
   await page.getByRole('tab', { name: /Webhooks/ }).click()

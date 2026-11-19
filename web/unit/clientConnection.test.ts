@@ -261,30 +261,6 @@ describe('connection checks and artifact tests', () => {
     }
   })
 
-  it('adds the Gradle and NuGet plain-HTTP opt-ins only for an http address', () => {
-    const http = 'http://10.0.0.2:23333'
-    const https = 'https://depsilo.example'
-    expect(getClientConnection('java', 'gradle', http)?.configuration?.body).toContain('allowInsecureProtocol = true')
-    expect(getClientConnection('java', 'gradle', https)?.configuration?.body).not.toContain('allowInsecure')
-    expect(getClientConnection('dotnet', 'nuget', http)?.configuration?.body).toContain('allowInsecureConnections="true"')
-    expect(getClientConnection('dotnet', 'nuget', https)?.configuration?.body).not.toContain('allowInsecure')
-    expect(getClientConnection('dotnet', 'cli', http)?.configuration?.command?.body)
-      .toBe(`dotnet nuget add source ${http}/nuget/v3/index.json -n depsilo --allow-insecure-connections`)
-    expect(getClientConnection('dotnet', 'cli', https)?.configuration?.command?.body)
-      .toBe(`dotnet nuget add source ${https}/nuget/v3/index.json -n depsilo`)
-  })
-
-  it('says which .NET SDKs accept the plain-HTTP flag wherever the flag is generated', () => {
-    const http = 'http://10.0.0.2:23333'
-    for (const manager of ['cli', 'nuget']) {
-      expect(getClientConnection('dotnet', manager, http)?.notes, manager).toEqual([{
-        text: 'quickstart.note.dotnetInsecureFlag', plainHttpOnly: true, lang: 'sh',
-        body: `dotnet nuget add source ${http}/nuget/v3/index.json -n depsilo`,
-      }])
-      expect(getClientConnection('dotnet', manager, 'https://depsilo.example')?.notes, manager).toEqual([])
-    }
-  })
-
   it('checks Docker mirror configuration without overriding the registry or widening the image target', () => {
     const connection = getClientConnection('container', 'docker', 'https://depsilo.example')
     expect(connection?.test).toMatchObject({

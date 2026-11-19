@@ -1,62 +1,37 @@
 import { test, expect, mockAdminApi, setUiPreferences, proProjectCapabilities } from './fixtures/admin-api'
 
-test('dialog traps focus and restores its trigger', async ({ page }) => {
+test('dialog traps focus, names its 40px close action with a tooltip, and restores its trigger', async ({ page }) => {
   await page.goto('/admin/users')
   const trigger = page.getByRole('button', { name: /添加用户/ })
   await trigger.click()
 
   const dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()
-  for (let index = 0; index < 12; index += 1) {
-    await page.keyboard.press('Tab')
-  }
-
-  await expect.poll(() => dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true)
-
   const closeButton = dialog.locator('[data-icon-button]:visible')
-  await closeButton.focus()
-  const tooltip = page.getByRole('tooltip', { name: '关闭', exact: true })
-  await expect(tooltip).toContainText(/关闭/)
-  await expect(tooltip).toHaveCSS('background-color', 'oklch(0.985 0 0)')
-  await expect(tooltip).toHaveCSS('color', 'oklch(0.145 0 0)')
-
-  await page.keyboard.press('Escape')
-  await expect(trigger).toBeFocused()
-})
-
-test('every visible icon action is named and at least 40px', async ({ page }) => {
-  await page.goto('/admin/users')
-  await page.getByRole('button', { name: /添加用户/ }).click()
-
-  const button = page.getByRole('dialog').locator('[data-icon-button]:visible')
-  await expect(button).toHaveCount(1)
-  await expect(button).toHaveAttribute('aria-label', /关闭/)
-
+  await expect(closeButton).toHaveCount(1)
+  await expect(closeButton).toHaveAttribute('aria-label', /关闭/)
   // The dialog zooms in on open, so measure once the entrance has settled.
-  await expect.poll(async () => (await button.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(40)
-  await expect.poll(async () => (await button.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(40)
+  await expect.poll(async () => (await closeButton.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(40)
+  await expect.poll(async () => (await closeButton.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(40)
 
-  await button.hover()
-  await expect(page.getByRole('tooltip', { name: '关闭', exact: true })).toContainText(/关闭/)
-})
-
-test('icon action exposes its tooltip on keyboard focus', async ({ page }) => {
-  await setUiPreferences(page, 'light', 'zh')
-  await page.goto('/admin/users')
-  await page.getByRole('button', { name: /添加用户/ }).click()
-
-  const dialog = page.getByRole('dialog')
-  const button = dialog.locator('[data-icon-button]:visible')
   // Opening a dialog schedules its initial focus. Begin reverse tabbing only
   // once the first field owns focus, rather than racing that handoff.
   await expect(dialog.getByRole('textbox', { name: '用户名', exact: true })).toBeFocused()
   await page.keyboard.press('Shift+Tab')
-
-  await expect(button).toBeFocused()
+  await expect(closeButton).toBeFocused()
   const tooltip = page.getByRole('tooltip', { name: '关闭', exact: true })
   await expect(tooltip).toContainText(/关闭/)
-  await expect(tooltip).toHaveCSS('background-color', 'oklch(0.145 0 0)')
-  await expect(tooltip).toHaveCSS('color', 'oklch(1 0 0)')
+
+  for (let index = 0; index < 12; index += 1) {
+    await page.keyboard.press('Tab')
+  }
+  await expect.poll(() => dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true)
+
+  await closeButton.hover()
+  await expect(tooltip).toContainText(/关闭/)
+
+  await page.keyboard.press('Escape')
+  await expect(trigger).toBeFocused()
 })
 
 test('user credential dialog explains the enforced password policy', async ({ page }) => {

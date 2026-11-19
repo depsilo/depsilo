@@ -1,12 +1,15 @@
 import { test, expect, mockAdminApi, setUiPreferences } from './fixtures/admin-api'
 
 test('a policy engine awaiting its first evaluation is informative, not an active issue', async ({ page }) => {
+  let fail = false
   await mockAdminApi(page, {
-    'GET /api/v1/admin/policy/status': {
-      status: 'unavailable', degraded: false, using_stale_snapshot: false,
-      snapshot_loaded_at: null, snapshot_age_seconds: 0, refresh_failures: 0,
-      on_load_error: 'use_stale_then_allow',
-    },
+    'GET /api/v1/admin/policy/status': () => fail
+      ? { status: 500, body: { code: 'FAILED', message: 'fixture policy read failed' } }
+      : {
+          status: 'unavailable', degraded: false, using_stale_snapshot: false,
+          snapshot_loaded_at: null, snapshot_age_seconds: 0, refresh_failures: 0,
+          on_load_error: 'use_stale_then_allow',
+        },
   })
   await setUiPreferences(page, 'light', 'zh')
   const policyResponse = page.waitForResponse(response => response.url().endsWith('/api/v1/admin/policy/status'))
@@ -25,6 +28,16 @@ test('a policy engine awaiting its first evaluation is informative, not an activ
   await expect(details.getByRole('button', { name: '刷新状态', exact: true })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(status).toBeFocused()
+
+  // A failed status refresh is unknown, not the idle state above.
+  fail = true
+  await page.getByRole('button', { name: '刷新', exact: true }).click()
+  await expect(status).toHaveText('状态未知')
+  await status.click()
+  await expect(details).toContainText('包规则健康状态刷新失败')
+  await expect(details).not.toContainText('包规则状态暂时不可用')
+  await page.keyboard.press('Escape')
+  fail = false
 
   await page.goto('/admin/rules')
   await expect(page.locator('[data-admin-policy-status-banner]')).toHaveCount(0)

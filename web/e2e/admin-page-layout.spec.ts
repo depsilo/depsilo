@@ -25,30 +25,6 @@ test('workspace navigation remains stable while readable content has a narrower 
   expect(fluidWidth).toBeGreaterThan(readableWidth)
 })
 
-test('workspace destinations are the page header tabs', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 1000 })
-  await page.goto('/admin/cache')
-
-  const header = page.locator('[data-admin-page-header]')
-  const localNavigation = header.locator('[data-admin-page-navigation="cache"]')
-  await expect(localNavigation).toBeVisible()
-  await expect(localNavigation.getByRole('link', { name: '缓存对象', exact: true })).toHaveAttribute('aria-current', 'page')
-  await expect(localNavigation.getByRole('link', { name: '索引缓存', exact: true })).toHaveAttribute('href', '/admin/indexes')
-  await expect(localNavigation.getByRole('link', { name: '编译缓存', exact: true })).toHaveAttribute('href', '/admin/compile-cache')
-
-  // The rail stands in for the page title, so the route heading stays in the
-  // accessibility tree without repeating the visible label.
-  const title = header.locator('[data-admin-page-title]')
-  await expect(title).toHaveText('缓存对象')
-  expect(await title.evaluate(element => element.getBoundingClientRect().width)).toBeLessThanOrEqual(2)
-  await expect(page.locator('[data-admin-page-content] [data-admin-page-navigation]')).toHaveCount(0)
-
-  // Switching destinations keeps the rail in the header and moves the current tab.
-  await localNavigation.getByRole('link', { name: '编译缓存', exact: true }).click()
-  await expect(page).toHaveURL(/\/admin\/compile-cache$/)
-  await expect(header.locator('[data-admin-page-navigation="cache"] a[aria-current="page"]')).toHaveText('编译缓存')
-})
-
 test('tab workspaces keep their own commands below the rail', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto('/admin/cache')
@@ -71,18 +47,6 @@ test('tab workspaces keep their own commands below the rail', async ({ page }) =
   })
   expect(geometry.actions.top).toBeGreaterThanOrEqual(geometry.rail.bottom)
   await expect(description).toBeVisible()
-})
-
-test('empty cache keeps the search controls close to the storage overview on mobile', async ({ page }) => {
-  await mockAdminApi(page)
-  await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto('/admin/cache')
-
-  await expect(page.getByRole('textbox', { name: '搜索缓存' })).toBeVisible()
-  await expect(page.getByText('暂无缓存数据', { exact: true })).toBeVisible()
-  const filters = await page.locator('[data-admin-filters]').boundingBox()
-  expect(filters?.y).toBeLessThan(750)
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
 })
 
 test('cache capacity uses its real quota and omits the meter when the quota is unknown', async ({ page }) => {

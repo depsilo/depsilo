@@ -125,11 +125,3 @@ test('request rows open a centered detail dialog that closes with Escape', async
   await expect(dialog).toHaveCount(0)
   await expect(row.getByRole('button').first()).toBeFocused()
 })
-
-test('Overview empty recent requests do not claim the instance has never been used', async ({ page }) => {
-  await page.goto('/admin')
-  const table = page.locator('[data-dashboard-recent-requests]')
-  await expect(table).toContainText('暂无可展示的请求记录')
-  await expect(table).not.toContainText('首次')
-  await expect(table.locator('[data-recent-request-id]')).toHaveCount(0)
-})

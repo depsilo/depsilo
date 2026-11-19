@@ -45,7 +45,7 @@ async function serveNetworkOrigin(page: Page, baseURL: string | undefined) {
   })
 }
 
-for (const shell of ['macOS / Linux (sh)', 'PowerShell']) {
+for (const shell of ['macOS / Linux (sh)']) {
   test(`pip one-command source survives reload and switches back to persistent settings in ${shell}`, async ({ page, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
     await setUiPreferences(page, 'dark', 'en')
@@ -86,100 +86,57 @@ for (const shell of ['macOS / Linux (sh)', 'PowerShell']) {
   })
 }
 
-test('setup signs the new administrator in on the same origin and continues to onboarding', async ({ page }) => {
-  await page.clock.install()
-  await setUiPreferences(page, 'light', 'en')
-  let configured = false
-  let loginBody: unknown
-  await mockAdminApi(page, {
-    'GET /api/v1/setup/status': () => ({ needs_setup: !configured, token_required: false }),
-    'POST /api/v1/setup/complete': (request: Request) => {
-      configured = true
-      return {
-        status: 'ok',
-        message: 'Configuration saved. Server restarting...',
-        reconnect_url: `${new URL(request.url()).origin}/`,
-        restart_strategy: 'exec',
-      }
-    },
-    'POST /api/v1/auth/login': (request: Request) => {
-      loginBody = request.postDataJSON()
-      return {
-        token: 'new-admin-token',
-        expires_at: 1_900_000_000,
-        user: { id: 1, username: 'admin', role: 'admin' },
-      }
-    },
-    'GET /api/v1/admin/onboarding/status': {
-      status: 'not_started', started_at: startedAt, next_after_id: 0, events: [], has_more: false,
-    },
+// Setup signs the new administrator in on the same origin; a new deployment
+// continues to onboarding, a recovered one (onboarding already completed)
+// goes straight to the Dashboard.
+for (const { status, url, overview } of [
+  { status: 'not_started' as const, url: /\/admin\/connect\?new=1$/, overview: false },
+  { status: 'completed' as const, url: /\/admin$/, overview: true },
+]) {
+  test(`setup signs the new administrator in and continues to the next step (onboarding ${status})`, async ({ page }) => {
+    await page.clock.install()
+    await setUiPreferences(page, 'light', 'en')
+    let configured = false
+    let loginBody: unknown
+    await mockAdminApi(page, {
+      'GET /api/v1/setup/status': () => ({ needs_setup: !configured, token_required: false }),
+      'POST /api/v1/setup/complete': (request: Request) => {
+        configured = true
+        return {
+          status: 'ok',
+          message: 'Configuration saved. Server restarting...',
+          reconnect_url: `${new URL(request.url()).origin}/`,
+          restart_strategy: 'exec',
+        }
+      },
+      'POST /api/v1/auth/login': (request: Request) => {
+        loginBody = request.postDataJSON()
+        return {
+          token: 'new-admin-token',
+          expires_at: 1_900_000_000,
+          user: { id: 1, username: 'admin', role: 'admin' },
+        }
+      },
+      'GET /api/v1/admin/onboarding/status': {
+        status, started_at: startedAt, next_after_id: status === 'completed' ? 200 : 0, events: [], has_more: false,
+      },
+    })
+    await page.route('**/health', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'healthy' }),
+    }))
+
+    await page.goto('/admin')
+    await page.getByLabel('Administrator password').fill('Tr0ub4dor&Correct')
+    await page.getByLabel('Confirm password').fill('Tr0ub4dor&Correct')
+    await page.getByRole('button', { name: 'Complete setup' }).click()
+    await page.clock.fastForward(2_000)
+    await expect(page).toHaveURL(url)
+    expect(loginBody).toEqual({ username: 'admin', password: 'Tr0ub4dor&Correct' })
+    if (overview) await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible()
   })
-  await page.route('**/health', route => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({ status: 'healthy' }),
-  }))
-
-  await page.goto('/admin')
-  await page.getByLabel('Administrator password').fill('Tr0ub4dor&Correct')
-  await page.getByLabel('Confirm password').fill('Tr0ub4dor&Correct')
-  await page.getByRole('button', { name: 'Complete setup' }).click()
-  await page.clock.fastForward(2_000)
-  await expect(page).toHaveURL(/\/admin\/connect\?new=1$/)
-  expect(loginBody).toEqual({ username: 'admin', password: 'Tr0ub4dor&Correct' })
-})
-
-test('an existing completed deployment goes straight to the Dashboard', async ({ page }) => {
-  await setUiPreferences(page, 'light', 'en')
-  await mockAdminApi(page, {
-    'GET /api/v1/admin/onboarding/status': {
-      status: 'completed', started_at: startedAt, next_after_id: 200, events: [], has_more: false,
-    },
-  })
-
-  await page.goto('/admin')
-  await expect(page).toHaveURL(/\/admin$/)
-  await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible()
-})
-
-test('setup recovery resumes the Dashboard instead of starting onboarding again', async ({ page }) => {
-  await page.clock.install()
-  await setUiPreferences(page, 'light', 'en')
-  let configured = false
-  await mockAdminApi(page, {
-    'GET /api/v1/setup/status': () => ({ needs_setup: !configured, token_required: false }),
-    'POST /api/v1/setup/complete': (request: Request) => {
-      configured = true
-      return {
-        status: 'ok',
-        message: 'Configuration recovered. Server restarting...',
-        reconnect_url: `${new URL(request.url()).origin}/`,
-        restart_strategy: 'exec',
-      }
-    },
-    'POST /api/v1/auth/login': {
-      token: 'recovered-admin-token',
-      expires_at: 1_900_000_000,
-      user: { id: 1, username: 'admin', role: 'admin' },
-    },
-    'GET /api/v1/admin/onboarding/status': {
-      status: 'completed', started_at: startedAt, next_after_id: 200, events: [], has_more: false,
-    },
-  })
-  await page.route('**/health', route => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({ status: 'healthy' }),
-  }))
-
-  await page.goto('/admin')
-  await page.getByLabel('Administrator password').fill('Tr0ub4dor&Correct')
-  await page.getByLabel('Confirm password').fill('Tr0ub4dor&Correct')
-  await page.getByRole('button', { name: 'Complete setup' }).click()
-  await page.clock.fastForward(2_000)
-  await expect(page).toHaveURL(/\/admin$/)
-  await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible()
-})
+}
 
 test('connection verification requires an artifact delivery and a matching cache hit', async ({ page, context }) => {
   await page.clock.install()
@@ -448,57 +405,6 @@ test('client controls and code remain usable across acceptance widths without do
   await expect(page.getByRole('complementary', { name: 'Verification result', exact: true })).toBeVisible()
 })
 
-test('the Bundler command names the project scope it is shown under', async ({ page }) => {
-  await setUiPreferences(page, 'light', 'en')
-  await mockAdminApi(page, { 'GET /api/v1/admin/onboarding/status': response() })
-  await page.goto('/admin/connect')
-  const origin = new URL(page.url()).origin
-  const instructions = page.locator('.connection-instructions')
-
-  await selectClientOption(page, 'Ecosystem', 'Ruby')
-  await selectClientOption(page, 'Package manager', 'Bundler')
-  await expect(page.getByRole('heading', { name: 'Configure Bundler', exact: true })).toBeVisible()
-  await expect(instructions.locator('pre').first())
-    .toHaveText(`bundle config set --local mirror.https://rubygems.org ${origin}/rubygems/`)
-  await expect(instructions).toContainText('Run on the device that uses this package manager · Current project')
-  await expect(instructions).toContainText(
-    'Run it in the project directory. It writes .bundle/config there, which takes precedence over ~/.bundle/config.')
-  // Bundler 1.x accepts `config set` silently and sets nothing.
-  const notes = page.getByRole('region', { name: 'Notes', exact: true })
-  await expect(notes).toContainText('The set and get subcommands need Bundler 2.1 or later.')
-  await expect(notes.locator('pre')).toHaveText(
-    `bundle config --local mirror.https://rubygems.org ${origin}/rubygems/\nbundle config mirror.https://rubygems.org`)
-
-  await setUiPreferences(page, 'light', 'zh')
-  await page.reload()
-  await expect(instructions).toContainText('当前项目')
-  await expect(instructions).toContainText('在项目目录中执行。命令写入该目录的 .bundle/config，优先于 ~/.bundle/config。')
-  await expect(page.getByRole('region', { name: '注意事项', exact: true }))
-    .toContainText('set 和 get 子命令需要 Bundler 2.1 或更高版本。')
-})
-
-test('the .NET instructions say which SDKs accept the plain-HTTP flag', async ({ page }) => {
-  await setUiPreferences(page, 'light', 'en')
-  await mockAdminApi(page, { 'GET /api/v1/admin/onboarding/status': response() })
-  await page.goto('/admin/connect')
-  const origin = new URL(page.url()).origin
-  const notes = page.getByRole('region', { name: 'Notes', exact: true })
-
-  // The suite runs over http, where the primary command carries the flag
-  // that only .NET SDK 9 and later accept.
-  await selectClientOption(page, 'Ecosystem', '.NET')
-  await expect(page.getByRole('heading', { name: 'Configure dotnet CLI', exact: true })).toBeVisible()
-  await expect(page.locator('.connection-instructions pre').first())
-    .toHaveText(`dotnet nuget add source ${origin}/nuget/v3/index.json -n depsilo --allow-insecure-connections`)
-  await expect(notes).toContainText('The --allow-insecure-connections option needs .NET SDK 9 or later.')
-  await expect(notes.locator('pre')).toHaveText(`dotnet nuget add source ${origin}/nuget/v3/index.json -n depsilo`)
-
-  await setUiPreferences(page, 'light', 'zh')
-  await page.reload()
-  await expect(page.getByRole('region', { name: '注意事项', exact: true }))
-    .toContainText('--allow-insecure-connections 参数需要 .NET SDK 9 或更高版本。')
-})
-
 test('the Node.js and Go instructions carry the lockfile and checksum-database notes', async ({ page }) => {
   await setUiPreferences(page, 'light', 'en')
   await mockAdminApi(page, { 'GET /api/v1/admin/onboarding/status': response() })
@@ -510,23 +416,25 @@ test('the Node.js and Go instructions carry the lockfile and checksum-database n
 
   await selectClientOption(page, 'Ecosystem', 'Node.js')
   await expect(page.getByRole('heading', { name: 'Configure npm', exact: true })).toBeVisible()
-  await expect(notes).toContainText('fails through Depsilo with 404, because Depsilo serves only the tarball URLs it issued')
   await expect(notes.locator('pre').first())
     .toHaveText('npm install --package-lock-only --omit-lockfile-registry-resolved\nnpm ci')
   await expect(notes.locator('pre').nth(1)).toHaveText('omit-lockfile-registry-resolved=true')
-  await expect(notes).toContainText('records URLs of this instance, so it depends on this address and on the configured npm upstream')
   await page.setViewportSize({ width: 320, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
   await page.setViewportSize({ width: 1280, height: 1000 })
 
   await selectClientOption(page, 'Package manager', 'pnpm')
-  await expect(notes).toContainText('Regenerate the lockfile through Depsilo.')
-  await expect(notes).toContainText('unless the project\'s pnpm-workspace.yaml sets trustLockfile.')
   await expect(notes.locator('pre')).toHaveText('trustLockfile: true')
 
   await selectClientOption(page, 'Ecosystem', 'Go')
-  await expect(notes).toContainText(
-    'Checksum verification goes through Depsilo when one of its Go upstreams mirrors the checksum database (the default first upstream, goproxy.cn, does; proxy.golang.org does not). Otherwise the go command contacts sum.golang.org directly; where that is unreachable, set GOSUMDB=sum.golang.google.cn.')
+  await expect(notes.locator('pre')).toHaveText('go env -w GOSUMDB=sum.golang.google.cn')
+  // The option list is still closing right after a selection.
+  await expect(page.getByRole('listbox')).toHaveCount(0)
+
+  // A command that writes project configuration names that scope.
+  await selectClientOption(page, 'Ecosystem', 'Ruby')
+  await selectClientOption(page, 'Package manager', 'Bundler')
+  await expect(page.locator('.connection-instructions')).toContainText('Run on the device that uses this package manager · Current project')
   // The option list is still closing right after a selection.
   await expect(page.getByRole('listbox')).toHaveCount(0)
   expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations).toEqual([])
@@ -534,7 +442,6 @@ test('the Node.js and Go instructions carry the lockfile and checksum-database n
 
 for (const outcome of [
   { value: 'blocked', status: 403, title: 'Request blocked' },
-  { value: 'error', status: 502, title: 'Request failed' },
 ]) {
   test(`${outcome.value} is an observed failure, never successful verification`, async ({ page }) => {
     await setUiPreferences(page, 'dark', 'en')

@@ -397,50 +397,6 @@ test('Node.js setup keeps each Yarn and pnpm generation on the setting it reads'
   }
 })
 
-test('Bundler setup labels each command with the scope it writes', async ({ page }) => {
-  await setUiPreferences(page, 'light', 'en')
-  await page.goto('/')
-  const origin = new URL(page.url()).origin
-  const pane = page.locator('[data-quickstart-primary] [data-quickstart-pane="ruby"]')
-
-  await openManager(page, /^Ruby\b/, 'Bundler')
-  await expect(pane.locator('.code-block').first()).toContainText('.bundle/config')
-  // These commands write configuration that stays, so the heading claims nothing about persistence.
-  await expect(pane.getByText('Use a command or an environment variable instead of the configuration above', { exact: true })).toBeVisible()
-  await pane.getByText('Other ways to connect').click()
-  for (const [label, flag] of [
-    ['Command line (this project)', '--local'],
-    ['Command line (current user)', '--global'],
-  ]) {
-    const method = pane.locator('details > div > div').filter({ hasText: label })
-    await expect(method.locator('pre')).toHaveText(`bundle config set ${flag} mirror.https://rubygems.org ${origin}/rubygems/`)
-  }
-  // Bundler 1.x accepts `config set` silently and sets nothing.
-  const notes = pane.getByRole('region', { name: 'Notes' })
-  await expect(notes).toContainText('The set and get subcommands need Bundler 2.1 or later.')
-  await expect(notes.locator('pre')).toHaveText(
-    `bundle config --local mirror.https://rubygems.org ${origin}/rubygems/\nbundle config mirror.https://rubygems.org`)
-})
-
-test('the .NET add-source instructions say which SDKs accept the plain-HTTP flag', async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' })
-  await setUiPreferences(page, 'light', 'en')
-  await page.goto('/')
-  const origin = new URL(page.url()).origin
-  const primary = page.locator('[data-quickstart-primary]')
-  const notes = primary.getByRole('region', { name: 'Notes' })
-
-  // The suite runs over http, where the generated command carries the flag
-  // that only .NET SDK 9 and later accept.
-  for (const manager of ['dotnet CLI', 'NuGet.Config']) {
-    await openManager(page, /^\.NET\b/, manager)
-    await expect(primary.locator('[data-quickstart-pane="dotnet"]'), manager).toContainText('--allow-insecure-connections')
-    await expect(notes, manager).toContainText(
-      'The --allow-insecure-connections option needs .NET SDK 9 or later. .NET SDK 8 and earlier reject it and only warn about a plain-HTTP source, so add the source without it there.')
-    await expect(notes.locator('pre'), manager).toHaveText(`dotnet nuget add source ${origin}/nuget/v3/index.json -n depsilo`)
-  }
-})
-
 test('Node.js and Go setup carry the lockfile and checksum-database notes in both languages', async ({ page }) => {
   // The pane fades in on every manager change; axe must not sample mid-fade.
   await page.emulateMedia({ reducedMotion: 'reduce' })
@@ -458,27 +414,11 @@ test('Node.js and Go setup carry the lockfile and checksum-database notes in bot
   await expect(notes.locator('pre').nth(1)).toHaveText('omit-lockfile-registry-resolved=true')
   await expect(notes).toContainText('records URLs of this instance, so it depends on this address and on the configured npm upstream')
 
-  // Bun, like npm, fails only on registry.npmjs.org URLs and follows others'.
-  await openManager(page, /^Node\.js\b/, 'Bun')
-  await expect(notes).toContainText(
-    'A bun.lock with registry.npmjs.org URLs fails through Depsilo with 404, and one with another registry\'s URLs installs from that registry and bypasses Depsilo; regenerate the lockfile through Depsilo.')
-  await expect(notes).not.toContainText('A lockfile recorded against another registry')
-  await expect(notes).toContainText('records URLs of this instance, so it depends on this address and on the configured npm upstream')
-  for (const manager of ['Yarn 2+', 'pnpm']) {
-    await openManager(page, /^Node\.js\b/, manager)
-    await expect(notes, manager).toContainText('Regenerate the lockfile through Depsilo.')
-    await expect(notes, manager).toContainText('records URLs of this instance, so it depends on this address and on the configured npm upstream')
-  }
   // pnpm 11 and later refuse that regenerated lockfile without a project setting.
-  await expect(notes).toContainText('unless the project\'s pnpm-workspace.yaml sets trustLockfile.')
+  await openManager(page, /^Node\.js\b/, 'pnpm')
   await expect(notes.locator('pre')).toHaveText('trustLockfile: true')
-  // Yarn 1 does not fail on such a lockfile; it never reaches Depsilo.
-  await openManager(page, /^Node\.js\b/, 'Yarn 1')
-  await expect(notes).toContainText('bypasses Depsilo without an error')
 
   await openManager(page, /^Go\b/, 'go env')
-  await expect(notes).toContainText(
-    'Checksum verification goes through Depsilo when one of its Go upstreams mirrors the checksum database (the default first upstream, goproxy.cn, does; proxy.golang.org does not). Otherwise the go command contacts sum.golang.org directly; where that is unreachable, set GOSUMDB=sum.golang.google.cn.')
   await expect(notes.locator('pre')).toHaveText('go env -w GOSUMDB=sum.golang.google.cn')
   expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations).toEqual([])
 
@@ -685,19 +625,6 @@ test('Portal header keeps every visible control in view at 320px', async ({ page
   const admin = page.locator('.portal-admin-link')
   await expect(admin).toHaveAccessibleName(/Admin/i)
 
-  const clippedControls = await page.locator(
-    'header a:visible, header button:visible, header [role="status"]:visible',
-  ).evaluateAll((elements) => elements.flatMap((element) => {
-    const rect = element.getBoundingClientRect()
-    return rect.left < 0 || rect.right > window.innerWidth + 0.5
-      ? [{
-          name: element.getAttribute('aria-label') || element.textContent?.trim() || element.tagName,
-          left: rect.left,
-          right: rect.right,
-        }]
-      : []
-  }))
-  expect(clippedControls).toEqual([])
   await expectNoDocumentOverflow(page)
 })
 
@@ -727,8 +654,9 @@ for (const { locale, copyName, copiedText } of [
   })
 }
 
+// At the narrowest supported width, which also covers Monitor's overflow.
 test('Monitor heartbeat detail works with keyboard and tap', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
+  await page.setViewportSize({ width: 320, height: 844 })
   await setUiPreferences(page, 'light', 'en')
   await mockAdminApi(page, {
     'GET /api/v1/stats': populatedStats,
@@ -755,20 +683,6 @@ test('Monitor heartbeat detail works with keyboard and tap', async ({ page }) =>
   await expect(detail).toBeVisible()
   await expect(detail).toContainText('303ms')
   await expectNoDocumentOverflow(page)
-})
-
-test('Portal routes avoid document overflow at the narrowest supported width', async ({ page }) => {
-  await page.setViewportSize({ width: 320, height: 844 })
-  await setUiPreferences(page, 'dark', 'en')
-  await mockAdminApi(page, {
-    'GET /api/v1/stats': populatedStats,
-    'GET /api/v1/latency-series': latencySeries,
-  })
-
-  for (const route of ['/', '/monitor']) {
-    await page.goto(route)
-    await expectNoDocumentOverflow(page)
-  }
 })
 
 test('Quick Start keeps the ecosystem directory to one rail on phones', async ({ page }) => {

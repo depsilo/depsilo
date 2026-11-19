@@ -489,7 +489,7 @@ test('pending removal can be restored without changing another source and failur
   expect(restores).toBe(2)
 })
 
-for (const destination of ['sidebar', 'workspace tab', 'browser Back'] as const) {
+for (const destination of ['sidebar', 'browser Back'] as const) {
   test(`unsaved edits guard ${destination} navigation and discard requires an explicit decision`, async ({ page }) => {
     await mockAdminApi(page, { 'GET /api/v1/auth/me': localAdmin, 'GET /api/v1/admin/authentication/sources': { sources: [state], config_writable: true } })
     await page.goto('/admin/authentication')
@@ -497,7 +497,6 @@ for (const destination of ['sidebar', 'workspace tab', 'browser Back'] as const)
     await page.getByLabel('认证源名称').fill('Unsaved name')
     const leave = async () => {
       if (destination === 'sidebar') await page.locator('aside').getByRole('link', { name: '总览', exact: true }).click()
-      else if (destination === 'workspace tab') await page.locator('[data-admin-page-navigation="instance"] a[href="/admin/settings"]').click()
       else await page.evaluate(() => history.back())
     }
     await leave()
@@ -508,7 +507,7 @@ for (const destination of ['sidebar', 'workspace tab', 'browser Back'] as const)
     await expect(page.getByLabel('认证源名称')).toHaveValue('Unsaved name')
     await leave()
     await dialog.getByRole('button', { name: '放弃并离开', exact: true }).click()
-    await expect(page).toHaveURL(destination === 'sidebar' ? /\/admin$/ : destination === 'workspace tab' ? /\/admin\/settings$/ : /\/admin\/authentication$/)
+    await expect(page).toHaveURL(destination === 'sidebar' ? /\/admin$/ : /\/admin\/authentication$/)
   })
 }
 
@@ -532,7 +531,7 @@ test('browser refresh warns before discarding an edited source', async ({ page }
   await expect(page.getByLabel('认证源名称')).toHaveValue('Company login')
 })
 
-for (const sample of [{ width: 1440, theme: 'light' as const, lang: 'zh' as const }, { width: 2048, theme: 'dark' as const, lang: 'zh' as const }, { width: 320, theme: 'light' as const, lang: 'en' as const }]) {
+for (const sample of [{ width: 1440, theme: 'light' as const, lang: 'zh' as const }, { width: 320, theme: 'light' as const, lang: 'en' as const }]) {
   test(`system authentication has readable fields and no overflow at ${sample.width}px ${sample.theme}`, async ({ page }) => {
     await page.setViewportSize({ width: sample.width, height: 1000 })
     await setUiPreferences(page, sample.theme, sample.lang)

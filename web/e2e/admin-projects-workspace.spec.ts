@@ -130,6 +130,13 @@ for (const state of initialStates) {
 
     await expectStableProjectsPage(page)
     await expect(page.getByText(state.content)).toBeVisible()
+    if (state.name === 'failed') {
+      // A failure stays recoverable and never invents a free allowance.
+      await expect(page.getByRole('button', { name: /重试|Retry/ })).toBeVisible()
+      await expect(page.getByRole('button', { name: /创建项目|Create Project/ })).toHaveCount(0)
+      await expect(page.locator('[data-project-capacity]')).toHaveCount(0)
+      await expect(page.getByText(/暂无项目|no projects/i)).toHaveCount(0)
+    }
   })
 }
 

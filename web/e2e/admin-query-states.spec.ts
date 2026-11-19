@@ -28,11 +28,11 @@ const populatedDistribution = {
   top_packages: [{ name: 'requests', size: 1024, type: 'pypi', hit_count: 2 }],
 }
 
-// Query-state rendering is owned by shared page primitives. Exercise one
-// simple page and the two composed pages whose sibling queries must survive;
+// Query-state rendering is owned by shared page primitives. Exercise the two
+// composed pages whose sibling queries must survive (the Overview has its
+// own recovery test in admin-dashboard-states.spec.ts);
 // page-specific behavior remains covered by each workspace spec.
 const recoveryQueries: readonly QueryCase[] = [
-  { path: '/admin', endpoint: 'GET /api/v1/admin/dashboard', success: adminApiDefaults['GET /api/v1/admin/dashboard'] },
   { path: '/admin/cache', endpoint: 'GET /api/v1/admin/cache', success: adminApiDefaults['GET /api/v1/admin/cache'], siblings: { 'GET /api/v1/admin/cache/distribution': populatedDistribution } },
   { path: '/admin/users', endpoint: 'GET /api/v1/admin/users', success: adminApiDefaults['GET /api/v1/admin/users'], siblings: { 'GET /api/v1/admin/tokens': [populatedToken] } },
 ]
@@ -90,19 +90,6 @@ for (const query of permissionQueries) {
     await expect(page.getByText(/暂无|没有数据|暂无数据/)).toHaveCount(0)
   })
 }
-
-test('Projects list failures remain recoverable instead of inventing a free allowance', async ({ page }) => {
-  await mockAdminApi(page, {
-    'GET /api/v1/admin/projects': { status: 503, body: { code: 'PROJECTS_UNAVAILABLE', message: 'fixture project limits unavailable' } },
-  })
-  await page.goto('/admin/projects')
-  await expect(page.getByRole('alert')).toContainText('fixture project limits unavailable')
-  await expect(page.getByRole('button', { name: /重试|Retry/ })).toBeVisible()
-  await expect(page.getByRole('button', { name: /创建项目|Create Project/ })).toHaveCount(0)
-  await expect(page.locator('[data-project-capacity]')).toHaveCount(0)
-  await expect(page.getByText(/暂无项目|no projects/i)).toHaveCount(0)
-  await expect(page.getByText(/权限不足|permission denied/i)).toHaveCount(0)
-})
 
 async function refocus(page: Page) {
   const other = await page.context().newPage()
@@ -186,54 +173,6 @@ function trendPoints(count: number, requestBase: number, bucketStep: number) {
     }
   })
 }
-
-test('Overview keeps the previous trend while an uncached range loads', async ({ page }) => {
-  const initialPoints = trendPoints(4, 12, 10)
-  const nextPoints = trendPoints(6, 24, 2 * 60 * 60)
-  const requestStarted = deferred<void>()
-  const response = deferred<{ points: typeof nextPoints }>()
-  await mockAdminApi(page, {
-    'GET /api/v1/admin/dashboard/trends': (request: Request) => {
-      const range = new URL(request.url()).searchParams.get('range')
-      if (range !== '1h') return { points: initialPoints }
-      requestStarted.resolve()
-      return response.promise
-    },
-  })
-
-  await page.goto('/admin')
-  const trends = page.locator('[data-query-key="dashboard-trends"]')
-  const chart = trends.locator('[data-trend-chart]')
-  const ranges = page.getByRole('group', { name: '统计周期' })
-  const nextRange = ranges.getByRole('button', { name: '1 小时' })
-  await expect(chart).toBeVisible()
-  await expect(trends).toHaveAttribute('data-trend-range', '30d')
-  // Four 10-second buckets fall inside one clock-aligned minute: 12+13+14+15.
-  await expect.poll(() => activityBarRequests(trends)).toEqual([54])
-  await nextRange.click()
-  await requestStarted.promise
-
-  // The previous range's bars stay mounted and tagged with their own range
-  // while the new range loads, and the card says so instead of passing the
-  // old period off as the selected one.
-  await expect(chart).toBeVisible()
-  await expect(trends).toHaveAttribute('data-trend-range', '30d')
-  await expect(trends).toHaveAttribute('data-trend-pending', 'true')
-  await expect(trends).toHaveAttribute('aria-busy', 'true')
-  await expect(nextRange).toHaveAttribute('aria-pressed', 'true')
-  expect(await activityBarRequests(trends)).toEqual([54])
-  await expect(trends.getByRole('status').filter({ hasText: '正在切换统计周期，当前仍显示上一周期的数据。' })).toBeVisible()
-  await expect(trends.getByRole('status', { name: '正在加载统计' })).toHaveCount(0)
-
-  response.resolve({ points: nextPoints })
-  await expect(trends).toHaveAttribute('data-trend-range', '1h')
-  await expect(trends).not.toHaveAttribute('data-trend-pending', 'true')
-  await expect(trends).not.toHaveAttribute('aria-busy', 'true')
-  await expect(chart).toBeVisible()
-  // Six 2-hour buckets are six bars, one per bucket.
-  await expect.poll(() => activityBarRequests(trends)).toEqual([24, 25, 26, 27, 28, 29])
-  await expect(trends).not.toContainText('正在切换统计周期')
-})
 
 test('Overview keeps the previous trend and warns when an uncached range fails', async ({ page }) => {
   const initialPoints = trendPoints(4, 12, 10)
@@ -383,22 +322,6 @@ test('Blocklist overrides stay visible when status initially returns 500', async
   await page.getByRole('combobox', { name: /拦截视图|Blocking view/ }).selectOption('blocklist')
   await expect(page.getByRole('table').getByText('false-positive')).toBeVisible()
   await expect(page.getByRole('alert')).toContainText('fixture status failure')
-})
-
-test('Dashboard snapshot failure keeps independent live and analytics regions mounted', async ({ page }) => {
-  await mockAdminApi(page, {
-    'GET /api/v1/admin/dashboard': {
-      status: 500,
-      body: { code: 'FAILED', message: 'fixture dashboard snapshot failure' },
-    },
-  })
-  await page.goto('/admin')
-
-  await expect(page.getByRole('alert').filter({ hasText: '统计暂不可用' })).toBeVisible()
-  await expect(page.locator('[data-query-key="now"]')).toBeVisible()
-  await expect(page.locator('[data-dashboard-recent-requests]')).toBeVisible()
-  await expect(page.locator('[data-query-key="dashboard-trends"]')).toBeVisible()
-  await expect(page.getByRole('heading', { name: /性能快照|Performance snapshot/ })).toHaveCount(0)
 })
 
 const projectSummary = {

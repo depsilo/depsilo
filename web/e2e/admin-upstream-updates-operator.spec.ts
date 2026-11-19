@@ -323,3 +323,38 @@ test('pauses automatic refresh and preserves older pages until manual recovery s
     .getByRole('button', { name: 'Refresh', exact: true })).toBeVisible()
   await expect(page.locator('[data-upstream-updates-summary]')).toContainText(/auto.*refresh.*30 seconds/i)
 })
+
+test('keeps loaded history visible when the next cursor page fails', async ({ page }) => {
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/upstream-updates': async (request: Request) => {
+      const cursor = new URL(request.url()).searchParams.get('cursor')
+      if (cursor !== null) {
+        return { status: 500, body: { code: 'FAILED', message: 'fixture next-page failure' } }
+      }
+      return {
+        items: [{
+          id: 1,
+          ecosystem: 'pypi',
+          upstream: 'pypi.org',
+          package: 'requests',
+          result: 'unchanged',
+          detail: 'upstream metadata not modified',
+          latency_ms: 45,
+          occurrence_count: 1,
+          first_seen_at: '2026-07-17T08:00:00Z',
+          last_seen_at: '2026-07-17T08:00:00Z',
+          created_at: '2026-07-17T08:00:00Z',
+        }],
+        total: 2,
+        next_cursor: 'page-2',
+      }
+    },
+  })
+
+  await page.goto('/admin/upstream-updates')
+  await page.getByRole('button', { name: '加载更多' }).click()
+
+  await expect(page.getByRole('alert')).toHaveText('加载后续记录失败，请重试“加载更多”。')
+  await expect(page.getByRole('cell', { name: 'requests', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '加载更多' })).toBeEnabled()
+})

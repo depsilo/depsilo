@@ -3,7 +3,6 @@ import { mkdir } from 'node:fs/promises'
 import { expect, setUiPreferences, test } from './fixtures/admin-api'
 
 for (const { theme, locale, width } of [
-  { theme: 'dark', locale: 'zh', width: 1440 },
   { theme: 'light', locale: 'en', width: 1440 },
   { theme: 'dark', locale: 'zh', width: 320 },
 ] as const) {

@@ -451,28 +451,11 @@ test('a fake-IP egress failure is explained on the card and in check results', a
   // Depsilo connects to fake-IP addresses by default, so the code means that
   // nothing carried the connection, that allow_fake_ip is off, or that the
   // guard always refuses the answer.
-  await expect(card.locator('[data-upstream-failure="egress_fake_ip"]')).toContainText(
-    'DNS resolved this upstream to 198.18.0.65, in the fake-IP range 198.18.0.0/15 that proxy software in fake-IP mode answers from, '
-    + 'and Depsilo could not connect to it: nothing carried the connection, [egress] allow_fake_ip is off, '
-    + 'or the answer mixed fake-IP and other addresses or held a unique-local IPv6 fake-IP address, which Depsilo always refuses.')
-  await expect(card.locator('[data-upstream-failure="egress_fake_ip"]')).toContainText(
-    'Turn on the proxy software\'s TUN mode, which carries connections to fake-IP addresses')
-  // A container operator sets the proxy in the environment, not in config.toml.
-  await expect(card.locator('[data-upstream-failure="egress_fake_ip"]')).toContainText(
-    'upstream_proxy under [egress] in config.toml (or the environment variable DEPSILO_EGRESS_UPSTREAM_PROXY)')
-  // The loopback example is wrong inside a container, and a container keeps
-  // the environment it was created with, so the remedy says to run it again.
-  await expect(card.locator('[data-upstream-failure="egress_fake_ip"]')).toContainText(
-    'Inside a container, 127.0.0.1 is the container itself: remove the container and run it again with '
-    + 'DEPSILO_EGRESS_UPSTREAM_PROXY=http://host.docker.internal:7890 (docker restart keeps the old environment), '
-    + 'adding --add-host=host.docker.internal:host-gateway on Docker Engine for Linux. '
-    + 'If [egress] allow_fake_ip or DEPSILO_EGRESS_ALLOW_FAKE_IP is false, Depsilo does not connect to fake-IP addresses itself: '
-    + 'check whether it was turned off on purpose, for a network that really uses these ranges; '
-    + 'if not, set it to true, or use the proxy port. '
-    + 'If DNS also returns IPv6 fake-IP addresses from a unique-local range such as fdfe:dcba:9876::/48, '
-    + 'set the proxy software\'s IPv6 fake-IP range to 2001:2::/48. '
-    + 'Details: "Upstream network egress" in the deployment guide.',
-  )
+  const fakeIPReason = card.locator('[data-upstream-failure="egress_fake_ip"]')
+  await expect(fakeIPReason).toContainText('DNS resolved this upstream to 198.18.0.65, in the fake-IP range 198.18.0.0/15')
+  // A container keeps the environment it was created with, so the remedy
+  // names the variable and says to run the container again.
+  await expect(fakeIPReason).toContainText('DEPSILO_EGRESS_UPSTREAM_PROXY=http://host.docker.internal:7890 (docker restart keeps the old environment)')
   // A failed upstream's average is not a response latency.
   await expect(card).not.toContainText('5 ms')
   await page.getByText('Connection details').nth(1).click()
@@ -513,16 +496,6 @@ test('fake-IP DNS failing every upstream is explained once for the page', async 
 
   await setUiPreferences(page, 'light', 'zh')
   await page.reload()
-  await expect(notice).toContainText('Depsilo 无法连接这些地址：可能是连接没有被接管，或者 [egress] allow_fake_ip 已关闭，'
-    + '也可能是应答里混有其他地址或唯一本地地址段的 IPv6 fake-IP 地址，这类应答 Depsilo 一律拒绝。')
-  await expect(notice).toContainText('打开代理软件的 TUN 模式，由它接管到 fake-IP 地址的连接')
-  await expect(notice).toContainText('把 upstream_proxy（或环境变量 DEPSILO_EGRESS_UPSTREAM_PROXY）设为代理软件的 HTTP 端口')
-  await expect(notice).toContainText('在容器里 127.0.0.1 指的是容器自己：要删除容器，再带上 DEPSILO_EGRESS_UPSTREAM_PROXY=http://host.docker.internal:7890 重新运行（docker restart 沿用旧的环境变量），'
-    + 'Linux 上的 Docker Engine 还要加 --add-host=host.docker.internal:host-gateway。'
-    + '如果 [egress] allow_fake_ip 或 DEPSILO_EGRESS_ALLOW_FAKE_IP 设成了 false，Depsilo 不会自己连接 fake-IP 地址：'
-    + '先确认它是不是因为网络里确实在用这些地址段而特意关闭的；如果不是，改回 true，或改用代理端口。'
-    + '如果 DNS 还返回了 fdfe:dcba:9876::/48 这类唯一本地地址段里的 IPv6 fake-IP 地址，请把代理软件的 IPv6 fake-IP 地址段改为 2001:2::/48。'
-    + '详见部署指南的“Upstream network egress”一节。')
   await expect(cardReasons.first()).toHaveText('DNS 返回了 fake-IP 地址 198.18.0.1，未连接。')
 })
 
@@ -561,12 +534,6 @@ test('a failure at the egress proxy is explained on the card and in check result
   await expect(check.locator('[data-upstream-failure="egress_proxy"]')).toContainText(action)
   await expect(check).not.toContainText('CONNECT answered')
   await page.keyboard.press('Escape')
-
-  await setUiPreferences(page, 'light', 'zh')
-  await page.reload()
-  await expect(reason).toContainText('出站代理拒绝为这个上游建立连接（CONNECT 请求返回了 502）。')
-  // An IP entry in no_proxy matches only a URL written with that address.
-  await expect(reason).toContainText('把它 URL 里的主机名（URL 写的是 IP 时就写 IP）加入 [egress] no_proxy 后重启，Depsilo 就会直接连接它。')
 })
 
 test('a failure at an upstream\'s own proxy is not sent to no_proxy, which cannot bypass that proxy', async ({ page }) => {

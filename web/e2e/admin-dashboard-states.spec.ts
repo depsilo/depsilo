@@ -325,6 +325,10 @@ test('Overview statistics failure stays distinct from zero and can recover', asy
   // Tiles print figure and unit as separate spans, so match "0B" as well.
   await expect(statistics).not.toContainText(/\b0\s*B\b/)
   await expect(statistics.locator('[data-tile-value]')).toHaveCount(0)
+  // The independent live and analytics regions stay mounted.
+  await expect(page.locator('[data-query-key="now"]')).toBeVisible()
+  await expect(page.locator('[data-dashboard-recent-requests]')).toBeVisible()
+  await expect(page.locator('[data-query-key="dashboard-trends"]')).toBeVisible()
   unavailable = false
   await statistics.getByRole('button', { name: /重试/ }).click()
   await expect(page.locator('[data-dashboard-benefits]')).toContainText('92.0%')
@@ -494,6 +498,9 @@ test('Overview opens grouped upstream checks in one click without repeating bann
   await expect(chart.locator('[data-trend-chart]')).toContainText('这段时间没有请求')
   await expect(chart.locator('.dash-chart-col[data-requests]:not([data-requests="0"])')).toHaveCount(0)
   await expect(recent).toContainText('暂无可展示的请求记录')
+  // An empty list does not claim the instance has never been used.
+  await expect(recent).not.toContainText('首次')
+  await expect(recent.locator('[data-recent-request-id]')).toHaveCount(0)
   await expect(recent).toHaveAttribute('data-dashboard-recent-empty', 'true')
   const [chartBox, recentBox] = await Promise.all([chart.boundingBox(), recent.boundingBox()])
   expect(chartBox!.height).toBeLessThan(240)
@@ -590,25 +597,6 @@ test('Overview preserves the latest upstream observation across cached range cha
   await expect(details.locator('[data-upstream-health-id="7"]')).toContainText('1,600 ms')
   await expect(details.locator('[data-upstream-health-id="7"]')).toContainText('上次状态')
   await expect(details).toContainText('上游健康状态刷新失败')
-})
-
-test('Overview keeps an idle policy payload distinct from a failed status refresh', async ({ page }) => {
-  let fail = false
-  await mockAdminApi(page, {
-    'GET /api/v1/admin/policy/status': () => fail
-      ? { status: 500, body: { code: 'FAILED', message: 'fixture policy read failed' } }
-      : { status: 'unavailable', degraded: false, using_stale_snapshot: false, refresh_failures: 0, snapshot_age_seconds: 0, on_load_error: 'block' },
-  })
-  await page.goto('/admin')
-  const status = page.locator('[data-dashboard-status]')
-  await expect(status).toHaveText('服务正常')
-  fail = true
-  await page.getByRole('button', { name: '刷新', exact: true }).click()
-  await expect(status).toHaveText('状态未知')
-  await status.click()
-  const details = page.getByRole('dialog', { name: '服务状态详情' })
-  await expect(details).toContainText('包规则健康状态刷新失败')
-  await expect(details).not.toContainText('包规则状态暂时不可用')
 })
 
 test('Overview keeps a failed health refresh stale across ranges until fresh success, including unchanged payloads', async ({ page }) => {

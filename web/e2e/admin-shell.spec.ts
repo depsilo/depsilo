@@ -208,6 +208,11 @@ test('desktop navigation shows only workspaces and keeps destinations in page ta
       continue
     }
     await expect(tabs).toBeVisible()
+    // The rail sits in the page header and stands in for the page title,
+    // which stays in the accessibility tree without repeating the label.
+    await expect(page.locator(`[data-admin-page-header] [data-admin-page-navigation="${workspace.id}"]`)).toHaveCount(1)
+    await expect(page.locator('[data-admin-page-content] [data-admin-page-navigation]')).toHaveCount(0)
+    expect(await page.locator('[data-admin-page-title]').evaluate(element => element.getBoundingClientRect().width)).toBeLessThanOrEqual(2)
     expect(await tabs.getByRole('link').evaluateAll(links => (
       links.map(link => link.getAttribute('href'))
     ))).toEqual(workspace.routes)

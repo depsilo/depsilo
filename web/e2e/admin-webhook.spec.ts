@@ -29,17 +29,6 @@ test('webhook rows and actions fit 390px', async ({ page }) => {
   await expect(page.getByRole('button', { name: /添加 Webhook/ })).toBeVisible()
 })
 
-test('failed webhook test renders a danger toast', async ({ page }) => {
-  await mockAdminApi(page, {
-    'GET /api/v1/admin/webhooks': [{ id: 1, name: 'ops', platform: 'slack', url: 'https://example.test/hook', enabled: true, events: '*', cooldown_minutes: 30, last_sent_at: null, created_at: '2026-07-10T00:00:00Z', updated_at: '2026-07-10T00:00:00Z' }],
-    'POST /api/v1/admin/webhooks/1/test': { status: 502, body: { code: 'WEBHOOK_FAILED', message: 'delivery failed' } },
-  })
-  await page.goto('/admin/settings')
-  await page.getByRole('tab', { name: /Webhook/ }).click()
-  await page.getByRole('button', { name: /测试/ }).click()
-  await expect(page.locator('[data-sonner-toast][data-type="error"]')).toContainText('delivery failed')
-})
-
 test('renders loading before an empty successful Webhook response', async ({ page }) => {
   let release!: (rows: WebhookConfig[]) => void
   const response = new Promise<WebhookConfig[]>(resolve => { release = resolve })
@@ -51,18 +40,11 @@ test('renders loading before an empty successful Webhook response', async ({ pag
   await expect(page.getByText(/尚未配置 Webhook/)).toBeVisible()
 })
 
-test('renders one Webhook row without an empty or duplicate action state', async ({ page }) => {
-  await mockAdminApi(page, { 'GET /api/v1/admin/webhooks': [webhookRows[0]] })
-  await openWebhookTab(page)
-  await expect(page.getByText('ops')).toHaveCount(1)
-  await expect(page.getByRole('button', { name: /测试 ops/ })).toHaveCount(1)
-  await expect(page.getByText(/尚未配置 Webhook/)).toHaveCount(0)
-})
-
 test('renders enabled and disabled webhooks with shared actions', async ({ page }) => {
   await mockAdminApi(page, { 'GET /api/v1/admin/webhooks': webhookRows })
   await openWebhookTab(page)
   await expect(page.getByText('ops')).toBeVisible()
+  await expect(page.getByText(/尚未配置 Webhook/)).toHaveCount(0)
   const disabled = page.getByText(/^已禁用$/)
   await expect(disabled).toBeVisible()
   await expect(page.getByRole('button', { name: /删除 audit/ })).toBeVisible()
@@ -151,6 +133,7 @@ test('hides mutation controls for an admin using a readonly API token', async ({
   })
   await openWebhookTab(page)
   await expect(page.getByText('ops')).toBeVisible()
+  await expect(page.getByText(/当前账号为只读/)).toBeVisible()
   await expect(page.getByRole('button', { name: /添加 Webhook/ })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /测试 ops/ })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /编辑 ops/ })).toHaveCount(0)

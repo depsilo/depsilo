@@ -1,7 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
-import type { Request } from '@playwright/test'
 
-import { adminApiDefaults, test, expect, mockAdminApi, setUiPreferences } from './fixtures/admin-api'
+import { test, expect, mockAdminApi, setUiPreferences } from './fixtures/admin-api'
 
 async function expectNoDialogAxeViolations(page: import('@playwright/test').Page) {
   const dialog = page.getByRole('dialog')
@@ -16,12 +15,6 @@ async function expectNoDialogAxeViolations(page: import('@playwright/test').Page
     .analyze()
   expect(results.violations).toEqual([])
 }
-
-test('login fields are addressable by their visible labels', async ({ page }) => {
-  await page.goto('/admin/login')
-  await expect(page.getByLabel('用户名')).toBeVisible()
-  await expect(page.getByLabel('密码')).toHaveAttribute('type', 'password')
-})
 
 test('field primitives compose native and local accessibility feedback', async ({ page }) => {
   await page.goto('/e2e/fixtures/admin-forms.html')
@@ -215,28 +208,4 @@ test('dynamic rule and cache forms expose named controls and pass axe', async ({
   await warmupStart.click()
   await expect(warmupDialog).toContainText(/已接受 1 个包的预热请求|Warmup accepted for 1 packages/)
   await expectNoDialogAxeViolations(page)
-})
-
-test('Dashboard range control drives overview and trends and persists the choice', async ({ page }) => {
-  const calls: Record<string, number> = {}
-  await mockAdminApi(page, {
-    'GET /api/v1/admin/dashboard': (request: Request) => {
-      const range = new URL(request.url()).searchParams.get('range') ?? ''
-      calls[`overview-${range}`] = (calls[`overview-${range}`] ?? 0) + 1
-      return adminApiDefaults['GET /api/v1/admin/dashboard']
-    },
-    'GET /api/v1/admin/dashboard/trends': (request: Request) => {
-      const range = new URL(request.url()).searchParams.get('range') ?? ''
-      calls[`trends-${range}`] = (calls[`trends-${range}`] ?? 0) + 1
-      return { points: [] }
-    },
-  })
-  await page.goto('/admin')
-  await expect.poll(() => calls['overview-30d'] ?? 0).toBe(1)
-  await expect.poll(() => calls['trends-30d'] ?? 0).toBe(1)
-
-  await page.getByRole('group', { name: '统计周期' }).getByRole('button', { name: '7 天' }).click()
-  await expect.poll(() => calls['overview-7d'] ?? 0).toBe(1)
-  await expect.poll(() => calls['trends-7d'] ?? 0).toBe(1)
-  expect(await page.evaluate(() => localStorage.getItem('depsilo-dashboard-range'))).toBe('7d')
 })
