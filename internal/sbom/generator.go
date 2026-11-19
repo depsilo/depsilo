@@ -3,6 +3,7 @@ package sbom
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/google/uuid"
@@ -252,6 +253,7 @@ func (g *Generator) GenerateCycloneDX(project *db.Project, components []Componen
 		doc.Dependencies = []cdxDependency{{Ref: rootRef, DependsOn: make([]string, 0, len(components))}}
 	}
 
+	usedRefs := make(map[string]bool, len(components))
 	for _, component := range components {
 		entry := cdxComponent{
 			Type:    "library",
@@ -261,6 +263,12 @@ func (g *Generator) GenerateCycloneDX(project *db.Project, components []Componen
 		}
 		if options.CRA {
 			entry.BomRef = entry.PURL
+			if usedRefs[entry.BomRef] {
+				// Purl normalization can map two recorded spellings of one
+				// package to the same purl; bom-refs must stay unique.
+				entry.BomRef = "urn:depsilo:component:" + component.Ecosystem + ":" + url.PathEscape(component.Name) + "@" + url.PathEscape(component.Version)
+			}
+			usedRefs[entry.BomRef] = true
 			for _, hash := range component.Hashes {
 				entry.Hashes = append(entry.Hashes, cdxHash{Algorithm: "SHA-256", Content: hash})
 			}

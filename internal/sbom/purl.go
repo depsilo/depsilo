@@ -1,54 +1,125 @@
 package sbom
 
 import (
-	"fmt"
+	"regexp"
 	"strings"
 )
 
-// FormatPURL creates a Package URL identifier for a package.
-// See https://github.com/package-url/purl-spec
+// FormatPURL creates a Package URL for a package recorded under a Depsilo
+// ecosystem name. Each ecosystem maps to its registered purl type
+// (github.com/package-url/purl-spec/types) with that type's namespace split
+// and normalization, and every component is percent-encoded as ECMA-427
+// requires. Depsilo's own package-name conventions (Maven "group:artifact",
+// npm "@scope/name") are kept elsewhere because OSV and Package Rules rely on
+// them; only this identifier is translated.
 func FormatPURL(ecosystem, packageName, version string) string {
 	if version == "" {
 		version = "unknown"
 	}
 
+	purlType, namespace, name := "generic", "", packageName
 	switch ecosystem {
 	case "pypi":
-		return fmt.Sprintf("pkg:pypi/%s@%s", packageName, version)
+		purlType, name = "pypi", normalizePyPIName(packageName)
 	case "npm":
-		if strings.HasPrefix(packageName, "@") {
-			// Scoped: @scope/name → pkg:npm/%40scope/name@version
-			return fmt.Sprintf("pkg:npm/%s@%s", strings.Replace(packageName, "@", "%40", 1), version)
+		purlType = "npm"
+		if scope, rest, scoped := strings.Cut(packageName, "/"); scoped && strings.HasPrefix(scope, "@") {
+			namespace, name = scope, rest
 		}
-		return fmt.Sprintf("pkg:npm/%s@%s", packageName, version)
 	case "go":
-		return fmt.Sprintf("pkg:golang/%s@%s", packageName, version)
+		purlType = "golang"
+		namespace, name = splitLast(packageName)
 	case "cargo":
-		return fmt.Sprintf("pkg:cargo/%s@%s", packageName, version)
+		purlType = "cargo"
 	case "maven":
-		// Maven packageName might be "groupId/artifactId" or just "artifactId"
-		if strings.Contains(packageName, "/") {
-			parts := strings.SplitN(packageName, "/", 2)
-			return fmt.Sprintf("pkg:maven/%s/%s@%s", parts[0], parts[1], version)
+		purlType = "maven"
+		if group, artifact, found := strings.Cut(packageName, ":"); found {
+			namespace, name = group, artifact
 		}
-		return fmt.Sprintf("pkg:maven/%s@%s", packageName, version)
 	case "rubygems":
-		return fmt.Sprintf("pkg:gem/%s@%s", packageName, version)
+		purlType = "gem"
 	case "composer":
-		return fmt.Sprintf("pkg:composer/%s@%s", packageName, version)
+		purlType = "composer"
+		namespace, name = splitLast(strings.ToLower(packageName))
 	case "nuget":
-		return fmt.Sprintf("pkg:nuget/%s@%s", packageName, version)
+		purlType = "nuget"
 	case "conda":
-		return fmt.Sprintf("pkg:conda/%s@%s", packageName, version)
+		purlType = "conda"
 	case "cran":
-		return fmt.Sprintf("pkg:cran/%s@%s", packageName, version)
-	case "helm":
-		return fmt.Sprintf("pkg:helm/%s@%s", packageName, version)
+		purlType = "cran"
+	case "alpine":
+		purlType, namespace, name = "apk", "alpine", strings.ToLower(packageName)
 	case "apt":
-		return fmt.Sprintf("pkg:deb/debian/%s@%s", packageName, version)
+		purlType, namespace, name = "deb", "debian", strings.ToLower(packageName)
+	case "helm":
+		purlType = "helm"
 	case "docker":
-		return fmt.Sprintf("pkg:docker/%s@%s", packageName, version)
+		purlType = "docker"
+		namespace, name = splitLast(packageName)
+	case "huggingface":
+		// The huggingface type names a model repository as
+		// <owner>/<repository>. Datasets and owner-less legacy repositories
+		// have no defined form and stay generic.
+		if owner, repository, found := strings.Cut(packageName, "/"); found && owner != "datasets" && !strings.Contains(repository, "/") {
+			purlType, namespace, name = "huggingface", owner, repository
+		} else {
+			namespace, name = splitLast(packageName)
+		}
 	default:
-		return fmt.Sprintf("pkg:generic/%s@%s", packageName, version)
+		namespace, name = splitLast(packageName)
 	}
+
+	var b strings.Builder
+	b.WriteString("pkg:")
+	b.WriteString(purlType)
+	b.WriteByte('/')
+	for _, segment := range strings.Split(namespace, "/") {
+		if segment == "" {
+			continue
+		}
+		b.WriteString(purlEscape(segment))
+		b.WriteByte('/')
+	}
+	b.WriteString(purlEscape(strings.Trim(name, "/")))
+	b.WriteByte('@')
+	b.WriteString(purlEscape(version))
+	return b.String()
+}
+
+// splitLast splits a slash-separated identity into its namespace and its
+// last segment, the purl name.
+func splitLast(identity string) (namespace, name string) {
+	identity = strings.Trim(identity, "/")
+	if i := strings.LastIndex(identity, "/"); i >= 0 {
+		return identity[:i], identity[i+1:]
+	}
+	return "", identity
+}
+
+var pypiSeparatorRun = regexp.MustCompile(`[-_.]+`)
+
+// normalizePyPIName applies the PEP 503 normalization the pypi purl type
+// requires.
+func normalizePyPIName(name string) string {
+	return pypiSeparatorRun.ReplaceAllString(strings.ToLower(name), "-")
+}
+
+// purlEscape percent-encodes one purl component. ECMA-427 leaves only the
+// alphanumerics, the punctuation ".-_~" and the colon unencoded.
+func purlEscape(component string) string {
+	const hex = "0123456789ABCDEF"
+	var b strings.Builder
+	for i := 0; i < len(component); i++ {
+		c := component[i]
+		switch {
+		case 'a' <= c && c <= 'z', 'A' <= c && c <= 'Z', '0' <= c && c <= '9',
+			c == '.', c == '-', c == '_', c == '~', c == ':':
+			b.WriteByte(c)
+		default:
+			b.WriteByte('%')
+			b.WriteByte(hex[c>>4])
+			b.WriteByte(hex[c&0x0f])
+		}
+	}
+	return b.String()
 }
