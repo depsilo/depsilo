@@ -220,6 +220,12 @@ func (m *MockUpstream) RegisterGoModules() {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"Version":"v1.1.0","Time":"2024-06-01T00:00:00Z"}`)
 	})
+	// A module only the miss-then-hit test fetches: with the integration
+	// server's 2s blob TTL, a zip another test cached earlier would be served
+	// stale and refreshed in the background during that test.
+	m.mux.HandleFunc("/github.com/test/cachehit/@v/v1.0.0.zip", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("FAKE_CACHEHIT_GO_ZIP"))
+	})
 	// A module one test downloads once, so that its audit row is told apart
 	// from the downloads of every other test sharing the server.
 	m.mux.HandleFunc("/github.com/test/audited/@v/v1.0.0.zip", func(w http.ResponseWriter, r *http.Request) {

@@ -48,7 +48,7 @@ func TestGo_ModuleMod(t *testing.T) {
 }
 
 func TestGo_ModuleZipMissThenHit(t *testing.T) {
-	assertMissThenHit(t, depsiloURL+"/go/github.com/test/mod/@v/v1.0.0.zip", "", false)
+	assertMissThenHit(t, depsiloURL+"/go/github.com/test/cachehit/@v/v1.0.0.zip", "FAKE_CACHEHIT_GO_ZIP", true)
 }
 
 // sumDBClient is the checksum database client of the go command, reading the

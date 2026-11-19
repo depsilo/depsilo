@@ -34,7 +34,8 @@ func TestComposer_MirrorsInjected(t *testing.T) {
 // On the second fetch both the dist blob (long TTL) and the p2 metadata it
 // resolves through (fresh within its short TTL) must come from cache.
 func TestComposer_DistMissThenHit(t *testing.T) {
-	assertMissThenHit(t, depsiloURL+"/composer/dist/test/pkg/1.0.0.0/abc.zip", "FAKE_COMPOSER_DIST", false)
+	assertMissThenHit(t, depsiloURL+"/composer/dist/test/pkg/1.0.0.0/abc.zip", "FAKE_COMPOSER_DIST", false,
+		"/composer-dist/test.zip", "/p2/test/pkg.json")
 }
 
 func TestComposer_DistUnknownVersion(t *testing.T) {
