@@ -24,7 +24,8 @@ type AuditExporter struct {
 	URL   string `gorm:"size:512" json:"url"`
 	Token string `gorm:"size:512" json:"-"` // bearer / HEC token, never serialized
 	// Events is "*" or a comma-separated list of action/cache_result values
-	// (download, metadata, hit, miss, error, blocked, plus governance actions).
+	// (download/metadata policy blocks, blocked, success/error, plus governance
+	// actions). Package request outcomes (hit, miss) are access-log history.
 	Events  string `gorm:"size:256;default:'*'" json:"events"`
 	Enabled bool   `gorm:"default:true" json:"enabled"`
 

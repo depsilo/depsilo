@@ -2,6 +2,7 @@ package admin
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -237,7 +238,11 @@ func normalizeAuditExporter(body auditExporterRequest, existing db.AuditExporter
 		exporter.Token = strings.TrimSpace(*body.Token)
 	}
 	if events := strings.TrimSpace(body.Events); events != "" {
-		exporter.Events = normalizeEventFilter(events)
+		normalized, err := normalizeEventFilter(events)
+		if err != nil {
+			return db.AuditExporter{}, err
+		}
+		exporter.Events = normalized
 	}
 	if exporter.Events == "" {
 		exporter.Events = "*"
@@ -248,7 +253,13 @@ func normalizeAuditExporter(body auditExporterRequest, existing db.AuditExporter
 	return exporter, nil
 }
 
-func normalizeEventFilter(events string) string {
+// retiredAuditEventTokens are package request outcomes. They are request
+// history in the access log, not audit events, so a filter naming them would
+// match nothing new. An exporter stored before the change keeps its filter;
+// those tokens simply stop matching.
+var retiredAuditEventTokens = map[string]bool{"hit": true, "miss": true}
+
+func normalizeEventFilter(events string) (string, error) {
 	seen := map[string]bool{}
 	tokens := make([]string, 0, 4)
 	for _, token := range strings.Split(events, ",") {
@@ -257,15 +268,18 @@ func normalizeEventFilter(events string) string {
 			continue
 		}
 		if token == "*" {
-			return "*"
+			return "*", nil
+		}
+		if retiredAuditEventTokens[token] {
+			return "", fmt.Errorf("event %q is a package request outcome, recorded in the access log rather than the audit log", token)
 		}
 		seen[token] = true
 		tokens = append(tokens, token)
 	}
 	if len(tokens) == 0 {
-		return "*"
+		return "*", nil
 	}
-	return strings.Join(tokens, ",")
+	return strings.Join(tokens, ","), nil
 }
 
 func writeAuditExporterLookupError(c *gin.Context, err error) {

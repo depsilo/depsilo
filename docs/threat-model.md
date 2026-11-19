@@ -364,7 +364,10 @@ allows editing the database directly.
 
 ### 5.8 Audit tampering or loss
 
-Audit rows are written by the request path and by governance handlers; SIEM
+Ordinary package request outcomes are access-log history, outside the audit
+chain; only policy blocks and governance actions are audit rows.
+
+Audit rows are written by the policy gates and by governance handlers; SIEM
 forwarding is at-least-once with a visible cursor, lag, and last error, so a
 stalled or silently broken feed is detectable from Admin. Rows are
 hash-chained (schema v8): the chain is recomputed by the audit page, the

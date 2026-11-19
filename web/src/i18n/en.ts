@@ -2683,7 +2683,7 @@ const en = {
       token: 'Token',
       tokenOptional: 'Optional',
       events: 'Event filter',
-      filterHint: 'Use "*" or a comma-separated list of action / cache_result values (download, metadata, hit, miss, error, blocked, plus governance actions). A new exporter starts at the current audit head instead of replaying history; use the CSV export above for past ranges.',
+      filterHint: 'Use "*" or a comma-separated list of action / cache_result values (blocked and the download / metadata classes of policy blocks, success, error, plus governance actions). Cache hits and misses are request history in the access log, not audit events. A new exporter starts at the current audit head instead of replaying history; use the CSV export above for past ranges.',
       create: 'Add exporter',
       creating: 'Adding…',
       created: 'Exporter added; delivery starts at the current audit head.',

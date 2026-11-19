@@ -219,3 +219,29 @@ func TestAuditExporterCreateStoresTheRequestedEnabledState(t *testing.T) {
 		}
 	}
 }
+
+// Package request outcomes are access-log history, not audit events, so an
+// event filter naming them would forward nothing; it is refused instead.
+func TestAuditExporterRefusesRequestOutcomeEventFilters(t *testing.T) {
+	router, _ := newAuditExporterTestRouter(t)
+	for _, events := range []string{"hit", "blocked, MISS"} {
+		create := httptest.NewRecorder()
+		router.ServeHTTP(create, httptest.NewRequest(http.MethodPost, "/audit/exporters",
+			bytes.NewBufferString(`{"name":"feed","kind":"ndjson","url":"https://collector.example/intake","events":"`+events+`"}`)))
+		if create.Code != http.StatusBadRequest || !strings.Contains(create.Body.String(), "access log") {
+			t.Fatalf("events %q create status=%d body=%s", events, create.Code, create.Body.String())
+		}
+	}
+	create := httptest.NewRecorder()
+	router.ServeHTTP(create, httptest.NewRequest(http.MethodPost, "/audit/exporters",
+		bytes.NewBufferString(`{"name":"feed","kind":"ndjson","url":"https://collector.example/intake","events":"blocked,error"}`)))
+	if create.Code != http.StatusCreated {
+		t.Fatalf("create status=%d body=%s", create.Code, create.Body.String())
+	}
+	update := httptest.NewRecorder()
+	router.ServeHTTP(update, httptest.NewRequest(http.MethodPut, "/audit/exporters/1",
+		bytes.NewBufferString(`{"events":"miss"}`)))
+	if update.Code != http.StatusBadRequest {
+		t.Fatalf("update status=%d body=%s", update.Code, update.Body.String())
+	}
+}

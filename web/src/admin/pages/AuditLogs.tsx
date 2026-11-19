@@ -64,8 +64,10 @@ function canonicalizeSearchParams(current: URLSearchParams): URLSearchParams {
   if (ecosystems) next.set('ecosystem', ecosystems)
   else next.delete('ecosystem')
 
+  // Hit and miss are package request outcomes, which the access log records;
+  // older audit rows still show them, but they are not a current filter.
   const result = current.get('result')
-  if (result === 'hit' || result === 'miss' || result === 'success' || result === 'error' || result === 'blocked') next.set('result', result)
+  if (result === 'success' || result === 'error' || result === 'blocked') next.set('result', result)
   else next.delete('result')
 
   writeTimeRange(next, parseTimeRange(current, DEFAULT_RANGE), DEFAULT_RANGE)
@@ -117,8 +119,6 @@ export default function AuditLogs() {
     if (appliedSearch) params.package = appliedSearch
     const ecosystemFilter = serializeEcosystemList(ecosystems)
     if (ecosystemFilter) params.ecosystem = ecosystemFilter
-    if (resultFilter === 'hit') params.result = 'hit'
-    if (resultFilter === 'miss') params.result = 'miss'
     if (resultFilter === 'success') params.result = 'success'
     if (resultFilter === 'error') params.result = 'error'
     if (resultFilter === 'blocked') params.result = 'blocked'
@@ -268,8 +268,6 @@ export default function AuditLogs() {
               })}
             >
               <option value="all">{t('all')}</option>
-              <option value="hit">{t('audit.hit')}</option>
-              <option value="miss">{t('audit.miss')}</option>
               <option value="success">{t('audit.success')}</option>
               <option value="error">{t('audit.error')}</option>
               <option value="blocked">{t('audit.blocked')}</option>

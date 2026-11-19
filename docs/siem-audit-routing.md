@@ -7,10 +7,17 @@
 
 ## What is forwarded
 
-Every row of the durable `audit_logs` table: proxy requests (`action` =
-`download` / `metadata` with `cache_result` = hit / miss / error / blocked),
-policy blocks recorded by the enforcement gates, and governance actions
-written by admin handlers (snapshot lifecycle, audit exporter changes, …).
+Every row of the durable `audit_logs` table: policy blocks recorded by the
+enforcement gates (`action` = `download` / `metadata` with `cache_result` =
+`blocked`) and governance actions written by admin handlers (snapshot
+lifecycle, audit exporter changes, …).
+
+Ordinary package request outcomes (cache hit, miss, upstream error, refused
+request) are not audit events. They are request history in the access log
+(`access_logs`, kept for `access_log.retention_days`, plus rollups) and are
+neither chained nor forwarded. Request rows an earlier release wrote to the
+audit log stay in the chain until they age out; a new exporter starts at the
+current head and does not replay them.
 
 Alert-style events (malware block, quarantine, tamper, upstream down) keep
 their own webhook channel; a `generic` webhook already posts those payloads to
@@ -57,8 +64,12 @@ and returns, and the forwarder owns delivery.
 `events` is `*` (default) or a comma-separated list matched against a row's
 `action` **or** `cache_result`, case-insensitively:
 
-- `download`, `metadata` — request classes
-- `hit`, `miss`, `error`, `blocked` — outcomes
+- `download`, `metadata` — the request class of a policy block
+- `blocked` — a policy block; `success`, `error` — a governance action's
+  result
+- `hit` and `miss` are refused: they name package request outcomes, which
+  the access log records. An exporter saved before that change keeps its
+  filter, and those tokens no longer match new rows
 - governance actions such as `snapshot_create`, `snapshot_delete`,
   `snapshot_import`, `snapshot_use`, `exporter_test`
 - `user.cli_reset` — a local account's password was set with

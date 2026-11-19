@@ -2690,7 +2690,7 @@ const zh = {
       token: '令牌',
       tokenOptional: '可选',
       events: '事件过滤',
-      filterHint: '过滤值为 "*"，或 action / cache_result 的逗号列表（download、metadata、hit、miss、error、blocked 以及治理动作）。新导出器从当前审计头开始，不重放历史；历史区间用页面上的 CSV 导出。',
+      filterHint: '过滤值为 "*"，或 action / cache_result 的逗号列表（blocked 及策略拦截的 download / metadata 类别、success、error 以及治理动作）。缓存命中与未命中属于访问日志中的请求历史，不是审计事件。新导出器从当前审计头开始，不重放历史；历史区间用页面上的 CSV 导出。',
       create: '添加导出器',
       creating: '正在添加...',
       created: '导出器已添加，将从当前审计头开始投递。',

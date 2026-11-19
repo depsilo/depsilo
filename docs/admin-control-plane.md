@@ -437,14 +437,17 @@ together; changing the selection or starting a new check creates a new baseline.
 The service origin comes from the browser's current origin. Configuration is
 applied on the client device, not on the Depsilo server.
 
-`GET /api/v1/admin/onboarding/status` retains its audit `events`, numeric
-`after_id`, and `has_more` contract. The additional `delivery_events`,
-`delivery_after_id` / `next_delivery_after_id`, and `deliveries_has_more` fields
-provide completed-response evidence. The delivery cursor is opaque and tracks
-both independently committed log streams; clients must preserve it verbatim.
-Joined records use the server request ID and the audit request-start timestamp,
-so a response to a request that began before the observation cannot complete it.
-This is an observation of related requests, not a unique client identity.
+`GET /api/v1/admin/onboarding/status` reads two streams. Its `events`, numeric
+`after_id`, and `has_more` page policy blocks from the audit log. Every other
+package request outcome comes from the access log as `delivery_events`, paged by
+`delivery_after_id` / `next_delivery_after_id` and `deliveries_has_more`; a poll
+without a delivery cursor reads only policy blocks. The delivery cursor is
+opaque; clients must preserve it verbatim. A delivery event's `created_at` is
+its request start (completion less latency), so a response to a request that
+began before the observation cannot complete it, and its `version` is derived
+from the cache key, empty for a refused or failed response. Audit request rows
+written before package requests left the audit log are not read. This is an
+observation of related requests, not a unique client identity.
 
 A successful download requires a GET artifact response, 2xx status, positive
 bytes, a completed stream, and a hit/miss result. A 206 confirms delivery of the

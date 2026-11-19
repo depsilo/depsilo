@@ -253,14 +253,14 @@ test('Logs client emits canonical pagination and filters', async ({ page }) => {
 
 test('Audit client emits package rather than legacy search', async ({ page }) => {
   const query = {
-    page: 3, page_size: 50, ecosystem: 'pypi', package: 'requests', ip: '127.0.0.1', result: 'hit',
+    page: 3, page_size: 50, ecosystem: 'pypi', package: 'requests', ip: '127.0.0.1', result: 'blocked',
     start: '2026-07-01T00:00:00Z', end: '2026-07-10T00:00:00Z',
   } as const
   await expectAdminCall(page, {
     operation: 'listAuditLogs', args: [query], method: 'GET', path: '/api/v1/admin/audit-logs',
     query: {
       ecosystem: 'pypi', end: '2026-07-10T00:00:00Z', ip: '127.0.0.1', package: 'requests', page: '3',
-      page_size: '50', result: 'hit', start: '2026-07-01T00:00:00Z',
+      page_size: '50', result: 'blocked', start: '2026-07-01T00:00:00Z',
     },
     response: audit,
   })

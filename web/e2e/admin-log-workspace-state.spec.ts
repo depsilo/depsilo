@@ -144,6 +144,13 @@ for (const malformedCase of [
     canonicalPath: '/admin/audit?package=urllib3',
     endpoint: 'GET /api/v1/admin/audit-logs',
   },
+  {
+    // Cache hits and misses are access-log history, no longer audit events.
+    name: 'Audit Logs request outcome',
+    path: '/admin/audit?package=urllib3&result=hit',
+    canonicalPath: '/admin/audit?package=urllib3',
+    endpoint: 'GET /api/v1/admin/audit-logs',
+  },
 ] as const) {
   test(`${malformedCase.name} replaces malformed filter and page URLs with canonical state`, async ({ page }) => {
     const requests: Array<Record<string, string>> = []
