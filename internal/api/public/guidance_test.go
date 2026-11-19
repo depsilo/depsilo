@@ -2,6 +2,7 @@ package public
 
 import (
 	"context"
+	"encoding/json"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
@@ -85,6 +86,16 @@ func TestMCPRequestFactsAreRecentAndCredentialRedacted(t *testing.T) {
 	if !strings.Contains(toolResultText(t, missing), "no retained access log") {
 		t.Fatal("missing request did not report bounded retention")
 	}
+	var allowed map[string]any
+	if err := json.Unmarshal([]byte(text), &allowed); err != nil {
+		t.Fatal(err)
+	}
+	if allowed["source"] != "access_log" {
+		t.Fatalf("allowed request source = %v", allowed["source"])
+	}
+	if _, ok := allowed["audit_events"]; ok {
+		t.Fatalf("allowed request still carries the retired audit list: %s", text)
+	}
 	for _, value := range []string{
 		"https://token@example.invalid/path?secret=1",
 		"https://user:secret@example.invalid/path",
@@ -103,6 +114,56 @@ func TestMCPRequestFactsAreRecentAndCredentialRedacted(t *testing.T) {
 	cancel()
 	if _, err := handler.toolRequest(cancelled, "req-mcp-1"); err == nil {
 		t.Fatal("cancelled request facts query completed")
+	}
+}
+
+func TestMCPRequestExplainsAPolicyBlockFromTheAuditLog(t *testing.T) {
+	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "mcp-block.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.AutoMigrate(&db.AccessLog{}, &db.AuditLog{}); err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, err := database.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	blockedAt := time.Date(2026, 11, 19, 8, 0, 0, 0, time.UTC)
+	// A policy block writes only an audit row; its package name is external
+	// input and must pass through the same sanitizer as access-log facts.
+	if err := database.Create(&db.AuditLog{
+		RequestID: "req-blocked", Ecosystem: "npm", PackageName: "evil\u202epkg",
+		Version: "1.0.0", Action: "download", CacheResult: "blocked", StatusCode: 451, CreatedAt: blockedAt,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	handler := NewMCPHandler(database, []string{"npm"}, false, nil)
+	result, err := handler.toolRequest(context.Background(), "req-blocked")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := toolResultText(t, result)
+	var facts map[string]any
+	if err := json.Unmarshal([]byte(text), &facts); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{
+		"found": true, "request_id": "req-blocked", "source": "audit_log", "external_strings_untrusted": true,
+		"ecosystem": "npm", "version": "1.0.0", "action": "download", "policy_decision": "deny",
+		"status_code": float64(451), "created_at": blockedAt.Format(time.RFC3339),
+	}
+	for key, value := range want {
+		if facts[key] != value {
+			t.Fatalf("%s = %#v, want %#v in %s", key, facts[key], value, text)
+		}
+	}
+	if facts["package"] != "evil?pkg" {
+		t.Fatalf("blocked package not sanitized: %#v", facts["package"])
+	}
+	if _, ok := facts["delivery_result"]; ok {
+		t.Fatalf("a blocked request reported delivery facts: %s", text)
 	}
 }
 

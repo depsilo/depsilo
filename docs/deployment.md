@@ -1761,7 +1761,9 @@ direct path give no hint.
 The request ID leads to the details. Every answer carries it in the
 `X-Request-ID` header. Admin → Access Logs shows it in a request's details,
 and the MCP tool `depsilo_recent` explains one request given its
-`request_id`. The server log line of the failure carries it in the
+`request_id`, a policy-blocked request included: a block writes no access-log
+row, so the tool answers from the audit log and says so in `source`. The
+server log line of the failure carries it in the
 `request_id` field, next to the full error: the URL that failed and up to
 64 KiB of the registry's answer. In that URL, and in every absolute `http` or
 `https` URL and every double-quoted URL reference in the error text or the
