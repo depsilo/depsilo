@@ -14,7 +14,9 @@ import (
 
 	"go.uber.org/zap"
 
+	"depsilo/internal/adapter"
 	"depsilo/internal/packagepolicy"
+	"depsilo/internal/upstream"
 )
 
 // errCargoIndexUnavailable marks index metadata that cannot prove a version's
@@ -124,7 +126,9 @@ func (h *Handler) resolvePublished(ctx context.Context, crate, version string) (
 		if err != nil {
 			return nil, "", 0, "", err
 		}
-		fetchResult, err := ups.Fetch(ctx, "/"+indexPath)
+		fetchResult, ups, err := adapter.FetchFromPool(ctx, h.selector, ups, false, func(member *upstream.Upstream) (*upstream.FetchResult, error) {
+			return member.Fetch(ctx, "/"+indexPath)
+		})
 		if err != nil {
 			return nil, "", 0, "", err
 		}

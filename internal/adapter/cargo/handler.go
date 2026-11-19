@@ -87,11 +87,12 @@ func (h *Handler) handleConfig(c *gin.Context) {
 			return nil, "", 0, "", err
 		}
 
-		zap.L().Info("fetching cargo config.json from upstream",
-			zap.String("upstream", ups.Name),
-		)
-
-		fetchResult, err := ups.Fetch(ctx, "/config.json")
+		fetchResult, ups, err := adapter.FetchFromPool(ctx, h.selector, ups, false, func(member *upstream.Upstream) (*upstream.FetchResult, error) {
+			zap.L().Info("fetching cargo config.json from upstream",
+				zap.String("upstream", member.Name),
+			)
+			return member.Fetch(ctx, "/config.json")
+		})
 		if err != nil {
 			return nil, "", 0, "", err
 		}
@@ -117,8 +118,9 @@ func (h *Handler) handleConfig(c *gin.Context) {
 
 	if err != nil {
 		zap.L().Error("failed to fetch cargo config.json", zap.Error(err))
-		adapter.LogAccess(c.Request.Context(), h.db, "cargo", c.Request.Method, ConfigCacheKey(), false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		status, code := adapter.UpstreamFailureStatus(err)
+		adapter.LogAccess(c.Request.Context(), h.db, "cargo", c.Request.Method, ConfigCacheKey(), false, "", time.Since(start), status, c.ClientIP(), 0)
+		c.JSON(status, gin.H{"code": code, "message": err.Error()})
 		return
 	}
 	defer result.Reader.Close()
@@ -167,12 +169,16 @@ func (h *Handler) handleIndex(c *gin.Context) {
 			return nil, "", 0, "", err
 		}
 
-		zap.L().Info("fetching crate index from upstream",
-			zap.String("crate", crateName),
-			zap.String("upstream", ups.Name),
-		)
-
-		fetchResult, err := ups.Fetch(ctx, "/"+path)
+		// An index file never moves on a 404: one member's answer that the
+		// crate does not exist is the pool's answer, and one request never
+		// mixes the index snapshots of different mirrors.
+		fetchResult, ups, err := adapter.FetchFromPool(ctx, h.selector, ups, false, func(member *upstream.Upstream) (*upstream.FetchResult, error) {
+			zap.L().Info("fetching crate index from upstream",
+				zap.String("crate", crateName),
+				zap.String("upstream", member.Name),
+			)
+			return member.Fetch(ctx, "/"+path)
+		})
 		if err != nil {
 			return nil, "", 0, "", err
 		}
@@ -182,8 +188,9 @@ func (h *Handler) handleIndex(c *gin.Context) {
 
 	if err != nil {
 		zap.L().Error("failed to fetch crate index", zap.String("crate", crateName), zap.Error(err))
-		adapter.LogAccess(c.Request.Context(), h.db, "cargo", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		status, code := adapter.UpstreamFailureStatus(err)
+		adapter.LogAccess(c.Request.Context(), h.db, "cargo", c.Request.Method, cacheKey, false, "", time.Since(start), status, c.ClientIP(), 0)
+		c.JSON(status, gin.H{"code": code, "message": err.Error()})
 		return
 	}
 	defer result.Reader.Close()
@@ -235,14 +242,18 @@ func (h *Handler) handleDownload(c *gin.Context) {
 			return nil, "", 0, "", err
 		}
 
-		zap.L().Info("fetching crate from upstream",
-			zap.String("crate", crateName),
-			zap.String("version", version),
-			zap.String("upstream", ups.Name),
-		)
-
+		// A .crate is immutable and Cargo verifies it against the index
+		// checksum, so a member that has not synchronized it yet is passed
+		// over like an unavailable one.
 		downloadPath := "/api/v1/crates/" + crateName + "/" + version + "/download"
-		fetchResult, err := ups.Fetch(ctx, downloadPath)
+		fetchResult, ups, err := adapter.FetchFromPool(ctx, h.selector, ups, true, func(member *upstream.Upstream) (*upstream.FetchResult, error) {
+			zap.L().Info("fetching crate from upstream",
+				zap.String("crate", crateName),
+				zap.String("version", version),
+				zap.String("upstream", member.Name),
+			)
+			return member.Fetch(ctx, downloadPath)
+		})
 		if err != nil {
 			return nil, "", 0, "", err
 		}
@@ -252,8 +263,9 @@ func (h *Handler) handleDownload(c *gin.Context) {
 
 	if err != nil {
 		zap.L().Error("failed to fetch crate", zap.String("crate", crateName), zap.String("version", version), zap.Error(err))
-		adapter.LogAccess(c.Request.Context(), h.db, "cargo", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		status, code := adapter.UpstreamFailureStatus(err)
+		adapter.LogAccess(c.Request.Context(), h.db, "cargo", c.Request.Method, cacheKey, false, "", time.Since(start), status, c.ClientIP(), 0)
+		c.JSON(status, gin.H{"code": code, "message": err.Error()})
 		return
 	}
 	defer result.Reader.Close()

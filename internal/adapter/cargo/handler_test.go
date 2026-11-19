@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -13,6 +14,8 @@ import (
 	"depsilo/internal/adapter"
 	"depsilo/internal/adapter/adaptertest"
 	"depsilo/internal/config"
+	"depsilo/internal/db"
+	"depsilo/internal/upstream"
 )
 
 func TestPackageUpstreamFailuresAreRecordedAsAuditErrors(t *testing.T) {
@@ -91,5 +94,85 @@ func TestConfigDownloadURLTakesOnlyAnHTTPSchemeFromForwardedProto(t *testing.T) 
 		if document.DL != test.want {
 			t.Errorf("X-Forwarded-Proto %q: dl = %q, want %q", test.forwarded, document.DL, test.want)
 		}
+	}
+}
+
+func newPoolCargoRouter(t *testing.T, selector upstream.Selector) http.Handler {
+	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
+	handler := New(manager, selector, config.CacheConfig{TTLIndex: time.Hour, TTLBlob: 72 * time.Hour}, database)
+	router := gin.New()
+	handler.Register(router.Group("/crates"))
+	return router
+}
+
+// Cargo reads a 404 or 410 for an index file as "no such crate"; a 502 makes
+// it report a registry outage instead.
+func TestIndexReportsThePoolAnswer(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	adaptertest.CheckPoolAnswers(t, adaptertest.MetadataPoolAnswers, "/crates/se/rd/serde", `{"name":"serde","vers":"1.0.0"}`, newPoolCargoRouter)
+	adaptertest.CheckPoolAnswers(t, adaptertest.MetadataPoolAnswers, "/crates/config.json", `{"dl":"https://static.crates.io/crates"}`, newPoolCargoRouter)
+}
+
+// A .crate is immutable and Cargo checks it against the index checksum, so a
+// member that lacks it is passed over like an unavailable one.
+func TestDownloadMovesOnFromAMemberThatLacksTheCrate(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	adaptertest.CheckPoolAnswers(t, []adaptertest.PoolAnswer{
+		{Name: "missing on one member", First: http.StatusNotFound, Second: http.StatusOK, Status: http.StatusOK, SecondAsked: true},
+		{Name: "missing everywhere", First: http.StatusNotFound, Second: http.StatusNotFound, Status: http.StatusNotFound, Code: "NOT_FOUND", SecondAsked: true},
+		{Name: "gone", First: http.StatusGone, Second: http.StatusOK, Status: http.StatusGone, Code: "GONE"},
+		{Name: "failing member", First: http.StatusInternalServerError, Second: http.StatusOK, Status: http.StatusOK, SecondAsked: true},
+		{Name: "failing pool", First: http.StatusInternalServerError, Second: http.StatusBadGateway, Status: http.StatusBadGateway, Code: "UPSTREAM_UNAVAILABLE", SecondAsked: true},
+	}, "/crates/api/v1/crates/serde/1.0.0/download", "crate bytes", newPoolCargoRouter)
+}
+
+// An index file cached before the pool began answering 404 is still served
+// from that copy once it is stale, as the transparent proxies serve stale
+// metadata: only content whose presence is the answer withdraws its copy.
+func TestStaleIndexCoversALater404(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const body = `{"name":"serde","vers":"1.0.0"}`
+	var missing atomic.Bool
+	var requests atomic.Int32
+	origin := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		if missing.Load() {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = io.WriteString(w, body)
+	})
+	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
+	handler := New(manager, adaptertest.NewPoolSelector(t, origin), config.CacheConfig{TTLIndex: 0, TTLBlob: time.Hour}, database)
+	router := gin.New()
+	handler.Register(router.Group("/crates"))
+	request := func() *httptest.ResponseRecorder {
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/crates/se/rd/serde", nil))
+		return response
+	}
+
+	if response := request(); response.Code != http.StatusOK {
+		t.Fatalf("first request status = %d, body=%s", response.Code, response.Body.String())
+	}
+	for deadline := time.Now().Add(time.Second); ; time.Sleep(2 * time.Millisecond) {
+		var count int64
+		if err := database.Model(&db.CacheEntry{}).Where("key = ?", IndexCacheKey("se/rd", "serde")).Count(&count).Error; err != nil {
+			t.Fatal(err)
+		}
+		if count == 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("index entry was not committed")
+		}
+	}
+	missing.Store(true)
+	response := request()
+	if response.Code != http.StatusOK || response.Body.String() != body {
+		t.Fatalf("stale request status = %d, body=%s", response.Code, response.Body.String())
+	}
+	if got := requests.Load(); got != 2 {
+		t.Fatalf("origin requests = %d, want the stale entry refreshed once", got)
 	}
 }
