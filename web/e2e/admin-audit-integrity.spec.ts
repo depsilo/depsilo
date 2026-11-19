@@ -54,6 +54,26 @@ test('audit page shows where audit retention pruned the chain', async ({ page })
   await expect(page.getByText(/2 个检查点早于保留基点/)).toBeVisible()
 })
 
+test('audit page shows only the retention base once every row was pruned', async ({ page }) => {
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/audit/integrity': integrity({
+      rows_scanned: 0,
+      chained_rows: 0,
+      unchained_rows: 0,
+      first_chained_id: undefined,
+      head_id: undefined,
+      head_hash: undefined,
+      base_id: 1200,
+      base_hash: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      base_created_at: '2026-07-01T10:00:00Z',
+    }),
+  })
+  await page.goto('/admin/audit')
+
+  await expect(page.getByText(/第 1200 行（.+）及更早的全部记录已按审计保留期删除/)).toBeVisible()
+  await expect(page.getByText(/审计链已校验：0 行/)).toHaveCount(0)
+})
+
 test('audit page surfaces a broken chain with the offending row', async ({ page }) => {
   await mockAdminApi(page, {
     'GET /api/v1/admin/audit/integrity': integrity({

@@ -84,23 +84,28 @@ export default function AuditIntegrityNotice() {
       </div>
     )
   }
+  const baseTime = report.base_created_at
+    ? new Date(report.base_created_at).toLocaleString(i18n.language)
+    : ''
+  // Retention can delete every row on a quiet instance: a "0 rows, head #0"
+  // claim would read as an empty or reset chain, so name the base instead.
+  const fullyPruned = Boolean(report.base_created_at) && report.rows_scanned === 0
   return (
     <Alert variant={"success"}><AlertDescription>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span>
-          {t('auditIntegrity.verified', {
-            count: report.chained_rows.toLocaleString(),
-            head: report.head_id ?? 0,
-            hash: shortHash(report.head_hash ?? ''),
-          })}
+          {fullyPruned
+            ? t('auditIntegrity.prunedAll', { id: report.base_id ?? 0, time: baseTime })
+            : t('auditIntegrity.verified', {
+              count: report.chained_rows.toLocaleString(),
+              head: report.head_id ?? 0,
+              hash: shortHash(report.head_hash ?? ''),
+            })}
           {report.unchained_rows > 0
             ? ` · ${t('auditIntegrity.preChain', { count: report.unchained_rows.toLocaleString() })}`
             : ''}
-          {report.base_created_at
-            ? ` · ${t('auditIntegrity.pruned', {
-              id: report.base_id ?? 0,
-              time: new Date(report.base_created_at).toLocaleString(i18n.language),
-            })}`
+          {report.base_created_at && !fullyPruned
+            ? ` · ${t('auditIntegrity.pruned', { id: report.base_id ?? 0, time: baseTime })}`
             : ''}
           {anchors?.configured
             ? ` · ${anchors.checkpoints > 0

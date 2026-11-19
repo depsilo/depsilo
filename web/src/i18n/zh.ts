@@ -2719,6 +2719,7 @@ const zh = {
       verified: '审计链已校验：{{count}} 行，链头 #{{head}} {{hash}}',
       preChain: '{{count}} 行早于哈希链（schema v8 之前写入，不在链覆盖范围）',
       pruned: '第 {{id}} 行（{{time}}）及更早的记录已按审计保留期删除，审计链从该处继续校验',
+      prunedAll: '第 {{id}} 行（{{time}}）及更早的全部记录已按审计保留期删除，新记录从该处接续审计链',
       broken: '审计链在第 {{id}} 行断裂：{{reason}}。请检查数据库是否被修改，必要时从升级前备份恢复。',
       unavailable: '暂时无法校验审计链：{{message}}',
       stale: '本次校验失败，无法确认上次校验结果仍然有效。',

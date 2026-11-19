@@ -2712,6 +2712,7 @@ const en = {
       verified: 'Audit chain verified: {{count}} rows, head #{{head}} {{hash}}',
       preChain: '{{count}} rows predate the hash chain (written before schema v8 and not covered)',
       pruned: 'rows through #{{id}} (created {{time}}) were deleted by audit retention; the chain is verified from that point',
+      prunedAll: 'Audit retention deleted every row through #{{id}} (created {{time}}); new rows continue the chain from that point',
       broken: 'Audit chain broken at row {{id}}: {{reason}}. Check whether the database was modified, and restore a pre-upgrade backup if needed.',
       unavailable: 'The audit chain could not be verified: {{message}}',
       stale: 'Verification failed. The previous result cannot confirm the current chain.',
