@@ -37,3 +37,15 @@ func TestDependencyRequestKindUsesPayloadMeaningNotCacheTTL(t *testing.T) {
 		})
 	}
 }
+
+func TestRecordedVersionNamesOnlyServedArtifacts(t *testing.T) {
+	key := "npm-exact-v1/fixture/-/fixture-1.0.0-beta.1.tgz"
+	if got := RecordedVersion("npm", key, 200); got != "1.0.0-beta.1" {
+		t.Fatalf("served version = %q", got)
+	}
+	for _, status := range []int{404, 502} {
+		if got := RecordedVersion("npm", key, status); got != "" {
+			t.Fatalf("status %d version = %q, want none", status, got)
+		}
+	}
+}

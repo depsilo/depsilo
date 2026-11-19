@@ -23,14 +23,19 @@ import (
 func TestDashboardRecentDownloadsReturnsSmallPrivateSnapshot(t *testing.T) {
 	database := newRecentDownloadsTestDB(t)
 	now := time.Date(2026, 7, 21, 10, 30, 0, 0, time.UTC)
-	rows := []db.AuditLog{
-		{Ecosystem: "pypi", PackageName: "oldest", Version: "1.0.0", Action: "download", CacheResult: "hit", ClientIP: "10.0.0.1", UserAgent: "secret-agent", UpstreamURL: "https://user:secret@example.test", LatencyMs: 8, BytesSent: 1200, StatusCode: 200, CreatedAt: now.Add(-3 * time.Minute)},
-		{Ecosystem: "npm", PackageName: "metadata-only", Action: "metadata", CacheResult: "miss", CreatedAt: now.Add(-2 * time.Minute)},
-		{Ecosystem: "npm", PackageName: "middle", Version: "2.0.0", Action: "download", CacheResult: "miss", LatencyMs: 31, BytesSent: 2400, StatusCode: 200, CreatedAt: now.Add(-time.Minute)},
-		{Ecosystem: "cargo", PackageName: "newest", Version: "3.0.0", Action: "download", CacheResult: "error", LatencyMs: 55, BytesSent: 0, StatusCode: 502, CreatedAt: now},
+	rows := []db.AccessLog{
+		{AdapterType: "pypi", CacheKey: "pypi/files/ab/oldest-1.0.0-py3-none-any.whl", PackageName: "oldest", Hit: true, ClientIP: "10.0.0.1", Upstream: "secret-upstream", LatencyMs: 8, BytesSent: 1200, StatusCode: 200, CreatedAt: now.Add(-3 * time.Minute)},
+		{AdapterType: "npm", CacheKey: "npm-exact-v1/metadata-only/metadata.json", PackageName: "metadata-only", StatusCode: 200, CreatedAt: now.Add(-2 * time.Minute)},
+		{AdapterType: "npm", CacheKey: "npm-exact-v1/middle/-/middle-2.0.0-rc.1.tgz", PackageName: "middle", LatencyMs: 31, BytesSent: 2400, StatusCode: 200, CreatedAt: now.Add(-time.Minute)},
+		{AdapterType: "cargo", CacheKey: "cargo/crates/newest/3.0.0.crate", PackageName: "newest", LatencyMs: 55, StatusCode: 502, CreatedAt: now},
 	}
 	if err := database.Create(&rows).Error; err != nil {
 		t.Fatalf("seed: %v", err)
+	}
+	// A request row an earlier release chained into the audit log is not a
+	// second source: the feed reads the access log alone.
+	if err := database.Create(&db.AuditLog{Ecosystem: "npm", PackageName: "legacy-audit-row", Version: "9.9.9", Action: "download", CacheResult: "hit", StatusCode: 200, CreatedAt: now.Add(time.Minute)}).Error; err != nil {
+		t.Fatalf("seed legacy audit row: %v", err)
 	}
 
 	queryCount := 0
@@ -47,8 +52,8 @@ func TestDashboardRecentDownloadsReturnsSmallPrivateSnapshot(t *testing.T) {
 	if queryCount != 1 {
 		t.Fatalf("database queries = %d, want one lightweight SELECT", queryCount)
 	}
-	if strings.Contains(recorder.Body.String(), "10.0.0.1") || strings.Contains(recorder.Body.String(), "secret-agent") || strings.Contains(recorder.Body.String(), "user:secret") {
-		t.Fatalf("response leaked private audit fields: %s", recorder.Body.String())
+	if strings.Contains(recorder.Body.String(), "10.0.0.1") || strings.Contains(recorder.Body.String(), "secret-upstream") || strings.Contains(recorder.Body.String(), "legacy-audit-row") {
+		t.Fatalf("response leaked private request fields: %s", recorder.Body.String())
 	}
 
 	var body map[string]json.RawMessage
@@ -76,6 +81,43 @@ func TestDashboardRecentDownloadsReturnsSmallPrivateSnapshot(t *testing.T) {
 	if newestID != rows[3].ID || middleID != rows[2].ID {
 		t.Fatalf("ids = [%d, %d], want newest download ids [%d, %d]", newestID, middleID, rows[3].ID, rows[2].ID)
 	}
+	var decoded contract.RecentDownloadsResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("decode typed response: %v", err)
+	}
+	newest, middle := decoded.Items[0], decoded.Items[1]
+	// A failed response proved no artifact identity, so it names no version.
+	if newest.PackageName != "newest" || newest.Version != "" || newest.CacheResult != "error" || newest.StatusCode != 502 {
+		t.Fatalf("newest = %#v", newest)
+	}
+	if middle.Ecosystem != "npm" || middle.PackageName != "middle" || middle.Version != "2.0.0-rc.1" ||
+		middle.CacheResult != "miss" || middle.BytesSent != 2400 || middle.LatencyMs != 31 {
+		t.Fatalf("middle = %#v", middle)
+	}
+}
+
+func TestDashboardRecentDownloadsScansPastMetadataRequests(t *testing.T) {
+	database := newRecentDownloadsTestDB(t)
+	now := time.Date(2026, 7, 21, 10, 30, 0, 0, time.UTC)
+	if err := database.Create(&db.AccessLog{AdapterType: "npm", CacheKey: "npm-exact-v1/left-pad/-/left-pad-1.3.0.tgz", PackageName: "left-pad", Hit: true, BytesSent: 10, StatusCode: 200, CreatedAt: now}).Error; err != nil {
+		t.Fatalf("seed download: %v", err)
+	}
+	metadata := make([]db.AccessLog, recentDownloadsScanBatch+5)
+	for index := range metadata {
+		metadata[index] = db.AccessLog{AdapterType: "npm", CacheKey: "npm-exact-v1/left-pad/metadata.json", PackageName: "left-pad", Hit: true, StatusCode: 200, CreatedAt: now}
+	}
+	if err := database.CreateInBatches(&metadata, 50).Error; err != nil {
+		t.Fatalf("seed metadata: %v", err)
+	}
+
+	recorder := performRecentDownloadsRequest(newRecentDownloadsTestRouter(database), "/dashboard/recent-downloads?limit=3")
+	var body contract.RecentDownloadsResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil || recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if len(body.Items) != 1 || body.Items[0].PackageName != "left-pad" || body.Items[0].Version != "1.3.0" || body.Items[0].CacheResult != "hit" {
+		t.Fatalf("items = %#v, want the one download behind a batch of metadata requests", body.Items)
+	}
 }
 
 func TestDashboardRecentDownloadsLimitIsBounded(t *testing.T) {
@@ -96,32 +138,10 @@ func TestDashboardRecentDownloadsLimitIsBounded(t *testing.T) {
 	}
 }
 
-func TestDashboardRecentDownloadsQueryUsesActionOrderIndex(t *testing.T) {
-	database := newRecentDownloadsTestDB(t)
-	var plan []struct {
-		Detail string `gorm:"column:detail"`
-	}
-	if err := database.Raw(
-		"EXPLAIN QUERY PLAN SELECT id, ecosystem, package_name, version, cache_result, latency_ms, bytes_sent, status_code, created_at FROM audit_logs WHERE action = ? ORDER BY id DESC LIMIT ?",
-		"download",
-		3,
-	).Scan(&plan).Error; err != nil {
-		t.Fatalf("explain recent downloads query: %v", err)
-	}
-	var details []string
-	for _, row := range plan {
-		details = append(details, row.Detail)
-	}
-	joined := strings.Join(details, "\n")
-	if !strings.Contains(joined, "idx_audit_action_order") {
-		t.Fatalf("recent downloads query does not use the action/order index:\n%s", joined)
-	}
-}
-
 func TestDashboardRecentDownloadsPropagatesDatabaseErrors(t *testing.T) {
 	database := newRecentDownloadsTestDB(t)
 	if err := database.Callback().Query().Before("gorm:query").Register("test:fail_recent_download_query", func(tx *gorm.DB) {
-		if reflect.TypeOf(tx.Statement.Dest) == reflect.TypeOf((*[]contract.RecentDownload)(nil)) {
+		if reflect.TypeOf(tx.Statement.Dest) == reflect.TypeOf((*[]db.AccessLog)(nil)) {
 			tx.AddError(errors.New("forced recent download failure"))
 		}
 	}); err != nil {
@@ -144,11 +164,8 @@ func newRecentDownloadsTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	if err := database.AutoMigrate(&db.AuditLog{}); err != nil {
+	if err := database.AutoMigrate(&db.AccessLog{}, &db.AuditLog{}); err != nil {
 		t.Fatalf("migrate: %v", err)
-	}
-	if !database.Migrator().HasIndex(&db.AuditLog{}, "idx_audit_action_order") {
-		t.Fatal("missing idx_audit_action_order")
 	}
 	return database
 }

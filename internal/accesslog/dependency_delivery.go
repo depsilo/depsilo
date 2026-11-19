@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/db"
 )
 
@@ -74,4 +75,15 @@ func DependencyRequestKind(ecosystem, key string) string {
 	default:
 		return db.ClassifyCacheKind(ecosystem, key)
 	}
+}
+
+// RecordedVersion is the version an access row names, derived from its cache
+// key. A refused or failed response proved no artifact identity: the file
+// name in its path is only the client's claim, so it reads as no version
+// rather than a request for that version.
+func RecordedVersion(adapterType, cacheKey string, statusCode int) string {
+	if statusCode >= 400 {
+		return ""
+	}
+	return packagekey.ExtractVersion(adapterType, cacheKey)
 }
