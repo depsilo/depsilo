@@ -333,6 +333,13 @@ func TestManagerInvalidationDuringStreamingWinsOverTheWriter(t *testing.T) {
 // while an older one is still streaming.
 type unserializedStagedStorage struct {
 	*observedLocalStorage
+
+	mu sync.Mutex
+	// deleteErr, while set, fails every Delete.
+	deleteErr error
+	// afterPublish runs once the published object is visible, before
+	// PutStaged returns to the writer that still holds the publish gate.
+	afterPublish func()
 }
 
 func (s *unserializedStagedStorage) PutStaged(ctx context.Context, key string, r io.Reader, size int64, contentType string, publish func() error) error {
@@ -343,7 +350,49 @@ func (s *unserializedStagedStorage) PutStaged(ctx context.Context, key string, r
 	if err := runPublish(publish); err != nil {
 		return err
 	}
-	return s.LocalStorage.Put(ctx, key, bytes.NewReader(staged), int64(len(staged)), contentType)
+	if err := s.LocalStorage.Put(ctx, key, bytes.NewReader(staged), int64(len(staged)), contentType); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	hook := s.afterPublish
+	s.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
+	return nil
+}
+
+func (s *unserializedStagedStorage) Delete(ctx context.Context, key string) error {
+	s.mu.Lock()
+	err := s.deleteErr
+	s.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	return s.LocalStorage.Delete(ctx, key)
+}
+
+func (s *unserializedStagedStorage) setDeleteErr(err error) {
+	s.mu.Lock()
+	s.deleteErr = err
+	s.mu.Unlock()
+}
+
+// requireEntryRemoved fails unless both the metadata row and the object under
+// key are gone.
+func requireEntryRemoved(t *testing.T, storage Storage, database *gorm.DB, key string) {
+	t.Helper()
+	var rows int64
+	if err := database.Model(&db.CacheEntry{}).Where("key = ?", key).Count(&rows).Error; err != nil {
+		t.Fatal(err)
+	}
+	exists, err := storage.Exists(t.Context(), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows != 0 || exists {
+		t.Fatalf("revoked entry survived: metadata rows=%d object exists=%v", rows, exists)
+	}
 }
 
 func TestManagerSupersededRefreshKeepsANewerCommittedFill(t *testing.T) {
@@ -403,4 +452,94 @@ func TestManagerSupersededRefreshKeepsANewerCommittedFill(t *testing.T) {
 	if string(got) != "fresh-index" || result.ContentType != "text/fresh" {
 		t.Fatalf("hit after superseded refresh = body:%q type:%q, want the newer fill", got, result.ContentType)
 	}
+}
+
+func TestManagerSupersededRefreshRetriesAnInvalidationWhoseDeletesFailed(t *testing.T) {
+	const key = "pypi/simple/failed-invalidation/index.html"
+	database := openStreamTestDB(t)
+	storage := &unserializedStagedStorage{observedLocalStorage: newObservedLocalStorage(t)}
+	seedLocalEntry(t, storage.LocalStorage, database, db.CacheEntry{
+		Key: key, AdapterType: "pypi", StoragePath: key, CacheKind: db.CacheKindMetadata,
+		ContentType: "text/old", ExpiresAt: time.Now().Add(-time.Minute),
+	}, "revoked-index")
+	m := NewManager(storage, database, NewEventBus(), 72*time.Hour)
+	m.invalidationTimeout = time.Second
+	t.Cleanup(func() { closeTestManager(t, m) })
+
+	slow := newTrickleBody("slow-", "refresh")
+	defer slow.Close()
+	refreshDone := make(chan struct{})
+	go func() {
+		defer close(refreshDone)
+		m.backgroundRefresh(t.Context(), key, "pypi", time.Hour,
+			func(context.Context) (io.ReadCloser, string, int64, string, error) {
+				return slow, "text/slow", -1, "mock", nil
+			})
+	}()
+	storage.waitStreaming(t)
+
+	// The invalidation supersedes the streaming refresh, but both halves of
+	// its delete fail, so the revoked row and object remain.
+	metadataFailure := errors.New("injected metadata delete failure")
+	objectFailure := errors.New("injected object delete failure")
+	const deleteCallback = "test:fail-invalidation-metadata-delete"
+	if err := database.Callback().Delete().Before("gorm:delete").Register(deleteCallback, func(tx *gorm.DB) {
+		if tx.Statement.Table == "cache_entries" {
+			tx.AddError(metadataFailure)
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = database.Callback().Delete().Remove(deleteCallback) })
+	storage.setDeleteErr(objectFailure)
+	if err := m.Invalidate(t.Context(), key); !errors.Is(err, metadataFailure) || !errors.Is(err, objectFailure) {
+		t.Fatalf("Invalidate = %v, want both delete failures", err)
+	}
+	if err := database.Callback().Delete().Remove(deleteCallback); err != nil {
+		t.Fatal(err)
+	}
+	storage.setDeleteErr(nil)
+
+	// The refused refresh holds the gate with the invalidation still pending
+	// and no newer commit, so it retries the delete.
+	close(slow.release)
+	select {
+	case <-refreshDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("superseded refresh did not finish")
+	}
+	requireEntryRemoved(t, storage, database, key)
+	if !m.invalidations.readable(key) {
+		t.Fatal("completed cleanup retry left the key tombstoned")
+	}
+}
+
+func TestManagerRefreshSupersededAfterPublishRemovesItself(t *testing.T) {
+	const key = "pypi/simple/superseded-after-publish/index.html"
+	database := openStreamTestDB(t)
+	storage := &unserializedStagedStorage{observedLocalStorage: newObservedLocalStorage(t)}
+	seedLocalEntry(t, storage.LocalStorage, database, db.CacheEntry{
+		Key: key, AdapterType: "pypi", StoragePath: key, CacheKind: db.CacheKindMetadata,
+		ContentType: "text/old", ExpiresAt: time.Now().Add(-time.Minute),
+	}, "old-index")
+	m := NewManager(storage, database, NewEventBus(), 72*time.Hour)
+	m.invalidationTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { closeTestManager(t, m) })
+
+	// Once the refresh has published, an invalidation supersedes it. The
+	// refresh holds the gate until its commit, so the invalidation's wait
+	// times out and leaves the published object for the refresh to remove.
+	var invalidateErr error
+	storage.afterPublish = func() {
+		storage.afterPublish = nil
+		invalidateErr = m.Invalidate(t.Context(), key)
+	}
+	m.backgroundRefresh(t.Context(), key, "pypi", time.Hour,
+		func(context.Context) (io.ReadCloser, string, int64, string, error) {
+			return io.NopCloser(bytes.NewReader([]byte("refreshed-index"))), "text/refreshed", -1, "mock", nil
+		})
+	if !errors.Is(invalidateErr, context.DeadlineExceeded) {
+		t.Fatalf("Invalidate behind the publishing refresh = %v, want its gate wait to time out", invalidateErr)
+	}
+	requireEntryRemoved(t, storage, database, key)
 }

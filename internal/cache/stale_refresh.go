@@ -346,11 +346,17 @@ func (m *Manager) handleBackgroundRefreshError(parentCtx context.Context, key st
 }
 
 // discardSupersededWrite runs while the caller holds the key mutation gate,
-// after the publish hook refused a write that lost the generation race. That
-// write made nothing visible, so the row and object under key belong to
-// someone else. They are deleted only to retry an invalidation that has not
-// yet removed what it revoked; once a newer write has committed, or either
-// half of the invalidation's delete succeeded, they are left alone.
+// for a write that lost the generation race. If the publish hook refused it,
+// it made nothing visible and the row and object under key belong to someone
+// else; if it was superseded after its own publish, the gate it has held
+// since then means they are its own. Either way they are deleted only to
+// retry an invalidation that has not yet removed what it revoked (for a write
+// published under the gate, that is the write itself); once a newer write
+// has committed, or either half of the invalidation's delete succeeded, they
+// are left alone. That matches how invalidation defines cleanupSafe: after a
+// successful row delete, an object whose delete failed stays in storage until
+// a newer fill replaces it, but reads go through the row, so it is leaked
+// space, never served.
 func (m *Manager) discardSupersededWrite(ctx context.Context, key string) error {
 	if !m.invalidations.cleanupPending(key) {
 		return nil
