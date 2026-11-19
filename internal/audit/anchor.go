@@ -409,9 +409,19 @@ func VerifyAnchors(ctx context.Context, database *gorm.DB, path string) (AnchorR
 	report.LatestCheckedAt = latest.CheckedAt
 	report.LatestHeadID = latest.HeadID
 	report.LatestHeadHash = latest.HeadHash
+	// Read the base and every checkpointed row from one WAL snapshot: a
+	// retention sweep committed between them would make a just-pruned row
+	// look missing.
+	err = database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return verifyAnchorsSnapshot(ctx, tx, checkpoints, &report)
+	})
+	return report, err
+}
+
+func verifyAnchorsSnapshot(ctx context.Context, database *gorm.DB, checkpoints []ChainCheckpoint, report *AnchorReport) error {
 	base, hasBase, err := LoadChainBase(ctx, database)
 	if err != nil {
-		return report, err
+		return err
 	}
 	for _, checkpoint := range checkpoints {
 		if hasBase && checkpoint.HeadID <= base.ID {
@@ -419,7 +429,7 @@ func VerifyAnchors(ctx context.Context, database *gorm.DB, path string) (AnchorR
 				report.OK = false
 				report.BrokenAtID = checkpoint.HeadID
 				report.Reason = fmt.Sprintf("pruned chain base %d does not match its checkpoint", checkpoint.HeadID)
-				return report, nil
+				return nil
 			}
 			report.Pruned++
 			continue
@@ -430,17 +440,17 @@ func VerifyAnchors(ctx context.Context, database *gorm.DB, path string) (AnchorR
 			report.OK = false
 			report.BrokenAtID = checkpoint.HeadID
 			report.Reason = fmt.Sprintf("checkpointed row %d is missing", checkpoint.HeadID)
-			return report, nil
+			return nil
 		}
 		if err != nil {
-			return report, fmt.Errorf("read checkpointed row %d: %w", checkpoint.HeadID, err)
+			return fmt.Errorf("read checkpointed row %d: %w", checkpoint.HeadID, err)
 		}
 		if row.Hash != checkpoint.HeadHash {
 			report.OK = false
 			report.BrokenAtID = checkpoint.HeadID
 			report.Reason = fmt.Sprintf("row %d no longer matches its checkpoint", checkpoint.HeadID)
-			return report, nil
+			return nil
 		}
 	}
-	return report, nil
+	return nil
 }

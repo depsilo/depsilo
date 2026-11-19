@@ -388,7 +388,9 @@ consequence.
   part of the database backup; restoring a backup restores the rows and the
   base together. An older binary ignores the base: its `audit verify` reports
   a pruned database as broken at the first retained row, and on a fully
-  pruned table it restarts the chain from the genesis hash.
+  pruned table it restarts the chain from the genesis hash. Ids still never
+  repeat (`audit_logs` uses `AUTOINCREMENT`), so exporter cursors keep
+  working; the supported downgrade is still the backup restore below.
 - The supported downgrade path is restoring a backup taken before the
   upgrade with `depsilo restore`; migrations are not reversed in place.
 - `depsilo backup` writes a checksummed `depsilo-backup` archive containing

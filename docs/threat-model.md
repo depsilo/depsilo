@@ -385,10 +385,10 @@ the integrity API, and `depsilo audit verify`, so a rewritten or truncated
 chain contradicts a copy the operator already holds. Checkpoints older than
 the chain base are reported as pruned: rows retention was allowed to delete
 can no longer be proven, so a database attacker can also drop an old prefix
-and move the base forward. What remains is operational: the anchor copy must live where a database attacker cannot
-rewrite it. `checkpoint_url` pushes each checkpoint directly to a WORM
-gateway or log platform, so this no longer depends on a person shipping the
-local file.
+and move the base forward. What remains is operational: the anchor copy must
+live where a database attacker cannot rewrite it. `checkpoint_url` pushes
+each checkpoint directly to a WORM gateway or log platform, so this no longer
+depends on a person shipping the local file.
 
 ### 5.9 SSRF through redirects, upstreams, or MCP
 

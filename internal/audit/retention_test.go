@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -292,6 +293,65 @@ func TestVerifyAnchorsReportsPrunedCheckpointsSeparately(t *testing.T) {
 	}
 	if report.OK || report.BrokenAtID != freshRows[0].ID {
 		t.Fatalf("base contradiction report = %+v", report)
+	}
+}
+
+// pruneAfterBaseRead commits one retention sweep right after the next read of
+// the chain base, the window between a verifier's base read and its row scan.
+// Each test database is fresh, so the callback is never removed.
+func pruneAfterBaseRead(t *testing.T, database *gorm.DB) *atomic.Bool {
+	t.Helper()
+	var armed, fired atomic.Bool
+	armed.Store(true)
+	name := "test:prune_after_base_read"
+	err := database.Callback().Query().After("gorm:query").Register(name, func(statement *gorm.DB) {
+		if statement.Statement.Table != "control_plane_states" || !armed.CompareAndSwap(true, false) {
+			return
+		}
+		if _, err := NewRetention(database, 90).PruneBefore(context.Background(), retentionCutoff); err != nil {
+			t.Errorf("interleaved prune: %v", err)
+			return
+		}
+		fired.Store(true)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &fired
+}
+
+func TestVerifyReadsTheBaseAndRowsFromOneSnapshot(t *testing.T) {
+	old := retentionCutoff.Add(-time.Hour)
+
+	chainDB := newChainTestDB(t)
+	appendRows(t, chainDB, agedAuditRow("a", old), agedAuditRow("b", old), sampleAuditRow("c"))
+	fired := pruneAfterBaseRead(t, chainDB)
+	report, err := VerifyChain(context.Background(), chainDB, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !fired.Load() {
+		t.Fatal("the interleaved prune did not run")
+	}
+	// The database was consistent at every commit, so either snapshot verifies.
+	if !report.OK {
+		t.Fatalf("chain report with a prune between base and rows = %+v", report)
+	}
+
+	anchorDB := newChainTestDB(t)
+	path := filepath.Join(t.TempDir(), "audit-anchors.ndjson")
+	rows := appendRows(t, anchorDB, agedAuditRow("a", old), agedAuditRow("b", old), sampleAuditRow("c"))
+	writeCheckpoints(t, path, rows[0], rows[1], rows[2])
+	fired = pruneAfterBaseRead(t, anchorDB)
+	anchors, err := VerifyAnchors(context.Background(), anchorDB, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !fired.Load() {
+		t.Fatal("the interleaved prune did not run")
+	}
+	if !anchors.OK {
+		t.Fatalf("anchor report with a prune between base and rows = %+v", anchors)
 	}
 }
 

@@ -93,8 +93,10 @@ func AppendAuditRows(ctx context.Context, database *gorm.DB, rows []db.AuditLog)
 			}
 			for index := range pending {
 				if nextID != 0 {
-					// Every row was pruned: SQLite would restart ids at 1,
-					// which exporter cursors and anchors already passed.
+					// Every row was pruned. AUTOINCREMENT already keeps new
+					// ids above the deleted ones; the explicit id also holds
+					// when the sqlite_sequence entry is missing, so exporter
+					// cursors and anchors never see a reused id.
 					pending[index].ID = nextID + uint(index)
 				}
 				// Each row needs its own prev value: sharing one variable would
@@ -191,9 +193,19 @@ func VerifyChain(ctx context.Context, database *gorm.DB, batchSize int) (ChainRe
 	if batchSize <= 0 {
 		batchSize = 1000
 	}
+	// Retention deletes the prefix and moves the base while this runs: read
+	// the base and every row from one WAL snapshot, or a sweep committed in
+	// between would look like a break.
+	err := database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return verifyChainSnapshot(ctx, tx, batchSize, &report)
+	})
+	return report, err
+}
+
+func verifyChainSnapshot(ctx context.Context, database *gorm.DB, batchSize int, report *ChainReport) error {
 	base, hasBase, err := LoadChainBase(ctx, database)
 	if err != nil {
-		return report, err
+		return err
 	}
 	prev := ""
 	started := false
@@ -261,7 +273,7 @@ func VerifyChain(ctx context.Context, database *gorm.DB, batchSize int) (ChainRe
 		return nil
 	}).Error
 	if err != nil {
-		return report, fmt.Errorf("scan audit chain: %w", err)
+		return fmt.Errorf("scan audit chain: %w", err)
 	}
-	return report, nil
+	return nil
 }
