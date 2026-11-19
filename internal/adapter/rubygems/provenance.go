@@ -12,6 +12,9 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+
+	"depsilo/internal/adapter"
+	"depsilo/internal/upstream"
 )
 
 // errRubyGemsIndexUnavailable marks compact-index metadata that cannot prove
@@ -105,7 +108,7 @@ func (h *Handler) resolveProvenance(ctx context.Context, fullName string) (rubyg
 		seenGems[gem] = true
 		info, err := h.fetchInfo(ctx, gem)
 		if err != nil {
-			if strings.Contains(err.Error(), "returned 404") {
+			if upstream.IsNotFound(err) {
 				continue
 			}
 			return rubygemsResolution{}, err
@@ -170,14 +173,16 @@ func (h *Handler) fetchInfo(ctx context.Context, gem string) ([]byte, error) {
 		if err != nil {
 			return nil, "", 0, "", err
 		}
-		fetchResult, err := ups.Fetch(ctx, "/"+path)
+		fetchResult, ups, err := adapter.FetchFromPool(ctx, h.selector, ups, false, func(member *upstream.Upstream) (*upstream.FetchResult, error) {
+			return member.Fetch(ctx, "/"+path)
+		})
 		if err != nil {
 			return nil, "", 0, "", err
 		}
 		return fetchResult.Body, fetchResult.ContentType, fetchResult.Size, ups.Name, nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("%w: info/%s: %v", errRubyGemsIndexUnavailable, gem, err)
+		return nil, fmt.Errorf("%w: info/%s: %w", errRubyGemsIndexUnavailable, gem, err)
 	}
 	defer result.Reader.Close()
 	return io.ReadAll(result.Reader)

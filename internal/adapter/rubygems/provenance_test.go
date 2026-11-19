@@ -146,3 +146,26 @@ func TestRubyGemsProvenanceMemoizesInfoLookups(t *testing.T) {
 		t.Fatalf("info hits = %d, want 1", got)
 	}
 }
+
+// The compact index that proves a gem's publish time is read from the pool:
+// a failing preferred member is passed over, and the 404s of hyphen splits
+// that name no gem still read as "not this split".
+func TestRubyGemsProvenanceIsReadFromThePool(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	fixture, _ := rubyGemsTestFixture(t, time.Now().UTC())
+	env := adaptertest.NewProvenanceEnv(t, fixture.URL, "rubygems", adaptertest.BoundProvenance)
+	failing := &adaptertest.Origin{Status: http.StatusInternalServerError}
+	handler := New(env.Manager, adaptertest.NewPoolSelector(t, failing, fixture.Config.Handler), config.CacheConfig{TTLIndex: time.Hour, TTLBlob: time.Hour}, env.DB)
+	handler.SetProvenanceRequired(true)
+	router := gin.New()
+	handler.Register(router.Group("/rubygems"))
+	scoped := adapter.NewRequestScope(nil, nil, quarantine.Wrap(env.Checker), nil).Wrap(router)
+
+	old := requestGem(t, scoped, "acme-demo-2.0.0.gem")
+	if old.Code != http.StatusOK || old.Body.String() != "gem-bytes" {
+		t.Fatalf("old gem status=%d body=%q", old.Code, old.Body.String())
+	}
+	if failing.Requests() == 0 {
+		t.Fatal("the preferred member was never asked")
+	}
+}
