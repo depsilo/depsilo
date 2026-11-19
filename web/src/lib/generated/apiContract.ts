@@ -1218,6 +1218,9 @@ export interface AuditExporterTestResponse {
 /**
  * AuditChainReport is the result of recomputing the tamper-evident audit hash
  * chain. Rows written before the chain existed are the unchained prefix.
+ * BaseID/BaseHash name the last row deleted by audit retention, which the
+ * first retained row links to; BaseCreatedAt is that row's time and is null
+ * when retention has never deleted a row.
  */
 export interface AuditChainReport {
   ok: boolean;
@@ -1225,6 +1228,9 @@ export interface AuditChainReport {
   chained_rows: number /* int64 */;
   unchained_rows: number /* int64 */;
   first_chained_id?: number /* uint */;
+  base_id?: number /* uint */;
+  base_hash?: string;
+  base_created_at: string | null;
   head_id?: number /* uint */;
   head_hash?: string;
   broken_at_id?: number /* uint */;
@@ -1233,13 +1239,15 @@ export interface AuditChainReport {
 }
 /**
  * AuditAnchorReport cross-checks chain-head checkpoints against the database.
- * LatestCheckedAt is null before the first checkpoint.
+ * LatestCheckedAt is null before the first checkpoint. Pruned counts
+ * checkpoints whose rows audit retention deleted.
  */
 export interface AuditAnchorReport {
   configured: boolean;
   path?: string;
   checkpoints: number /* int */;
   invalid_lines?: number /* int */;
+  pruned?: number /* int */;
   latest_checked_at: string | null;
   latest_head_id?: number /* uint */;
   latest_head_hash?: string;

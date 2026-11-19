@@ -11,9 +11,10 @@ function shortHash(hash: string) {
 
 // AuditIntegrityNotice recomputes the tamper-evident audit chain and shows the
 // result: verified head, the pre-chain prefix (rows written before schema v8),
-// or the exact row where the chain stopped matching.
+// the retention base the retained chain starts from, or the exact row where
+// the chain stopped matching.
 export default function AuditIntegrityNotice() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const query = useQuery({
     queryKey: ['admin', 'audit', 'integrity'],
     queryFn: ({ signal }) => adminApi.getAuditIntegrity({ signal }),
@@ -95,6 +96,12 @@ export default function AuditIntegrityNotice() {
           {report.unchained_rows > 0
             ? ` · ${t('auditIntegrity.preChain', { count: report.unchained_rows.toLocaleString() })}`
             : ''}
+          {report.base_created_at
+            ? ` · ${t('auditIntegrity.pruned', {
+              id: report.base_id ?? 0,
+              time: new Date(report.base_created_at).toLocaleString(i18n.language),
+            })}`
+            : ''}
           {anchors?.configured
             ? ` · ${anchors.checkpoints > 0
               ? t('auditIntegrity.anchorVerified', {
@@ -102,6 +109,9 @@ export default function AuditIntegrityNotice() {
                 head: anchors.latest_head_id ?? 0,
               })
               : t('auditIntegrity.anchorEmpty')}`
+            : ''}
+          {anchors?.configured && (anchors.pruned ?? 0) > 0
+            ? ` · ${t('auditIntegrity.anchorPruned', { count: anchors.pruned ?? 0 })}`
             : ''}
           {feed?.remote_configured && feed.remote_last_success_at
             ? ` · ${t('auditIntegrity.remoteVerified', { head: feed.remote_head_id ?? 0 })}`

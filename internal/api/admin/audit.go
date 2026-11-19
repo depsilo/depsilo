@@ -76,7 +76,7 @@ func (h *AuditHandler) Export(c *gin.Context) {
 }
 
 // Integrity recomputes the tamper-evident audit chain and reports the first
-// broken row, the pre-chain prefix, and the current head.
+// broken row, the pre-chain prefix, the retention base, and the current head.
 func (h *AuditHandler) Integrity(c *gin.Context) {
 	report, err := audit.VerifyChain(c.Request.Context(), h.db, 2000)
 	if err != nil {
@@ -102,13 +102,14 @@ func (h *AuditHandler) Integrity(c *gin.Context) {
 		},
 		Anchors: contract.AuditAnchorReport{
 			Configured: anchors.Configured, Path: anchors.Path, Checkpoints: anchors.Checkpoints,
-			InvalidLines: anchors.InvalidLines, LatestCheckedAt: contract.NullableTime(anchors.LatestCheckedAt),
+			InvalidLines: anchors.InvalidLines, Pruned: anchors.Pruned, LatestCheckedAt: contract.NullableTime(anchors.LatestCheckedAt),
 			LatestHeadID: anchors.LatestHeadID, LatestHeadHash: anchors.LatestHeadHash,
 			OK: anchors.OK, BrokenAtID: anchors.BrokenAtID, Reason: anchors.Reason,
 		},
 		Integrity: contract.AuditChainReport{
 			OK: report.OK, RowsScanned: report.RowsScanned, ChainedRows: report.ChainedRows,
 			UnchainedRows: report.UnchainedRows, FirstChainedID: report.FirstChainedID,
+			BaseID: report.BaseID, BaseHash: report.BaseHash, BaseCreatedAt: report.BaseCreatedAt,
 			HeadID: report.HeadID, HeadHash: report.HeadHash, BrokenAtID: report.BrokenAtID,
 			Reason: report.Reason, ScannedAt: report.ScannedAt,
 		},

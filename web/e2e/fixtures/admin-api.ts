@@ -327,6 +327,7 @@ const canonicalAdminApiDefaults = {
       rows_scanned: 0,
       chained_rows: 0,
       unchained_rows: 0,
+      base_created_at: null,
       scanned_at: '2026-10-06T10:00:00Z',
     },
     anchors: {

@@ -84,6 +84,7 @@ func TestAuditIntegrityEndpointSendsNeverAsNull(t *testing.T) {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 	var body struct {
+		Integrity  map[string]json.RawMessage `json:"integrity"`
 		Anchors    map[string]json.RawMessage `json:"anchors"`
 		AnchorFeed map[string]json.RawMessage `json:"anchor_feed"`
 	}
@@ -91,6 +92,7 @@ func TestAuditIntegrityEndpointSendsNeverAsNull(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, value := range map[string]json.RawMessage{
+		"integrity.base_created_at":          body.Integrity["base_created_at"],
 		"anchors.latest_checked_at":          body.Anchors["latest_checked_at"],
 		"anchor_feed.file_last_success_at":   body.AnchorFeed["file_last_success_at"],
 		"anchor_feed.remote_last_success_at": body.AnchorFeed["remote_last_success_at"],
@@ -98,5 +100,56 @@ func TestAuditIntegrityEndpointSendsNeverAsNull(t *testing.T) {
 		if string(value) != "null" {
 			t.Errorf("%s = %s, want null", name, value)
 		}
+	}
+}
+
+func TestAuditIntegrityEndpointReportsTheRetentionBase(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "audit-base.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(database); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().UTC().AddDate(0, 0, -200)
+	rows := []db.AuditLog{
+		{Ecosystem: "admin", PackageName: "old", Action: "user_create", CacheResult: "success", StatusCode: 200, CreatedAt: old},
+		{Ecosystem: "admin", PackageName: "new", Action: "user_create", CacheResult: "success", StatusCode: 200, CreatedAt: time.Now().UTC()},
+	}
+	if err := audit.AppendAuditRows(context.Background(), database, rows); err != nil {
+		t.Fatal(err)
+	}
+	var pruned db.AuditLog
+	if err := database.Order("id").First(&pruned).Error; err != nil {
+		t.Fatal(err)
+	}
+	if deleted, err := audit.NewRetention(database, 90).RunOnce(context.Background()); err != nil || deleted != 1 {
+		t.Fatalf("retention deleted=%d err=%v", deleted, err)
+	}
+
+	router := gin.New()
+	router.GET("/audit/integrity", NewAuditHandler(database).Integrity)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/audit/integrity", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var body struct {
+		Integrity struct {
+			OK            bool       `json:"ok"`
+			ChainedRows   int64      `json:"chained_rows"`
+			BaseID        uint       `json:"base_id"`
+			BaseHash      string     `json:"base_hash"`
+			BaseCreatedAt *time.Time `json:"base_created_at"`
+		} `json:"integrity"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	got := body.Integrity
+	if !got.OK || got.ChainedRows != 1 || got.BaseID != pruned.ID || got.BaseHash != pruned.Hash ||
+		got.BaseCreatedAt == nil || !got.BaseCreatedAt.Equal(pruned.CreatedAt) {
+		t.Fatalf("integrity = %+v, want base row %d", got, pruned.ID)
 	}
 }

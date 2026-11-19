@@ -89,26 +89,34 @@ type AuditExporterTestResponse struct {
 
 // AuditChainReport is the result of recomputing the tamper-evident audit hash
 // chain. Rows written before the chain existed are the unchained prefix.
+// BaseID/BaseHash name the last row deleted by audit retention, which the
+// first retained row links to; BaseCreatedAt is that row's time and is null
+// when retention has never deleted a row.
 type AuditChainReport struct {
-	OK             bool      `json:"ok"`
-	RowsScanned    int64     `json:"rows_scanned"`
-	ChainedRows    int64     `json:"chained_rows"`
-	UnchainedRows  int64     `json:"unchained_rows"`
-	FirstChainedID uint      `json:"first_chained_id,omitempty"`
-	HeadID         uint      `json:"head_id,omitempty"`
-	HeadHash       string    `json:"head_hash,omitempty"`
-	BrokenAtID     uint      `json:"broken_at_id,omitempty"`
-	Reason         string    `json:"reason,omitempty"`
-	ScannedAt      time.Time `json:"scanned_at"`
+	OK             bool       `json:"ok"`
+	RowsScanned    int64      `json:"rows_scanned"`
+	ChainedRows    int64      `json:"chained_rows"`
+	UnchainedRows  int64      `json:"unchained_rows"`
+	FirstChainedID uint       `json:"first_chained_id,omitempty"`
+	BaseID         uint       `json:"base_id,omitempty"`
+	BaseHash       string     `json:"base_hash,omitempty"`
+	BaseCreatedAt  *time.Time `json:"base_created_at" tstype:"string | null,required"`
+	HeadID         uint       `json:"head_id,omitempty"`
+	HeadHash       string     `json:"head_hash,omitempty"`
+	BrokenAtID     uint       `json:"broken_at_id,omitempty"`
+	Reason         string     `json:"reason,omitempty"`
+	ScannedAt      time.Time  `json:"scanned_at"`
 }
 
 // AuditAnchorReport cross-checks chain-head checkpoints against the database.
-// LatestCheckedAt is null before the first checkpoint.
+// LatestCheckedAt is null before the first checkpoint. Pruned counts
+// checkpoints whose rows audit retention deleted.
 type AuditAnchorReport struct {
 	Configured      bool       `json:"configured"`
 	Path            string     `json:"path,omitempty"`
 	Checkpoints     int        `json:"checkpoints"`
 	InvalidLines    int        `json:"invalid_lines,omitempty"`
+	Pruned          int        `json:"pruned,omitempty"`
 	LatestCheckedAt *time.Time `json:"latest_checked_at" tstype:"string | null,required"`
 	LatestHeadID    uint       `json:"latest_head_id,omitempty"`
 	LatestHeadHash  string     `json:"latest_head_hash,omitempty"`

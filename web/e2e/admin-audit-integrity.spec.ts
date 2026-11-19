@@ -11,6 +11,7 @@ function integrity(overrides: Partial<AuditChainReport>): AuditIntegrityResponse
       first_chained_id: 21,
       head_id: 1200,
       head_hash: 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+      base_created_at: null,
       scanned_at: '2026-10-06T10:00:00Z',
       ...overrides,
     },
@@ -32,6 +33,25 @@ test('audit page shows a verified chain including the pre-chain prefix', async (
 
   await expect(page.getByText(/审计链已校验：1,180 行/)).toBeVisible()
   await expect(page.getByText(/20 行早于哈希链/)).toBeVisible()
+})
+
+test('audit page shows where audit retention pruned the chain', async ({ page }) => {
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/audit/integrity': {
+      ...integrity({
+        unchained_rows: 0,
+        base_id: 20,
+        base_hash: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+        base_created_at: '2026-07-01T10:00:00Z',
+      }),
+      anchors: { configured: true, checkpoints: 5, pruned: 2, latest_checked_at: '2026-10-06T10:00:00Z', latest_head_id: 1200, ok: true },
+    },
+  })
+  await page.goto('/admin/audit')
+
+  await expect(page.getByText(/审计链已校验：1,180 行/)).toBeVisible()
+  await expect(page.getByText(/第 20 行（.+）及更早的记录已按审计保留期删除/)).toBeVisible()
+  await expect(page.getByText(/2 个检查点早于保留基点/)).toBeVisible()
 })
 
 test('audit page surfaces a broken chain with the offending row', async ({ page }) => {
