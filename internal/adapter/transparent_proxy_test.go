@@ -1,6 +1,7 @@
 package adapter_test
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -102,36 +103,60 @@ func (writer *disconnectedWriter) Write(body []byte) (int, error) {
 	return written, errors.New("client disconnected")
 }
 
+// A failed miss answers the client the way the hand-rolled package routes do:
+// a member's 404 or 410 says the file does not exist, anything else is a
+// gateway failure. The access record carries the status the client saw.
 func TestTransparentProxyRecordsFailedUpstreamRequest(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	upstreamServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
-		http.Error(writer, "unavailable", http.StatusServiceUnavailable)
-	}))
-	t.Cleanup(upstreamServer.Close)
+	for _, tc := range []struct {
+		name     string
+		upstream int
+		status   int
+		code     string
+	}{
+		{"member unavailable", http.StatusServiceUnavailable, http.StatusBadGateway, "UPSTREAM_UNAVAILABLE"},
+		{"file missing", http.StatusNotFound, http.StatusNotFound, "NOT_FOUND"},
+		// proxy.golang.org answers a missing module version with 410: the go
+		// command reports it as not found and falls back to its next GOPROXY.
+		{"file gone", http.StatusGone, http.StatusGone, "GONE"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			upstreamServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+				http.Error(writer, "upstream answer", tc.upstream)
+			}))
+			t.Cleanup(upstreamServer.Close)
 
-	manager, database, _ := adaptertest.NewManager(t, time.Hour)
-	pool, err := upstream.NewPool([]config.UpstreamConfig{{Name: "broken", URL: upstreamServer.URL, Priority: 1}})
-	if err != nil {
-		t.Fatalf("create upstream pool: %v", err)
-	}
-	proxy := adapter.NewTransparentProxy("fixture", manager, upstream.NewPassiveRecoverySelector(pool), database)
-	engine := gin.New()
-	engine.GET("/fixture/*path", func(c *gin.Context) {
-		proxy.Serve(c, adapter.TransparentPlan{Path: "packages/missing.bin", CacheKey: "fixture/packages/missing.bin", TTL: time.Hour})
-	})
+			manager, database, _ := adaptertest.NewManager(t, time.Hour)
+			pool, err := upstream.NewPool([]config.UpstreamConfig{{Name: "broken", URL: upstreamServer.URL, Priority: 1}})
+			if err != nil {
+				t.Fatalf("create upstream pool: %v", err)
+			}
+			proxy := adapter.NewTransparentProxy("fixture", manager, upstream.NewPassiveRecoverySelector(pool), database)
+			engine := gin.New()
+			engine.GET("/fixture/*path", func(c *gin.Context) {
+				proxy.Serve(c, adapter.TransparentPlan{Path: "packages/missing.bin", CacheKey: "fixture/packages/missing.bin", TTL: time.Hour})
+			})
 
-	response := httptest.NewRecorder()
-	engine.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/fixture/packages/missing.bin", nil))
-	if response.Code != http.StatusBadGateway {
-		t.Fatalf("response status = %d, want %d", response.Code, http.StatusBadGateway)
-	}
+			response := httptest.NewRecorder()
+			engine.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/fixture/packages/missing.bin", nil))
+			var body struct {
+				Code string `json:"code"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+				t.Fatalf("decode error body %q: %v", response.Body.String(), err)
+			}
+			if response.Code != tc.status || body.Code != tc.code {
+				t.Fatalf("response = %d %s, want %d %s", response.Code, body.Code, tc.status, tc.code)
+			}
 
-	var logs []db.AccessLog
-	if err := database.Find(&logs).Error; err != nil {
-		t.Fatalf("read access logs: %v", err)
-	}
-	if len(logs) != 1 || logs[0].StatusCode != http.StatusBadGateway || logs[0].Hit || logs[0].Upstream != "broken" {
-		t.Fatalf("access logs = %+v, want one failed miss", logs)
+			var logs []db.AccessLog
+			if err := database.Find(&logs).Error; err != nil {
+				t.Fatalf("read access logs: %v", err)
+			}
+			if len(logs) != 1 || logs[0].StatusCode != tc.status || logs[0].Hit || logs[0].Upstream != "broken" {
+				t.Fatalf("access logs = %+v, want one failed miss answered %d", logs, tc.status)
+			}
+		})
 	}
 }
 
@@ -192,7 +217,7 @@ func TestTransparentProxyMovesOnOnlyWhereAnotherMirrorMayAnswer(t *testing.T) {
 		{"metadata unavailable on the mirror", "/dists/jammy/main/binary-amd64/Packages.gz", http.StatusOK, "official:/dists/jammy/main/binary-amd64/Packages.gz", true},
 		{"package missing everywhere", "/pool/main/m/missing/missing_1.0_amd64.deb", http.StatusNotFound, "", true},
 		// Only a 404 says the mirror lacks the file: a 410 is its answer.
-		{"package gone on the mirror", "/pool/main/g/gone/gone_1.0_amd64.deb", http.StatusBadGateway, "", false},
+		{"package gone on the mirror", "/pool/main/g/gone/gone_1.0_amd64.deb", http.StatusGone, "", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			before := officialHits.Load()
@@ -237,8 +262,8 @@ func TestTransparentProxyTreatsTheAbsenceOfOptionalContentAsTheAnswer(t *testing
 	proxy := adapter.NewTransparentProxy("apt", manager, upstream.NewPassiveRecoverySelector(pool), database)
 	const ttl = 20 * time.Millisecond
 	engine := gin.New()
-	// InRelease is metadata: unless it is optional a 404 stays on the member
-	// that gave it and a 410 is a gateway error.
+	// InRelease is metadata: unless it is optional a 404 or 410 stays on the
+	// member that gave it and is the client's answer.
 	engine.GET("/:mode/*path", func(c *gin.Context) {
 		mode := c.Param("mode")
 		proxy.Serve(c, adapter.TransparentPlan{
@@ -279,8 +304,8 @@ func TestTransparentProxyTreatsTheAbsenceOfOptionalContentAsTheAnswer(t *testing
 	if code, body := get("/optional/gone"); code != http.StatusOK || body != "second" {
 		t.Errorf("optional content gone on the first member = %d %q, want 200 from the second", code, body)
 	}
-	if code, _ := get("/plain/gone"); code != http.StatusBadGateway {
-		t.Errorf("metadata gone = %d, want 502", code)
+	if code, _ := get("/plain/gone"); code != http.StatusGone {
+		t.Errorf("metadata gone on the first member = %d, want its 410", code)
 	}
 	answer(http.StatusGone, http.StatusGone)
 	if code, _ := get("/optional/gone-everywhere"); code != http.StatusGone {
@@ -311,6 +336,9 @@ func TestTransparentProxyTreatsTheAbsenceOfOptionalContentAsTheAnswer(t *testing
 	answer(http.StatusGone, http.StatusGone)
 	if code, _ := get("/revoking-gone/expires"); code != http.StatusGone || cached("revoking-gone") != 0 {
 		t.Errorf("expired content the pool calls gone = %d with %d cached copies, want 410 and none", code, cached("revoking-gone"))
+	}
+	if code, body := get("/plain/expires"); code != http.StatusOK || body != "first" || cached("plain") != 1 {
+		t.Errorf("expired metadata gone upstream = %d %q with %d cached copies, want the stale copy kept", code, body, cached("plain"))
 	}
 
 	// Without a copy, a pool that cannot say whether it offers the content is

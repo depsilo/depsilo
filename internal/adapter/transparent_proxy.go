@@ -173,13 +173,8 @@ func (proxy *TransparentProxy) Serve(c *gin.Context, plan TransparentPlan) {
 				zap.Error(err),
 			)
 		}
-		status, code := http.StatusBadGateway, "UPSTREAM_UNAVAILABLE"
-		if upstream.IsNotFound(err) {
-			// Every member that answered reported the file missing.
-			status, code = http.StatusNotFound, "NOT_FOUND"
-		} else if plan.Optional && upstreamStatus(err) == http.StatusGone {
-			status, code = http.StatusGone, "GONE"
-		} else if plan.Optional && plan.PresenceIsAnswer {
+		status, code := UpstreamFailureStatus(err)
+		if status == http.StatusBadGateway && plan.Optional && plan.PresenceIsAnswer {
 			// No member said the content is offered and no copy is cached.
 			status, code = http.StatusNotFound, "NOT_FOUND"
 		}
