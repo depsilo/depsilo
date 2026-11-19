@@ -1,11 +1,21 @@
 # Release verification and immutable build inputs
 
-Tagged releases do not start publishing assets until the offline verification
-workflow and release qualification are green. Qualification exercises all 14
-package-manager clients, Docker OCI, pinned ccache and sccache clients, real
-S3 storage behavior, the long-range v0.9.0 source/Compose upgrade contracts, the
-fixed v0.9.1 source plus immutable image/state contract, and the upgrade from
-the previous published release.
+A pushed release tag does not run the checks again. Its first job,
+`scripts/check-release-qualification.sh`, requires two runs for the exact
+tagged commit that already passed: the CI workflow (offline verification,
+including the Windows lifecycle and ARM64 cross-build) and a release
+qualification run of the real-client workflow. Qualification exercises all 14
+package-manager clients (official registries first; see `E2E_ORIGIN_FIRST` in
+`docs/development/testing.md`), Docker OCI, pinned ccache and sccache clients,
+real S3 storage behavior, and the upgrade from the previous published release.
+Dispatch it on the commit to tag:
+
+```bash
+gh workflow run real-client-e2e.yml --ref <branch> -f release_qualification=true
+```
+
+Without both runs the release stops before building anything; run the
+missing one and re-run the release workflow.
 Releases then stay in draft state until all archives and tray bundles are
 available, the Linux archive executes, its checksum set verifies, the candidate
 container starts, its database and storage pass `/ready`, and signing and
@@ -21,44 +31,14 @@ make test-e2e
 make test-docker-docker
 make test-compiler-cache-qualified
 make test-s3
-make test-v090-upgrade
-make test-v090-compose-upgrade
-make test-v091-upgrade
 make test-previous-release-upgrade
 make release-check
 make release-dry-run
 ```
 
 The network and privileged checks are intentionally outside `make verify` so
-ordinary development stays deterministic. They are mandatory in the reusable
-workflow when a release tag calls it. One upgrade contract rebuilds the
-annotated v0.9.0 tag source with the current CI toolchain. The second pulls
-`ghcr.io/depsilo/depsilo@sha256:fbc16cae946eccfdbb115ec6523047702bef5d1e3e15359f9c16dcd6a8e6e56e`,
-extracts the exact tagged Compose file, and verifies its real bind layout
-against the UID/GID `10001:10001` candidate, including an explicitly confirmed
-rotation from a weak legacy JWT secret. Together they cover source-level
-compatibility and the immutable artifact users actually ran across the old
-bind-layout seam.
-
-The v0.9.1 contract (the direct predecessor of v0.10.0, kept as a fixed
-baseline) separately pins the peeled v0.9.1 tag to commit
-`773b9ad673615d5df6a8281f7cb658e3df84527d`, pins its shipped `compose.yaml`
-bytes to SHA-256
-`5abaad918604e045a32eacb81a4db14019e6a3c3d33d2f82be61e3bbe1a2a3ae`, and
-pulls
-`ghcr.io/depsilo/depsilo@sha256:bd3a2aeb8f7f461ed91cd583edc16e8f8958f103ebeb4946c626fd2a0d60b8f6`.
-The executable child manifests are separately pinned to
-`sha256:c242b5dba39aa891cb49ba815d3232f06a59344682a97c0a6f2841bdeb0dd571`
-for Linux amd64 and
-`sha256:2bef80088d03255a02b512763196006132e7827688b6400c9cd98286e2ee889a`
-for Linux arm64, and the contract verifies that the selected child is a member
-of the pinned index before running it.
-It first reopens source-created state with the candidate. It then creates real
-administrator, JWT, API-token, entitlement, and safe ecosystem-wide Package
-Rule state through that immutable published image and its named-volume layout,
-before proving the candidate preserves the state and migrates the rule to
-schema v3 dialect revision 1. Mutable tags are never used as qualification
-inputs.
+ordinary development stays deterministic. They are mandatory in release
+qualification.
 
 The previous-release contract (`make test-previous-release-upgrade`) covers the
 step operators actually take: from the release published directly before the

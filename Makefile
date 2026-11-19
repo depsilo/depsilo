@@ -172,7 +172,7 @@ sbom:                           # 维护者：生成 SBOM (CycloneDX + SPDX)
 		echo "wrote dist/sbom/depsilo-$$VERSION-source.spdx.json"
 
 # ─── 测试 ─────────────────────────────────────
-.PHONY: test test-full test-race test-integration test-ui test-ui-production test-compiler-cache test-compiler-cache-qualified test-s3 test-v090-upgrade test-v090-compose-upgrade test-v091-upgrade test-previous-release-upgrade
+.PHONY: test test-full test-race test-integration test-ui test-ui-production test-compiler-cache test-compiler-cache-qualified test-s3 test-previous-release-upgrade
 
 test: prepare-go                ## 快速 Go 测试（使用缓存，跳过慢速压力边界）
 	go test -short $(GO_TEST_PKGS)
@@ -201,15 +201,6 @@ test-compiler-cache-qualified: build-dev-server  # 发布：自举服务与凭�
 test-s3:                         ## 用固定 RustFS 验证 S3 存储契约
 	@bash scripts/test-s3.sh
 
-test-v090-upgrade: build-dev-server  # 发布：验证 v0.9.0 配置、SQLite、凭据与缓存原地升级
-	@bash scripts/test-v090-upgrade.sh
-
-test-v090-compose-upgrade:          # 发布：验证官方 v0.9.0 Compose bind 布局安全升级
-	@bash scripts/test-v090-compose-upgrade.sh
-
-test-v091-upgrade: build-dev-server # 发布：验证固定 v0.9.1 source 与已发布镜像状态升级
-	@bash scripts/test-v091-upgrade.sh
-
 test-previous-release-upgrade:      # 发布：验证上一个已发布版本的镜像与状态原地升级到候选版本
 	@bash scripts/test-previous-release-upgrade.sh
 
@@ -222,8 +213,11 @@ DOCKER_E2E_BUILD_FLAGS  := --no-cache --progress=plain --add-host=$(DOCKER_HOST_
 TEST_DOCKER_ALL_ECOS    := pypi apt npm go cargo maven rubygems composer nuget conda cran alpine helm huggingface
 TEST_DOCKER_ALL_TARGETS := $(addprefix test-docker-,$(TEST_DOCKER_ALL_ECOS))
 TEST_DOCKER_ECOS        := $(TEST_DOCKER_ALL_ECOS) docker
-override E2E_CONFIG          := config.example.toml
 override E2E_STATE_DIR       := $(CURDIR)/.test-e2e-state
+# E2E_ORIGIN_FIRST=1 tries each ecosystem's official registry before the
+# example's regional mirrors (CI runners sit outside mainland China).
+E2E_ORIGIN_FIRST             ?= 0
+override E2E_CONFIG          := $(if $(filter 1,$(E2E_ORIGIN_FIRST)),$(E2E_STATE_DIR)/config.toml,config.example.toml)
 override E2E_HOME            := $(E2E_STATE_DIR)/home
 override E2E_DATA_DIR        := $(E2E_STATE_DIR)/data
 override E2E_DATABASE        := $(E2E_DATA_DIR)/depsilo.db
@@ -240,6 +234,7 @@ test-e2e-server: build-dev-server  # 内部：仅启动真实客户端测试所�
 		bash scripts/e2e-state.sh guard "$(E2E_STATE_DIR)"; \
 		bash scripts/dev-service.sh stop "./$(BIN)" "$(E2E_PID_FILE)"; \
 		bash scripts/e2e-state.sh prepare "$(E2E_STATE_DIR)"; \
+		if [ "$(E2E_ORIGIN_FIRST)" = 1 ]; then python3 -I scripts/e2e-origin-first.py config.example.toml "$(E2E_CONFIG)"; fi; \
 		trap 'bash scripts/dev-service.sh stop "./$(BIN)" "$(E2E_PID_FILE)" >/dev/null 2>&1 || true; bash scripts/e2e-state.sh clean "$(E2E_STATE_DIR)"' EXIT INT TERM; \
 		HOME="$(E2E_HOME)" DEPSILO_CONFIG="$(E2E_CONFIG)" \
 			DEPSILO_DEV_JWT_FILE="$(E2E_JWT_SECRET)" \
@@ -442,7 +437,6 @@ verify-scripts:                 # 内部：安装、开发与发布脚本回归�
 	bash scripts/test-release-tag.sh
 	bash scripts/test-release-notes.sh
 	bash scripts/test-release-promotion.sh
-	bash scripts/test-prepare-v090-compose-upgrade.sh
 	bash scripts/test-release-workflow.sh
 	bash scripts/test-install-linux.sh
 	bash scripts/test-benchmark-install.sh

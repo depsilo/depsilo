@@ -45,16 +45,24 @@ if grep -R -q "node-version: '22.22.0'" "$ROOT/.github/workflows"; then
     exit 1
 fi
 
-if ! grep -q '^  workflow_call:' "$REAL_CLIENT_WORKFLOW" ||
+if ! grep -q '^  workflow_dispatch:' "$REAL_CLIENT_WORKFLOW" ||
     ! grep -q 'release_qualification:' "$REAL_CLIENT_WORKFLOW"; then
-    echo "real-client workflow must expose release qualification through workflow_call" >&2
+    echo "real-client workflow must expose release qualification through workflow_dispatch" >&2
     exit 1
 fi
-client_contracts_job=$(sed -n '/^  client-contracts:/,/^  [a-zA-Z0-9_-]*:/p' "$WORKFLOW")
-if ! grep -q 'uses: ./.github/workflows/real-client-e2e.yml' <<<"$client_contracts_job"; then
-    echo "release workflow must call the real-client qualification workflow" >&2
+qualified_job=$(sed -n '/^  qualified:/,/^  [a-zA-Z0-9_-]*:/p' "$WORKFLOW")
+if ! grep -Fq 'bash scripts/check-release-qualification.sh "$GITHUB_REPOSITORY" "$GITHUB_SHA"' <<<"$qualified_job" ||
+    ! grep -Fq 'actions: read' <<<"$qualified_job"; then
+    echo "release workflow must require passed CI and release qualification for the tagged commit" >&2
     exit 1
 fi
+for job in "All 14 ecosystems" "Docker OCI client" "ccache and sccache clients" "S3 storage contract" "Previous-release upgrade contract"; do
+    if ! grep -Fq "\"$job\"" "$ROOT/scripts/check-release-qualification.sh" ||
+        ! grep -Fq "name: $job" "$REAL_CLIENT_WORKFLOW"; then
+        echo "release qualification gate and real-client workflow disagree on job: $job" >&2
+        exit 1
+    fi
+done
 windows_cli_job=$(sed -n '/^  windows-cli:/,$p' "$VERIFY_WORKFLOW")
 if ! grep -Fqx 'scripts/prepare-go-embed.sh text eol=lf' "$GIT_ATTRIBUTES"; then
     echo "the cross-platform Go embed helper must keep LF endings on Windows checkouts" >&2
@@ -76,7 +84,7 @@ if [ "$windows_embed_line" -ge "$windows_daemon_line" ]; then
 fi
 # The npm audit gate runs from the repository root, after the frontend tests,
 # so that a newly published advisory cannot skip them.
-frontend_job=$(sed -n '/^  frontend:/,/^  windows-cli:/p' "$VERIFY_WORKFLOW")
+frontend_job=$(sed -n '/^  frontend:/,/^  browser:/p' "$VERIFY_WORKFLOW")
 audit_step=$(sed -n '/- name: Audit dependencies/,/^$/p' <<<"$frontend_job")
 if ! grep -Fqx '        working-directory: .' <<<"$audit_step" ||
     ! grep -Fqx '        run: python3 scripts/npm-audit-gate.py' <<<"$audit_step" ||
@@ -84,15 +92,21 @@ if ! grep -Fqx '        working-directory: .' <<<"$audit_step" ||
     echo "the frontend job must run scripts/npm-audit-gate.py from the repository root instead of npm audit" >&2
     exit 1
 fi
-browser_tests_line=$(grep -n -m1 -- '- name: Browser tests' <<<"$frontend_job" | cut -d: -f1)
+unit_tests_line=$(grep -n -m1 -- '- name: Unit tests' <<<"$frontend_job" | cut -d: -f1)
 audit_line=$(grep -n -m1 -- '- name: Audit dependencies' <<<"$frontend_job" | cut -d: -f1)
-if [ -z "$browser_tests_line" ] || [ "$audit_line" -le "$browser_tests_line" ]; then
-    echo "the frontend job must audit dependencies after the browser tests" >&2
+if [ -z "$unit_tests_line" ] || [ "$audit_line" -le "$unit_tests_line" ]; then
+    echo "the frontend job must audit dependencies after its tests" >&2
+    exit 1
+fi
+browser_job=$(sed -n '/^  browser:/,$p' "$VERIFY_WORKFLOW")
+if ! grep -Fq 'npm run test:ui -- --shard=${{ matrix.shard }}/3' <<<"$browser_job" ||
+    ! grep -Fq 'shard: [1, 2, 3]' <<<"$browser_job"; then
+    echo "the browser suite must run in its own sharded job" >&2
     exit 1
 fi
 release_job=$(sed -n '/^  release:/,/^  [a-zA-Z0-9_-]*:/p' "$WORKFLOW")
-if ! grep -q 'needs:.*client-contracts' <<<"$release_job"; then
-    echo "release assets must wait for real-client qualification" >&2
+if ! grep -q 'needs:.*qualified' <<<"$release_job"; then
+    echo "release assets must wait for the qualified-commit gate" >&2
     exit 1
 fi
 if ! grep -q -- '- name: Extract release notes' <<<"$release_job" ||
@@ -119,34 +133,12 @@ if [ "$macos_embed_line" -ge "$macos_daemon_line" ]; then
     echo "macOS release qualification must prepare Go embed assets before compiling CLI tests" >&2
     exit 1
 fi
-for command in 'make test-e2e' 'make test-docker-docker' 'make test-compiler-cache-qualified' 'make test-s3' 'make test-v090-upgrade' 'make test-v090-compose-upgrade' 'make test-v091-upgrade' 'make test-previous-release-upgrade'; do
+for command in 'make test-e2e' 'make test-docker-docker' 'make test-compiler-cache-qualified' 'make test-s3' 'make test-previous-release-upgrade'; do
     if ! grep -q "$command" "$REAL_CLIENT_WORKFLOW"; then
         echo "release qualification is missing: $command" >&2
         exit 1
     fi
 done
-
-v091_upgrade_script="$ROOT/scripts/test-v091-upgrade.sh"
-v091_image_script="$ROOT/scripts/test-v091-image-upgrade.sh"
-for script in "$v091_upgrade_script" "$v091_image_script"; do
-    if [ ! -x "$script" ]; then
-        echo "missing executable direct-predecessor upgrade contract: $script" >&2
-        exit 1
-    fi
-done
-if ! grep -Fq 'DEPSILO_UPGRADE_BASELINE_TAG=v0.9.1' "$v091_upgrade_script" ||
-    ! grep -Fq 'DEPSILO_UPGRADE_BASELINE_COMMIT=773b9ad673615d5df6a8281f7cb658e3df84527d' "$v091_upgrade_script" ||
-    ! grep -Fq 'bash "$root/scripts/test-v090-upgrade.sh"' "$v091_upgrade_script" ||
-    ! grep -Fq 'bash "$root/scripts/test-v091-image-upgrade.sh"' "$v091_upgrade_script" ||
-    ! grep -Fqx 'baseline_tag=v0.9.1' "$v091_image_script" ||
-    ! grep -Fqx 'baseline_commit=773b9ad673615d5df6a8281f7cb658e3df84527d' "$v091_image_script" ||
-    ! grep -Fqx 'baseline_compose_sha256=5abaad918604e045a32eacb81a4db14019e6a3c3d33d2f82be61e3bbe1a2a3ae' "$v091_image_script" ||
-    ! grep -Fqx 'baseline_image_index=ghcr.io/depsilo/depsilo@sha256:bd3a2aeb8f7f461ed91cd583edc16e8f8958f103ebeb4946c626fd2a0d60b8f6' "$v091_image_script" ||
-    ! grep -Fqx 'baseline_image_amd64=ghcr.io/depsilo/depsilo@sha256:c242b5dba39aa891cb49ba815d3232f06a59344682a97c0a6f2841bdeb0dd571' "$v091_image_script" ||
-    ! grep -Fqx 'baseline_image_arm64=ghcr.io/depsilo/depsilo@sha256:2bef80088d03255a02b512763196006132e7827688b6400c9cd98286e2ee889a' "$v091_image_script"; then
-    echo 'v0.9.1 qualification inputs must remain pinned to the reviewed tag commit, Compose bytes, and published image digest' >&2
-    exit 1
-fi
 
 # The previous-release contract is re-pinned after every release, so its
 # values are checked for shape here; the script itself checks them against

@@ -9,6 +9,9 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+  # A release requires a passed CI run for the tagged commit; dispatch this
+  # for a commit that is not on master.
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}

@@ -24,20 +24,28 @@ jobs:
         shell: bash
         run: bash scripts/validate-release-tag.sh "$GITHUB_REF_NAME"
 
-  verify:
+  # The release does not run the checks again: it requires a successful CI
+  # run and a successful release-qualification run of the real-client
+  # workflow for the exact tagged commit (RELEASE_CHECKLIST.md).
+  qualified:
+    name: Qualified commit
     needs: release-tag
-    uses: ./.github/workflows/verify.yml
+    permissions:
+      actions: read
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-  client-contracts:
-    needs: [release-tag, verify]
-    uses: ./.github/workflows/real-client-e2e.yml
-    with:
-      release_qualification: true
+      - name: Require passed CI and release qualification for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/check-release-qualification.sh "$GITHUB_REPOSITORY" "$GITHUB_SHA"
 
   # Job 1: Cross-platform CLI binaries via GoReleaser (6 platforms), plus
   # checksums, changelog, tray bundles, and source SBOMs.
   release:
-    needs: [verify, client-contracts, tray-macos, tray-linux]
+    needs: [qualified, tray-macos, tray-linux]
     permissions:
       contents: write
       id-token: write
@@ -164,7 +172,7 @@ jobs:
   # first launch, and docs/deployment.md#tray-application gives the override
   # for each macOS version.
   tray-macos:
-    needs: verify
+    needs: qualified
     permissions:
       contents: read
     runs-on: macos-latest
@@ -226,7 +234,7 @@ jobs:
   # to drop the binary into ~/.local/bin and register the .desktop file.
   # Needs GTK + AppIndicator headers at build time for fyne/systray.
   tray-linux:
-    needs: verify
+    needs: qualified
     permissions:
       contents: read
     runs-on: ubuntu-latest

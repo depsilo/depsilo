@@ -22,22 +22,6 @@
 - [ ] `make test-docker-docker` passes with the Docker Registry client and dind
 - [ ] `make test-compiler-cache-qualified` passes with pinned ccache and sccache
 - [ ] `make test-s3` passes against the pinned S3 contract image (RustFS)
-- [ ] `make test-v090-upgrade` reopens v0.9.0 state and preserves config,
-      SQLite identities, password/JWT/API credentials, and legacy npm cache
-      records; it rejects unsigned cached npm data while offline, then refetches
-      online metadata and proves fresh source-bound signed artifact provenance
-- [ ] `make test-v090-compose-upgrade` upgrades the immutable published v0.9.0
-      image's exact shipped bind layout, explicitly rotates a weak legacy JWT
-      secret, preserves passwords, API tokens, database, license and legacy
-      npm cache records, rejects unsigned legacy npm artifacts, establishes fresh
-      source-bound signed provenance after reconnect, and proves Admin Settings
-      can atomically rewrite the prepared candidate config. Linux only: the
-      contract needs `findmnt` and GNU-style `sha256sum`
-- [ ] `make test-v091-upgrade` upgrades the fixed v0.9.1 source and immutable
-      published v0.9.1 image. It reopens the shipped named-volume state with
-      the candidate, preserves config, password/JWT/API credentials, trial and
-      paid entitlement, and migrates a safe ecosystem-wide Package Rule to
-      schema v3 with dialect revision 1
 - [ ] `make test-previous-release-upgrade` upgrades the previous published
       release. It runs that release's image by digest on its shipped Compose
       named-volume layout, completes first-run setup through the API, and
@@ -79,13 +63,17 @@
 ## Release
 
 ### Tag & Push
+Push the release commit to `master` and wait for CI; dispatch release
+qualification on it and wait for it to pass. The release workflow checks both
+runs for the tagged commit and does not repeat them.
 ```bash
+gh workflow run real-client-e2e.yml --ref master -f release_qualification=true
 git tag -a vX.Y.Z -m "vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
 ### Automated (GitHub Actions)
-- [ ] Release qualification finishes before any release asset is published
+- [ ] The qualified-commit gate finds passed CI and release-qualification runs for the tag
 - [ ] Native Windows and macOS detached-daemon lifecycle checks pass
 - [ ] The promotion lock verifies the authoritative tag still resolves to the
       triggering commit and that its floating-tag decision remains current

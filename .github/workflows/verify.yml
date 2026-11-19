@@ -36,14 +36,27 @@ jobs:
       - name: Go tests (full)
         run: make test-full
 
-      - name: Go tests (race-sensitive packages)
-        run: make test-race
-
       - name: Integration tests
         run: make test-integration
 
       - name: Build binary
         run: make verify-build
+
+  # The race detector is the slowest Go step; run it beside the other checks.
+  race:
+    name: Go race tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Go tests (race-sensitive packages)
+        run: make test-race
 
   frontend:
     name: Frontend
@@ -101,9 +114,6 @@ jobs:
       - name: Check bundle budget
         run: npm run check:bundle
 
-      - name: Browser tests
-        run: npm run test:ui
-
       - name: i18n audit
         working-directory: .
         run: python3 scripts/i18n-audit.py
@@ -115,11 +125,42 @@ jobs:
         working-directory: .
         run: python3 scripts/npm-audit-gate.py
 
+  # The mocked browser suite is the longest check; three shards run it in
+  # parallel. Each case stays in one shard and specs keep their serial order.
+  browser:
+    name: Browser tests (${{ matrix.shard }}/3)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.23.2'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser tests
+        run: npm run test:ui -- --shard=${{ matrix.shard }}/3
+
       - name: Upload browser test report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: |
             web/playwright-report
             web/test-results

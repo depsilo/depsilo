@@ -24,9 +24,6 @@ the changed interface.
 | Compiler clients | `make test-compiler-cache` | Client-dependent | Installed ccache and sccache against a running service |
 | Qualified compiler clients | `make test-compiler-cache-qualified` | No upstream network after client install | Bootstrap a service and credential, then prove ccache and sccache miss/write/remote-hit behavior |
 | S3 storage contract | `make test-s3` | Local Docker | Signed known/unknown-length streaming, metadata, listing, deletion, and failed multipart cleanup against pinned RustFS |
-| v0.9.0 state reopen | `make test-v090-upgrade` | Go modules if uncached | Build the tagged source, seed durable state, prove legacy unsigned npm cache fails closed offline, then reconnect the mock Upstream and prove fresh signed provenance |
-| v0.9.0 shipped Compose upgrade | `make test-v090-compose-upgrade` | Privileged Docker, host PID namespace, util-linux `findmnt`, and registry access | Reject a real nested bind mount without changing its external victim, then run the immutable published v0.9.0 image with its exact shipped layout, rotate a weak JWT secret explicitly, and reopen its state with a UID/GID 10001 candidate |
-| v0.9.1 fixed-baseline upgrade | `make test-v091-upgrade` | Go modules if uncached, Docker, and registry access | Build source from the fixed peeled tag commit, then run the immutable published image by digest with its checksummed Compose named-volume layout; preserve credentials and entitlement while migrating a safe Package Rule to schema v3 |
 | Previous-release upgrade | `make test-previous-release-upgrade` | Docker and registry access | Run the previous published release's image by digest with its checksummed Compose named-volume layout, complete first-run setup, and create a session, an API token, a second user, and a Package Rule, activate the trial and edit an Upstream; then start the candidate on the same volume and require unchanged config, no reopened setup, working credentials, the rule, the trial, the edited Upstream, an intact audit chain, private state files owned by the service user, a clean startup log, and the candidate's schema version. Refuses a shallow checkout. Fails when the pinned baseline is older than the newest release in the candidate's history |
 | Development scripts | `make verify-scripts` | No | Make workflows, paired Vite/backend lifecycle, and development proxy coverage |
 
@@ -81,12 +78,18 @@ software's IPv6 fake-IP range to `2001:2::/48` or turn IPv6 fake-IP off. The
 other real-client targets reach package Upstreams the same way and accept the
 same variable.
 
-The tag-triggered release workflow invokes the real-client workflow in release
-qualification mode. GitHub release assets wait for all 14 package clients,
-Docker OCI, compiler-cache, S3, the long-range v0.9.0 source/Compose contracts,
-the fixed v0.9.1 source/image-state contract, and the upgrade from the
-previous published release; the ordinary weekly run keeps the smaller
-all-package-client matrix.
+Release qualification is a dispatch of the real-client workflow with
+`release_qualification=true` on the commit to tag; it adds Docker OCI,
+compiler-cache, S3, and the upgrade from the previous published release to
+the 14 package clients. The tag-triggered release workflow requires that run
+and a passed CI run for the same commit, and runs neither again. The weekly
+run keeps the package-client matrix only.
+
+In CI the clients run with `make test-e2e E2E_ORIGIN_FIRST=1`, which gives
+the server a copy of `config.example.toml` whose upstreams are tried in
+reverse priority, so official registries come before the mainland-China
+mirrors that GitHub's runners reach slowly. Locally `make test-e2e` uses
+`config.example.toml` as it is.
 
 ## Change-to-check matrix
 
@@ -101,7 +104,7 @@ all-package-client matrix.
 | Pure frontend model/manifest | focused Vitest file | `make check` |
 | Portal/Admin interaction | focused Playwright file | `make check`; full `make verify` for shared shell/primitives |
 | Embedded frontend or release delivery | `make test-ui-production` | `make test-ui-production` plus release checks |
-| Storage backend or schema compatibility | focused storage/migration test | `make test-s3`, `make test-v090-upgrade`, `make test-v090-compose-upgrade`, `make test-v091-upgrade`, and `make test-previous-release-upgrade` |
+| Storage backend or schema compatibility | focused storage/migration test | `make test-s3` and `make test-previous-release-upgrade` |
 | i18n or UI copy | `make lint-i18n`; the spec that asserts the old text | `make check` |
 | Makefile, installer, dev or release scripts | relevant `scripts/test-*.sh` | `make verify-scripts` or `make verify` |
 | Dependency versions or release inputs | focused build | `make security` plus release checks |
@@ -202,9 +205,11 @@ make verify-scripts
 - Do not put changing public-network data in the offline gates.
 
 `.github/workflows/ci.yml` runs `verify.yml` on every push and pull request to
-`master`. The backend job calls the Go targets of `make verify`. The frontend
-job runs `make verify-scripts` and calls the commands behind the other targets
-directly: the npm scripts for lint, type check, unit tests, bundle budget, and
-the full Playwright suite, and `python3 scripts/i18n-audit.py`. CI also runs
-the scans of `make security`, `make test-ui-production`, and a Windows CLI
-lifecycle job. `make verify` is the local command for the same offline checks.
+`master`, and on dispatch. Its jobs run in parallel: the backend job calls the
+Go targets of `make verify` except the race run, which has its own job; the
+frontend job runs `make verify-scripts` and the npm scripts for lint, type
+check, unit tests, and bundle budget, `make test-ui-production`, and
+`python3 scripts/i18n-audit.py`; the full Playwright suite runs in three
+`--shard` jobs; and a Windows CLI lifecycle job. CI also runs the scans of
+`make security`. `make verify` is the local command for the same offline
+checks.

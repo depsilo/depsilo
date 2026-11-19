@@ -217,8 +217,7 @@ v0.9.0 binary. Starting with v0.9.1, daemon control requires a process-identity
 record and deliberately refuses the older PID-only file. If the binary has
 already been replaced, first verify that the recorded process has ended, then
 remove `~/.local/share/depsilo/depsilo.pid` manually before starting the new
-binary. This is distinct from the
-[v0.9.0 Compose state migration](#upgrade-the-compose-layout-shipped-in-v090).
+binary.
 
 ## Tray application
 
@@ -1096,91 +1095,6 @@ state that the fixed service identity cannot reopen after an upgrade.
 On SELinux hosts, apply the host's normal container labeling policy to the bind
 directory. On rootless Docker, prefer the named-volume template because the
 daemon's UID mapping can differ from the numeric UID shown inside the image.
-
-### Upgrade the Compose layout shipped in v0.9.0
-
-The v0.9.0 `docker-compose.yml` did not use the current state volume. It
-bind-mounted the project directory's `data/` at `/app/data` and its
-`config.toml` at `/app/config.toml`. Use the fail-closed preparer and
-[`compose.v090-compat.yaml`](../compose.v090-compat.yaml) for this exact layout.
-Do not adapt the named-volume procedure below or guess a volume name.
-
-Run preparation on Linux with GNU coreutils. Keep the stopped old container
-until preparation succeeds: the script verifies its exact two bind mounts,
-configuration path, old JWT secret, and candidate JWT policy. Supply the
-candidate by immutable digest (or exact local image ID), and choose absent,
-non-symlink state and backup targets.
-
-If the v0.9.0 secret is already at least 32 bytes with no surrounding
-whitespace, reuse it as the candidate secret:
-
-```bash
-IFS= read -rsp 'Existing v0.9.0 JWT secret: ' DEPSILO_AUTH_JWT_SECRET
-printf '\n'
-export DEPSILO_AUTH_JWT_SECRET
-```
-
-If the old secret is shorter, rotate it explicitly during preparation. Retrieve
-the old value from the same secret source used by the stopped container; avoid
-putting either value in shell history:
-
-```bash
-IFS= read -rsp 'Existing v0.9.0 JWT secret: ' DEPSILO_V090_AUTH_JWT_SECRET
-printf '\n'
-export DEPSILO_V090_AUTH_JWT_SECRET
-export DEPSILO_AUTH_JWT_SECRET="$(openssl rand -hex 32)"
-export DEPSILO_ACCEPT_JWT_ROTATION=1
-```
-
-A rotation invalidates existing browser JWTs, so Operators must sign in again.
-Passwords and API tokens remain valid. Metadata from an extra PyPI-compatible
-index must be fetched online once because its signed cache identity changes;
-already-cached artifact objects remain reusable.
-
-Then prepare the state:
-
-```bash
-release_checkout=/path/to/depsilo-release-source
-v090_source=/path/to/v090-compose-project
-old_container='<stopped-v090-container-name-or-id>'
-docker stop "$old_container"
-
-export DEPSILO_IMAGE='ghcr.io/depsilo/depsilo@sha256:<release-digest>'
-v090_parent="$(dirname "$(realpath "$v090_source")")"
-export DEPSILO_V090_DATA_DIR="$(realpath "$v090_source/data")"
-export DEPSILO_UPGRADE_STATE_DIR="$v090_parent/depsilo-upgrade-state"
-backup_dir="$v090_parent/depsilo-v090-backup"
-docker pull "$DEPSILO_IMAGE"
-
-bash "$release_checkout/scripts/prepare-v090-compose-upgrade.sh" \
-  --source-dir "$v090_source" \
-  --state-dir "$DEPSILO_UPGRADE_STATE_DIR" \
-  --backup-dir "$backup_dir" \
-  --old-container "$old_container" \
-  --image "$DEPSILO_IMAGE"
-
-docker compose -f "$release_checkout/compose.v090-compat.yaml" up -d
-(cd "$backup_dir" && sha256sum --check SHA256SUMS)
-```
-
-The preparer rejects a running or differently mounted old container, a
-non-SQLite database, symlinks, special files, multiply-linked data files, an
-occupied target, an old JWT secret that does not match the stopped container, a
-weak candidate secret, an unconfirmed secret change, and an image not declaring
-`10001:10001`. It performs those checks before creating the backup or changing
-ownership. It then backs up `config.toml`, `depsilo.db`, and present WAL/SHM
-sidecars and atomically installs a mode-`0600` state config. The compatibility
-Compose file disables automatic host-path creation. Never use
-`docker compose down -v`, rewrite the old config with `sed`, or delete the
-original project until login, API tokens, license state, and cached packages
-have been verified.
-
-The ownership helper reads Linux `/proc/self/mountinfo` inside the exact
-candidate container and refuses any mount below either recursive chown target.
-This prevents a nested bind, tmpfs, or other mount under `data/` from carrying
-the ownership change outside the validated v0.9 tree. Use the official Linux
-image, which supplies the required POSIX shell, `awk`, `find`, `chown`, and
-`stat` utilities.
 
 ### Other older named-volume layouts
 
@@ -2225,9 +2139,8 @@ To go back to the older version, stop Depsilo, install the older binary or
 image, and [restore](#back-up-and-restore) the backup from step 1. Changes
 made after that backup are lost.
 
-Two older layouts need their own procedure before this one applies:
-[a v0.9.0 daemon](#upgrade-a-v090-daemon) and
-[the Compose layout shipped in v0.9.0](#upgrade-the-compose-layout-shipped-in-v090).
+A v0.9.0 daemon needs [its own procedure](#upgrade-a-v090-daemon) before
+this one applies.
 An older deployment on a named volume may need
 [Other older named-volume layouts](#other-older-named-volume-layouts) first.
 

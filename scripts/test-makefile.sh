@@ -260,12 +260,6 @@ if [[ "$compiler_cache_dry_run" == *"sentinel-compiler-cache-token"* ]] \
     fail "test-compiler-cache must not expose endpoint or token in process arguments"
 fi
 
-v090_compose_dry_run=$(make -n -C "$ROOT" test-v090-compose-upgrade)
-assert_contains "$v090_compose_dry_run" 'bash scripts/test-v090-compose-upgrade.sh'
-
-v091_upgrade_dry_run=$(make -n -C "$ROOT" test-v091-upgrade)
-assert_contains "$v091_upgrade_dry_run" 'bash scripts/test-v091-upgrade.sh'
-
 previous_release_upgrade_dry_run=$(make -n -C "$ROOT" test-previous-release-upgrade)
 assert_contains "$previous_release_upgrade_dry_run" 'bash scripts/test-previous-release-upgrade.sh'
 

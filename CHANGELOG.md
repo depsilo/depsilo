@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Removed
+- `compose.v090-compat.yaml` and the deployment guide's procedure for
+  migrating the Compose layout shipped in v0.9.0. Upgrade such an install to
+  0.15.0 first with that release's guide, or start from a fresh state
+  volume.
+
 ## [0.15.0] - 2026-11-19
 
 ### Added
