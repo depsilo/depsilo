@@ -244,7 +244,7 @@ func TestSumDBCachesRecordsAndTilesForTheBlobTTLAndTheRestForTheIndexTTL(t *test
 
 // The checksum database is verification data that the go command checks
 // itself. Reading it downloads no dependency, so no request for it may show
-// up as a download in the audit feed or as a delivered artifact.
+// up in the recent-downloads feed or as a delivered artifact.
 func TestSumDBRequestsAreRecordedAsMetadataNotAsDownloads(t *testing.T) {
 	mirror := newSumDBMirror(t)
 	engine, database := newSumDBRoute(t, sumDBTTL, mirror)
@@ -275,21 +275,22 @@ func TestSumDBRequestsAreRecordedAsMetadataNotAsDownloads(t *testing.T) {
 			t.Errorf("%s is cached as %q, want %q", key, entry.CacheKind, db.CacheKindMetadata)
 		}
 	}
-	// A record the mirror lacks is audited the same way.
+	// A record the mirror lacks is recorded the same way.
 	if response := getSumDB(route, "/go/sumdb/sum.golang.org/lookup/example.com/absent@v1.0.0"); response.Code != http.StatusNotFound {
 		t.Fatalf("lookup of an unknown record = %d, want 404", response.Code)
 	}
 
-	if want := 2*len(keys) + 1; len(records.audit) != want || len(records.events) != want {
-		t.Fatalf("recorded %d audit entries and %d access events, want %d of each", len(records.audit), len(records.events), want)
-	}
-	for _, entry := range records.audit {
-		if entry.Action != "metadata" || entry.Ecosystem != "go" || entry.PackageName != "" || entry.Version != "" {
-			t.Errorf("audit entry = %s %s %q %q (status %d), want a go metadata request that names no package",
-				entry.Action, entry.Ecosystem, entry.PackageName, entry.Version, entry.StatusCode)
-		}
+	// Request outcomes are access-log history; none is chained into audit.
+	if want := 2*len(keys) + 1; len(records.audit) != 0 || len(records.events) != want {
+		t.Fatalf("recorded %d audit entries and %d access events, want none and %d", len(records.audit), len(records.events), want)
 	}
 	for _, event := range records.events {
+		version := accesslog.RecordedVersion(event.AdapterType, event.CacheKey, event.StatusCode)
+		if db.ClassifyCacheKind(event.AdapterType, event.CacheKey) != db.CacheKindMetadata ||
+			event.AdapterType != "go" || event.PackageName != "" || version != "" {
+			t.Errorf("access event %s = %s %q %q (status %d), want a go metadata request that names no package",
+				event.CacheKey, event.AdapterType, event.PackageName, version, event.StatusCode)
+		}
 		if event.DependencyKind != db.CacheKindMetadata || accesslog.SuccessfulArtifactDownload(event) {
 			t.Errorf("%s is accounted as %q (delivered artifact: %v), want metadata",
 				event.CacheKey, event.DependencyKind, accesslog.SuccessfulArtifactDownload(event))

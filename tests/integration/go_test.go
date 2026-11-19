@@ -160,9 +160,11 @@ func TestGo_ChecksumDatabaseIsRelayedAndVerifies(t *testing.T) {
 	}
 }
 
-type goAuditRow struct {
+type goLogRow struct {
 	ID          uint      `json:"id"`
 	Ecosystem   string    `json:"ecosystem"`
+	AdapterType string    `json:"adapter_type"`
+	CacheKey    string    `json:"cache_key"`
 	PackageName string    `json:"package_name"`
 	Version     string    `json:"version"`
 	Action      string    `json:"action"`
@@ -170,7 +172,7 @@ type goAuditRow struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-func adminItems(t *testing.T, path string) []goAuditRow {
+func adminItems(t *testing.T, path string) []goLogRow {
 	t.Helper()
 	resp := adminGet(t, depsiloURL+path)
 	defer resp.Body.Close()
@@ -179,7 +181,7 @@ func adminItems(t *testing.T, path string) []goAuditRow {
 		t.Fatalf("GET %s = %d: %s", path, resp.StatusCode, body)
 	}
 	var page struct {
-		Items []goAuditRow `json:"items"`
+		Items []goLogRow `json:"items"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
 		t.Fatalf("decode %s: %v", path, err)
@@ -188,9 +190,10 @@ func adminItems(t *testing.T, path string) []goAuditRow {
 }
 
 // Reading the checksum database downloads no dependency. What a go command
-// asks it is audited as metadata and stays out of the Admin recent-downloads
-// feed, which shows the module the go command then fetched.
-func TestGo_ChecksumDatabaseRequestsAreAuditedAsMetadataNotDownloads(t *testing.T) {
+// asks it is recorded in the access log as metadata and stays out of the Admin
+// recent-downloads feed, which shows the module the go command then fetched.
+// Package request outcomes are request history, so none reaches the audit log.
+func TestGo_ChecksumDatabaseRequestsAreRecordedAsMetadataNotDownloads(t *testing.T) {
 	const module = "github.com/test/audited"
 	started := time.Now().UTC()
 
@@ -206,10 +209,10 @@ func TestGo_ChecksumDatabaseRequestsAreAuditedAsMetadataNotDownloads(t *testing.
 	assertStatus(t, resp, 200)
 	resp.Body.Close()
 
-	// Audit rows are persisted in request order shortly after the response:
+	// Access rows are persisted in request order shortly after the response:
 	// once the module download shows, the checksum requests made before it
 	// are stored too, and would be the rows right below it.
-	var downloads []goAuditRow
+	var downloads []goLogRow
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		downloads = adminItems(t, "/api/v1/admin/dashboard/recent-downloads?limit=20")
@@ -227,24 +230,28 @@ func TestGo_ChecksumDatabaseRequestsAreAuditedAsMetadataNotDownloads(t *testing.
 		}
 	}
 
-	// Module requests are audited under their module path, so Go rows without
-	// a package name are checksum database requests. A row is dated at the
-	// start of its request; the filter takes whole seconds, so the requests
-	// of a test that ended within this second are told apart here.
-	query := url.Values{"ecosystem": {"go"}, "start": {started.Truncate(time.Second).Format(time.RFC3339)}, "page_size": {"200"}}
-	var audited int
-	for _, row := range adminItems(t, "/api/v1/admin/audit-logs?"+query.Encode()) {
-		if row.PackageName != "" || row.CreatedAt.Before(started) {
+	// The filter takes whole seconds, so the requests of a test that ended
+	// within this second are told apart by their own timestamps here.
+	query := url.Values{"adapter_type": {"go"}, "start": {started.Truncate(time.Second).Format(time.RFC3339)}, "page_size": {"200"}}
+	var recorded int
+	for _, row := range adminItems(t, "/api/v1/admin/logs?"+query.Encode()) {
+		if !strings.HasPrefix(row.CacheKey, "go/sumdb/") || row.CreatedAt.Before(started) {
 			continue
 		}
-		audited++
-		if row.Action != "metadata" {
-			t.Errorf("checksum database request audited as %+v, want action metadata", row)
+		recorded++
+		if row.PackageName != "" {
+			t.Errorf("checksum database request recorded as a package request: %+v", row)
 		}
 	}
-	if audited != checksumRequests {
-		t.Errorf("audit log holds %d checksum database requests since %s, want the %d this test made",
-			audited, started.Format(time.RFC3339Nano), checksumRequests)
+	if recorded != checksumRequests {
+		t.Errorf("access log holds %d checksum database requests since %s, want the %d this test made",
+			recorded, started.Format(time.RFC3339Nano), checksumRequests)
+	}
+	auditQuery := url.Values{"ecosystem": {"go"}, "start": {started.Truncate(time.Second).Format(time.RFC3339)}, "page_size": {"200"}}
+	for _, row := range adminItems(t, "/api/v1/admin/audit-logs?"+auditQuery.Encode()) {
+		if !row.CreatedAt.Before(started) {
+			t.Errorf("a Go package request reached the audit log: %+v", row)
+		}
 	}
 }
 

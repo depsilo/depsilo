@@ -64,6 +64,18 @@ func (UnavailableSelector) Select(context.Context) (*upstream.Upstream, error) {
 	return nil, errors.New("test upstream unavailable")
 }
 
+// AccessRows returns the access log rows written to database, oldest first.
+// A RequestScope without a recorder writes each package request's row to the
+// database directly, so a handler test reads its request outcomes here.
+func AccessRows(t testing.TB, database *gorm.DB) []db.AccessLog {
+	t.Helper()
+	var rows []db.AccessLog
+	if err := database.Order("id").Find(&rows).Error; err != nil {
+		t.Fatalf("read access rows: %v", err)
+	}
+	return rows
+}
+
 // AuditCapture records every audit entry logged to it.
 type AuditCapture struct {
 	Entries []db.AuditLog
@@ -206,21 +218,22 @@ var MetadataPoolAnswers = []PoolAnswer{
 
 // CheckPoolAnswers requests target from the router build returns once per
 // answer, each time over a fresh two-member pool whose members serve body,
-// and checks the response status and code, the status the access record
-// carries, and whether the second member was asked.
+// and checks the response status and code, the status the access log row
+// written to build's database carries, and whether the second member was
+// asked.
 func CheckPoolAnswers(
 	t *testing.T,
 	answers []PoolAnswer,
 	target, body string,
-	build func(t *testing.T, selector upstream.Selector) http.Handler,
+	build func(t *testing.T, selector upstream.Selector) (http.Handler, *gorm.DB),
 ) {
 	t.Helper()
 	for _, answer := range answers {
 		t.Run(answer.Name, func(t *testing.T) {
 			first := &Origin{Status: answer.First, Body: body}
 			second := &Origin{Status: answer.Second, Body: body}
-			audit := &AuditCapture{}
-			handler := adapter.NewRequestScope(nil, audit, nil, nil).Wrap(build(t, NewPoolSelector(t, first, second)))
+			router, database := build(t, NewPoolSelector(t, first, second))
+			handler := adapter.NewRequestScope(nil, nil, nil, nil).Wrap(router)
 
 			response := httptest.NewRecorder()
 			handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, target, nil))
@@ -239,10 +252,11 @@ func CheckPoolAnswers(
 			if asked := second.Requests() > 0; asked != answer.SecondAsked {
 				t.Fatalf("second member asked = %v, want %v", asked, answer.SecondAsked)
 			}
-			if len(audit.Entries) == 0 {
+			rows := AccessRows(t, database)
+			if len(rows) == 0 {
 				t.Fatalf("GET %s left no access record", target)
 			}
-			if recorded := audit.Entries[len(audit.Entries)-1].StatusCode; recorded != answer.Status {
+			if recorded := rows[len(rows)-1].StatusCode; recorded != answer.Status {
 				t.Fatalf("access record status = %d, want %d", recorded, answer.Status)
 			}
 		})

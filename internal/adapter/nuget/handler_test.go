@@ -13,18 +13,20 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"depsilo/internal/adapter"
 	"depsilo/internal/adapter/adaptertest"
+	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/config"
+	"depsilo/internal/db"
 	"depsilo/internal/upstream"
 )
 
-func TestPackageUpstreamFailureIsRecordedAsAuditError(t *testing.T) {
+func TestPackageUpstreamFailureIsRecordedInTheAccessLog(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
-	audit := &adaptertest.AuditCapture{}
-	scope := adapter.NewRequestScope(nil, audit, nil, nil)
+	scope := adapter.NewRequestScope(nil, nil, nil, nil)
 
 	handler := New(manager, adaptertest.UnavailableSelector{}, config.CacheConfig{TTLIndex: time.Hour, TTLBlob: 72 * time.Hour}, database)
 	router := gin.New()
@@ -37,13 +39,14 @@ func TestPackageUpstreamFailureIsRecordedAsAuditError(t *testing.T) {
 	if response.Code != http.StatusBadGateway {
 		t.Fatalf("GET %s status = %d, body=%s", target, response.Code, response.Body.String())
 	}
-	if len(audit.Entries) != 1 {
-		t.Fatalf("audit entries = %#v", audit.Entries)
+	rows := adaptertest.AccessRows(t, database)
+	if len(rows) != 1 {
+		t.Fatalf("access rows = %#v", rows)
 	}
-	entry := audit.Entries[0]
-	if entry.Ecosystem != "nuget" || entry.PackageName != "newtonsoft.json" || entry.Version != "13.0.3" ||
-		entry.Action != "download" || entry.CacheResult != "error" || entry.StatusCode != http.StatusBadGateway {
-		t.Fatalf("audit entry = %#v", entry)
+	row := rows[0]
+	if row.AdapterType != "nuget" || row.PackageName != "newtonsoft.json" || packagekey.ExtractVersion("nuget", row.CacheKey) != "13.0.3" ||
+		db.ClassifyCacheKind("nuget", row.CacheKey) != db.CacheKindArtifact || row.Hit || row.StatusCode != http.StatusBadGateway {
+		t.Fatalf("access row = %#v", row)
 	}
 }
 
@@ -171,12 +174,12 @@ func TestServiceIndexURLsTakeOnlyAnHTTPSchemeFromForwardedProto(t *testing.T) {
 	}
 }
 
-func newPoolNugetRouter(t *testing.T, selector upstream.Selector) http.Handler {
+func newPoolNugetRouter(t *testing.T, selector upstream.Selector) (http.Handler, *gorm.DB) {
 	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
 	handler := New(manager, selector, config.CacheConfig{TTLIndex: time.Hour, TTLBlob: 72 * time.Hour}, database)
 	router := gin.New()
 	handler.Register(router.Group("/nuget"))
-	return router
+	return router, database
 }
 
 // NuGet reads a 404 as "not on this source" and moves on to the next package

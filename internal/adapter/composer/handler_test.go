@@ -10,18 +10,19 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"depsilo/internal/adapter"
 	"depsilo/internal/adapter/adaptertest"
 	"depsilo/internal/config"
+	"depsilo/internal/db"
 	"depsilo/internal/upstream"
 )
 
-func TestPackageUpstreamFailuresAreRecordedAsAuditErrors(t *testing.T) {
+func TestPackageUpstreamFailuresAreRecordedInTheAccessLog(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
-	audit := &adaptertest.AuditCapture{}
-	scope := adapter.NewRequestScope(nil, audit, nil, nil)
+	scope := adapter.NewRequestScope(nil, nil, nil, nil)
 
 	handler := New(manager, adaptertest.UnavailableSelector{}, config.CacheConfig{TTLIndex: time.Hour, TTLBlob: 72 * time.Hour}, database)
 	router := gin.New()
@@ -38,19 +39,20 @@ func TestPackageUpstreamFailuresAreRecordedAsAuditErrors(t *testing.T) {
 		}
 	}
 
-	if len(audit.Entries) != 2 {
-		t.Fatalf("audit entries = %#v", audit.Entries)
+	rows := adaptertest.AccessRows(t, database)
+	if len(rows) != 2 {
+		t.Fatalf("access rows = %#v", rows)
 	}
-	for index, entry := range audit.Entries {
-		if entry.Ecosystem != "composer" || entry.PackageName != "monolog/monolog" || entry.CacheResult != "error" || entry.StatusCode != http.StatusBadGateway {
-			t.Errorf("audit entry %d = %#v", index, entry)
+	for index, row := range rows {
+		if row.AdapterType != "composer" || row.PackageName != "monolog/monolog" || row.Hit || row.StatusCode != http.StatusBadGateway {
+			t.Errorf("access row %d = %#v", index, row)
 		}
 	}
-	if audit.Entries[0].Action != "metadata" {
-		t.Errorf("metadata audit entry = %#v", audit.Entries[0])
+	if db.ClassifyCacheKind("composer", rows[0].CacheKey) != db.CacheKindMetadata {
+		t.Errorf("metadata access row = %#v", rows[0])
 	}
-	if audit.Entries[1].Action != "download" {
-		t.Errorf("dist audit entry = %#v", audit.Entries[1])
+	if db.ClassifyCacheKind("composer", rows[1].CacheKey) != db.CacheKindArtifact {
+		t.Errorf("dist access row = %#v", rows[1])
 	}
 }
 
@@ -111,12 +113,12 @@ func TestPackagesJSONURLsTakeOnlyAnHTTPSchemeFromForwardedProto(t *testing.T) {
 	}
 }
 
-func newPoolComposerRouter(t *testing.T, selector upstream.Selector) http.Handler {
+func newPoolComposerRouter(t *testing.T, selector upstream.Selector) (http.Handler, *gorm.DB) {
 	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
 	handler := New(manager, selector, config.CacheConfig{TTLIndex: time.Hour, TTLBlob: 72 * time.Hour}, database)
 	router := gin.New()
 	handler.Register(router.Group("/composer"))
-	return router
+	return router, database
 }
 
 // Composer reads a 404 for package metadata as "no such package"; a 502 makes

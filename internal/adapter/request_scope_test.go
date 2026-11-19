@@ -187,6 +187,7 @@ func requestScopeExerciseHandler(entered chan<- struct{}, release <-chan struct{
 		}
 		client := request.URL.Query().Get("client")
 		LogAccess(request.Context(), nil, "npm", "GET", "npm/"+client, true, "upstream", time.Millisecond, http.StatusOK, client, 10)
+		LogPolicyBlock(request.Context(), "npm", client, "1.0.0", http.StatusForbidden, client)
 
 		ginContext, _ := gin.CreateTestContext(writer)
 		ginContext.Request = request

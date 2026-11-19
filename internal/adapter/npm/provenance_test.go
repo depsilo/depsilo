@@ -588,15 +588,14 @@ func TestLegacyDirectTarballIsRejectedWithoutMakingVersionDecision(t *testing.T)
 	if events := access.snapshot(); len(events) != len(tests) {
 		t.Fatalf("access events = %d, want one per rejected request", len(events))
 	}
-	// The audit log is hash-chained and forwarded: a refused request must not
-	// appear there as a download of the version its file name suggests.
-	if len(audit.Entries) != len(tests) {
-		t.Fatalf("audit entries = %#v, want one per rejected request", audit.Entries)
+	// A refused request is request history, not an audit event, and it must
+	// not read as a download of the version its file name suggests.
+	if len(audit.Entries) != 0 {
+		t.Fatalf("audit entries = %#v, want none for refused requests", audit.Entries)
 	}
-	for index, entry := range audit.Entries {
-		if entry.Ecosystem != "npm" || entry.PackageName != tests[index].packageName || entry.Version != "" ||
-			entry.StatusCode != http.StatusNotFound || entry.CacheResult != "miss" || entry.BytesSent != 0 {
-			t.Errorf("legacy tarball %q audit entry = %#v, want no version", tests[index].path, entry)
+	for _, event := range access.snapshot() {
+		if version := accesslog.RecordedVersion(event.AdapterType, event.CacheKey, event.StatusCode); version != "" {
+			t.Errorf("legacy tarball %q reads as version %q", event.CacheKey, version)
 		}
 	}
 	if calls := checker.snapshot(); len(calls) != 0 {
@@ -666,9 +665,11 @@ func TestRejectedSignedTarballIsRecordedWithoutTokenOrVersion(t *testing.T) {
 			if strings.Contains(event.CacheKey, token) {
 				t.Fatalf("access event recorded the signed token: %q", event.CacheKey)
 			}
-			if len(audit.Entries) != 1 || audit.Entries[0].PackageName != "fixture" || audit.Entries[0].Version != "" ||
-				audit.Entries[0].StatusCode != http.StatusNotFound {
-				t.Fatalf("audit entries = %#v, want one entry without a version", audit.Entries)
+			if len(audit.Entries) != 0 {
+				t.Fatalf("audit entries = %#v, want none for a refused request", audit.Entries)
+			}
+			if version := accesslog.RecordedVersion(event.AdapterType, event.CacheKey, event.StatusCode); version != "" {
+				t.Fatalf("rejected signed tarball reads as version %q", version)
 			}
 			if got := tarballRequests.Load(); got != 0 {
 				t.Fatalf("rejected signed URL contacted upstream: requests = %d", got)

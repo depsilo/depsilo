@@ -15,7 +15,9 @@ import (
 	"depsilo/internal/traffic"
 )
 
-// AuditLogger is the audit half of the access hook snapshot.
+// AuditLogger is the audit half of the access hook snapshot. It receives
+// policy blocks only: ordinary package request outcomes are request history,
+// which the access log owns, and are not chained into the audit log.
 type AuditLogger interface {
 	Log(entry db.AuditLog)
 }
@@ -31,7 +33,7 @@ type suppressAccessLoggingContextKey struct{}
 
 // SuppressAccessLogging marks requests initiated by an internal maintenance
 // task. The marker is private to this package, so an external HTTP header
-// cannot suppress End User access or audit records.
+// cannot suppress End User access or policy-block records.
 func SuppressAccessLogging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		ctx := context.WithValue(request.Context(), suppressAccessLoggingContextKey{}, true)
@@ -42,16 +44,16 @@ func SuppressAccessLogging(next http.Handler) http.Handler {
 // LogAccess submits an access log entry to the request's recorder snapshot.
 // See accessHooksFor for a ctx without a RequestScope.
 func LogAccess(ctx context.Context, database *gorm.DB, adapterType, method, cacheKey string, hit bool, upstreamName string, latency time.Duration, statusCode int, clientIP string, bytesSent int64) {
-	logAccess(ctx, database, adapterType, method, cacheKey, hit, upstreamName, latency, statusCode, clientIP, bytesSent, "unknown", "response_completion_not_recorded", true)
+	logAccess(ctx, database, adapterType, method, cacheKey, hit, upstreamName, latency, statusCode, clientIP, bytesSent, "unknown", "response_completion_not_recorded")
 }
 
 // LogRefusedAccess records a request an adapter refused before it established
 // which artifact the request names. The access entry keeps the requested key,
-// so Admin logs show the response the client received. The audit entry names
-// no version: the file name in a refused path is the client's claim, not an
-// identity Depsilo verified, and must not read as a download of that version.
+// so Admin logs show the response the client received. Readers derive no
+// version for a refused response (accesslog.RecordedVersion): the file name in
+// a refused path is the client's claim, not an identity Depsilo verified.
 func LogRefusedAccess(ctx context.Context, database *gorm.DB, adapterType, method, cacheKey string, latency time.Duration, statusCode int, clientIP string) {
-	logAccess(ctx, database, adapterType, method, cacheKey, false, "", latency, statusCode, clientIP, 0, "unknown", "response_completion_not_recorded", false)
+	logAccess(ctx, database, adapterType, method, cacheKey, false, "", latency, statusCode, clientIP, 0, "unknown", "response_completion_not_recorded")
 }
 
 // LogAccessDelivery records the actual stream completion separately from the
@@ -61,26 +63,21 @@ func LogAccessDelivery(ctx context.Context, database *gorm.DB, adapterType, meth
 	if deliveryErr != nil {
 		result, reason = "failed", "response_body_incomplete"
 	}
-	logAccess(ctx, database, adapterType, method, cacheKey, hit, upstreamName, latency, statusCode, clientIP, bytesSent, result, reason, true)
+	logAccess(ctx, database, adapterType, method, cacheKey, hit, upstreamName, latency, statusCode, clientIP, bytesSent, result, reason)
 }
 
-// logAccess writes the access entry and its audit entry. versionKnown is false
-// only for a refused request, whose audit entry then carries no version.
-func logAccess(ctx context.Context, database *gorm.DB, adapterType, method, cacheKey string, hit bool, upstreamName string, latency time.Duration, statusCode int, clientIP string, bytesSent int64, deliveryResult, deliveryReason string, versionKnown bool) {
+// logAccess writes the access entry. It is the one record of a package
+// request outcome; the audit log keeps policy blocks and management events.
+func logAccess(ctx context.Context, database *gorm.DB, adapterType, method, cacheKey string, hit bool, upstreamName string, latency time.Duration, statusCode int, clientIP string, bytesSent int64, deliveryResult, deliveryReason string) {
 	if ctx != nil {
 		if suppressed, _ := ctx.Value(suppressAccessLoggingContextKey{}).(bool); suppressed {
 			return
 		}
 	}
 	pkgName := packagekey.ExtractName(adapterType, cacheKey)
-	version := ""
-	if versionKnown {
-		version = packagekey.ExtractVersion(adapterType, cacheKey)
-		if authenticated, ok := AuthenticatedArtifactCoordinateFromContext(ctx); ok &&
-			authenticated.Ecosystem == adapterType {
-			pkgName = authenticated.PackageName
-			version = authenticated.Version
-		}
+	if authenticated, ok := AuthenticatedArtifactCoordinateFromContext(ctx); ok &&
+		authenticated.Ecosystem == adapterType {
+		pkgName = authenticated.PackageName
 	}
 	now := time.Now().UTC()
 	requestID := requestid.FromContext(ctx)
@@ -153,40 +150,12 @@ func logAccess(ctx context.Context, database *gorm.DB, adapterType, method, cach
 			zap.L().Warn("failed to write access log", zap.Error(err))
 		}
 	}
-
-	action := "download"
-	if db.ClassifyCacheKind(adapterType, cacheKey) == db.CacheKindMetadata {
-		action = "metadata"
-	}
-	auditCacheResult := "miss"
-	if hit {
-		auditCacheResult = "hit"
-	}
-	if statusCode >= 500 {
-		auditCacheResult = "error"
-	}
-	logAuditOutcome(hooks, db.AuditLog{
-		RequestID:   requestID,
-		Ecosystem:   adapterType,
-		PackageName: pkgName,
-		Version:     version,
-		Action:      action,
-		CacheResult: auditCacheResult,
-		ClientIP:    clientIP,
-		LatencyMs:   latency.Milliseconds(),
-		BytesSent:   bytesSent,
-		StatusCode:  statusCode,
-		// AuditLog is the request-event source used by session baselines.
-		// Attribute the event to request start, not completion, so a slow
-		// request already in flight when onboarding begins cannot look new.
-		CreatedAt: now.Add(-latency),
-	})
 }
 
 // LogPolicyBlock records a request that reached Depsilo but was refused before
-// the cache/upstream path. Keeping policy outcomes in AuditLog gives Admin UX a
-// single source for miss, hit, error, and blocked request results without
-// changing the policy response or writing a synthetic cache access.
+// the cache/upstream path. A policy block is a security decision, so it is
+// chained into the audit log; it writes no synthetic cache access, and the
+// access log keeps every other request outcome.
 func LogPolicyBlock(ctx context.Context, ecosystem, packageName, version string, statusCode int, clientIP string) {
 	if ctx != nil {
 		if suppressed, _ := ctx.Value(suppressAccessLoggingContextKey{}).(bool); suppressed {
@@ -215,7 +184,7 @@ func LogPolicyBlock(ctx context.Context, ecosystem, packageName, version string,
 // scope is the only source: a request without one (an isolated handler test,
 // or an in-process call that bypasses the server's scope wrapper) gets no
 // recorder, no audit logger, and no observer, so LogAccess falls back to the
-// raw database row and audit/policy outcomes are not recorded. A scoped nil
+// raw database row and policy blocks are not recorded. A scoped nil
 // field means the same thing for that server owner.
 func accessHooksFor(ctx context.Context) (*accessHookSnapshot, RequestObserver) {
 	scope, ok := requestScopeFromContext(ctx)

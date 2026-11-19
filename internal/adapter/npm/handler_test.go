@@ -10,18 +10,19 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"depsilo/internal/adapter"
 	"depsilo/internal/adapter/adaptertest"
 	"depsilo/internal/config"
+	"depsilo/internal/db"
 	"depsilo/internal/upstream"
 )
 
-func TestMetadataUpstreamFailureIsRecordedAsAuditError(t *testing.T) {
+func TestMetadataUpstreamFailureIsRecordedInTheAccessLog(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
-	audit := &adaptertest.AuditCapture{}
-	scope := adapter.NewRequestScope(nil, audit, nil, nil)
+	scope := adapter.NewRequestScope(nil, nil, nil, nil)
 
 	handler := New(manager, adaptertest.UnavailableSelector{}, config.CacheConfig{TTLIndex: time.Hour}, database, testNPMTarballSigningKey)
 	router := gin.New()
@@ -33,13 +34,14 @@ func TestMetadataUpstreamFailureIsRecordedAsAuditError(t *testing.T) {
 	if response.Code != http.StatusBadGateway {
 		t.Fatalf("status = %d, body=%s", response.Code, response.Body.String())
 	}
-	if len(audit.Entries) != 1 {
-		t.Fatalf("audit entries = %#v", audit.Entries)
+	rows := adaptertest.AccessRows(t, database)
+	if len(rows) != 1 {
+		t.Fatalf("access rows = %#v", rows)
 	}
-	entry := audit.Entries[0]
-	if entry.Ecosystem != "npm" || entry.PackageName != "is-number" || entry.Action != "metadata" ||
-		entry.CacheResult != "error" || entry.StatusCode != http.StatusBadGateway {
-		t.Fatalf("audit entry = %#v", entry)
+	row := rows[0]
+	if row.AdapterType != "npm" || row.PackageName != "is-number" || db.ClassifyCacheKind("npm", row.CacheKey) != db.CacheKindMetadata ||
+		row.Hit || row.StatusCode != http.StatusBadGateway {
+		t.Fatalf("access row = %#v", row)
 	}
 }
 
@@ -237,11 +239,11 @@ func TestInstallV1AcceptRetainsV090MetadataCacheKey(t *testing.T) {
 func TestMetadataReportsThePoolAnswer(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	adaptertest.CheckPoolAnswers(t, adaptertest.MetadataPoolAnswers, "/npm/is-number", `{"name":"is-number","versions":{}}`,
-		func(t *testing.T, selector upstream.Selector) http.Handler {
+		func(t *testing.T, selector upstream.Selector) (http.Handler, *gorm.DB) {
 			manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
 			handler := New(manager, selector, config.CacheConfig{TTLIndex: time.Hour}, database, testNPMTarballSigningKey)
 			router := gin.New()
 			handler.Register(router.Group("/npm"))
-			return router
+			return router, database
 		})
 }

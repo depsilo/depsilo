@@ -22,11 +22,13 @@ const (
 var onboardingArtifactSequence atomic.Uint64
 
 type onboardingStatus struct {
-	Status      string            `json:"status"`
-	StartedAt   string            `json:"started_at"`
-	Events      []onboardingEvent `json:"events"`
-	NextAfterID uint              `json:"next_after_id"`
-	HasMore     bool              `json:"has_more"`
+	Status              string            `json:"status"`
+	StartedAt           string            `json:"started_at"`
+	Events              []onboardingEvent `json:"events"`
+	NextAfterID         uint              `json:"next_after_id"`
+	HasMore             bool              `json:"has_more"`
+	DeliveryEvents      []onboardingEvent `json:"delivery_events"`
+	NextDeliveryAfterID string            `json:"next_delivery_after_id"`
 }
 
 type onboardingEvent struct {
@@ -52,7 +54,7 @@ func TestOnboardingStatusTracksRealMissThenHit(t *testing.T) {
 		t.Fatalf("first onboarding artifact body = %q", body)
 	}
 
-	// Make the second request before polling the eventually persisted audit log.
+	// Make the second request before polling the eventually persisted access log.
 	// This keeps the cache read inside the short integration blob TTL even on a
 	// slow runner while the status endpoint remains the only observation seam.
 	second := httpGet(t, proxyURL)
@@ -67,8 +69,8 @@ func TestOnboardingStatusTracksRealMissThenHit(t *testing.T) {
 			event.Version == version
 	})
 	miss, hit := events[0], events[1]
-	if miss.StatusCode != http.StatusOK || miss.ID <= baseline.NextAfterID {
-		t.Fatalf("miss event = %+v, baseline after_id = %d", miss, baseline.NextAfterID)
+	if miss.StatusCode != http.StatusOK {
+		t.Fatalf("miss event = %+v", miss)
 	}
 	if hit.StatusCode != http.StatusOK || hit.ID <= miss.ID {
 		t.Fatalf("ordered outcomes = %+v", events)
@@ -103,8 +105,11 @@ func TestOnboardingStatusTracksRealUpstreamFailure(t *testing.T) {
 	_, _ = io.Copy(io.Discard, response.Body)
 	response.Body.Close()
 
-	failure, _ := waitForOnboardingOutcome(t, baseline, "error", func(event onboardingEvent) bool {
-		return event.Ecosystem == "npm" && event.PackageName == "onboarding-error" && event.Version == "1.0.0"
+	// A failed response proved no artifact identity, so it names no version;
+	// the access log records its cache outcome as unknown.
+	failure, _ := waitForOnboardingOutcome(t, baseline, "unknown", func(event onboardingEvent) bool {
+		return event.Ecosystem == "npm" && event.PackageName == "onboarding-error" &&
+			event.StatusCode == http.StatusBadGateway && event.Version == ""
 	})
 	if failure.StatusCode != http.StatusBadGateway {
 		t.Fatalf("upstream failure event = %+v", failure)
@@ -123,8 +128,8 @@ func getOnboardingBaseline(t *testing.T) onboardingStatus {
 	if _, err := time.Parse(time.RFC3339Nano, status.StartedAt); err != nil {
 		t.Fatalf("onboarding baseline started_at = %q: %v", status.StartedAt, err)
 	}
-	if len(status.Events) != 0 {
-		t.Fatalf("onboarding baseline returned historical events: %+v", status.Events)
+	if len(status.Events) != 0 || len(status.DeliveryEvents) != 0 || status.NextDeliveryAfterID == "" {
+		t.Fatalf("onboarding baseline returned historical events or no delivery cursor: %+v", status)
 	}
 	return status
 }
@@ -152,13 +157,18 @@ func waitForOnboardingOutcomes(
 	matched := make([]onboardingEvent, 0, len(wantOutcomes))
 	for {
 		last = getOnboardingStatus(t, onboardingStatusQuery(cursor))
-		for _, event := range last.Events {
+		// Policy blocks are audit events; every other request outcome is a
+		// delivery event from the access log.
+		for _, event := range append(last.Events, last.DeliveryEvents...) {
 			if matches(event) {
 				matched = append(matched, event)
 			}
 		}
 		if last.NextAfterID > cursor.NextAfterID {
 			cursor.NextAfterID = last.NextAfterID
+		}
+		if last.NextDeliveryAfterID != "" {
+			cursor.NextDeliveryAfterID = last.NextDeliveryAfterID
 		}
 		if len(matched) >= len(wantOutcomes) {
 			for index, want := range wantOutcomes {
@@ -180,6 +190,7 @@ func onboardingStatusQuery(cursor onboardingStatus) string {
 	values := url.Values{}
 	values.Set("after_id", fmt.Sprintf("%d", cursor.NextAfterID))
 	values.Set("started_at", cursor.StartedAt)
+	values.Set("delivery_after_id", cursor.NextDeliveryAfterID)
 	return "?" + values.Encode()
 }
 

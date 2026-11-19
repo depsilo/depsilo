@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"depsilo/internal/adapter"
 	"depsilo/internal/adapter/adaptertest"
@@ -35,11 +36,10 @@ func (s *countingSelector) Select(context.Context) (*upstream.Upstream, error) {
 	return s.upstream, nil
 }
 
-func TestPackageIndexUpstreamFailureIsRecordedAsAuditError(t *testing.T) {
+func TestPackageIndexUpstreamFailureIsRecordedInTheAccessLog(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
-	audit := &adaptertest.AuditCapture{}
-	scope := adapter.NewRequestScope(nil, audit, nil, nil)
+	scope := adapter.NewRequestScope(nil, nil, nil, nil)
 
 	handler := New(manager, adaptertest.UnavailableSelector{}, config.CacheConfig{TTLIndex: time.Hour}, database)
 	router := gin.New()
@@ -51,22 +51,23 @@ func TestPackageIndexUpstreamFailureIsRecordedAsAuditError(t *testing.T) {
 	if response.Code != http.StatusBadGateway {
 		t.Fatalf("status = %d, body=%s", response.Code, response.Body.String())
 	}
-	if len(audit.Entries) != 1 {
-		t.Fatalf("audit entries = %#v", audit.Entries)
+	rows := adaptertest.AccessRows(t, database)
+	if len(rows) != 1 {
+		t.Fatalf("access rows = %#v", rows)
 	}
-	entry := audit.Entries[0]
-	if entry.Ecosystem != "pypi" || entry.PackageName != "requests" || entry.Action != "metadata" ||
-		entry.CacheResult != "error" || entry.StatusCode != http.StatusBadGateway {
-		t.Fatalf("audit entry = %#v", entry)
+	row := rows[0]
+	if row.AdapterType != "pypi" || row.PackageName != "requests" || db.ClassifyCacheKind("pypi", row.CacheKey) != db.CacheKindMetadata ||
+		row.Hit || row.StatusCode != http.StatusBadGateway {
+		t.Fatalf("access row = %#v", row)
 	}
 }
 
-func newPoolPyPIRouter(t *testing.T, selector upstream.Selector) http.Handler {
+func newPoolPyPIRouter(t *testing.T, selector upstream.Selector) (http.Handler, *gorm.DB) {
 	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
 	handler := New(manager, selector, config.CacheConfig{TTLIndex: time.Hour}, database)
 	router := gin.New()
 	handler.Register(router.Group("/pypi"))
-	return router
+	return router, database
 }
 
 // pip reads a 404 for a project page as "no such project"; a 502 makes it
@@ -84,8 +85,9 @@ func TestRootIndexIsServedFromThePool(t *testing.T) {
 		t.Run(answer.Name, func(t *testing.T) {
 			first := &adaptertest.Origin{Status: answer.First, Body: "<html></html>"}
 			second := &adaptertest.Origin{Status: answer.Second, Body: "<html></html>"}
+			router, _ := newPoolPyPIRouter(t, adaptertest.NewPoolSelector(t, first, second))
 			response := httptest.NewRecorder()
-			newPoolPyPIRouter(t, adaptertest.NewPoolSelector(t, first, second)).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/pypi/simple/", nil))
+			router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/pypi/simple/", nil))
 			if response.Code != answer.Status || (answer.Code != "" && !strings.Contains(response.Body.String(), `"code":"`+answer.Code+`"`)) {
 				t.Fatalf("status = %d, body = %s; want %d %s", response.Code, response.Body.String(), answer.Status, answer.Code)
 			}

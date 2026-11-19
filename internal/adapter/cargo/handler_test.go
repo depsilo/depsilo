@@ -10,19 +10,20 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"depsilo/internal/adapter"
 	"depsilo/internal/adapter/adaptertest"
+	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
 	"depsilo/internal/upstream"
 )
 
-func TestPackageUpstreamFailuresAreRecordedAsAuditErrors(t *testing.T) {
+func TestPackageUpstreamFailuresAreRecordedInTheAccessLog(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
-	audit := &adaptertest.AuditCapture{}
-	scope := adapter.NewRequestScope(nil, audit, nil, nil)
+	scope := adapter.NewRequestScope(nil, nil, nil, nil)
 
 	handler := New(manager, adaptertest.UnavailableSelector{}, config.CacheConfig{TTLIndex: time.Hour, TTLBlob: 72 * time.Hour}, database)
 	router := gin.New()
@@ -39,19 +40,21 @@ func TestPackageUpstreamFailuresAreRecordedAsAuditErrors(t *testing.T) {
 		}
 	}
 
-	if len(audit.Entries) != 2 {
-		t.Fatalf("audit entries = %#v", audit.Entries)
+	rows := adaptertest.AccessRows(t, database)
+	if len(rows) != 2 {
+		t.Fatalf("access rows = %#v", rows)
 	}
-	for index, entry := range audit.Entries {
-		if entry.Ecosystem != "cargo" || entry.CacheResult != "error" || entry.StatusCode != http.StatusBadGateway {
-			t.Errorf("audit entry %d = %#v", index, entry)
+	for index, row := range rows {
+		if row.AdapterType != "cargo" || row.Hit || row.StatusCode != http.StatusBadGateway {
+			t.Errorf("access row %d = %#v", index, row)
 		}
 	}
-	if audit.Entries[0].Action != "metadata" || audit.Entries[0].PackageName != "" || audit.Entries[0].Version != "" {
-		t.Errorf("index audit entry = %#v", audit.Entries[0])
+	if db.ClassifyCacheKind("cargo", rows[0].CacheKey) != db.CacheKindMetadata || rows[0].PackageName != "" {
+		t.Errorf("index access row = %#v", rows[0])
 	}
-	if audit.Entries[1].Action != "download" || audit.Entries[1].PackageName != "serde" || audit.Entries[1].Version != "1.0.219" {
-		t.Errorf("download audit entry = %#v", audit.Entries[1])
+	if db.ClassifyCacheKind("cargo", rows[1].CacheKey) != db.CacheKindArtifact || rows[1].PackageName != "serde" ||
+		packagekey.ExtractVersion("cargo", rows[1].CacheKey) != "1.0.219" {
+		t.Errorf("download access row = %#v", rows[1])
 	}
 }
 
@@ -97,12 +100,12 @@ func TestConfigDownloadURLTakesOnlyAnHTTPSchemeFromForwardedProto(t *testing.T) 
 	}
 }
 
-func newPoolCargoRouter(t *testing.T, selector upstream.Selector) http.Handler {
+func newPoolCargoRouter(t *testing.T, selector upstream.Selector) (http.Handler, *gorm.DB) {
 	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
 	handler := New(manager, selector, config.CacheConfig{TTLIndex: time.Hour, TTLBlob: 72 * time.Hour}, database)
 	router := gin.New()
 	handler.Register(router.Group("/crates"))
-	return router
+	return router, database
 }
 
 // Cargo reads a 404 or 410 for an index file as "no such crate"; a 502 makes

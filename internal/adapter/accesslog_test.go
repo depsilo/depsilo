@@ -89,37 +89,25 @@ func scopedContext(base context.Context, scope *RequestScope) context.Context {
 	return ctx
 }
 
-func TestLogAccessUsesCanonicalCacheKindForAuditAction(t *testing.T) {
-	calls := newCapturedHookCalls()
+// Package request outcomes are request history in the access log. Whatever
+// the outcome (hit, miss, server error, refusal, interrupted body), none is
+// chained into the audit log; only policy blocks and management events are.
+func TestPackageRequestOutcomesStayOutOfTheAuditLog(t *testing.T) {
+	recorder := &timestampAccessRecorder{}
 	audit := &captureAuditEntries{}
-	ctx := scopedContext(context.Background(), NewRequestScope(&captureAccessRecorder{owner: 1, calls: calls}, audit, nil, nil))
+	ctx := scopedContext(requestid.With(context.Background(), "req-outcomes"), NewRequestScope(recorder, audit, nil, nil))
 
-	tests := []struct {
-		ecosystem string
-		cacheKey  string
-		want      string
-	}{
-		{ecosystem: "apt", cacheKey: "apt/ubuntu/dists/jammy/InRelease", want: "metadata"},
-		{ecosystem: "apt", cacheKey: "apt/ubuntu/dists/jammy/main/binary-amd64/Packages.gz", want: "metadata"},
-		{ecosystem: "alpine", cacheKey: "alpine/v3.20/main/x86_64/APKINDEX.tar.gz", want: "metadata"},
-		{ecosystem: "pypi", cacheKey: "pypi/simple/requests/index.html", want: "metadata"},
-		{ecosystem: "pypi", cacheKey: "pypi/files/index-helper-1.0.0.whl", want: "download"},
-		{ecosystem: "npm", cacheKey: "npm/react/-/react-19.0.0.tgz", want: "download"},
-	}
+	LogAccess(ctx, nil, "npm", "GET", "npm-exact-v1/react/metadata.json", true, "npmjs", time.Millisecond, http.StatusOK, "192.0.2.1", 10)
+	LogAccess(ctx, nil, "pypi", "GET", "pypi/files/requests-2.32.0-py3-none-any.whl", false, "pypi", time.Millisecond, http.StatusOK, "192.0.2.2", 10)
+	LogAccess(ctx, nil, "npm", "GET", "npm-exact-v1/react", false, "npmjs", time.Millisecond, http.StatusBadGateway, "192.0.2.3", 0)
+	LogRefusedAccess(ctx, nil, "npm", "GET", "npm-exact-v1/fixture/-/fixture-9.9.9.tgz", time.Millisecond, http.StatusNotFound, "192.0.2.4")
+	LogAccessDelivery(ctx, nil, "npm", "GET", "npm-exact-v1/react/-/react-19.0.0.tgz", false, "npmjs", time.Millisecond, http.StatusOK, "192.0.2.5", 10, fmt.Errorf("client disconnected"))
 
-	for index, test := range tests {
-		LogAccess(ctx, nil, test.ecosystem, "GET", test.cacheKey, false, "upstream", time.Millisecond, 200, fmt.Sprintf("classification-%d", index), 10)
+	if recorder.event.ClientIP != "192.0.2.5" || recorder.event.RequestID != "req-outcomes" {
+		t.Fatalf("access recorder did not receive the requests: %+v", recorder.event)
 	}
-	if len(audit.entries) != len(tests) {
-		t.Fatalf("audit entries = %d, want %d", len(audit.entries), len(tests))
-	}
-	for index, test := range tests {
-		if got := audit.entries[index].Action; got != test.want {
-			t.Errorf("%s %q action = %q, want %q", test.ecosystem, test.cacheKey, got, test.want)
-		}
-		if audit.entries[index].CreatedAt.IsZero() {
-			t.Errorf("%s %q has zero event timestamp", test.ecosystem, test.cacheKey)
-		}
+	if len(audit.entries) != 0 {
+		t.Fatalf("package request outcomes reached the audit log: %#v", audit.entries)
 	}
 }
 
@@ -156,25 +144,20 @@ func TestGoChecksumDatabaseKeysAreMetadataToEveryClassifier(t *testing.T) {
 
 func TestLogAccessRecordsCorrelatedDiagnosticFacts(t *testing.T) {
 	recorder := &timestampAccessRecorder{}
-	audit := &captureAuditEntries{}
-	ctx := scopedContext(requestid.With(context.Background(), "req-facts-1"), NewRequestScope(recorder, audit, nil, nil))
+	ctx := scopedContext(requestid.With(context.Background(), "req-facts-1"), NewRequestScope(recorder, nil, nil, nil))
 	LogAccess(ctx, nil, "npm", "GET", "npm/react", false, "npmjs", time.Millisecond, http.StatusBadGateway, "127.0.0.1", 0)
 	if recorder.event.RequestID != "req-facts-1" || recorder.event.CacheResult != "unknown" ||
 		recorder.event.CacheReason != "not_recorded" || recorder.event.PolicyDecision != "unknown" ||
 		recorder.event.DeliveryResult != "unknown" {
 		t.Fatalf("diagnostic event = %+v", recorder.event)
 	}
-	if len(audit.entries) != 1 || audit.entries[0].RequestID != "req-facts-1" {
-		t.Fatalf("audit entries = %+v", audit.entries)
-	}
 }
 
 func TestLogAccessPrefersAuthenticatedArtifactCoordinate(t *testing.T) {
 	recorder := &timestampAccessRecorder{}
-	audit := &captureAuditEntries{}
 	ginContext, _ := gin.CreateTestContext(httptest.NewRecorder())
 	request := httptest.NewRequest(http.MethodGet, "/npm/fixture/-/opaque/pkg-custom.tgz", nil)
-	ginContext.Request = request.WithContext(scopedContext(request.Context(), NewRequestScope(recorder, audit, nil, nil)))
+	ginContext.Request = request.WithContext(scopedContext(request.Context(), NewRequestScope(recorder, nil, nil, nil)))
 	BindAuthenticatedArtifactCoordinate(ginContext, "npm", "fixture", "1.0.0")
 	LogAccess(
 		ginContext.Request.Context(), nil, "npm", http.MethodGet,
@@ -185,18 +168,12 @@ func TestLogAccessPrefersAuthenticatedArtifactCoordinate(t *testing.T) {
 	if recorder.event.PackageName != "fixture" {
 		t.Fatalf("recorded package = %q, want authenticated fixture", recorder.event.PackageName)
 	}
-	if len(audit.entries) != 1 || audit.entries[0].PackageName != "fixture" ||
-		audit.entries[0].Version != "1.0.0" {
-		t.Fatalf("audit entries = %#v", audit.entries)
-	}
 }
 
-func TestLogRefusedAccessRecordsTheRequestWithoutAVersion(t *testing.T) {
+func TestLogRefusedAccessRecordsTheRequestedKey(t *testing.T) {
 	recorder := &timestampAccessRecorder{}
-	audit := &captureAuditEntries{}
-	ctx := scopedContext(context.Background(), NewRequestScope(recorder, audit, nil, nil))
+	ctx := scopedContext(context.Background(), NewRequestScope(recorder, nil, nil, nil))
 
-	// The same key through LogAccess would put version 9.9.9 in the audit log.
 	const key = "npm-exact-v1/fixture/-/fixture-9.9.9.tgz"
 	LogRefusedAccess(ctx, nil, "npm", http.MethodGet, key, time.Millisecond, http.StatusNotFound, "192.0.2.10")
 
@@ -206,13 +183,10 @@ func TestLogRefusedAccessRecordsTheRequestWithoutAVersion(t *testing.T) {
 		event.CacheResult != "unknown" {
 		t.Fatalf("access event = %+v", event)
 	}
-	if len(audit.entries) != 1 {
-		t.Fatalf("audit entries = %#v, want one", audit.entries)
-	}
-	entry := audit.entries[0]
-	if entry.PackageName != "fixture" || entry.Version != "" || entry.StatusCode != http.StatusNotFound ||
-		entry.CacheResult != "miss" || entry.ClientIP != "192.0.2.10" {
-		t.Fatalf("audit entry = %#v, want the package and no version", entry)
+	// Readers name no version for a refused response: 9.9.9 is the client's
+	// claim, not an identity Depsilo verified.
+	if version := accesslog.RecordedVersion(event.AdapterType, event.CacheKey, event.StatusCode); version != "" {
+		t.Fatalf("refused request reads as version %q", version)
 	}
 }
 
@@ -235,30 +209,6 @@ func TestLogPolicyBlockUsesUnifiedAuditOutcome(t *testing.T) {
 	}
 	if audit.entries[1].Action != "download" || audit.entries[1].StatusCode != http.StatusUnavailableForLegalReasons {
 		t.Errorf("artifact block = %#v", audit.entries[1])
-	}
-}
-
-func TestLogAccessAttributesAuditEventToRequestStart(t *testing.T) {
-	recorder := &timestampAccessRecorder{}
-	audit := &captureAuditEntries{}
-	ctx := scopedContext(context.Background(), NewRequestScope(recorder, audit, nil, nil))
-	const latency = 2750 * time.Millisecond
-	before := time.Now().UTC()
-	LogAccess(ctx, nil, "npm", "GET", "npm/is-number/metadata.json", false, "primary", latency, http.StatusBadGateway, "192.0.2.8", 0)
-	after := time.Now().UTC()
-
-	if len(audit.entries) != 1 {
-		t.Fatalf("audit entries = %#v", audit.entries)
-	}
-	auditTime := audit.entries[0].CreatedAt
-	if got := recorder.event.At.Sub(auditTime); got != latency {
-		t.Fatalf("access completion - audit request start = %s, want %s", got, latency)
-	}
-	if recorder.event.At.Before(before) || recorder.event.At.After(after) {
-		t.Fatalf("access event time %s is not completion time in [%s, %s]", recorder.event.At, before, after)
-	}
-	if auditTime.Before(before.Add(-latency)) || auditTime.After(after.Add(-latency)) {
-		t.Fatalf("audit event time %s is not request start in [%s, %s]", auditTime, before.Add(-latency), after.Add(-latency))
 	}
 }
 
@@ -318,6 +268,7 @@ func TestSuppressAccessLoggingSkipsRawAndScopedHooks(t *testing.T) {
 
 	handler := scope.Wrap(SuppressAccessLogging(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
 		LogAccess(request.Context(), database, "pypi", "GET", "pypi/simple/pillow/index.html", false, "primary", time.Millisecond, 200, "internal-refresh", 12)
+		LogPolicyBlock(request.Context(), "pypi", "pillow", "", http.StatusForbidden, "internal-refresh")
 	})))
 	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/internal-refresh", nil))
 
