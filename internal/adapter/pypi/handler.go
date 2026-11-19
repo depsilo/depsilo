@@ -175,9 +175,12 @@ func (h *Handler) handleSimpleIndex(c *gin.Context) {
 		return
 	}
 
-	result, err := ups.Fetch(c.Request.Context(), h.upstreamProjectPath(""))
+	result, _, err := adapter.FetchFromPool(c.Request.Context(), h.selector, ups, false, func(member *upstream.Upstream) (*upstream.FetchResult, error) {
+		return member.Fetch(c.Request.Context(), h.upstreamProjectPath(""))
+	})
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		status, code := adapter.UpstreamFailureStatus(err)
+		c.JSON(status, gin.H{"code": code, "message": err.Error()})
 		return
 	}
 	defer result.Body.Close()
@@ -206,12 +209,7 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 	result, cacheKey, err := h.projectIndex(c.Request.Context(), pkg)
 	if err != nil {
 		zap.L().Error("failed to get package index", zap.String("package", pkg), zap.Error(err))
-		status := http.StatusBadGateway
-		code := "UPSTREAM_UNAVAILABLE"
-		if strings.Contains(err.Error(), "returned 404") {
-			status = http.StatusNotFound
-			code = "NOT_FOUND"
-		}
+		status, code := adapter.UpstreamFailureStatus(err)
 		adapter.LogAccess(c.Request.Context(), h.db, h.adapterID, c.Request.Method, cacheKey, false, "", time.Since(start), status, c.ClientIP(), 0)
 		c.JSON(status, gin.H{"code": code, "message": err.Error()})
 		return
@@ -261,11 +259,6 @@ func (h *Handler) projectIndex(ctx context.Context, pkg string) (*cache.GetResul
 			return nil, "", 0, "", err
 		}
 
-		zap.L().Info("fetching package index from upstream",
-			zap.String("package", pkg),
-			zap.String("upstream", ups.Name),
-		)
-
 		headers := map[string]string{
 			"If-None-Match":     cachedValidators.ETag,
 			"If-Modified-Since": cachedValidators.LastModified,
@@ -273,7 +266,18 @@ func (h *Handler) projectIndex(ctx context.Context, pkg string) (*cache.GetResul
 		if h.provenanceRequired {
 			headers["Accept"] = "application/vnd.pypi.simple.v1+json, application/vnd.pypi.simple.v1+html;q=0.5, text/html;q=0.2"
 		}
-		fetchResult, err := ups.FetchWithHeaders(ctx, h.upstreamProjectPath(pkg), headers)
+		// A project page never moves on a 404: one member's answer that the
+		// project does not exist is the pool's answer. The validators can
+		// belong to another member's copy: an ETag this member did not issue
+		// gets a full answer, and a 304 against a Last-Modified means this
+		// member has nothing newer than the cached copy.
+		fetchResult, ups, err := adapter.FetchFromPool(ctx, h.selector, ups, false, func(member *upstream.Upstream) (*upstream.FetchResult, error) {
+			zap.L().Info("fetching package index from upstream",
+				zap.String("package", pkg),
+				zap.String("upstream", member.Name),
+			)
+			return member.FetchWithHeaders(ctx, h.upstreamProjectPath(pkg), headers)
+		})
 		if err != nil {
 			return nil, "", 0, ups.Name, err
 		}
@@ -475,12 +479,7 @@ func (h *Handler) handleFileDownload(c *gin.Context) {
 			logFields = append(logFields, zap.String("filepath", filepath))
 		}
 		zap.L().Error("failed to get file", logFields...)
-		status := http.StatusBadGateway
-		code := "UPSTREAM_UNAVAILABLE"
-		if strings.Contains(err.Error(), "returned 404") {
-			status = http.StatusNotFound
-			code = "NOT_FOUND"
-		}
+		status, code := adapter.UpstreamFailureStatus(err)
 		adapter.LogAccess(c.Request.Context(), h.db, h.adapterID, c.Request.Method, cacheKey, false, "", time.Since(start), status, c.ClientIP(), 0)
 		c.JSON(status, gin.H{"code": code, "message": err.Error()})
 		return

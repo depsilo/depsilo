@@ -61,6 +61,41 @@ func TestPackageIndexUpstreamFailureIsRecordedAsAuditError(t *testing.T) {
 	}
 }
 
+func newPoolPyPIRouter(t *testing.T, selector upstream.Selector) http.Handler {
+	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
+	handler := New(manager, selector, config.CacheConfig{TTLIndex: time.Hour}, database)
+	router := gin.New()
+	handler.Register(router.Group("/pypi"))
+	return router
+}
+
+// pip reads a 404 for a project page as "no such project"; a 502 makes it
+// report an index outage instead.
+func TestPackageIndexReportsThePoolAnswer(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	adaptertest.CheckPoolAnswers(t, adaptertest.MetadataPoolAnswers, "/pypi/simple/requests/", "<html><body></body></html>", newPoolPyPIRouter)
+}
+
+// The root simple index is not cached or recorded, but it is served from the
+// pool like any other index page.
+func TestRootIndexIsServedFromThePool(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, answer := range adaptertest.MetadataPoolAnswers {
+		t.Run(answer.Name, func(t *testing.T) {
+			first := &adaptertest.Origin{Status: answer.First, Body: "<html></html>"}
+			second := &adaptertest.Origin{Status: answer.Second, Body: "<html></html>"}
+			response := httptest.NewRecorder()
+			newPoolPyPIRouter(t, adaptertest.NewPoolSelector(t, first, second)).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/pypi/simple/", nil))
+			if response.Code != answer.Status || (answer.Code != "" && !strings.Contains(response.Body.String(), `"code":"`+answer.Code+`"`)) {
+				t.Fatalf("status = %d, body = %s; want %d %s", response.Code, response.Body.String(), answer.Status, answer.Code)
+			}
+			if asked := second.Requests() > 0; asked != answer.SecondAsked {
+				t.Fatalf("second member asked = %v, want %v", asked, answer.SecondAsked)
+			}
+		})
+	}
+}
+
 type recordingQuarantineChecker struct {
 	ecosystem string
 }
