@@ -9,9 +9,12 @@ const baseURL = `http://127.0.0.1:${port}`
 export default defineConfig({
   testDir: './e2e',
   testIgnore: '**/production-binary.spec.ts',
-  fullyParallel: false,
-  // Keep cases within a spec serial, but use half of the four cores available
-  // on GitHub's public Linux runners so Chromium and Vite retain headroom.
+  // Cases are independent (each mocks its own API on a fresh page), so they
+  // run in parallel and CI shards split them by case rather than by file;
+  // a file of slow cases no longer decides a shard's length. Use half of the
+  // four cores on GitHub's public Linux runners so Chromium and Vite retain
+  // headroom.
+  fullyParallel: true,
   workers: process.env.CI ? 2 : undefined,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
