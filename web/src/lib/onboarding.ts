@@ -137,10 +137,11 @@ export function advanceOnboardingSession(
     .filter((event): event is OnboardingDeliveryEvent => event !== undefined)
     .sort((left, right) => Date.parse(left.created_at) - Date.parse(right.created_at) || left.id - right.id)
     .at(-1)
-  // Policy blocks and access-log requests are separate streams with separate
-  // IDs, so the first arrival is ordered by request start.
-  const firstRequest = session.firstRequest ?? [...events, ...deliveries]
-    .sort((left, right) => Date.parse(left.created_at) - Date.parse(right.created_at) || left.id - right.id)
+  // Policy blocks and batched access-log requests are separate streams with
+  // separate IDs and arrival delays, so the first request is the earliest
+  // request start seen in any poll, not the first one to arrive.
+  const firstRequest = [...(session.firstRequest ? [session.firstRequest] : []), ...events, ...deliveries]
+    .sort((left, right) => Date.parse(left.created_at) - Date.parse(right.created_at))
     .at(0)
   const latestRequest = [session.latestRequest, ...events]
     .filter((event): event is OnboardingEvent => event !== undefined)

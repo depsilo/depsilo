@@ -128,9 +128,10 @@ describe('scoped connection evidence', () => {
     expect(next.successfulDownload).toEqual(later)
     expect(parseOnboardingSession(JSON.stringify(next))).toEqual(next)
 
+    // Access rows are batched, so an earlier block can arrive after them.
     const blocked = request({ id: 51, outcome: 'blocked', status_code: 403, created_at: '2026-08-20T00:00:01Z' })
     const second = advanceOnboardingSession(next, poll({ next_after_id: 60, events: [blocked] }))
-    expect(second.firstRequest).toEqual(metadata)
+    expect(second.firstRequest).toEqual(blocked)
     expect(second.latestRequest).toEqual(blocked)
     expect(parseOnboardingSession(JSON.stringify(second))).toEqual(second)
   })
@@ -181,11 +182,12 @@ describe('scoped connection evidence', () => {
     expect(second.successfulDownload).toEqual(success)
   })
 
-  it('keeps a newer blocked request when an older request is committed to the audit log later', () => {
+  it('keeps a newer blocked request when an older request is committed later', () => {
     const blocked = request({ id: 42, outcome: 'blocked', status_code: 403, created_at: '2026-08-20T00:00:03Z' })
     const first = advanceOnboardingSession(startOnboardingSession(baseline, scope), poll({ next_after_id: 42, events: [blocked] }))
-    const second = advanceOnboardingSession(first, poll({ events: [request({ id: 43 })] }))
-    expect(second.firstRequest).toEqual(blocked)
+    const older = request({ id: 43, outcome: 'blocked', status_code: 403 })
+    const second = advanceOnboardingSession(first, poll({ events: [older] }))
+    expect(second.firstRequest).toEqual(older)
     expect(second.latestRequest).toEqual(blocked)
     expect(second.afterId).toBe(50)
     expect(parseOnboardingSession(JSON.stringify(second))).toEqual(second)

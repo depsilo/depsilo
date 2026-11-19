@@ -203,7 +203,7 @@ function ConnectionWorkspace({ connection, restored, managerName, selectors, onR
     : session.firstRequest ? 'relatedRequest'
     : 'waitingTitle'
   const success = Boolean(session?.successfulDownload)
-  const resultEvent = blocked || failed ? latest : session?.firstCacheHit ?? session?.successfulDownload ?? latestRequest
+  const resultEvent = blocked || failed ? latest : session?.firstCacheHit ?? session?.successfulDownload ?? latest
   const tone = verification.isError || blocked ? 'warning' : failed ? 'danger' : success ? 'success' : 'neutral'
   return <AdminPage title={t('onboarding.title')} description={t('onboarding.subtitle')} actions={
     <Button variant="ghost" onClick={() => { void leave() }} disabled={leaving}><Icon name="arrow_back" size="sm" />{t('onboarding.backOverview')}</Button>

@@ -171,6 +171,9 @@ test('connection verification requires an artifact delivery and a matching cache
   await expect(page.getByRole('heading', { name: 'Waiting for a related request' })).toBeVisible()
   await page.clock.fastForward(2_600)
   await expect(page.getByRole('heading', { name: 'Related request detected' })).toBeVisible()
+  // A metadata delivery alone still names the request it observed.
+  await expect(page.locator('.connection-event')).toContainText('six')
+  await expect(page.locator('.connection-event')).toContainText('CACHE HIT · HTTP 200')
   expect(writes).toEqual([])
   await expect(page.getByRole('heading', { name: 'Cache hit confirmed' })).toHaveCount(0)
   stage = 1
@@ -218,9 +221,8 @@ test('other ecosystems cannot verify the selected client and a manager change st
   await mockAdminApi(page, {
     'GET /api/v1/admin/onboarding/status': (request: Request) => {
       if (!new URL(request.url()).searchParams.has('after_id')) { baselines += 1; return response() }
-      return response({ next_after_id: 11,
-        events: [event(11, 'hit', 200, { ecosystem: matching ? 'pypi' : 'npm' })],
-        delivery_events: matching ? [] : [delivery(101, 'hit', { ecosystem: 'npm' })],
+      return response({
+        delivery_events: [delivery(101, 'hit', { ecosystem: matching ? 'pypi' : 'npm', dependency_kind: 'metadata', successful_artifact_download: false })],
       })
     },
   })
@@ -229,8 +231,8 @@ test('other ecosystems cannot verify the selected client and a manager change st
   await page.clock.fastForward(2_600)
   await expect(page.getByRole('heading', { name: 'Waiting for a related request' })).toBeVisible()
   matching = true
-  // The same audit ID was already consumed by the unrelated row; only a new
-  // request in a new session may provide fresh connection evidence.
+  // The unrelated row was already read past; only a new request in a new
+  // session may provide fresh connection evidence.
   await page.getByRole('button', { name: 'Start a new check' }).click()
   await expect(page.getByRole('heading', { name: 'Waiting for a related request' })).toBeVisible()
   await page.clock.fastForward(2_600)
@@ -268,13 +270,13 @@ test('a late poll from the previous manager cannot replace the new observation o
         await oldPollReleased
         oldResponseReturned = true
         return response({ next_after_id: 60, next_delivery_after_id: 'late-pip-hit',
-          events: [event(60, 'hit', 200, { created_at: '2026-08-20T10:01:01Z' })],
           delivery_events: [delivery(160, 'hit', { created_at: '2026-08-20T10:01:01Z' })],
         })
       }
       nextPolls.push({ afterId: params.get('after_id'), deliveryAfterId: params.get('delivery_after_id'), startedAt: params.get('started_at') })
-      return response({ started_at: nextStartedAt, next_after_id: 51, next_delivery_after_id: 'uv-metadata',
-        events: [event(51, 'miss', 200, { action: 'metadata', version: '', created_at: '2026-08-20T10:01:02Z' })],
+      return response({ started_at: nextStartedAt, next_after_id: 50, next_delivery_after_id: 'uv-metadata',
+        delivery_events: [delivery(161, 'miss', { version: '', created_at: '2026-08-20T10:01:02Z',
+          cache_key: 'pypi/simple/six/index.html', dependency_kind: 'metadata', successful_artifact_download: false })],
       })
     },
     'PUT /api/v1/admin/onboarding': (request: Request) => {
@@ -301,7 +303,8 @@ test('a late poll from the previous manager cannot replace the new observation o
   await page.clock.fastForward(2_600)
   await expect(page.getByRole('heading', { name: 'Related request detected', exact: true })).toBeVisible()
   expect(nextPolls[0]).toEqual({ afterId: '50', deliveryAfterId: 'uv-baseline', startedAt: nextStartedAt })
-  await expect.poll(storedSession).toMatchObject({ managerId: 'uv', startedAt: nextStartedAt, afterId: 51, deliveryAfterId: 'uv-metadata' })
+  await expect(page.locator('.connection-event')).toContainText('CACHE MISS · HTTP 200')
+  await expect.poll(storedSession).toMatchObject({ managerId: 'uv', startedAt: nextStartedAt, afterId: 50, deliveryAfterId: 'uv-metadata' })
   const session = await storedSession()
   expect(session).not.toHaveProperty('successfulDownload')
   expect(session).not.toHaveProperty('firstCacheHit')
@@ -316,7 +319,7 @@ test('reload preserves the selected manager, shell, scope and verified result', 
   let produceDelivery = false
   await mockAdminApi(page, {
     'GET /api/v1/admin/onboarding/status': (request: Request) => new URL(request.url()).searchParams.has('after_id') && produceDelivery
-      ? response({ next_after_id: 11, events: [event(11, 'miss')], delivery_events: [delivery(101, 'miss')] })
+      ? response({ delivery_events: [delivery(101, 'miss')] })
       : response(),
   })
   await page.goto('/admin/connect')
@@ -465,6 +468,30 @@ for (const outcome of [
   })
 }
 
+test('a newer allowed request replaces an earlier policy block in the result card', async ({ page }) => {
+  await page.clock.install()
+  await setUiPreferences(page, 'dark', 'en')
+  let allowed = false
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/onboarding/status': (request: Request) => {
+      if (!new URL(request.url()).searchParams.has('after_id')) return response()
+      return allowed
+        ? response({ next_after_id: 11, delivery_events: [delivery(101, 'miss', { version: '', created_at: '2026-08-20T10:00:02Z',
+          cache_key: 'pypi/simple/six/index.html', dependency_kind: 'metadata', successful_artifact_download: false })] })
+        : response({ next_after_id: 11, events: [event(11, 'blocked', 403)] })
+    },
+  })
+  await page.goto('/admin/connect')
+  await page.clock.fastForward(2_600)
+  await expect(page.getByRole('heading', { name: 'Request blocked', exact: true })).toBeVisible()
+  await expect(page.locator('.connection-event')).toContainText('BLOCK · HTTP 403')
+  allowed = true
+  await page.clock.fastForward(2_600)
+  await expect(page.getByRole('heading', { name: 'Related request detected', exact: true })).toBeVisible()
+  await expect(page.locator('.connection-event')).toContainText('CACHE MISS · HTTP 200')
+  await expect(page.locator('.connection-event')).not.toContainText('BLOCK')
+})
+
 test('a cancelled body remains a failed verification despite a MISS', async ({ page }) => {
   await setUiPreferences(page, 'dark', 'en')
   await mockAdminApi(page, {
@@ -507,7 +534,7 @@ test('Chinese connection guidance and verified results remain readable on deskto
   let verified = false
   await mockAdminApi(page, {
     'GET /api/v1/admin/onboarding/status': (request: Request) => verified && new URL(request.url()).searchParams.has('after_id')
-      ? response({ next_after_id: 11, events: [event(11, 'hit')], delivery_events: [delivery(101, 'hit')] })
+      ? response({ delivery_events: [delivery(101, 'hit')] })
       : response(),
   })
   await page.goto('/admin/connect')
@@ -672,7 +699,7 @@ test('English light-theme verified guidance keeps accessible contrast and primar
   await setUiPreferences(page, 'light', 'en')
   await mockAdminApi(page, {
     'GET /api/v1/admin/onboarding/status': (request: Request) => new URL(request.url()).searchParams.has('after_id')
-      ? response({ next_after_id: 11, events: [event(11, 'hit')], delivery_events: [delivery(101, 'hit')] })
+      ? response({ delivery_events: [delivery(101, 'hit')] })
       : response(),
   })
   await page.goto('/admin/connect')
