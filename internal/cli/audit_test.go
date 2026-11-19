@@ -199,3 +199,49 @@ func TestRunAuditVerifySaysWhenItFindsNoInstance(t *testing.T) {
 		t.Fatalf("looking for an instance created state: %v", err)
 	}
 }
+
+// After retention pruned the oldest rows, the command verifies the retained
+// chain from the recorded base and says how far history was pruned.
+func TestRunAuditVerifyStartsFromTheRetentionBase(t *testing.T) {
+	dir := newAuditVerifyInstance(t, "")
+	database, err := db.Open("sqlite", filepath.Join(dir, "depsilo.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Model(&db.AuditLog{}).Where("1 = 1").
+		Update("created_at", time.Now().UTC().AddDate(0, 0, -200)).Error; err != nil {
+		t.Fatal(err)
+	}
+	// The stored hash no longer matches the moved timestamp, so re-chain the
+	// single row before pruning it.
+	var row db.AuditLog
+	if err := database.First(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Model(&row).Update("hash", audit.ComputeAuditHash("", row)).Error; err != nil {
+		t.Fatal(err)
+	}
+	if deleted, err := audit.NewRetention(database, 90).RunOnce(context.Background()); err != nil || deleted != 1 {
+		t.Fatalf("retention deleted=%d err=%v", deleted, err)
+	}
+	if err := audit.AppendAuditRows(context.Background(), database, []db.AuditLog{
+		{Action: "download", CacheResult: "hit", StatusCode: 200, CreatedAt: time.Now().UTC()},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if pool, err := database.DB(); err != nil {
+		t.Fatal(err)
+	} else if err := pool.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	output := captureStdout(t, func() {
+		if code := runAudit([]string{"verify"}); code != 0 {
+			t.Fatalf("runAudit(verify) = %d, want 0", code)
+		}
+	})
+	if !strings.Contains(output, "audit chain verified") || !strings.Contains(output, "chained rows: 1 (head 2") ||
+		!strings.Contains(output, "pruned by retention through row 1") {
+		t.Fatalf("output = %q", output)
+	}
+}

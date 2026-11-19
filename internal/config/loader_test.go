@@ -571,3 +571,38 @@ func TestSetDefaultsIncludesAlpineUpstreams(t *testing.T) {
 		t.Errorf("second.Priority = %d, want 2", second.Priority)
 	}
 }
+
+func TestLoadAuditRetentionDefaultsAndValidation(t *testing.T) {
+	setTestJWTSecret(t)
+	writeConfig := func(t *testing.T, document string) {
+		t.Helper()
+		configPath := filepath.Join(t.TempDir(), "config.toml")
+		if err := os.WriteFile(configPath, []byte(document), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("DEPSILO_CONFIG", configPath)
+	}
+
+	writeConfig(t, "config_version = 1\n[server]\nhost = \"127.0.0.1\"\n")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Audit.RetentionDays != 90 {
+		t.Fatalf("default audit.retention_days = %d, want 90", cfg.Audit.RetentionDays)
+	}
+
+	writeConfig(t, "config_version = 1\n[server]\nhost = \"127.0.0.1\"\n[audit]\nretention_days = 0\n")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Audit.RetentionDays != 0 {
+		t.Fatalf("audit.retention_days = %d, want 0 (keep forever)", cfg.Audit.RetentionDays)
+	}
+
+	writeConfig(t, "config_version = 1\n[server]\nhost = \"127.0.0.1\"\n[audit]\nretention_days = -1\n")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "audit.retention_days") {
+		t.Fatalf("negative audit.retention_days error = %v", err)
+	}
+}

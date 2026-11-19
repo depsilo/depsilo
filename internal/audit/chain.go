@@ -87,11 +87,16 @@ func AppendAuditRows(ctx context.Context, database *gorm.DB, rows []db.AuditLog)
 	for attempt := 0; attempt < 4; attempt++ {
 		pending := append([]db.AuditLog(nil), rows...)
 		err := database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-			prev, err := chainHead(tx)
+			prev, nextID, err := chainHead(tx)
 			if err != nil {
 				return err
 			}
 			for index := range pending {
+				if nextID != 0 {
+					// Every row was pruned: SQLite would restart ids at 1,
+					// which exporter cursors and anchors already passed.
+					pending[index].ID = nextID + uint(index)
+				}
 				// Each row needs its own prev value: sharing one variable would
 				// make every row in the batch point at the final hash and break
 				// the unique prev_hash index.
@@ -114,17 +119,26 @@ func AppendAuditRows(ctx context.Context, database *gorm.DB, rows []db.AuditLog)
 	return fmt.Errorf("append audit rows after chain retries: %w", lastErr)
 }
 
-func chainHead(tx *gorm.DB) (string, error) {
+// chainHead returns the hash the next row links to. When retention pruned
+// every row, it also returns the id the next row must take (0 otherwise).
+func chainHead(tx *gorm.DB) (string, uint, error) {
 	var head db.AuditLog
 	err := tx.Order("id DESC").Limit(1).Find(&head).Error
 	if err != nil {
-		return "", fmt.Errorf("read audit chain head: %w", err)
+		return "", 0, fmt.Errorf("read audit chain head: %w", err)
 	}
-	if head.ID == 0 {
-		// Empty table: the genesis row chains from the empty string.
-		return "", nil
+	if head.ID != 0 {
+		return head.Hash, 0, nil
 	}
-	return head.Hash, nil
+	base, ok, err := LoadChainBase(tx.Statement.Context, tx)
+	if err != nil {
+		return "", 0, err
+	}
+	if !ok {
+		// Never pruned: the genesis row chains from the empty string.
+		return "", 0, nil
+	}
+	return base.Hash, base.ID + 1, nil
 }
 
 func isChainAppendConflict(err error) bool {
@@ -139,27 +153,36 @@ func isChainAppendConflict(err error) bool {
 		return true
 	}
 	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "unique") && strings.Contains(message, "prev_hash")
+	return strings.Contains(message, "unique") &&
+		(strings.Contains(message, "prev_hash") || strings.Contains(message, "audit_logs.id"))
 }
 
-// ChainReport describes one verification pass.
+// ChainReport describes one verification pass. BaseID/BaseHash identify the
+// last row removed by retention, which the first retained row links to;
+// BaseCreatedAt is that row's time and nil when nothing was pruned.
 type ChainReport struct {
-	OK             bool      `json:"ok"`
-	RowsScanned    int64     `json:"rows_scanned"`
-	ChainedRows    int64     `json:"chained_rows"`
-	UnchainedRows  int64     `json:"unchained_rows"`
-	FirstChainedID uint      `json:"first_chained_id,omitempty"`
-	HeadID         uint      `json:"head_id,omitempty"`
-	HeadHash       string    `json:"head_hash,omitempty"`
-	BrokenAtID     uint      `json:"broken_at_id,omitempty"`
-	Reason         string    `json:"reason,omitempty"`
-	ScannedAt      time.Time `json:"scanned_at"`
+	OK             bool       `json:"ok"`
+	RowsScanned    int64      `json:"rows_scanned"`
+	ChainedRows    int64      `json:"chained_rows"`
+	UnchainedRows  int64      `json:"unchained_rows"`
+	FirstChainedID uint       `json:"first_chained_id,omitempty"`
+	BaseID         uint       `json:"base_id,omitempty"`
+	BaseHash       string     `json:"base_hash,omitempty"`
+	BaseCreatedAt  *time.Time `json:"base_created_at,omitempty"`
+	HeadID         uint       `json:"head_id,omitempty"`
+	HeadHash       string     `json:"head_hash,omitempty"`
+	BrokenAtID     uint       `json:"broken_at_id,omitempty"`
+	Reason         string     `json:"reason,omitempty"`
+	ScannedAt      time.Time  `json:"scanned_at"`
 }
 
 // VerifyChain walks audit_logs in id order and recomputes the hash chain.
 // Rows written before the chain existed are reported as an unchained prefix.
-// Any missing, reordered, or modified row after the first chained row makes
-// OK false and names the first broken id.
+// When retention pruned the oldest rows, the walk starts from the recorded
+// chain base: the first retained row must link to the base hash, and a first
+// row that does not start the chain without a recorded base is a break. Any
+// missing, reordered, or modified row after the first chained row makes OK
+// false and names the first broken id.
 func VerifyChain(ctx context.Context, database *gorm.DB, batchSize int) (ChainReport, error) {
 	report := ChainReport{OK: true, ScannedAt: time.Now().UTC()}
 	if database == nil {
@@ -168,27 +191,47 @@ func VerifyChain(ctx context.Context, database *gorm.DB, batchSize int) (ChainRe
 	if batchSize <= 0 {
 		batchSize = 1000
 	}
+	base, hasBase, err := LoadChainBase(ctx, database)
+	if err != nil {
+		return report, err
+	}
 	prev := ""
 	started := false
+	if hasBase {
+		report.BaseID, report.BaseHash = base.ID, base.Hash
+		baseCreatedAt := base.CreatedAt
+		report.BaseCreatedAt = &baseCreatedAt
+		prev, started = base.Hash, base.Hash != ""
+	}
+	fail := func(row db.AuditLog, reason string) {
+		report.OK = false
+		report.BrokenAtID = row.ID
+		report.Reason = reason
+	}
 	var batch []db.AuditLog
-	err := database.WithContext(ctx).Order("id").FindInBatches(&batch, batchSize, func(_ *gorm.DB, _ int) error {
+	err = database.WithContext(ctx).Order("id").FindInBatches(&batch, batchSize, func(_ *gorm.DB, _ int) error {
 		for _, row := range batch {
 			if report.BrokenAtID != 0 {
 				return nil
 			}
 			report.RowsScanned++
+			if hasBase && row.ID <= base.ID {
+				fail(row, "row precedes the pruned chain base")
+				return nil
+			}
 			if row.Hash == "" {
 				if started {
-					report.OK = false
-					report.BrokenAtID = row.ID
-					report.Reason = "row is not chained after the chain started"
+					fail(row, "row is not chained after the chain started")
 					return nil
 				}
 				report.UnchainedRows++
 				continue
 			}
-			if !started {
+			first := !started
+			if first {
 				started = true
+			}
+			if report.FirstChainedID == 0 {
 				report.FirstChainedID = row.ID
 			}
 			rowPrev := ""
@@ -196,15 +239,18 @@ func VerifyChain(ctx context.Context, database *gorm.DB, batchSize int) (ChainRe
 				rowPrev = *row.PrevHash
 			}
 			if rowPrev != prev {
-				report.OK = false
-				report.BrokenAtID = row.ID
-				report.Reason = "prev_hash does not link to the previous row"
+				switch {
+				case first && !hasBase:
+					fail(row, "first chained row does not start the chain and no pruned chain base is recorded")
+				case report.ChainedRows == 0 && hasBase:
+					fail(row, "prev_hash does not link to the pruned chain base")
+				default:
+					fail(row, "prev_hash does not link to the previous row")
+				}
 				return nil
 			}
 			if expected := ComputeAuditHash(prev, row); expected != row.Hash {
-				report.OK = false
-				report.BrokenAtID = row.ID
-				report.Reason = "hash does not match the row content"
+				fail(row, "hash does not match the row content")
 				return nil
 			}
 			report.ChainedRows++

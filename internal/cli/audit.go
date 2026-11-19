@@ -99,9 +99,20 @@ func runAudit(args []string) int {
 	if report.UnchainedRows > 0 {
 		fmt.Printf("  pre-chain rows: %d (written before schema v8; not covered by the chain)\n", report.UnchainedRows)
 	}
+	if report.BaseCreatedAt != nil {
+		continues := "only pre-chain rows were pruned"
+		if report.BaseHash != "" {
+			continues = "the chain continues from " + shortHash(report.BaseHash)
+		}
+		fmt.Printf("  pruned by retention through row %d (created %s); %s\n",
+			report.BaseID, report.BaseCreatedAt.Format(time.RFC3339), continues)
+	}
 	if anchors.Configured {
 		fmt.Printf("  anchor checkpoints: %d (latest head %d at %s)\n",
 			anchors.Checkpoints, anchors.LatestHeadID, anchors.LatestCheckedAt.Format(time.RFC3339))
+		if anchors.Pruned > 0 {
+			fmt.Printf("  anchor checkpoints at or before the retention base: %d (their rows were pruned)\n", anchors.Pruned)
+		}
 		if anchors.InvalidLines > 0 {
 			fmt.Printf("  anchor lines skipped as malformed: %d\n", anchors.InvalidLines)
 		}

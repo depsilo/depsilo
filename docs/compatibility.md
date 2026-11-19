@@ -379,6 +379,16 @@ consequence.
   horizon. Days deleted before this version are not recovered. A version 16
   binary refuses the upgraded database; downgrading requires the pre-upgrade
   backup.
+- Audit retention (`audit.retention_days`, default 90 days; `0` keeps rows
+  forever) deletes the oldest `audit_logs` rows without a schema change. An
+  upgraded instance whose audit history is older than the horizon loses that
+  history on the first sweep after startup; set `retention_days = 0` before
+  upgrading to keep it, or take a backup first. The chain base of the last
+  deleted row is stored in `control_plane_states` (`audit_chain_base`) and is
+  part of the database backup; restoring a backup restores the rows and the
+  base together. An older binary ignores the base: its `audit verify` reports
+  a pruned database as broken at the first retained row, and on a fully
+  pruned table it restarts the chain from the genesis hash.
 - The supported downgrade path is restoring a backup taken before the
   upgrade with `depsilo restore`; migrations are not reversed in place.
 - `depsilo backup` writes a checksummed `depsilo-backup` archive containing

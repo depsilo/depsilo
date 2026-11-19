@@ -370,12 +370,14 @@ func lastCheckpoint(path string) (ChainCheckpoint, bool) {
 }
 
 // AnchorReport describes the cross-check between stored checkpoints and the
-// current database.
+// current database. Pruned counts checkpoints at or before the retention chain
+// base, whose rows retention deleted.
 type AnchorReport struct {
 	Configured      bool      `json:"configured"`
 	Path            string    `json:"path,omitempty"`
 	Checkpoints     int       `json:"checkpoints"`
 	InvalidLines    int       `json:"invalid_lines,omitempty"`
+	Pruned          int       `json:"pruned,omitempty"`
 	LatestCheckedAt time.Time `json:"latest_checked_at,omitempty"`
 	LatestHeadID    uint      `json:"latest_head_id,omitempty"`
 	LatestHeadHash  string    `json:"latest_head_hash,omitempty"`
@@ -387,7 +389,8 @@ type AnchorReport struct {
 // VerifyAnchors checks that every checkpointed (id, hash) pair still exists in
 // the database unchanged. This catches what the chain walk alone cannot: a
 // rewritten chain whose links are internally consistent, including truncating
-// the head.
+// the head. Checkpoints at or before the retention chain base are counted as
+// pruned; one at the base id itself must still match the recorded base hash.
 func VerifyAnchors(ctx context.Context, database *gorm.DB, path string) (AnchorReport, error) {
 	report := AnchorReport{Configured: strings.TrimSpace(path) != "", Path: path, OK: true}
 	if !report.Configured {
@@ -406,7 +409,21 @@ func VerifyAnchors(ctx context.Context, database *gorm.DB, path string) (AnchorR
 	report.LatestCheckedAt = latest.CheckedAt
 	report.LatestHeadID = latest.HeadID
 	report.LatestHeadHash = latest.HeadHash
+	base, hasBase, err := LoadChainBase(ctx, database)
+	if err != nil {
+		return report, err
+	}
 	for _, checkpoint := range checkpoints {
+		if hasBase && checkpoint.HeadID <= base.ID {
+			if checkpoint.HeadID == base.ID && checkpoint.HeadHash != base.Hash {
+				report.OK = false
+				report.BrokenAtID = checkpoint.HeadID
+				report.Reason = fmt.Sprintf("pruned chain base %d does not match its checkpoint", checkpoint.HeadID)
+				return report, nil
+			}
+			report.Pruned++
+			continue
+		}
 		var row db.AuditLog
 		err := database.WithContext(ctx).First(&row, checkpoint.HeadID).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {

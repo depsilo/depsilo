@@ -628,7 +628,13 @@ contact = ""
 # supplier = "Python Software Foundation"
 # license  = "Apache-2.0"
 
-# ── Audit chain anchoring ─────────────────────────────────────────────
+# ── Audit retention and chain anchoring ───────────────────────────────
+# DELETION WARNING: retention_days physically DELETES audit_logs rows older
+# than the horizon (hourly sweep, oldest rows first). Set it to 0 to keep the
+# audit log forever. Rows an enabled SIEM exporter has not delivered yet are
+# kept, and the hash chain stays verifiable from the last deleted row. Forward
+# or export anything you must keep longer before it ages out.
+#
 # The audit log is hash-chained (schema v8). Anchoring writes periodic
 # checkpoints of the chain head to an append-only file, so rewriting the whole
 # database becomes detectable: `depsilo audit verify` and the audit page
@@ -636,6 +642,7 @@ contact = ""
 # different volume, bucket, or backup target than the SQLite database — a
 # checkpoint saved next to the database adds little.
 [audit]
+retention_days      = 90   # audit_logs horizon in days (0 = keep forever)
 checkpoint_file     = ""
 checkpoint_interval = "15m"
 # Optional remote anchor: the same NDJSON checkpoint line is POSTed to this

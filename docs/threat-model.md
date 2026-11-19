@@ -371,15 +371,21 @@ hash-chained (schema v8): the chain is recomputed by the audit page, the
 `GET /api/v1/admin/audit/integrity` endpoint, and the offline
 `depsilo audit verify` CLI, and every edited, deleted, reordered, or unchained
 row is reported with its id. Rows written before the chain keep a NULL
-`prev_hash` and are reported as a pre-chain prefix.
+`prev_hash` and are reported as a pre-chain prefix. Audit retention
+(`[audit] retention_days`, default 90) deletes only the oldest prefix, never
+ahead of an enabled exporter's cursor or past a link that does not verify,
+and records the last deleted row as the chain base the retained chain must
+link to.
 
 **Residual:** the chain has no external anchor — an attacker with database
 access can recompute the entire chain from the first row. The audit chain
 anchor (`[audit] checkpoint_file`) closes most of that: periodic chain-head
 checkpoints are written outside the database and verified by the audit page,
 the integrity API, and `depsilo audit verify`, so a rewritten or truncated
-chain contradicts a copy the operator already holds. What remains is
-operational: the anchor copy must live where a database attacker cannot
+chain contradicts a copy the operator already holds. Checkpoints older than
+the chain base are reported as pruned: rows retention was allowed to delete
+can no longer be proven, so a database attacker can also drop an old prefix
+and move the base forward. What remains is operational: the anchor copy must live where a database attacker cannot
 rewrite it. `checkpoint_url` pushes each checkpoint directly to a WORM
 gateway or log platform, so this no longer depends on a person shipping the
 local file.

@@ -410,6 +410,18 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		return nil, err
 	}
 
+	// Audit retention deletes the oldest audit rows past audit.retention_days,
+	// never ahead of an enabled exporter's cursor, and records the chain base
+	// so integrity checks keep verifying the retained chain.
+	auditRetention := audit.NewRetention(database, cfg.Audit.RetentionDays)
+	if auditRetention.Enabled() {
+		if err := submitBackground("audit retention", func(ctx context.Context) {
+			auditRetention.Start(ctx)
+		}); err != nil {
+			return nil, err
+		}
+	}
+
 	// Audit chain anchor (threat model §5.8): checkpoint the chain head into an
 	// operator-chosen file outside the database so a whole-database rewrite
 	// contradicts a copy that already left the box.

@@ -105,8 +105,8 @@ Verification entry points:
 
 | Surface | Usage |
 | --- | --- |
-| Admin UI | The audit page shows the verification result (verified head, pre-chain rows, or the exact broken row) with a re-verify button. |
-| Admin API | `GET /api/v1/admin/audit/integrity` returns the report (`ok`, `chained_rows`, `unchained_rows`, `first_chained_id`, `head_id`, `head_hash`, `broken_at_id`, `reason`). |
+| Admin UI | The audit page shows the verification result (verified head, pre-chain rows, the retention base, or the exact broken row) with a re-verify button. |
+| Admin API | `GET /api/v1/admin/audit/integrity` returns the report (`ok`, `chained_rows`, `unchained_rows`, `first_chained_id`, `base_id`, `base_hash`, `base_created_at`, `head_id`, `head_hash`, `broken_at_id`, `reason`). |
 | CLI | `depsilo audit verify [--json]` recomputes the chain directly against the SQLite file, usable offline or after a restore. Exit code 1 means the chain is broken. |
 
 Fully switched-on SIEM consumers can also verify continuously: the forwarded
@@ -152,6 +152,54 @@ remote delivery failure is a warning, not a chain contradiction: the local
 chain still verifies, but the off-box copy is behind. RFC 3161 timestamp
 authorities are out of scope; point the URL at a service that records arrival
 time (most log platforms and WORM gateways do).
+
+## Retention
+
+`audit.retention_days` (default `90`; `0` keeps every row) deletes the oldest
+audit rows once they pass that age. The deletion is permanent: forward or
+export the rows you must keep longer (a SIEM exporter, the audit page's CSV
+export, or a database backup) before they age out.
+
+```toml
+[audit]
+retention_days = 90   # 0 = keep audit rows forever
+```
+
+A background sweeper runs at startup and then hourly. It removes only the
+oldest prefix of `audit_logs` by `id`, in batches of 1000, and stops at the
+first row that must stay:
+
+- a row created within the retention window, even when an older row follows
+  it;
+- a row an **enabled** exporter has not delivered yet (its `id` is above that
+  exporter's cursor). A disabled exporter does not hold rows back; enabled
+  again, it resumes from its cursor and skips rows pruned meanwhile;
+- a row whose chain link does not verify. Pruning never deletes a broken
+  link, so tampering stays visible to verification; the sweep logs the row
+  and tries again on the next run.
+
+In the same transaction as each deleted batch, the sweeper records the
+**chain base** (the `id`, `hash`, and `created_at` of the last deleted row) in
+`control_plane_states` under the key `audit_chain_base`. The chain stays
+verifiable across pruning:
+
+- Verification starts from the base: the first retained row's `prev_hash`
+  must equal the base hash. A first row that does not start the chain while
+  no base is recorded is a break.
+- When every row was pruned, the next row links to the base hash and takes
+  the id after the base id, so exporter cursors and anchor checkpoints never
+  see a reused id.
+- Anchor checkpoints at or before the base id are reported as pruned
+  (`anchors.pruned`) instead of missing. A checkpoint at the base id itself
+  must still match the base hash; later checkpoints are verified as before.
+- The integrity API reports `base_id`, `base_hash`, and `base_created_at`
+  (null until the first prune); the audit page and `depsilo audit verify`
+  show how far history was pruned.
+
+Retention bounds what can be proven: someone who can write the database can
+also delete an old prefix and move the base forward, and an anchor cannot
+prove rows retention was allowed to delete. Keep a SIEM copy or backups when
+the full history must stay provable.
 
 ## Admin surface
 

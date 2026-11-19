@@ -122,8 +122,13 @@ type CascadePeerConfig struct {
 	ForwardCredentials bool `mapstructure:"forward_credentials"`
 }
 
-// AuditConfig configures the audit chain anchor.
+// AuditConfig configures audit retention and the audit chain anchor.
 type AuditConfig struct {
+	// RetentionDays deletes audit rows older than this many days (default
+	// 90; 0 keeps them forever). Rows an enabled SIEM exporter has not
+	// delivered are kept, and the chain stays verifiable from the recorded
+	// base of the last deleted row.
+	RetentionDays int `mapstructure:"retention_days"`
 	// CheckpointFile is an append-only NDJSON file holding chain-head
 	// checkpoints. Point it at a different volume, bucket, or backup target
 	// than the SQLite database; an empty path disables anchoring.

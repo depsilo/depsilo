@@ -382,6 +382,9 @@ func decodeViper(v *viper.Viper) (*Config, error) {
 		cfg.Cascade.Peers[index].Token = strings.TrimSpace(cfg.Cascade.Peers[index].Token)
 	}
 	cfg.CompileCache.PublicURL = strings.TrimRight(strings.TrimSpace(cfg.CompileCache.PublicURL), "/")
+	if cfg.Audit.RetentionDays < 0 {
+		return nil, errors.New("audit.retention_days must not be negative (0 keeps audit rows forever)")
+	}
 	if err := validateCompileCacheConfig(cfg.CompileCache); err != nil {
 		return nil, err
 	}
@@ -618,6 +621,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("auth.jwt_secret", "change-me-in-production")
 	v.SetDefault("auth.token_ttl", "168h")
 	v.SetDefault("policy.on_load_error", defaultPolicyOnLoadError)
+	// Audit retention deletes the oldest audit rows; 0 keeps them forever.
+	v.SetDefault("audit.retention_days", 90)
 	v.SetDefault("audit.checkpoint_file", "")
 	v.SetDefault("audit.checkpoint_interval", "15m")
 	v.SetDefault("audit.checkpoint_url", "")
