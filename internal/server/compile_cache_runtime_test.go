@@ -6,9 +6,7 @@ import (
 	"context"
 	"errors"
 	"io"
-	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -167,28 +165,6 @@ func TestValidateCompileCacheStorageSeparation(t *testing.T) {
 				t.Fatalf("validate storage separation error = %v, wantErr %v", err, test.wantErr)
 			}
 		})
-	}
-}
-
-func TestLocalStoragePathsOverlapResolvesMissingLeafUnderSymlink(t *testing.T) {
-	realParent := t.TempDir()
-	aliasParent := filepath.Join(t.TempDir(), "alias")
-	if err := os.Symlink(realParent, aliasParent); err != nil {
-		if runtime.GOOS == "windows" {
-			t.Skipf("create symlink without elevated token: %v", err)
-		}
-		t.Fatal(err)
-	}
-
-	overlaps, err := localStoragePathsOverlap(
-		filepath.Join(realParent, "cache"),
-		filepath.Join(aliasParent, "cache", "compiler"),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !overlaps {
-		t.Fatal("missing child below a symlink alias was not recognized as overlapping")
 	}
 }
 

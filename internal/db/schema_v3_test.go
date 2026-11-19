@@ -395,811 +395,315 @@ func TestPackageRuleDialectMigrationRepairsLegacyBlocklistIdentities(t *testing.
 	}
 }
 
-func TestPackageRuleDialectMigrationInvalidatesLegacyNPMScannerIdentity(t *testing.T) {
-	database := openCompileCacheMigrationTestDB(t)
-	if err := database.AutoMigrate(&schemaMigrationRecord{}); err != nil {
-		t.Fatal(err)
+func TestPackageRuleDialectMigrationRepairsLegacyScannerIdentity(t *testing.T) {
+	type check struct{ ecosystem, packageName string }
+	type project struct{ ecosystem, packageName, version string }
+	entry := func(key, adapterType, packageName, storagePath string) CacheEntry {
+		return CacheEntry{Key: key, AdapterType: adapterType, PackageName: packageName, StoragePath: storagePath}
 	}
-	for index := 0; index < 2; index++ {
-		if err := applySchemaMigration(database, schemaMigrations[index], time.Now().UTC()); err != nil {
-			t.Fatalf("apply migration %d: %v", index+1, err)
-		}
-	}
+	const goModule = "github.com/!azure/azure-sdk-for-go"
+	const rubyGemsGuess = "nokogiri-1.16.5-x86_64"
 
-	now := time.Unix(300, 0).UTC()
-	entries := []CacheEntry{
+	for _, tc := range []struct {
+		name string
+		// ecosystem is the lowercase scanner ecosystem whose advisories,
+		// checks, and project packages the migration must invalidate.
+		ecosystem string
+		now       int64
+		entries   []CacheEntry
+		// wantNames is the post-migration PackageName per entry; nil checks
+		// only that every cache row is retained.
+		wantNames     []string
+		vulnerability Vulnerability
+		sentinel      *Vulnerability
+		checks        []check
+		project       project
+		// sentinelCheck is a non-ecosystem check that must survive.
+		sentinelCheck *check
+	}{
 		{
-			Key: "npm/legacy/metadata.json", AdapterType: "npm",
-			PackageName: "legacy", StoragePath: "/tmp/legacy", CreatedAt: now,
+			name: "npm", ecosystem: "npm", now: 300,
+			entries: []CacheEntry{
+				entry("npm/legacy/metadata.json", "npm", "legacy", "/tmp/legacy"),
+				entry("npm-exact-v1/ExactName/metadata.json", "npm", "ExactName", "/tmp/exact"),
+			},
+			vulnerability: Vulnerability{OSVID: "GHSA-NPM", Ecosystem: "npm", PackageName: "legacy"},
+			sentinel:      &Vulnerability{OSVID: "ALPINE-NPM-SENTINEL", Ecosystem: "alpine", PackageName: "preserved"},
+			checks:        []check{{"npm", "legacy"}},
+			project:       project{"npm", "legacy", "1.0.0"},
 		},
 		{
-			Key: "npm-exact-v1/ExactName/metadata.json", AdapterType: "npm",
-			PackageName: "ExactName", StoragePath: "/tmp/exact", CreatedAt: now,
+			// APT identities are cleared without source-package provenance.
+			name: "APT", ecosystem: "apt", now: 315,
+			entries: []CacheEntry{
+				entry("apt/ubuntu/pool/main/c/curl/curl_8.0-1_amd64.deb", "apt", "curl", "/tmp/apt-artifact"),
+				entry("apt/ubuntu/dists/jammy/InRelease", "APT", "ubuntu", "/tmp/apt-metadata"),
+				entry("alpine/v3.19/main/x86_64/apt-2.0-r0.apk", "alpine", "apt", "/tmp/alpine"),
+			},
+			wantNames:     []string{"", "", "apt"},
+			vulnerability: Vulnerability{OSVID: "DSA-APT-GUESSED", Ecosystem: "APT", PackageName: "curl"},
+			sentinel:      &Vulnerability{OSVID: "ALPINE-APT-SENTINEL", Ecosystem: "alpine", PackageName: "apt"},
+			checks:        []check{{"APT", "curl"}},
+			project:       project{"APT", "curl", "8.0-1"},
 		},
-	}
-	if err := database.Create(&entries).Error; err != nil {
-		t.Fatalf("seed npm cache entries: %v", err)
-	}
-	npmVulnerability := Vulnerability{
-		OSVID: "GHSA-NPM", Ecosystem: "npm", PackageName: "legacy", CreatedAt: now,
-	}
-	alpineVulnerability := Vulnerability{
-		OSVID: "ALPINE-NPM-SENTINEL", Ecosystem: "alpine", PackageName: "preserved", CreatedAt: now,
-	}
-	if err := database.Omit("DetailRevision").Create(&npmVulnerability).Error; err != nil {
-		t.Fatalf("seed npm vulnerability: %v", err)
-	}
-	if err := database.Omit("DetailRevision").Create(&alpineVulnerability).Error; err != nil {
-		t.Fatalf("seed Alpine vulnerability: %v", err)
-	}
-	for _, vulnerabilityID := range []uint{npmVulnerability.ID, alpineVulnerability.ID} {
-		if err := database.Create(&DismissedVuln{
-			VulnerabilityID: vulnerabilityID, DismissedBy: "operator", CreatedAt: now,
-		}).Error; err != nil {
-			t.Fatalf("seed vulnerability dismissal: %v", err)
-		}
-	}
-	if err := database.Create(&VulnerabilityCheck{
-		Ecosystem: "npm", PackageName: "legacy", LastFetchedAt: now, NextFetchAt: now.Add(time.Hour),
-	}).Error; err != nil {
-		t.Fatalf("seed npm vulnerability check: %v", err)
-	}
-	if err := database.Create(&ProjectPackage{
-		ProjectID: 1, Ecosystem: "npm", PackageName: "legacy", Version: "1.0.0",
-		FirstSeenAt: now, LastSeenAt: now,
-	}).Error; err != nil {
-		t.Fatalf("seed npm project package: %v", err)
-	}
-
-	if err := applySchemaMigration(database, schemaMigrations[2], time.Now().UTC()); err != nil {
-		t.Fatalf("apply npm scanner identity migration: %v", err)
-	}
-
-	for modelName, model := range map[string]any{
-		"vulnerabilities":      &Vulnerability{},
-		"vulnerability checks": &VulnerabilityCheck{},
-		"project packages":     &ProjectPackage{},
+		{
+			// Go identities become the canonical decoded module path; a
+			// non-canonical (unescaped) key is cleared.
+			name: "Go", ecosystem: "go", now: 320,
+			entries: []CacheEntry{
+				entry("go/github.com/!azure/azure-sdk-for-go/@v/v1.2.3.zip", "go", goModule, "/tmp/go-artifact"),
+				entry("go/github.com/!azure/azure-sdk-for-go/@v/list", "GO", "untrusted-legacy-name", "/tmp/go-metadata"),
+				entry("go/github.com/Azure/azure-sdk-for-go/@v/v1.2.3.zip", "go", "github.com/Azure/azure-sdk-for-go", "/tmp/go-invalid"),
+				entry("alpine/v3.19/main/x86_64/py3-requests-2.31.0-r0.apk", "alpine", "py3-requests", "/tmp/alpine"),
+			},
+			wantNames: []string{
+				"github.com/Azure/azure-sdk-for-go", "github.com/Azure/azure-sdk-for-go", "", "py3-requests",
+			},
+			vulnerability: Vulnerability{OSVID: "GO-LEGACY-IDENTITY", Ecosystem: "Go", PackageName: goModule},
+			sentinel:      &Vulnerability{OSVID: "ALPINE-PRESERVED", Ecosystem: "alpine", PackageName: "py3-requests"},
+			checks:        []check{{"Go", goModule}},
+			project:       project{"Go", goModule, "v1.2.3"},
+		},
+		{
+			// Only a strict src/contrib artifact yields a CRAN identity.
+			name: "CRAN", ecosystem: "cran", now: 323,
+			entries: []CacheEntry{
+				entry("cran/src/contrib/Data.Table_1.15.4.tar.gz", "cran", "Data", "/tmp/cran-artifact"),
+				entry("cran/src/contrib/PACKAGES.gz", "CRAN", "PACKAGES.gz", "/tmp/cran-metadata"),
+				entry("cran/not-a-repository/Data.Table_1.15.4.tar.gz", "cran", "Data.Table", "/tmp/cran-ambiguous-path"),
+				entry("cran/src/contrib/not_a_package_1.0.tar.gz", "cran", "not", "/tmp/cran-ambiguous-name"),
+				entry("alpine/v3.19/main/x86_64/R-1.0-r0.apk", "alpine", "R", "/tmp/alpine"),
+			},
+			wantNames:     []string{"Data.Table", "", "", "", "R"},
+			vulnerability: Vulnerability{OSVID: "OSV-CRAN-GUESSED", Ecosystem: "CRAN", PackageName: "PACKAGES.gz"},
+			sentinel:      &Vulnerability{OSVID: "ALPINE-CRAN-SENTINEL", Ecosystem: "alpine", PackageName: "R"},
+			checks:        []check{{"CRAN", "PACKAGES.gz"}},
+			project:       project{"CRAN", "Data", "1.15.4"},
+		},
+		{
+			// Cargo artifacts keep the case-exact crate name; index, config,
+			// and non-artifact keys are cleared.
+			name: "Cargo", ecosystem: "cargo", now: 324,
+			entries: []CacheEntry{
+				entry("cargo/crates/Serde/1.0.228.crate", "cargo", "serde", "/tmp/cargo-artifact"),
+				entry("cargo/index/se/rd/serde", "CARGO", "serde", "/tmp/cargo-index"),
+				entry("cargo/config.json", "cargo", "config.json", "/tmp/cargo-config"),
+				entry("cargo/crates/serde/not-an-artifact", "cargo", "serde", "/tmp/cargo-ambiguous"),
+				entry("alpine/v3.19/main/x86_64/cargo-1.0-r0.apk", "alpine", "cargo", "/tmp/alpine"),
+			},
+			wantNames:     []string{"Serde", "", "", "", "cargo"},
+			vulnerability: Vulnerability{OSVID: "RUSTSEC-LEGACY-INDEX", Ecosystem: "Cargo", PackageName: "serde"},
+			sentinel:      &Vulnerability{OSVID: "ALPINE-CARGO-SENTINEL", Ecosystem: "alpine", PackageName: "cargo"},
+			checks:        []check{{"Cargo", "serde"}},
+			project:       project{"Cargo", "serde", "1.0.228"},
+		},
+		{
+			// NuGet identities are cleared without canonical registry casing.
+			name: "NuGet", ecosystem: "nuget", now: 325,
+			entries: []CacheEntry{
+				entry("nuget/v3-flatcontainer/newtonsoft.json/13.0.3/newtonsoft.json.13.0.3.nupkg", "nuget", "newtonsoft.json", "/tmp/nuget-artifact"),
+				entry("nuget/v3/registration/newtonsoft.json/index.json", "NUGET", "newtonsoft.json", "/tmp/nuget-metadata"),
+				entry("alpine/v3.19/main/x86_64/nuget-6.0-r0.apk", "alpine", "nuget", "/tmp/alpine"),
+			},
+			wantNames:     []string{"", "", "nuget"},
+			vulnerability: Vulnerability{OSVID: "GHSA-NUGET-LOWERCASE", Ecosystem: "NuGet", PackageName: "newtonsoft.json"},
+			sentinel:      &Vulnerability{OSVID: "ALPINE-NUGET-SENTINEL", Ecosystem: "alpine", PackageName: "nuget"},
+			checks:        []check{{"NuGet", "newtonsoft.json"}},
+			project:       project{"NuGet", "newtonsoft.json", "13.0.3"},
+		},
+		{
+			name: "RubyGems", ecosystem: "rubygems", now: 325,
+			entries: []CacheEntry{
+				entry("rubygems/gems/nokogiri-1.16.5-x86_64-linux.gem", "rubygems", rubyGemsGuess, "/tmp/nokogiri-platform-gem"),
+			},
+			vulnerability: Vulnerability{OSVID: "GHSA-RUBYGEMS-GUESSED", Ecosystem: "rubygems", PackageName: rubyGemsGuess},
+			checks:        []check{{"rubygems", rubyGemsGuess}},
+			project:       project{"rubygems", rubyGemsGuess, "linux"},
+			sentinelCheck: &check{"alpine", "ruby"},
+		},
+		{
+			// Maven artifacts gain the full OSV coordinate; metadata is
+			// ambiguous and cleared.
+			name: "Maven", ecosystem: "maven", now: 300,
+			entries: []CacheEntry{
+				entry("maven/org/apache/logging/log4j/log4j-core/2.20.0/log4j-core-2.20.0.jar", "maven", "log4j-core", "/tmp/artifact"),
+				entry("maven/org/apache/logging/log4j/log4j-core/maven-metadata.xml", "maven", "logging", "/tmp/metadata"),
+				entry("pypi/files/requests-2.32.0-py3-none-any.whl", "pypi", "requests", "/tmp/pypi"),
+			},
+			wantNames:     []string{"org.apache.logging.log4j:log4j-core", "", "requests"},
+			vulnerability: Vulnerability{OSVID: "GHSA-MAVEN", Ecosystem: "maven", PackageName: "log4j-core"},
+			checks:        []check{{"maven", "log4j-core"}},
+			project:       project{"maven", "log4j-core", "2.20.0"},
+		},
+		{
+			// Composer p2 and dist keys yield normalized coordinates.
+			name: "Composer", ecosystem: "composer", now: 325,
+			entries: []CacheEntry{
+				entry("composer/p2/Symfony/Console.json", "composer", "wrong/legacy", "/tmp/composer-p2"),
+				entry("composer/dist/monolog/monolog/abc123.tar.gz", "composer", "wrong/dist", "/tmp/composer-dist"),
+				entry("composer/p2/not-a-package.json", "composer", "guessed", "/tmp/composer-bad"),
+				entry("composer/packages.json", "composer", "metadata-guess", "/tmp/composer-index"),
+				entry("alpine/v3.19/main/x86_64/curl-1.0-r0.apk", "alpine", "curl", "/tmp/alpine"),
+			},
+			wantNames:     []string{"symfony/console", "monolog/monolog", "", "", "curl"},
+			vulnerability: Vulnerability{OSVID: "GHSA-COMPOSER-LEGACY", Ecosystem: "composer", PackageName: "wrong/legacy"},
+			sentinel:      &Vulnerability{OSVID: "GHSA-ALPINE-SENTINEL", Ecosystem: "alpine", PackageName: "curl"},
+			checks:        []check{{"composer", "wrong/legacy"}},
+			project:       project{"composer", "wrong/legacy", "1.0"},
+		},
+		{
+			// PyPI simple-index identities are PEP 503 normalized; an
+			// ambiguous file name is cleared.
+			name: "PyPI", ecosystem: "pypi", now: 350,
+			entries: []CacheEntry{
+				entry("pypi/simple/Django_REST.Framework/index.html", "pypi", "Django_REST.Framework", "/tmp/pypi"),
+				entry("pypi/files/packages/aa/foo-bar-1.0.zip", "pypi", "foo", "/tmp/pypi-ambiguous"),
+				entry("alpine/v3.19/main/x86_64/py3-requests-2.31.0-r0.apk", "alpine", "py3-requests", "/tmp/alpine"),
+			},
+			wantNames:     []string{"django-rest-framework", "", "py3-requests"},
+			vulnerability: Vulnerability{OSVID: "GHSA-PYPI-ALIAS", Ecosystem: "pypi", PackageName: "Django_REST.Framework"},
+			checks:        []check{{"pypi", "Django_REST.Framework"}, {"pypi", "foo"}},
+			project:       project{"pypi", "Django_REST.Framework", "1.0"},
+		},
 	} {
-		var count int64
-		if err := database.Model(model).Where("lower(ecosystem) = ?", "npm").Count(&count).Error; err != nil {
-			t.Fatalf("count npm %s: %v", modelName, err)
-		}
-		if count != 0 {
-			t.Fatalf("migration retained %d legacy npm %s", count, modelName)
-		}
-	}
-	var npmDismissals, alpineDismissals, cacheRows int64
-	if err := database.Model(&DismissedVuln{}).
-		Where("vulnerability_id = ?", npmVulnerability.ID).Count(&npmDismissals).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Model(&DismissedVuln{}).
-		Where("vulnerability_id = ?", alpineVulnerability.ID).Count(&alpineDismissals).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Model(&CacheEntry{}).Where("id IN ?", []uint{entries[0].ID, entries[1].ID}).Count(&cacheRows).Error; err != nil {
-		t.Fatal(err)
-	}
-	if npmDismissals != 0 || alpineDismissals != 1 || cacheRows != 2 {
-		t.Fatalf(
-			"post-migration npm dismissals=%d Alpine dismissals=%d cache rows=%d, want 0/1/2",
-			npmDismissals, alpineDismissals, cacheRows,
-		)
-	}
-}
+		t.Run(tc.name, func(t *testing.T) {
+			database := openCompileCacheMigrationTestDB(t)
+			if err := database.AutoMigrate(&schemaMigrationRecord{}); err != nil {
+				t.Fatal(err)
+			}
+			for index := 0; index < 2; index++ {
+				if err := applySchemaMigration(database, schemaMigrations[index], time.Now().UTC()); err != nil {
+					t.Fatalf("apply migration %d: %v", index+1, err)
+				}
+			}
 
-func TestPackageRuleDialectMigrationClearsLegacyAPTScannerIdentity(t *testing.T) {
-	database := openCompileCacheMigrationTestDB(t)
-	if err := database.AutoMigrate(&schemaMigrationRecord{}); err != nil {
-		t.Fatal(err)
-	}
-	for index := 0; index < 2; index++ {
-		if err := applySchemaMigration(database, schemaMigrations[index], time.Now().UTC()); err != nil {
-			t.Fatalf("apply migration %d: %v", index+1, err)
-		}
-	}
+			now := time.Unix(tc.now, 0).UTC()
+			entries := tc.entries
+			for index := range entries {
+				entries[index].CreatedAt = now
+			}
+			if err := database.Create(&entries).Error; err != nil {
+				t.Fatalf("seed cache entries: %v", err)
+			}
+			vulnerability := tc.vulnerability
+			vulnerability.CreatedAt = now
+			if err := database.Omit("DetailRevision").Create(&vulnerability).Error; err != nil {
+				t.Fatalf("seed %s vulnerability: %v", tc.name, err)
+			}
+			dismissed := []uint{vulnerability.ID}
+			var sentinel Vulnerability
+			if tc.sentinel != nil {
+				sentinel = *tc.sentinel
+				sentinel.CreatedAt = now
+				if err := database.Omit("DetailRevision").Create(&sentinel).Error; err != nil {
+					t.Fatalf("seed sentinel vulnerability: %v", err)
+				}
+				dismissed = append(dismissed, sentinel.ID)
+			}
+			for _, vulnerabilityID := range dismissed {
+				if err := database.Create(&DismissedVuln{
+					VulnerabilityID: vulnerabilityID, DismissedBy: "operator", CreatedAt: now,
+				}).Error; err != nil {
+					t.Fatalf("seed vulnerability dismissal: %v", err)
+				}
+			}
+			for _, seed := range tc.checks {
+				if err := database.Create(&VulnerabilityCheck{
+					Ecosystem: seed.ecosystem, PackageName: seed.packageName,
+					LastFetchedAt: now, NextFetchAt: now.Add(time.Hour),
+				}).Error; err != nil {
+					t.Fatalf("seed %s vulnerability check: %v", tc.name, err)
+				}
+			}
+			if err := database.Create(&ProjectPackage{
+				ProjectID: 1, Ecosystem: tc.project.ecosystem, PackageName: tc.project.packageName,
+				Version: tc.project.version, FirstSeenAt: now, LastSeenAt: now,
+			}).Error; err != nil {
+				t.Fatalf("seed %s project package: %v", tc.name, err)
+			}
+			var sentinelCheck VulnerabilityCheck
+			if tc.sentinelCheck != nil {
+				sentinelCheck = VulnerabilityCheck{
+					Ecosystem: tc.sentinelCheck.ecosystem, PackageName: tc.sentinelCheck.packageName,
+					LastFetchedAt: now, NextFetchAt: now.Add(time.Hour),
+				}
+				if err := database.Create(&sentinelCheck).Error; err != nil {
+					t.Fatalf("seed sentinel vulnerability check: %v", err)
+				}
+			}
 
-	now := time.Unix(315, 0).UTC()
-	entries := []CacheEntry{
-		{
-			Key: "apt/ubuntu/pool/main/c/curl/curl_8.0-1_amd64.deb", AdapterType: "apt",
-			PackageName: "curl", StoragePath: "/tmp/apt-artifact", CreatedAt: now,
-		},
-		{
-			Key: "apt/ubuntu/dists/jammy/InRelease", AdapterType: "APT",
-			PackageName: "ubuntu", StoragePath: "/tmp/apt-metadata", CreatedAt: now,
-		},
-		{
-			Key: "alpine/v3.19/main/x86_64/apt-2.0-r0.apk", AdapterType: "alpine",
-			PackageName: "apt", StoragePath: "/tmp/alpine", CreatedAt: now,
-		},
-	}
-	if err := database.Create(&entries).Error; err != nil {
-		t.Fatalf("seed cache entries: %v", err)
-	}
-	aptVulnerability := Vulnerability{
-		OSVID: "DSA-APT-GUESSED", Ecosystem: "APT", PackageName: "curl", CreatedAt: now,
-	}
-	alpineVulnerability := Vulnerability{
-		OSVID: "ALPINE-APT-SENTINEL", Ecosystem: "alpine", PackageName: "apt", CreatedAt: now,
-	}
-	if err := database.Omit("DetailRevision").Create(&aptVulnerability).Error; err != nil {
-		t.Fatalf("seed APT vulnerability advisory: %v", err)
-	}
-	if err := database.Omit("DetailRevision").Create(&alpineVulnerability).Error; err != nil {
-		t.Fatalf("seed Alpine vulnerability advisory: %v", err)
-	}
-	for _, vulnerabilityID := range []uint{aptVulnerability.ID, alpineVulnerability.ID} {
-		if err := database.Create(&DismissedVuln{
-			VulnerabilityID: vulnerabilityID, DismissedBy: "operator", CreatedAt: now,
-		}).Error; err != nil {
-			t.Fatalf("seed vulnerability dismissal: %v", err)
-		}
-	}
-	if err := database.Create(&VulnerabilityCheck{
-		Ecosystem: "APT", PackageName: "curl", LastFetchedAt: now, NextFetchAt: now.Add(time.Hour),
-	}).Error; err != nil {
-		t.Fatalf("seed APT vulnerability check: %v", err)
-	}
-	if err := database.Create(&ProjectPackage{
-		ProjectID: 1, Ecosystem: "APT", PackageName: "curl", Version: "8.0-1",
-		FirstSeenAt: now, LastSeenAt: now,
-	}).Error; err != nil {
-		t.Fatalf("seed APT project package: %v", err)
-	}
+			if err := applySchemaMigration(database, schemaMigrations[2], time.Now().UTC()); err != nil {
+				t.Fatalf("apply %s scanner identity migration: %v", tc.name, err)
+			}
 
-	if err := applySchemaMigration(database, schemaMigrations[2], time.Now().UTC()); err != nil {
-		t.Fatalf("apply APT scanner identity migration: %v", err)
-	}
+			var migratedEntries []CacheEntry
+			if err := database.Order("id ASC").Find(&migratedEntries).Error; err != nil {
+				t.Fatal(err)
+			}
+			if len(migratedEntries) != len(entries) {
+				t.Fatalf("cache rows after migration = %d, want %d retained objects", len(migratedEntries), len(entries))
+			}
+			for index, migrated := range migratedEntries {
+				if migrated.ID != entries[index].ID {
+					t.Fatalf("cache row %d id = %d, want retained %d", index, migrated.ID, entries[index].ID)
+				}
+				if tc.wantNames != nil && migrated.PackageName != tc.wantNames[index] {
+					t.Fatalf("cache identity %d (%s) = %q, want %q",
+						index, migrated.Key, migrated.PackageName, tc.wantNames[index])
+				}
+			}
 
-	var migratedEntries []CacheEntry
-	if err := database.Order("id ASC").Find(&migratedEntries).Error; err != nil {
-		t.Fatal(err)
-	}
-	if len(migratedEntries) != len(entries) {
-		t.Fatalf("cache rows after migration = %d, want %d retained objects", len(migratedEntries), len(entries))
-	}
-	if migratedEntries[0].PackageName != "" || migratedEntries[1].PackageName != "" {
-		t.Fatalf(
-			"APT cache package identities = %q/%q, want both empty without source-package provenance",
-			migratedEntries[0].PackageName,
-			migratedEntries[1].PackageName,
-		)
-	}
-	if migratedEntries[2].PackageName != "apt" {
-		t.Fatalf("non-APT cache package identity changed to %q", migratedEntries[2].PackageName)
-	}
-
-	for modelName, model := range map[string]any{
-		"vulnerability advisories": &Vulnerability{},
-		"vulnerability checks":     &VulnerabilityCheck{},
-		"project packages":         &ProjectPackage{},
-	} {
-		var count int64
-		if err := database.Model(model).Where("lower(ecosystem) = ?", "apt").Count(&count).Error; err != nil {
-			t.Fatalf("count APT %s: %v", modelName, err)
-		}
-		if count != 0 {
-			t.Fatalf("migration retained %d legacy APT %s", count, modelName)
-		}
-	}
-	var aptDismissals, alpineDismissals, alpineAdvisories int64
-	if err := database.Model(&DismissedVuln{}).
-		Where("vulnerability_id = ?", aptVulnerability.ID).Count(&aptDismissals).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Model(&DismissedVuln{}).
-		Where("vulnerability_id = ?", alpineVulnerability.ID).Count(&alpineDismissals).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Model(&Vulnerability{}).
-		Where("id = ?", alpineVulnerability.ID).Count(&alpineAdvisories).Error; err != nil {
-		t.Fatal(err)
-	}
-	if aptDismissals != 0 || alpineDismissals != 1 || alpineAdvisories != 1 {
-		t.Fatalf(
-			"post-migration APT dismissals=%d Alpine dismissals=%d advisories=%d, want 0/1/1",
-			aptDismissals,
-			alpineDismissals,
-			alpineAdvisories,
-		)
-	}
-}
-
-func TestPackageRuleDialectMigrationRepairsLegacyGoScannerIdentity(t *testing.T) {
-	database := openCompileCacheMigrationTestDB(t)
-	if err := database.AutoMigrate(&schemaMigrationRecord{}); err != nil {
-		t.Fatal(err)
-	}
-	for index := 0; index < 2; index++ {
-		if err := applySchemaMigration(database, schemaMigrations[index], time.Now().UTC()); err != nil {
-			t.Fatalf("apply migration %d: %v", index+1, err)
-		}
-	}
-
-	now := time.Unix(320, 0).UTC()
-	entries := []CacheEntry{
-		{
-			Key: "go/github.com/!azure/azure-sdk-for-go/@v/v1.2.3.zip", AdapterType: "go",
-			PackageName: "github.com/!azure/azure-sdk-for-go", StoragePath: "/tmp/go-artifact", CreatedAt: now,
-		},
-		{
-			Key: "go/github.com/!azure/azure-sdk-for-go/@v/list", AdapterType: "GO",
-			PackageName: "untrusted-legacy-name", StoragePath: "/tmp/go-metadata", CreatedAt: now,
-		},
-		{
-			Key: "go/github.com/Azure/azure-sdk-for-go/@v/v1.2.3.zip", AdapterType: "go",
-			PackageName: "github.com/Azure/azure-sdk-for-go", StoragePath: "/tmp/go-invalid", CreatedAt: now,
-		},
-		{
-			Key: "alpine/v3.19/main/x86_64/py3-requests-2.31.0-r0.apk", AdapterType: "alpine",
-			PackageName: "py3-requests", StoragePath: "/tmp/alpine", CreatedAt: now,
-		},
-	}
-	if err := database.Create(&entries).Error; err != nil {
-		t.Fatalf("seed cache entries: %v", err)
-	}
-	goVulnerability := Vulnerability{
-		OSVID: "GO-LEGACY-IDENTITY", Ecosystem: "Go",
-		PackageName: "github.com/!azure/azure-sdk-for-go", CreatedAt: now,
-	}
-	alpineVulnerability := Vulnerability{
-		OSVID: "ALPINE-PRESERVED", Ecosystem: "alpine", PackageName: "py3-requests", CreatedAt: now,
-	}
-	if err := database.Omit("DetailRevision").Create(&goVulnerability).Error; err != nil {
-		t.Fatalf("seed Go vulnerability advisory: %v", err)
-	}
-	if err := database.Omit("DetailRevision").Create(&alpineVulnerability).Error; err != nil {
-		t.Fatalf("seed Alpine vulnerability advisory: %v", err)
-	}
-	for _, vulnerabilityID := range []uint{goVulnerability.ID, alpineVulnerability.ID} {
-		if err := database.Create(&DismissedVuln{
-			VulnerabilityID: vulnerabilityID, DismissedBy: "operator", CreatedAt: now,
-		}).Error; err != nil {
-			t.Fatalf("seed vulnerability dismissal: %v", err)
-		}
-	}
-	if err := database.Create(&VulnerabilityCheck{
-		Ecosystem: "Go", PackageName: goVulnerability.PackageName,
-		LastFetchedAt: now, NextFetchAt: now.Add(time.Hour),
-	}).Error; err != nil {
-		t.Fatalf("seed Go vulnerability check: %v", err)
-	}
-	if err := database.Create(&ProjectPackage{
-		ProjectID: 1, Ecosystem: "Go", PackageName: goVulnerability.PackageName, Version: "v1.2.3",
-		FirstSeenAt: now, LastSeenAt: now,
-	}).Error; err != nil {
-		t.Fatalf("seed Go project package: %v", err)
-	}
-
-	if err := applySchemaMigration(database, schemaMigrations[2], time.Now().UTC()); err != nil {
-		t.Fatalf("apply Go scanner identity migration: %v", err)
-	}
-
-	var migratedEntries []CacheEntry
-	if err := database.Order("id ASC").Find(&migratedEntries).Error; err != nil {
-		t.Fatal(err)
-	}
-	if len(migratedEntries) != len(entries) {
-		t.Fatalf("cache rows after migration = %d, want %d retained objects", len(migratedEntries), len(entries))
-	}
-	for _, index := range []int{0, 1} {
-		if migratedEntries[index].PackageName != "github.com/Azure/azure-sdk-for-go" {
-			t.Fatalf(
-				"Go cache identity %d = %q, want canonical decoded module path",
-				index,
-				migratedEntries[index].PackageName,
-			)
-		}
-	}
-	if migratedEntries[2].PackageName != "" {
-		t.Fatalf("non-canonical Go cache identity = %q, want empty", migratedEntries[2].PackageName)
-	}
-	if migratedEntries[3].PackageName != "py3-requests" {
-		t.Fatalf("non-Go cache identity changed to %q", migratedEntries[3].PackageName)
-	}
-
-	for modelName, model := range map[string]any{
-		"vulnerability advisories": &Vulnerability{},
-		"vulnerability checks":     &VulnerabilityCheck{},
-		"project packages":         &ProjectPackage{},
-	} {
-		var count int64
-		if err := database.Model(model).Where("lower(ecosystem) = ?", "go").Count(&count).Error; err != nil {
-			t.Fatalf("count Go %s: %v", modelName, err)
-		}
-		if count != 0 {
-			t.Fatalf("migration retained %d legacy Go %s", count, modelName)
-		}
-	}
-	var goDismissals, alpineDismissals, alpineAdvisories int64
-	if err := database.Model(&DismissedVuln{}).
-		Where("vulnerability_id = ?", goVulnerability.ID).Count(&goDismissals).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Model(&DismissedVuln{}).
-		Where("vulnerability_id = ?", alpineVulnerability.ID).Count(&alpineDismissals).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Model(&Vulnerability{}).
-		Where("id = ?", alpineVulnerability.ID).Count(&alpineAdvisories).Error; err != nil {
-		t.Fatal(err)
-	}
-	if goDismissals != 0 || alpineDismissals != 1 || alpineAdvisories != 1 {
-		t.Fatalf(
-			"post-migration Go dismissals=%d Alpine dismissals=%d advisories=%d, want 0/1/1",
-			goDismissals,
-			alpineDismissals,
-			alpineAdvisories,
-		)
-	}
-}
-
-func TestPackageRuleDialectMigrationRepairsLegacyCRANScannerIdentity(t *testing.T) {
-	database := openCompileCacheMigrationTestDB(t)
-	if err := database.AutoMigrate(&schemaMigrationRecord{}); err != nil {
-		t.Fatal(err)
-	}
-	for index := 0; index < 2; index++ {
-		if err := applySchemaMigration(database, schemaMigrations[index], time.Now().UTC()); err != nil {
-			t.Fatalf("apply migration %d: %v", index+1, err)
-		}
-	}
-
-	now := time.Unix(323, 0).UTC()
-	entries := []CacheEntry{
-		{
-			Key: "cran/src/contrib/Data.Table_1.15.4.tar.gz", AdapterType: "cran",
-			PackageName: "Data", StoragePath: "/tmp/cran-artifact", CreatedAt: now,
-		},
-		{
-			Key: "cran/src/contrib/PACKAGES.gz", AdapterType: "CRAN",
-			PackageName: "PACKAGES.gz", StoragePath: "/tmp/cran-metadata", CreatedAt: now,
-		},
-		{
-			Key: "cran/not-a-repository/Data.Table_1.15.4.tar.gz", AdapterType: "cran",
-			PackageName: "Data.Table", StoragePath: "/tmp/cran-ambiguous-path", CreatedAt: now,
-		},
-		{
-			Key: "cran/src/contrib/not_a_package_1.0.tar.gz", AdapterType: "cran",
-			PackageName: "not", StoragePath: "/tmp/cran-ambiguous-name", CreatedAt: now,
-		},
-		{
-			Key: "alpine/v3.19/main/x86_64/R-1.0-r0.apk", AdapterType: "alpine",
-			PackageName: "R", StoragePath: "/tmp/alpine", CreatedAt: now,
-		},
-	}
-	if err := database.Create(&entries).Error; err != nil {
-		t.Fatalf("seed cache entries: %v", err)
-	}
-	cranVulnerability := Vulnerability{
-		OSVID: "OSV-CRAN-GUESSED", Ecosystem: "CRAN", PackageName: "PACKAGES.gz", CreatedAt: now,
-	}
-	alpineVulnerability := Vulnerability{
-		OSVID: "ALPINE-CRAN-SENTINEL", Ecosystem: "alpine", PackageName: "R", CreatedAt: now,
-	}
-	if err := database.Omit("DetailRevision").Create(&cranVulnerability).Error; err != nil {
-		t.Fatalf("seed CRAN vulnerability advisory: %v", err)
-	}
-	if err := database.Omit("DetailRevision").Create(&alpineVulnerability).Error; err != nil {
-		t.Fatalf("seed Alpine vulnerability advisory: %v", err)
-	}
-	for _, vulnerabilityID := range []uint{cranVulnerability.ID, alpineVulnerability.ID} {
-		if err := database.Create(&DismissedVuln{
-			VulnerabilityID: vulnerabilityID, DismissedBy: "operator", CreatedAt: now,
-		}).Error; err != nil {
-			t.Fatalf("seed vulnerability dismissal: %v", err)
-		}
-	}
-	if err := database.Create(&VulnerabilityCheck{
-		Ecosystem: "CRAN", PackageName: "PACKAGES.gz",
-		LastFetchedAt: now, NextFetchAt: now.Add(time.Hour),
-	}).Error; err != nil {
-		t.Fatalf("seed CRAN vulnerability check: %v", err)
-	}
-	if err := database.Create(&ProjectPackage{
-		ProjectID: 1, Ecosystem: "CRAN", PackageName: "Data", Version: "1.15.4",
-		FirstSeenAt: now, LastSeenAt: now,
-	}).Error; err != nil {
-		t.Fatalf("seed CRAN project package: %v", err)
-	}
-
-	if err := applySchemaMigration(database, schemaMigrations[2], time.Now().UTC()); err != nil {
-		t.Fatalf("apply CRAN scanner identity migration: %v", err)
-	}
-
-	var migratedEntries []CacheEntry
-	if err := database.Order("id ASC").Find(&migratedEntries).Error; err != nil {
-		t.Fatal(err)
-	}
-	if len(migratedEntries) != len(entries) {
-		t.Fatalf("cache rows after migration = %d, want %d retained objects", len(migratedEntries), len(entries))
-	}
-	if migratedEntries[0].PackageName != "Data.Table" {
-		t.Fatalf("strict CRAN artifact identity = %q, want Data.Table", migratedEntries[0].PackageName)
-	}
-	for _, index := range []int{1, 2, 3} {
-		if migratedEntries[index].PackageName != "" {
-			t.Fatalf("ambiguous CRAN cache identity %d = %q, want empty", index, migratedEntries[index].PackageName)
-		}
-	}
-	if migratedEntries[4].PackageName != "R" {
-		t.Fatalf("non-CRAN cache identity changed to %q", migratedEntries[4].PackageName)
-	}
-
-	for modelName, model := range map[string]any{
-		"vulnerability advisories": &Vulnerability{},
-		"vulnerability checks":     &VulnerabilityCheck{},
-		"project packages":         &ProjectPackage{},
-	} {
-		var count int64
-		if err := database.Model(model).Where("lower(ecosystem) = ?", "cran").Count(&count).Error; err != nil {
-			t.Fatalf("count CRAN %s: %v", modelName, err)
-		}
-		if count != 0 {
-			t.Fatalf("migration retained %d legacy CRAN %s", count, modelName)
-		}
-	}
-	var cranDismissals, alpineDismissals, alpineAdvisories int64
-	if err := database.Model(&DismissedVuln{}).
-		Where("vulnerability_id = ?", cranVulnerability.ID).Count(&cranDismissals).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Model(&DismissedVuln{}).
-		Where("vulnerability_id = ?", alpineVulnerability.ID).Count(&alpineDismissals).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Model(&Vulnerability{}).
-		Where("id = ?", alpineVulnerability.ID).Count(&alpineAdvisories).Error; err != nil {
-		t.Fatal(err)
-	}
-	if cranDismissals != 0 || alpineDismissals != 1 || alpineAdvisories != 1 {
-		t.Fatalf(
-			"post-migration CRAN dismissals=%d Alpine dismissals=%d advisories=%d, want 0/1/1",
-			cranDismissals,
-			alpineDismissals,
-			alpineAdvisories,
-		)
-	}
-}
-
-func TestPackageRuleDialectMigrationRepairsLegacyCargoScannerIdentity(t *testing.T) {
-	database := openCompileCacheMigrationTestDB(t)
-	if err := database.AutoMigrate(&schemaMigrationRecord{}); err != nil {
-		t.Fatal(err)
-	}
-	for index := 0; index < 2; index++ {
-		if err := applySchemaMigration(database, schemaMigrations[index], time.Now().UTC()); err != nil {
-			t.Fatalf("apply migration %d: %v", index+1, err)
-		}
-	}
-
-	now := time.Unix(324, 0).UTC()
-	entries := []CacheEntry{
-		{
-			Key: "cargo/crates/Serde/1.0.228.crate", AdapterType: "cargo",
-			PackageName: "serde", StoragePath: "/tmp/cargo-artifact", CreatedAt: now,
-		},
-		{
-			Key: "cargo/index/se/rd/serde", AdapterType: "CARGO",
-			PackageName: "serde", StoragePath: "/tmp/cargo-index", CreatedAt: now,
-		},
-		{
-			Key: "cargo/config.json", AdapterType: "cargo",
-			PackageName: "config.json", StoragePath: "/tmp/cargo-config", CreatedAt: now,
-		},
-		{
-			Key: "cargo/crates/serde/not-an-artifact", AdapterType: "cargo",
-			PackageName: "serde", StoragePath: "/tmp/cargo-ambiguous", CreatedAt: now,
-		},
-		{
-			Key: "alpine/v3.19/main/x86_64/cargo-1.0-r0.apk", AdapterType: "alpine",
-			PackageName: "cargo", StoragePath: "/tmp/alpine", CreatedAt: now,
-		},
-	}
-	if err := database.Create(&entries).Error; err != nil {
-		t.Fatalf("seed cache entries: %v", err)
-	}
-	cargoVulnerability := Vulnerability{
-		OSVID: "RUSTSEC-LEGACY-INDEX", Ecosystem: "Cargo", PackageName: "serde", CreatedAt: now,
-	}
-	alpineVulnerability := Vulnerability{
-		OSVID: "ALPINE-CARGO-SENTINEL", Ecosystem: "alpine", PackageName: "cargo", CreatedAt: now,
-	}
-	if err := database.Omit("DetailRevision").Create(&cargoVulnerability).Error; err != nil {
-		t.Fatalf("seed Cargo vulnerability advisory: %v", err)
-	}
-	if err := database.Omit("DetailRevision").Create(&alpineVulnerability).Error; err != nil {
-		t.Fatalf("seed Alpine vulnerability advisory: %v", err)
-	}
-	for _, vulnerabilityID := range []uint{cargoVulnerability.ID, alpineVulnerability.ID} {
-		if err := database.Create(&DismissedVuln{
-			VulnerabilityID: vulnerabilityID, DismissedBy: "operator", CreatedAt: now,
-		}).Error; err != nil {
-			t.Fatalf("seed vulnerability dismissal: %v", err)
-		}
-	}
-	if err := database.Create(&VulnerabilityCheck{
-		Ecosystem: "Cargo", PackageName: "serde",
-		LastFetchedAt: now, NextFetchAt: now.Add(time.Hour),
-	}).Error; err != nil {
-		t.Fatalf("seed Cargo vulnerability check: %v", err)
-	}
-	if err := database.Create(&ProjectPackage{
-		ProjectID: 1, Ecosystem: "Cargo", PackageName: "serde", Version: "1.0.228",
-		FirstSeenAt: now, LastSeenAt: now,
-	}).Error; err != nil {
-		t.Fatalf("seed Cargo project package: %v", err)
-	}
-
-	if err := applySchemaMigration(database, schemaMigrations[2], time.Now().UTC()); err != nil {
-		t.Fatalf("apply Cargo scanner identity migration: %v", err)
-	}
-
-	var migratedEntries []CacheEntry
-	if err := database.Order("id ASC").Find(&migratedEntries).Error; err != nil {
-		t.Fatal(err)
-	}
-	if len(migratedEntries) != len(entries) {
-		t.Fatalf("cache rows after migration = %d, want %d retained objects", len(migratedEntries), len(entries))
-	}
-	if migratedEntries[0].PackageName != "Serde" {
-		t.Fatalf("Cargo artifact identity = %q, want case-exact Serde", migratedEntries[0].PackageName)
-	}
-	for _, index := range []int{1, 2, 3} {
-		if migratedEntries[index].PackageName != "" {
-			t.Fatalf("non-artifact Cargo cache identity %d = %q, want empty", index, migratedEntries[index].PackageName)
-		}
-	}
-	if migratedEntries[4].PackageName != "cargo" {
-		t.Fatalf("non-Cargo cache identity changed to %q", migratedEntries[4].PackageName)
-	}
-
-	for modelName, model := range map[string]any{
-		"vulnerability advisories": &Vulnerability{},
-		"vulnerability checks":     &VulnerabilityCheck{},
-		"project packages":         &ProjectPackage{},
-	} {
-		var count int64
-		if err := database.Model(model).Where("lower(ecosystem) = ?", "cargo").Count(&count).Error; err != nil {
-			t.Fatalf("count Cargo %s: %v", modelName, err)
-		}
-		if count != 0 {
-			t.Fatalf("migration retained %d legacy Cargo %s", count, modelName)
-		}
-	}
-	var cargoDismissals, alpineDismissals, alpineAdvisories int64
-	if err := database.Model(&DismissedVuln{}).
-		Where("vulnerability_id = ?", cargoVulnerability.ID).Count(&cargoDismissals).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Model(&DismissedVuln{}).
-		Where("vulnerability_id = ?", alpineVulnerability.ID).Count(&alpineDismissals).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Model(&Vulnerability{}).
-		Where("id = ?", alpineVulnerability.ID).Count(&alpineAdvisories).Error; err != nil {
-		t.Fatal(err)
-	}
-	if cargoDismissals != 0 || alpineDismissals != 1 || alpineAdvisories != 1 {
-		t.Fatalf(
-			"post-migration Cargo dismissals=%d Alpine dismissals=%d advisories=%d, want 0/1/1",
-			cargoDismissals,
-			alpineDismissals,
-			alpineAdvisories,
-		)
-	}
-}
-
-func TestPackageRuleDialectMigrationClearsLegacyNuGetScannerIdentity(t *testing.T) {
-	database := openCompileCacheMigrationTestDB(t)
-	if err := database.AutoMigrate(&schemaMigrationRecord{}); err != nil {
-		t.Fatal(err)
-	}
-	for index := 0; index < 2; index++ {
-		if err := applySchemaMigration(database, schemaMigrations[index], time.Now().UTC()); err != nil {
-			t.Fatalf("apply migration %d: %v", index+1, err)
-		}
-	}
-
-	now := time.Unix(325, 0).UTC()
-	entries := []CacheEntry{
-		{
-			Key:         "nuget/v3-flatcontainer/newtonsoft.json/13.0.3/newtonsoft.json.13.0.3.nupkg",
-			AdapterType: "nuget", PackageName: "newtonsoft.json",
-			StoragePath: "/tmp/nuget-artifact", CreatedAt: now,
-		},
-		{
-			Key: "nuget/v3/registration/newtonsoft.json/index.json", AdapterType: "NUGET",
-			PackageName: "newtonsoft.json", StoragePath: "/tmp/nuget-metadata", CreatedAt: now,
-		},
-		{
-			Key: "alpine/v3.19/main/x86_64/nuget-6.0-r0.apk", AdapterType: "alpine",
-			PackageName: "nuget", StoragePath: "/tmp/alpine", CreatedAt: now,
-		},
-	}
-	if err := database.Create(&entries).Error; err != nil {
-		t.Fatalf("seed cache entries: %v", err)
-	}
-	nugetVulnerability := Vulnerability{
-		OSVID: "GHSA-NUGET-LOWERCASE", Ecosystem: "NuGet", PackageName: "newtonsoft.json", CreatedAt: now,
-	}
-	alpineVulnerability := Vulnerability{
-		OSVID: "ALPINE-NUGET-SENTINEL", Ecosystem: "alpine", PackageName: "nuget", CreatedAt: now,
-	}
-	if err := database.Omit("DetailRevision").Create(&nugetVulnerability).Error; err != nil {
-		t.Fatalf("seed NuGet vulnerability advisory: %v", err)
-	}
-	if err := database.Omit("DetailRevision").Create(&alpineVulnerability).Error; err != nil {
-		t.Fatalf("seed Alpine vulnerability advisory: %v", err)
-	}
-	for _, vulnerabilityID := range []uint{nugetVulnerability.ID, alpineVulnerability.ID} {
-		if err := database.Create(&DismissedVuln{
-			VulnerabilityID: vulnerabilityID, DismissedBy: "operator", CreatedAt: now,
-		}).Error; err != nil {
-			t.Fatalf("seed vulnerability dismissal: %v", err)
-		}
-	}
-	if err := database.Create(&VulnerabilityCheck{
-		Ecosystem: "NuGet", PackageName: "newtonsoft.json",
-		LastFetchedAt: now, NextFetchAt: now.Add(time.Hour),
-	}).Error; err != nil {
-		t.Fatalf("seed NuGet vulnerability check: %v", err)
-	}
-	if err := database.Create(&ProjectPackage{
-		ProjectID: 1, Ecosystem: "NuGet", PackageName: "newtonsoft.json", Version: "13.0.3",
-		FirstSeenAt: now, LastSeenAt: now,
-	}).Error; err != nil {
-		t.Fatalf("seed NuGet project package: %v", err)
-	}
-
-	if err := applySchemaMigration(database, schemaMigrations[2], time.Now().UTC()); err != nil {
-		t.Fatalf("apply NuGet scanner identity migration: %v", err)
-	}
-
-	var migratedEntries []CacheEntry
-	if err := database.Order("id ASC").Find(&migratedEntries).Error; err != nil {
-		t.Fatal(err)
-	}
-	if len(migratedEntries) != len(entries) {
-		t.Fatalf("cache rows after migration = %d, want %d retained objects", len(migratedEntries), len(entries))
-	}
-	if migratedEntries[0].PackageName != "" || migratedEntries[1].PackageName != "" {
-		t.Fatalf(
-			"NuGet cache package identities = %q/%q, want both empty without canonical registry casing",
-			migratedEntries[0].PackageName,
-			migratedEntries[1].PackageName,
-		)
-	}
-	if migratedEntries[2].PackageName != "nuget" {
-		t.Fatalf("non-NuGet cache identity changed to %q", migratedEntries[2].PackageName)
-	}
-
-	for modelName, model := range map[string]any{
-		"vulnerability advisories": &Vulnerability{},
-		"vulnerability checks":     &VulnerabilityCheck{},
-		"project packages":         &ProjectPackage{},
-	} {
-		var count int64
-		if err := database.Model(model).Where("lower(ecosystem) = ?", "nuget").Count(&count).Error; err != nil {
-			t.Fatalf("count NuGet %s: %v", modelName, err)
-		}
-		if count != 0 {
-			t.Fatalf("migration retained %d legacy NuGet %s", count, modelName)
-		}
-	}
-	var nugetDismissals, alpineDismissals, alpineAdvisories int64
-	if err := database.Model(&DismissedVuln{}).
-		Where("vulnerability_id = ?", nugetVulnerability.ID).Count(&nugetDismissals).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Model(&DismissedVuln{}).
-		Where("vulnerability_id = ?", alpineVulnerability.ID).Count(&alpineDismissals).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Model(&Vulnerability{}).
-		Where("id = ?", alpineVulnerability.ID).Count(&alpineAdvisories).Error; err != nil {
-		t.Fatal(err)
-	}
-	if nugetDismissals != 0 || alpineDismissals != 1 || alpineAdvisories != 1 {
-		t.Fatalf(
-			"post-migration NuGet dismissals=%d Alpine dismissals=%d advisories=%d, want 0/1/1",
-			nugetDismissals,
-			alpineDismissals,
-			alpineAdvisories,
-		)
-	}
-}
-
-func TestPackageRuleDialectMigrationInvalidatesLegacyRubyGemsScannerIdentity(t *testing.T) {
-	database := openCompileCacheMigrationTestDB(t)
-	if err := database.AutoMigrate(&schemaMigrationRecord{}); err != nil {
-		t.Fatal(err)
-	}
-	for index := 0; index < 2; index++ {
-		if err := applySchemaMigration(database, schemaMigrations[index], time.Now().UTC()); err != nil {
-			t.Fatalf("apply migration %d: %v", index+1, err)
-		}
-	}
-
-	now := time.Unix(325, 0).UTC()
-	cacheEntry := CacheEntry{
-		Key:         "rubygems/gems/nokogiri-1.16.5-x86_64-linux.gem",
-		AdapterType: "rubygems",
-		PackageName: "nokogiri-1.16.5-x86_64",
-		StoragePath: "/tmp/nokogiri-platform-gem",
-		CreatedAt:   now,
-	}
-	if err := database.Create(&cacheEntry).Error; err != nil {
-		t.Fatalf("seed RubyGems cache entry: %v", err)
-	}
-	vulnerability := Vulnerability{
-		OSVID: "GHSA-RUBYGEMS-GUESSED", Ecosystem: "rubygems",
-		PackageName: cacheEntry.PackageName, CreatedAt: now,
-	}
-	if err := database.Omit("DetailRevision").Create(&vulnerability).Error; err != nil {
-		t.Fatalf("seed RubyGems vulnerability: %v", err)
-	}
-	if err := database.Create(&DismissedVuln{
-		VulnerabilityID: vulnerability.ID, DismissedBy: "operator", CreatedAt: now,
-	}).Error; err != nil {
-		t.Fatalf("seed RubyGems dismissal: %v", err)
-	}
-	if err := database.Create(&VulnerabilityCheck{
-		Ecosystem: "rubygems", PackageName: cacheEntry.PackageName,
-		LastFetchedAt: now, NextFetchAt: now.Add(time.Hour),
-	}).Error; err != nil {
-		t.Fatalf("seed RubyGems vulnerability check: %v", err)
-	}
-	if err := database.Create(&ProjectPackage{
-		ProjectID: 1, Ecosystem: "rubygems", PackageName: cacheEntry.PackageName,
-		Version: "linux", FirstSeenAt: now, LastSeenAt: now,
-	}).Error; err != nil {
-		t.Fatalf("seed RubyGems project package: %v", err)
-	}
-	alpineCheck := VulnerabilityCheck{
-		Ecosystem: "alpine", PackageName: "ruby", LastFetchedAt: now,
-		NextFetchAt: now.Add(time.Hour),
-	}
-	if err := database.Create(&alpineCheck).Error; err != nil {
-		t.Fatalf("seed non-RubyGems vulnerability check: %v", err)
-	}
-
-	if err := applySchemaMigration(database, schemaMigrations[2], time.Now().UTC()); err != nil {
-		t.Fatalf("apply RubyGems scanner identity migration: %v", err)
-	}
-
-	for modelName, model := range map[string]any{
-		"vulnerabilities":      &Vulnerability{},
-		"vulnerability checks": &VulnerabilityCheck{},
-		"project packages":     &ProjectPackage{},
-	} {
-		var count int64
-		if err := database.Model(model).Where("lower(ecosystem) = ?", "rubygems").Count(&count).Error; err != nil {
-			t.Fatalf("count RubyGems %s: %v", modelName, err)
-		}
-		if count != 0 {
-			t.Fatalf("migration retained %d legacy RubyGems %s", count, modelName)
-		}
-	}
-	var dismissals, cacheRows, alpineChecks int64
-	if err := database.Model(&DismissedVuln{}).
-		Where("vulnerability_id = ?", vulnerability.ID).Count(&dismissals).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Model(&CacheEntry{}).Where("id = ?", cacheEntry.ID).Count(&cacheRows).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Model(&VulnerabilityCheck{}).Where("id = ?", alpineCheck.ID).Count(&alpineChecks).Error; err != nil {
-		t.Fatal(err)
-	}
-	if dismissals != 0 || cacheRows != 1 || alpineChecks != 1 {
-		t.Fatalf(
-			"post-migration dismissals=%d cache rows=%d Alpine checks=%d, want 0/1/1",
-			dismissals,
-			cacheRows,
-			alpineChecks,
-		)
+			for modelName, model := range map[string]any{
+				"vulnerabilities":      &Vulnerability{},
+				"vulnerability checks": &VulnerabilityCheck{},
+				"project packages":     &ProjectPackage{},
+			} {
+				var count int64
+				if err := database.Model(model).Where("lower(ecosystem) = ?", tc.ecosystem).Count(&count).Error; err != nil {
+					t.Fatalf("count %s %s: %v", tc.name, modelName, err)
+				}
+				if count != 0 {
+					t.Fatalf("migration retained %d legacy %s %s", count, tc.name, modelName)
+				}
+			}
+			var ecosystemDismissals, allDismissals int64
+			if err := database.Model(&DismissedVuln{}).
+				Where("vulnerability_id = ?", vulnerability.ID).Count(&ecosystemDismissals).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := database.Model(&DismissedVuln{}).Count(&allDismissals).Error; err != nil {
+				t.Fatal(err)
+			}
+			wantDismissals := int64(len(dismissed) - 1)
+			if ecosystemDismissals != 0 || allDismissals != wantDismissals {
+				t.Fatalf("post-migration %s dismissals=%d all dismissals=%d, want 0/%d sentinel",
+					tc.name, ecosystemDismissals, allDismissals, wantDismissals)
+			}
+			if tc.sentinel != nil {
+				var sentinelDismissals, sentinelAdvisories int64
+				if err := database.Model(&DismissedVuln{}).
+					Where("vulnerability_id = ?", sentinel.ID).Count(&sentinelDismissals).Error; err != nil {
+					t.Fatal(err)
+				}
+				if err := database.Model(&Vulnerability{}).
+					Where("id = ?", sentinel.ID).Count(&sentinelAdvisories).Error; err != nil {
+					t.Fatal(err)
+				}
+				if sentinelDismissals != 1 || sentinelAdvisories != 1 {
+					t.Fatalf("sentinel dismissals=%d advisories=%d, want 1/1", sentinelDismissals, sentinelAdvisories)
+				}
+			}
+			if tc.sentinelCheck != nil {
+				var sentinelChecks int64
+				if err := database.Model(&VulnerabilityCheck{}).
+					Where("id = ?", sentinelCheck.ID).Count(&sentinelChecks).Error; err != nil {
+					t.Fatal(err)
+				}
+				if sentinelChecks != 1 {
+					t.Fatalf("sentinel vulnerability checks = %d, want 1", sentinelChecks)
+				}
+			}
+		})
 	}
 }
 
@@ -1268,319 +772,6 @@ func TestLegacyScannerIdentityInvalidationExceedsSQLiteBindLimit(t *testing.T) {
 			npmVulnerabilities,
 			remainingDismissals,
 		)
-	}
-}
-
-func TestPackageRuleDialectMigrationRepairsMavenScannerIdentity(t *testing.T) {
-	database := openCompileCacheMigrationTestDB(t)
-	if err := database.AutoMigrate(&schemaMigrationRecord{}); err != nil {
-		t.Fatal(err)
-	}
-	for index := 0; index < 2; index++ {
-		if err := applySchemaMigration(database, schemaMigrations[index], time.Now().UTC()); err != nil {
-			t.Fatalf("apply migration %d: %v", index+1, err)
-		}
-	}
-
-	now := time.Unix(300, 0).UTC()
-	entries := []CacheEntry{
-		{
-			Key:         "maven/org/apache/logging/log4j/log4j-core/2.20.0/log4j-core-2.20.0.jar",
-			AdapterType: "maven", PackageName: "log4j-core", StoragePath: "/tmp/artifact", CreatedAt: now,
-		},
-		{
-			Key:         "maven/org/apache/logging/log4j/log4j-core/maven-metadata.xml",
-			AdapterType: "maven", PackageName: "logging", StoragePath: "/tmp/metadata", CreatedAt: now,
-		},
-		{
-			Key:         "pypi/files/requests-2.32.0-py3-none-any.whl",
-			AdapterType: "pypi", PackageName: "requests", StoragePath: "/tmp/pypi", CreatedAt: now,
-		},
-	}
-	if err := database.Create(&entries).Error; err != nil {
-		t.Fatalf("seed cache entries: %v", err)
-	}
-	mavenVulnerability := Vulnerability{
-		OSVID: "GHSA-MAVEN", Ecosystem: "maven", PackageName: "log4j-core", CreatedAt: now,
-	}
-	if err := database.Omit("DetailRevision").Create(&mavenVulnerability).Error; err != nil {
-		t.Fatalf("seed Maven vulnerability: %v", err)
-	}
-	if err := database.Create(&DismissedVuln{
-		VulnerabilityID: mavenVulnerability.ID, DismissedBy: "operator", CreatedAt: now,
-	}).Error; err != nil {
-		t.Fatalf("seed Maven vulnerability dismissal: %v", err)
-	}
-	if err := database.Create(&VulnerabilityCheck{
-		Ecosystem: "maven", PackageName: "log4j-core", LastFetchedAt: now, NextFetchAt: now.Add(time.Hour),
-	}).Error; err != nil {
-		t.Fatalf("seed Maven vulnerability check: %v", err)
-	}
-	if err := database.Create(&ProjectPackage{
-		ProjectID: 1, Ecosystem: "maven", PackageName: "log4j-core", Version: "2.20.0",
-		FirstSeenAt: now, LastSeenAt: now,
-	}).Error; err != nil {
-		t.Fatalf("seed Maven project package: %v", err)
-	}
-
-	if err := applySchemaMigration(database, schemaMigrations[2], time.Now().UTC()); err != nil {
-		t.Fatalf("apply package identity migration: %v", err)
-	}
-
-	var artifact, metadata, pypi CacheEntry
-	if err := database.Where("id = ?", entries[0].ID).Take(&artifact).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Where("id = ?", entries[1].ID).Take(&metadata).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Where("id = ?", entries[2].ID).Take(&pypi).Error; err != nil {
-		t.Fatal(err)
-	}
-	if artifact.PackageName != "org.apache.logging.log4j:log4j-core" {
-		t.Fatalf("Maven artifact package name = %q, want full OSV coordinate", artifact.PackageName)
-	}
-	if metadata.PackageName != "" {
-		t.Fatalf("ambiguous Maven metadata package name = %q, want empty", metadata.PackageName)
-	}
-	if pypi.PackageName != "requests" {
-		t.Fatalf("non-Maven package name changed to %q", pypi.PackageName)
-	}
-
-	for modelName, model := range map[string]any{
-		"vulnerabilities":      &Vulnerability{},
-		"vulnerability checks": &VulnerabilityCheck{},
-		"project packages":     &ProjectPackage{},
-		"dismissals":           &DismissedVuln{},
-	} {
-		var count int64
-		query := database.Model(model)
-		if modelName != "dismissals" {
-			query = query.Where("lower(ecosystem) = ?", "maven")
-		}
-		if err := query.Count(&count).Error; err != nil {
-			t.Fatalf("count %s: %v", modelName, err)
-		}
-		if count != 0 {
-			t.Fatalf("migration retained %d stale Maven %s", count, modelName)
-		}
-	}
-}
-
-func TestPackageRuleDialectMigrationRepairsComposerScannerIdentity(t *testing.T) {
-	database := openCompileCacheMigrationTestDB(t)
-	if err := database.AutoMigrate(&schemaMigrationRecord{}); err != nil {
-		t.Fatal(err)
-	}
-	for index := 0; index < 2; index++ {
-		if err := applySchemaMigration(database, schemaMigrations[index], time.Now().UTC()); err != nil {
-			t.Fatalf("apply migration %d: %v", index+1, err)
-		}
-	}
-
-	now := time.Unix(325, 0).UTC()
-	entries := []CacheEntry{
-		{
-			Key: "composer/p2/Symfony/Console.json", AdapterType: "composer",
-			PackageName: "wrong/legacy", StoragePath: "/tmp/composer-p2", CreatedAt: now,
-		},
-		{
-			Key: "composer/dist/monolog/monolog/abc123.tar.gz", AdapterType: "composer",
-			PackageName: "wrong/dist", StoragePath: "/tmp/composer-dist", CreatedAt: now,
-		},
-		{
-			Key: "composer/p2/not-a-package.json", AdapterType: "composer",
-			PackageName: "guessed", StoragePath: "/tmp/composer-bad", CreatedAt: now,
-		},
-		{
-			Key: "composer/packages.json", AdapterType: "composer",
-			PackageName: "metadata-guess", StoragePath: "/tmp/composer-index", CreatedAt: now,
-		},
-		{
-			Key: "alpine/v3.19/main/x86_64/curl-1.0-r0.apk", AdapterType: "alpine",
-			PackageName: "curl", StoragePath: "/tmp/alpine", CreatedAt: now,
-		},
-	}
-	if err := database.Create(&entries).Error; err != nil {
-		t.Fatalf("seed cache entries: %v", err)
-	}
-	composerVulnerability := Vulnerability{
-		OSVID: "GHSA-COMPOSER-LEGACY", Ecosystem: "composer", PackageName: "wrong/legacy", CreatedAt: now,
-	}
-	if err := database.Omit("DetailRevision").Create(&composerVulnerability).Error; err != nil {
-		t.Fatalf("seed Composer vulnerability: %v", err)
-	}
-	if err := database.Create(&DismissedVuln{
-		VulnerabilityID: composerVulnerability.ID, DismissedBy: "operator", CreatedAt: now,
-	}).Error; err != nil {
-		t.Fatalf("seed Composer dismissal: %v", err)
-	}
-	if err := database.Create(&VulnerabilityCheck{
-		Ecosystem: "composer", PackageName: "wrong/legacy", LastFetchedAt: now, NextFetchAt: now.Add(time.Hour),
-	}).Error; err != nil {
-		t.Fatalf("seed Composer check: %v", err)
-	}
-	if err := database.Create(&ProjectPackage{
-		ProjectID: 1, Ecosystem: "composer", PackageName: "wrong/legacy", Version: "1.0",
-		FirstSeenAt: now, LastSeenAt: now,
-	}).Error; err != nil {
-		t.Fatalf("seed Composer project package: %v", err)
-	}
-	otherVulnerability := Vulnerability{
-		OSVID: "GHSA-ALPINE-SENTINEL", Ecosystem: "alpine", PackageName: "curl", CreatedAt: now,
-	}
-	if err := database.Omit("DetailRevision").Create(&otherVulnerability).Error; err != nil {
-		t.Fatalf("seed non-Composer vulnerability: %v", err)
-	}
-	if err := database.Create(&DismissedVuln{
-		VulnerabilityID: otherVulnerability.ID, DismissedBy: "operator", CreatedAt: now,
-	}).Error; err != nil {
-		t.Fatalf("seed non-Composer dismissal: %v", err)
-	}
-
-	if err := applySchemaMigration(database, schemaMigrations[2], time.Now().UTC()); err != nil {
-		t.Fatalf("apply package identity migration: %v", err)
-	}
-
-	var p2, dist, bad, metadata, alpine CacheEntry
-	for _, item := range []struct {
-		id   uint
-		into *CacheEntry
-	}{
-		{entries[0].ID, &p2}, {entries[1].ID, &dist}, {entries[2].ID, &bad},
-		{entries[3].ID, &metadata}, {entries[4].ID, &alpine},
-	} {
-		if err := database.Where("id = ?", item.id).Take(item.into).Error; err != nil {
-			t.Fatal(err)
-		}
-	}
-	if p2.PackageName != "symfony/console" {
-		t.Fatalf("Composer p2 identity = %q, want normalized coordinate", p2.PackageName)
-	}
-	if dist.PackageName != "monolog/monolog" {
-		t.Fatalf("Composer dist identity = %q, want coordinate", dist.PackageName)
-	}
-	if bad.PackageName != "" || metadata.PackageName != "" {
-		t.Fatalf("ambiguous Composer identities = %q/%q, want empty", bad.PackageName, metadata.PackageName)
-	}
-	if alpine.PackageName != "curl" {
-		t.Fatalf("non-Composer identity changed to %q", alpine.PackageName)
-	}
-
-	var composerVulnerabilities, composerChecks, composerProjects, dismissals int64
-	if err := database.Model(&Vulnerability{}).Where("lower(ecosystem) = ?", "composer").Count(&composerVulnerabilities).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Model(&VulnerabilityCheck{}).Where("lower(ecosystem) = ?", "composer").Count(&composerChecks).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Model(&ProjectPackage{}).Where("lower(ecosystem) = ?", "composer").Count(&composerProjects).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Model(&DismissedVuln{}).Count(&dismissals).Error; err != nil {
-		t.Fatal(err)
-	}
-	if composerVulnerabilities != 0 || composerChecks != 0 || composerProjects != 0 || dismissals != 1 {
-		t.Fatalf("Composer invalidation counts = vuln:%d checks:%d projects:%d dismissals:%d, want 0/0/0/1 sentinel", composerVulnerabilities, composerChecks, composerProjects, dismissals)
-	}
-}
-
-func TestPackageRuleDialectMigrationRepairsPyPIScannerIdentity(t *testing.T) {
-	database := openCompileCacheMigrationTestDB(t)
-	if err := database.AutoMigrate(&schemaMigrationRecord{}); err != nil {
-		t.Fatal(err)
-	}
-	for index := 0; index < 2; index++ {
-		if err := applySchemaMigration(database, schemaMigrations[index], time.Now().UTC()); err != nil {
-			t.Fatalf("apply migration %d: %v", index+1, err)
-		}
-	}
-
-	now := time.Unix(350, 0).UTC()
-	entries := []CacheEntry{
-		{
-			Key: "pypi/simple/Django_REST.Framework/index.html", AdapterType: "pypi",
-			PackageName: "Django_REST.Framework", StoragePath: "/tmp/pypi", CreatedAt: now,
-		},
-		{
-			Key: "pypi/files/packages/aa/foo-bar-1.0.zip", AdapterType: "pypi",
-			PackageName: "foo", StoragePath: "/tmp/pypi-ambiguous", CreatedAt: now,
-		},
-		{
-			Key: "alpine/v3.19/main/x86_64/py3-requests-2.31.0-r0.apk", AdapterType: "alpine",
-			PackageName: "py3-requests", StoragePath: "/tmp/alpine", CreatedAt: now,
-		},
-	}
-	if err := database.Create(&entries).Error; err != nil {
-		t.Fatal(err)
-	}
-	pypiVulnerability := Vulnerability{
-		OSVID: "GHSA-PYPI-ALIAS", Ecosystem: "pypi", PackageName: "Django_REST.Framework", CreatedAt: now,
-	}
-	if err := database.Omit("DetailRevision").Create(&pypiVulnerability).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Create(&DismissedVuln{
-		VulnerabilityID: pypiVulnerability.ID, DismissedBy: "operator", CreatedAt: now,
-	}).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Create(&VulnerabilityCheck{
-		Ecosystem: "pypi", PackageName: "Django_REST.Framework", LastFetchedAt: now, NextFetchAt: now.Add(time.Hour),
-	}).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Create(&VulnerabilityCheck{
-		Ecosystem: "pypi", PackageName: "foo", LastFetchedAt: now, NextFetchAt: now.Add(time.Hour),
-	}).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Create(&ProjectPackage{
-		ProjectID: 1, Ecosystem: "pypi", PackageName: "Django_REST.Framework", Version: "1.0",
-		FirstSeenAt: now, LastSeenAt: now,
-	}).Error; err != nil {
-		t.Fatal(err)
-	}
-
-	if err := applySchemaMigration(database, schemaMigrations[2], time.Now().UTC()); err != nil {
-		t.Fatalf("apply package identity migration: %v", err)
-	}
-	var pypiEntry, ambiguousEntry, alpineEntry CacheEntry
-	if err := database.Where("id = ?", entries[0].ID).Take(&pypiEntry).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Where("id = ?", entries[1].ID).Take(&ambiguousEntry).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Where("id = ?", entries[2].ID).Take(&alpineEntry).Error; err != nil {
-		t.Fatal(err)
-	}
-	if pypiEntry.PackageName != "django-rest-framework" {
-		t.Fatalf("PyPI cache package identity = %q", pypiEntry.PackageName)
-	}
-	if ambiguousEntry.PackageName != "" {
-		t.Fatalf("ambiguous PyPI artifact identity = %q, want empty", ambiguousEntry.PackageName)
-	}
-	if alpineEntry.PackageName != "py3-requests" {
-		t.Fatalf("non-PyPI package identity changed to %q", alpineEntry.PackageName)
-	}
-	for modelName, model := range map[string]any{
-		"vulnerabilities":      &Vulnerability{},
-		"vulnerability checks": &VulnerabilityCheck{},
-		"project packages":     &ProjectPackage{},
-		"dismissals":           &DismissedVuln{},
-	} {
-		var count int64
-		query := database.Model(model)
-		if modelName != "dismissals" {
-			query = query.Where("lower(ecosystem) = ?", "pypi")
-		}
-		if err := query.Count(&count).Error; err != nil {
-			t.Fatal(err)
-		}
-		if count != 0 {
-			t.Fatalf("migration retained %d stale PyPI %s", count, modelName)
-		}
 	}
 }
 

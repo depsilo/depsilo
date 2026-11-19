@@ -1,11 +1,9 @@
 package conda
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -14,11 +12,9 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"depsilo/internal/adapter"
-	"depsilo/internal/cache"
+	"depsilo/internal/adapter/adaptertest"
 	"depsilo/internal/config"
-	"depsilo/internal/db"
 	"depsilo/internal/quarantine"
-	"depsilo/internal/upstream"
 )
 
 func condaTestFixture(t *testing.T, now time.Time) (*httptest.Server, *atomic.Int64) {
@@ -51,51 +47,12 @@ func condaTestFixture(t *testing.T, now time.Time) (*httptest.Server, *atomic.In
 
 func newCondaTestHandler(t *testing.T, upstreamURL string) (http.Handler, *quarantine.Checker) {
 	t.Helper()
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "conda-provenance.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.AutoMigrate(database); err != nil {
-		t.Fatal(err)
-	}
-	storage, err := cache.NewLocalStorage(filepath.Join(t.TempDir(), "cache"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	manager := cache.NewManager(storage, database, cache.NewEventBus(), 72*time.Hour)
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		if err := manager.Close(ctx); err != nil {
-			t.Errorf("close cache manager: %v", err)
-		}
-	})
-	pool, err := upstream.NewPool([]config.UpstreamConfig{{
-		Name: "mock", URL: upstreamURL, Priority: 1, ProbeMode: "passive",
-	}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	handler := New(manager, upstream.NewPassiveRecoverySelector(pool), config.CacheConfig{TTLIndex: time.Hour, TTLBlob: time.Hour}, database)
+	env := adaptertest.NewProvenanceEnv(t, upstreamURL, "conda", adaptertest.ApproximateProvenance)
+	handler := New(env.Manager, env.Selector, config.CacheConfig{TTLIndex: time.Hour, TTLBlob: time.Hour}, env.DB)
 	handler.SetProvenanceRequired(true)
 	router := gin.New()
 	handler.Register(router.Group("/conda"))
-
-	enabled := true
-	policy, err := quarantine.NewPolicyWithProvenance(quarantine.Config{
-		MinReleaseAgeEnabled: &enabled,
-		MinReleaseAge:        map[string]string{"conda": "168h"},
-		ApproximateSources:   []string{"conda"},
-	}, nil)
-	if err != nil {
-		t.Fatalf("NewPolicyWithProvenance: %v", err)
-	}
-	store := quarantine.NewStore(database)
-	checker, err := quarantine.NewChecker(policy, quarantine.NewLookup(store, nil), store)
-	if err != nil {
-		t.Fatalf("NewChecker: %v", err)
-	}
-	return adapter.NewRequestScope(nil, nil, quarantine.Wrap(checker), nil).Wrap(router), checker
+	return adapter.NewRequestScope(nil, nil, quarantine.Wrap(env.Checker), nil).Wrap(router), env.Checker
 }
 
 func requestCondaArtifact(t *testing.T, handler http.Handler, version string) *httptest.ResponseRecorder {

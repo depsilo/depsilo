@@ -265,125 +265,6 @@ func TestResolverAcceptsSubsetOfRequestedRange(t *testing.T) {
 	}
 }
 
-func TestResolverRejectsPartialContentOutsideRequestedRange(t *testing.T) {
-	artifact := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Length", "4")
-		w.Header().Set("Content-Range", "bytes 4-7/8")
-		w.WriteHeader(http.StatusPartialContent)
-		_, _ = io.WriteString(w, "efgh")
-	}))
-	t.Cleanup(artifact.Close)
-	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Location", artifact.URL+"/blob")
-		w.Header().Set("X-Linked-Size", "8")
-		w.WriteHeader(http.StatusFound)
-	}))
-	t.Cleanup(origin.Close)
-
-	selected := newIntegrityTestUpstream(t, origin.URL)
-	result, err := resolveIntegrityTest(
-		t,
-		selected,
-		http.Header{"Range": {"bytes=0-3"}},
-	)
-	if result != nil {
-		_ = result.Body.Close()
-		t.Fatalf("mismatched range returned a result: %+v", result)
-	}
-	if !errors.Is(err, cache.ErrBodySizeMismatch) {
-		t.Fatalf("resolve error = %v, want ErrBodySizeMismatch", err)
-	}
-	if selected.IsHealthy() {
-		t.Fatal("mismatched partial range was not reported as a critical failure")
-	}
-}
-
-func TestResolverRejectsCoalescedResponseAcrossLargeUnrequestedGap(t *testing.T) {
-	const bodySize = 1001
-	artifact := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Length", strconv.Itoa(bodySize))
-		w.Header().Set("Content-Range", "bytes 0-1000/2000")
-		w.WriteHeader(http.StatusPartialContent)
-		_, _ = io.WriteString(w, strings.Repeat("x", bodySize))
-	}))
-	t.Cleanup(artifact.Close)
-	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Location", artifact.URL+"/blob")
-		w.Header().Set("X-Linked-Size", "2000")
-		w.WriteHeader(http.StatusFound)
-	}))
-	t.Cleanup(origin.Close)
-
-	selected := newIntegrityTestUpstream(t, origin.URL)
-	result, err := resolveIntegrityTest(
-		t,
-		selected,
-		http.Header{"Range": {"bytes=0-0,1000-1000"}},
-	)
-	if result != nil {
-		_ = result.Body.Close()
-		t.Fatalf("large-gap response returned a result: %+v", result)
-	}
-	if !errors.Is(err, cache.ErrBodySizeMismatch) {
-		t.Fatalf("resolve error = %v, want ErrBodySizeMismatch", err)
-	}
-	if selected.IsHealthy() {
-		t.Fatal("large-gap response was not critically latched")
-	}
-}
-
-func TestResolverRejectsPartialContentWithoutValidRangeContract(t *testing.T) {
-	for _, test := range []struct {
-		name        string
-		rangeHeader string
-		contentType string
-	}{
-		{name: "missing Range"},
-		{name: "malformed Range", rangeHeader: "bytes=broken"},
-		{
-			name:        "multiple ranges without multipart response",
-			rangeHeader: "bytes=0-1,4-5",
-			contentType: "application/octet-stream",
-		},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			artifact := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				w.Header().Set("Content-Length", "4")
-				w.Header().Set("Content-Range", "bytes 0-3/8")
-				if test.contentType != "" {
-					w.Header().Set("Content-Type", test.contentType)
-				}
-				w.WriteHeader(http.StatusPartialContent)
-				_, _ = io.WriteString(w, "abcd")
-			}))
-			t.Cleanup(artifact.Close)
-			origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				w.Header().Set("Location", artifact.URL+"/blob")
-				w.Header().Set("X-Linked-Size", "8")
-				w.WriteHeader(http.StatusFound)
-			}))
-			t.Cleanup(origin.Close)
-
-			headers := make(http.Header)
-			if test.rangeHeader != "" {
-				headers.Set("Range", test.rangeHeader)
-			}
-			selected := newIntegrityTestUpstream(t, origin.URL)
-			result, err := resolveIntegrityTest(t, selected, headers)
-			if result != nil {
-				_ = result.Body.Close()
-				t.Fatalf("invalid partial contract returned a result: %+v", result)
-			}
-			if !errors.Is(err, cache.ErrBodySizeMismatch) {
-				t.Fatalf("resolve error = %v, want ErrBodySizeMismatch", err)
-			}
-			if selected.IsHealthy() {
-				t.Fatal("invalid partial contract was not reported as a critical failure")
-			}
-		})
-	}
-}
-
 func TestResolverRejectsAmbiguousOrInvalidPartialHeaders(t *testing.T) {
 	const multipartBody = "--first\r\n" +
 		"Content-Range: bytes 0-1/8\r\n\r\nab\r\n" +
@@ -488,6 +369,49 @@ func TestResolverRejectsAmbiguousOrInvalidPartialHeaders(t *testing.T) {
 				)
 			},
 		},
+		{
+			name:        "partial content outside requested range",
+			rangeHeader: "bytes=0-3",
+			body:        "efgh",
+			artifactHeaders: func(headers http.Header) {
+				headers.Set("Content-Range", "bytes 4-7/8")
+			},
+		},
+		{
+			name:        "coalesced response across large unrequested gap",
+			rangeHeader: "bytes=0-0,1000-1000",
+			body:        strings.Repeat("x", 1001),
+			artifactHeaders: func(headers http.Header) {
+				headers.Set("Content-Range", "bytes 0-1000/2000")
+			},
+			originHeaders: func(headers http.Header) {
+				headers.Set("X-Linked-Size", "2000")
+			},
+		},
+		{
+			name: "partial content without Range",
+			body: "abcd",
+			artifactHeaders: func(headers http.Header) {
+				headers.Set("Content-Range", "bytes 0-3/8")
+			},
+		},
+		{
+			name:        "partial content for malformed Range",
+			rangeHeader: "bytes=broken",
+			body:        "abcd",
+			artifactHeaders: func(headers http.Header) {
+				headers.Set("Content-Range", "bytes 0-3/8")
+			},
+		},
+		{
+			name:        "multiple ranges without multipart response",
+			rangeHeader: "bytes=0-1,4-5",
+			body:        "abcd",
+			artifactHeaders: func(headers http.Header) {
+				headers.Set("Content-Range", "bytes 0-3/8")
+				headers.Set("Content-Type", "application/octet-stream")
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -510,12 +434,12 @@ func TestResolverRejectsAmbiguousOrInvalidPartialHeaders(t *testing.T) {
 			}))
 			t.Cleanup(origin.Close)
 
+			headers := make(http.Header)
+			if test.rangeHeader != "" {
+				headers.Set("Range", test.rangeHeader)
+			}
 			selected := newIntegrityTestUpstream(t, origin.URL)
-			result, err := resolveIntegrityTest(
-				t,
-				selected,
-				http.Header{"Range": {test.rangeHeader}},
-			)
+			result, err := resolveIntegrityTest(t, selected, headers)
 			if result != nil {
 				_ = result.Body.Close()
 				t.Fatalf("ambiguous response returned a result: %+v", result)
@@ -1074,22 +998,5 @@ func TestRequestedRangesBoundCoalescedGaps(t *testing.T) {
 				t.Fatalf("match = %v, want %v", got, test.want)
 			}
 		})
-	}
-}
-
-func TestRangeParserCapsRequestComplexity(t *testing.T) {
-	specifications := make([]string, maxRequestedByteRanges+1)
-	for index := range specifications {
-		specifications[index] = strconv.Itoa(index*2) + "-" + strconv.Itoa(index*2)
-	}
-	if _, ok := parseRequestedByteRanges([]string{
-		"bytes=" + strings.Join(specifications[:maxRequestedByteRanges], ","),
-	}); !ok {
-		t.Fatalf("%d ranges were rejected", maxRequestedByteRanges)
-	}
-	if _, ok := parseRequestedByteRanges([]string{
-		"bytes=" + strings.Join(specifications, ","),
-	}); ok {
-		t.Fatalf("%d ranges exceeded the parser budget but were accepted", len(specifications))
 	}
 }

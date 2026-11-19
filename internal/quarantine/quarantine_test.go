@@ -110,8 +110,8 @@ func TestNewPolicy_ExplicitDisableOverridesThresholdTable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPolicy(disabled): %v", err)
 	}
-	if got := p.Threshold("npm"); got != 0 {
-		t.Fatalf("disabled npm threshold = %v, want 0", got)
+	if got := p.Threshold("npm"); got != 0 || p.Enabled("npm") {
+		t.Fatalf("disabled npm threshold = %v (enabled %v), want 0 and disabled", got, p.Enabled("npm"))
 	}
 	if p.IsAgeGateEnabled() {
 		t.Fatal("explicit false resolved the age gate to enabled")
@@ -184,26 +184,6 @@ func TestNewPolicy_InvalidValues(t *testing.T) {
 				t.Fatalf("expected error for %s", c.name)
 			}
 		})
-	}
-}
-
-func TestPolicy_Enabled(t *testing.T) {
-	disabled := false
-	p, err := NewPolicy(Config{
-		MinReleaseAgeEnabled: &disabled,
-		MinReleaseAge: map[string]string{
-			"npm":   "0",
-			"cargo": "3d",
-		},
-	})
-	if err != nil {
-		t.Fatalf("NewPolicy: %v", err)
-	}
-	if p.Enabled("npm") {
-		t.Errorf("Enabled(npm) = true, want false (threshold 0)")
-	}
-	if p.Enabled("cargo") {
-		t.Errorf("Enabled(cargo) = true without source provenance")
 	}
 }
 

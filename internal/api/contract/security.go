@@ -100,12 +100,11 @@ type SecurityScanResponse struct {
 
 // SecurityImportResponse answers an offline advisory import.
 type SecurityImportResponse struct {
-	Imported     int `json:"imported"`
-	Received     int `json:"received"`
-	Packages     int `json:"packages"`
-	Duplicates   int `json:"duplicates"`
-	Skipped      int `json:"skipped"`
-	RulesCreated int `json:"rules_created"`
+	Imported   int `json:"imported"`
+	Received   int `json:"received"`
+	Packages   int `json:"packages"`
+	Duplicates int `json:"duplicates"`
+	Skipped    int `json:"skipped"`
 }
 
 // SecurityPolicy is one ecosystem's advisory policy. GET

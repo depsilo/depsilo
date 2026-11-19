@@ -23,7 +23,7 @@ import (
 
 	"depsilo/internal/accesslog"
 	"depsilo/internal/adapter"
-	"depsilo/internal/cache"
+	"depsilo/internal/adapter/adaptertest"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
 	"depsilo/internal/rules"
@@ -176,25 +176,7 @@ func newNPMProvenanceRouterFactory(
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "npm-provenance.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.AutoMigrate(database); err != nil {
-		t.Fatal(err)
-	}
-	storage, err := cache.NewLocalStorage(filepath.Join(t.TempDir(), "cache"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	manager := cache.NewManager(storage, database, cache.NewEventBus(), 72*time.Hour)
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		if err := manager.Close(ctx); err != nil {
-			t.Errorf("close cache manager: %v", err)
-		}
-	})
+	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
 	pool, err := upstream.NewPool(upstreamConfigs)
 	if err != nil {
 		t.Fatal(err)
@@ -554,7 +536,7 @@ func TestLegacyDirectTarballIsRejectedWithoutMakingVersionDecision(t *testing.T)
 		decision: adapter.PackageRuleDecision{Outcome: adapter.PackageRuleAllow},
 	}
 	access := &npmAccessCapture{}
-	audit := &auditCapture{}
+	audit := &adaptertest.AuditCapture{}
 	scoped := adapter.NewRequestScope(access, audit, checker, ruleChecker).Wrap(router)
 
 	tests := []struct{ path, packageName, cacheKey string }{
@@ -608,10 +590,10 @@ func TestLegacyDirectTarballIsRejectedWithoutMakingVersionDecision(t *testing.T)
 	}
 	// The audit log is hash-chained and forwarded: a refused request must not
 	// appear there as a download of the version its file name suggests.
-	if len(audit.entries) != len(tests) {
-		t.Fatalf("audit entries = %#v, want one per rejected request", audit.entries)
+	if len(audit.Entries) != len(tests) {
+		t.Fatalf("audit entries = %#v, want one per rejected request", audit.Entries)
 	}
-	for index, entry := range audit.entries {
+	for index, entry := range audit.Entries {
 		if entry.Ecosystem != "npm" || entry.PackageName != tests[index].packageName || entry.Version != "" ||
 			entry.StatusCode != http.StatusNotFound || entry.CacheResult != "miss" || entry.BytesSent != 0 {
 			t.Errorf("legacy tarball %q audit entry = %#v, want no version", tests[index].path, entry)
@@ -648,7 +630,7 @@ func TestRejectedSignedTarballIsRecordedWithoutTokenOrVersion(t *testing.T) {
 	}})(signer)
 	// A selector that cannot resolve provenance sources must fail the same way.
 	unresolvable := gin.New()
-	newHandlerWithSigner(nil, unavailableSelector{}, config.CacheConfig{}, nil, signer).Register(unresolvable.Group("/npm"))
+	newHandlerWithSigner(nil, adaptertest.UnavailableSelector{}, config.CacheConfig{}, nil, signer).Register(unresolvable.Group("/npm"))
 
 	for _, test := range []struct {
 		name   string
@@ -662,7 +644,7 @@ func TestRejectedSignedTarballIsRecordedWithoutTokenOrVersion(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			access := &npmAccessCapture{}
-			audit := &auditCapture{}
+			audit := &adaptertest.AuditCapture{}
 			response := requestURLPath(t, adapter.NewRequestScope(access, audit, nil, nil).Wrap(test.router), signedURL)
 			if response.Code != http.StatusNotFound || response.Body.Len() != 0 {
 				t.Fatalf("status=%d body=%q, want an undifferentiated 404", response.Code, response.Body.String())
@@ -684,9 +666,9 @@ func TestRejectedSignedTarballIsRecordedWithoutTokenOrVersion(t *testing.T) {
 			if strings.Contains(event.CacheKey, token) {
 				t.Fatalf("access event recorded the signed token: %q", event.CacheKey)
 			}
-			if len(audit.entries) != 1 || audit.entries[0].PackageName != "fixture" || audit.entries[0].Version != "" ||
-				audit.entries[0].StatusCode != http.StatusNotFound {
-				t.Fatalf("audit entries = %#v, want one entry without a version", audit.entries)
+			if len(audit.Entries) != 1 || audit.Entries[0].PackageName != "fixture" || audit.Entries[0].Version != "" ||
+				audit.Entries[0].StatusCode != http.StatusNotFound {
+				t.Fatalf("audit entries = %#v, want one entry without a version", audit.Entries)
 			}
 			if got := tarballRequests.Load(); got != 0 {
 				t.Fatalf("rejected signed URL contacted upstream: requests = %d", got)

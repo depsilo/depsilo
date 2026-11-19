@@ -594,6 +594,16 @@ func TestManagerAuthoritativeInvalidationDoesNotDependOnExistsPreflight(t *testi
 	if !errors.Is(err, revoked) || result != nil {
 		t.Fatalf("authoritative refresh = %+v, err=%v", result, err)
 	}
+	var rows int64
+	if countErr := database.Model(&db.CacheEntry{}).Where("key = ?", key).Count(&rows).Error; countErr != nil {
+		t.Fatal(countErr)
+	}
+	storage.mu.Lock()
+	_, objectExists := storage.data[key]
+	storage.mu.Unlock()
+	if rows != 0 || objectExists {
+		t.Fatalf("forced authoritative refresh left stale state: rows=%d object=%v", rows, objectExists)
+	}
 
 	offline := errors.New("upstream offline")
 	result, err = manager.Get(

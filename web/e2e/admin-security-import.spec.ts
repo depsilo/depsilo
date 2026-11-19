@@ -24,7 +24,7 @@ test('security import reports exact results and rejects duplicate interaction wh
     'POST /api/v1/admin/security/import': async () => {
       importCalls += 1
       await releaseImport.promise
-      return { imported: 3, received: 5, packages: 2, duplicates: 1, skipped: 1, rules_created: 0 }
+      return { imported: 3, received: 5, packages: 2, duplicates: 1, skipped: 1 }
     },
   })
 

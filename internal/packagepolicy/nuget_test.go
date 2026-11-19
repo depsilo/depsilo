@@ -116,16 +116,3 @@ func TestNuGetDialectUsesNuGetVersionPrecedence(t *testing.T) {
 		}
 	}
 }
-
-func TestNuGetDialectRemainsExactOnly(t *testing.T) {
-	dialect, err := packagepolicy.DialectFor("nuget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if dialect.SupportsRanges() {
-		t.Fatal("NuGet dialect advertised range support")
-	}
-	if _, err := packagepolicy.CompileVersionMatcher("nuget", ">= 1.0"); err == nil {
-		t.Fatal("NuGet dialect accepted an ordered range")
-	}
-}

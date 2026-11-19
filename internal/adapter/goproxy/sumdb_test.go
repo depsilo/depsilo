@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -15,6 +14,7 @@ import (
 
 	"depsilo/internal/accesslog"
 	"depsilo/internal/adapter"
+	"depsilo/internal/adapter/adaptertest"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
@@ -106,25 +106,7 @@ func newSumDBRoute(t *testing.T, ttl config.CacheConfig, members ...*sumDBMirror
 func newSumDBRelay(t *testing.T, ttl config.CacheConfig, members ...*sumDBMirror) (*gin.Engine, *gorm.DB, *cache.Manager) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "sumdb.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := database.AutoMigrate(&db.CacheEntry{}, &db.AccessLog{}, &db.TamperRecord{}, &db.QuarantineEvent{}); err != nil {
-		t.Fatal(err)
-	}
-	storage, err := cache.NewLocalStorage(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	manager := cache.NewManager(storage, database, cache.NewEventBus(), ttl.TTLBlob)
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		if err := manager.Close(ctx); err != nil {
-			t.Errorf("close manager: %v", err)
-		}
-	})
+	manager, database, _ := adaptertest.NewManager(t, ttl.TTLBlob)
 	upstreams := make([]config.UpstreamConfig, 0, len(members))
 	for i, member := range members {
 		upstreams = append(upstreams, config.UpstreamConfig{

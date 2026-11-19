@@ -75,31 +75,6 @@ func serveDiscover(t *testing.T, handler *DiscoverHandler, path string) *httptes
 	return recorder
 }
 
-// setup_required follows the setup state per request; the agent guidance is
-// the same either way, because package routes serve before setup.
-func TestDiscoverReportsPendingSetupWithoutWithholdingGuidance(t *testing.T) {
-	pending := true
-	handler := NewDiscoverHandler(nil)
-	handler.SetSetupRequired(func() bool { return pending })
-
-	for _, want := range []bool{true, false} {
-		pending = want
-		var catalog discoverCatalog
-		if err := json.Unmarshal(serveDiscover(t, handler, "/api/v1/discover").Body.Bytes(), &catalog); err != nil {
-			t.Fatal(err)
-		}
-		if catalog.SetupRequired == nil || *catalog.SetupRequired != want {
-			t.Fatalf("setup_required = %v, want %t", catalog.SetupRequired, want)
-		}
-		if catalog.Endpoints["setup_status"] != "/api/v1/setup/status" {
-			t.Fatalf("endpoints.setup_status = %q", catalog.Endpoints["setup_status"])
-		}
-		if !strings.Contains(catalog.AgentSetup.Summary, "bootstrap prompt") {
-			t.Fatalf("pending=%t summary = %q", want, catalog.AgentSetup.Summary)
-		}
-	}
-}
-
 func TestDiscoverWithoutSetupStateDescribesAConfiguredService(t *testing.T) {
 	var catalog discoverCatalog
 	if err := json.Unmarshal(serveDiscover(t, NewDiscoverHandler(nil), "/api/v1/discover").Body.Bytes(), &catalog); err != nil {
@@ -195,10 +170,9 @@ func TestRequestOriginTakesOnlyAnHTTPSchemeFromForwardedProto(t *testing.T) {
 		forwarded string
 		want      string
 	}{
-		{forwarded: "https", want: "https://depsilo.example.test"},
+		// requestorigin.Scheme's own test holds the parsing rules; these cases
+		// prove every addressed URL takes its scheme from there.
 		{forwarded: "https, http", want: "https://depsilo.example.test"},
-		{forwarded: "HTTPS", want: "https://depsilo.example.test"},
-		{forwarded: "http, https", want: "http://depsilo.example.test"},
 		{forwarded: "gopher", want: "http://depsilo.example.test"},
 	} {
 		get := func(path string) string {

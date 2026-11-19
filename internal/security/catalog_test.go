@@ -591,128 +591,24 @@ func TestAdvisoryCatalogReconcileTimestampRules(t *testing.T) {
 	}
 }
 
-func TestAdvisoryCatalogStaleImportPreservesEffectiveAdvisoryWithoutAutomaticRule(t *testing.T) {
-	database := newCatalogTestDB(t)
-	catalog := newCatalogForTest(t, database, time.Hour)
-	newer := catalogTestAdvisory("OSV-EFFECTIVE-RULE", "PyPI", "effective", 9.8)
-	newer.Modified = time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
-	newer.Affected[0].Ranges[0].Events[1].Fixed = "5.0.0"
-	older := catalogTestAdvisory("OSV-EFFECTIVE-RULE", "PyPI", "effective", 4.0)
-	older.Modified = time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
-	older.Affected[0].Ranges[0].Events[1].Fixed = "1.0.0"
-
-	if _, err := catalog.Import(context.Background(), marshalAdvisories(t, newer)); err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Create(&db.SecurityPolicy{
-		Ecosystem:        "pypi",
-		AutoBlockEnabled: true,
-		MinCVSSScore:     9,
-	}).Error; err != nil {
-		t.Fatal(err)
-	}
-	receipt, err := catalog.Import(context.Background(), marshalAdvisories(t, older))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if receipt.RulesCreated != 0 {
-		t.Fatalf("stale Import RulesCreated = %d, want safety-disabled", receipt.RulesCreated)
-	}
-
-	assertCatalogTableCount(t, database, &db.PackageRule{}, 0)
-	var stored db.Vulnerability
-	if err := database.Where("ecosystem = ? AND package_name = ?", "pypi", "effective").
-		First(&stored).Error; err != nil {
-		t.Fatal(err)
-	}
-	if stored.CVSSScore != 9.8 || fixedVersionForTest(t, stored.AffectedRanges) != "5.0.0" {
-		t.Fatalf("stored advisory = %+v, want effective newer fields", stored)
-	}
-}
-
 func TestAdvisoryCatalogEnabledAutoBlockPolicyRemainsSafetyDisabled(t *testing.T) {
-	database := newCatalogTestDB(t)
-	if err := database.Create(&db.SecurityPolicy{
-		Ecosystem:        "pypi",
-		AutoBlockEnabled: true,
-		MinCVSSScore:     7,
-	}).Error; err != nil {
-		t.Fatal(err)
-	}
-	catalog := newCatalogForTest(t, database, time.Hour)
-	advisory := catalogTestAdvisory("OSV-BLOCK", "PyPI", "dangerous", 9.8)
-
-	first, err := catalog.RecordScan(
-		context.Background(),
-		PackageRef{Ecosystem: "pypi", Name: "dangerous"},
-		[]OSVVulnerability{advisory},
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if first.RulesCreated != 0 {
-		t.Fatalf("first RulesCreated = %d, want safety-disabled", first.RulesCreated)
-	}
-	second, err := catalog.RecordScan(
-		context.Background(),
-		PackageRef{Ecosystem: "pypi", Name: "dangerous"},
-		[]OSVVulnerability{advisory},
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if second.RulesCreated != 0 {
-		t.Fatalf("second RulesCreated = %d, want 0", second.RulesCreated)
-	}
-
-	assertCatalogTableCount(t, database, &db.Vulnerability{}, 1)
-	assertCatalogTableCount(t, database, &db.VulnerabilityCheck{}, 1)
-	assertCatalogTableCount(t, database, &db.PackageRule{}, 0)
-}
-
-func TestAdvisoryCatalogNeverTurnsUnfixedAdvisoryIntoPackageWideDeny(t *testing.T) {
-	database := newCatalogTestDB(t)
-	if err := database.Create(&db.SecurityPolicy{
-		Ecosystem:        "pypi",
-		AutoBlockEnabled: true,
-		MinCVSSScore:     7,
-	}).Error; err != nil {
-		t.Fatal(err)
-	}
-	catalog := newCatalogForTest(t, database, time.Hour)
-	advisory := catalogTestAdvisory("OSV-UNFIXED", "PyPI", "bounded", 9.8)
-	advisory.Affected[0].Ranges = []osvRange{{
-		Type:   "ECOSYSTEM",
-		Events: []osvEvent{{Introduced: "0"}},
-	}}
-
-	receipt, err := catalog.RecordScan(
-		context.Background(),
-		PackageRef{Ecosystem: "pypi", Name: "bounded"},
-		[]OSVVulnerability{advisory},
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if receipt.RulesCreated != 0 {
-		t.Fatalf("RulesCreated = %d, want 0", receipt.RulesCreated)
-	}
-	assertCatalogTableCount(t, database, &db.Vulnerability{}, 1)
-	assertCatalogTableCount(t, database, &db.VulnerabilityCheck{}, 1)
-	assertCatalogTableCount(t, database, &db.PackageRule{}, 0)
-}
-
-func TestAdvisoryCatalogDoesNotGuessUnenforceableRanges(t *testing.T) {
+	unfixed := []osvRange{{Type: "ECOSYSTEM", Events: []osvEvent{{Introduced: "0"}}}}
 	for _, test := range []struct {
+		name         string
 		ecosystem    string
 		osvEcosystem string
 		packageName  string
+		ranges       []osvRange
 	}{
-		{ecosystem: "go", osvEcosystem: "Go", packageName: "example.com/module"},
-		{ecosystem: "apt", osvEcosystem: "Debian", packageName: "demo"},
-		{ecosystem: "maven", osvEcosystem: "Maven", packageName: "org.example:demo"},
+		{name: "fixed pypi", ecosystem: "pypi", osvEcosystem: "PyPI", packageName: "dangerous"},
+		// An unfixed advisory is stored but never becomes a package-wide deny.
+		{name: "unfixed pypi", ecosystem: "pypi", osvEcosystem: "PyPI", packageName: "bounded", ranges: unfixed},
+		// Ranges the rule dialect cannot enforce are stored without a guessed rule.
+		{name: "go", ecosystem: "go", osvEcosystem: "Go", packageName: "example.com/module"},
+		{name: "apt", ecosystem: "apt", osvEcosystem: "Debian", packageName: "demo"},
+		{name: "maven", ecosystem: "maven", osvEcosystem: "Maven", packageName: "org.example:demo"},
 	} {
-		t.Run(test.ecosystem, func(t *testing.T) {
+		t.Run(test.name, func(t *testing.T) {
 			database := newCatalogTestDB(t)
 			if err := database.Create(&db.SecurityPolicy{
 				Ecosystem:        test.ecosystem,
@@ -722,19 +618,21 @@ func TestAdvisoryCatalogDoesNotGuessUnenforceableRanges(t *testing.T) {
 				t.Fatal(err)
 			}
 			catalog := newCatalogForTest(t, database, time.Hour)
-			advisory := catalogTestAdvisory("OSV-UNENFORCEABLE", test.osvEcosystem, test.packageName, 9.8)
+			advisory := catalogTestAdvisory("OSV-BLOCK", test.osvEcosystem, test.packageName, 9.8)
+			if test.ranges != nil {
+				advisory.Affected[0].Ranges = test.ranges
+			}
 
-			receipt, err := catalog.RecordScan(
-				context.Background(),
-				PackageRef{Ecosystem: test.ecosystem, Name: test.packageName},
-				[]OSVVulnerability{advisory},
-			)
-			if err != nil {
-				t.Fatalf("RecordScan: %v", err)
+			for range 2 {
+				if _, err := catalog.RecordScan(
+					context.Background(),
+					PackageRef{Ecosystem: test.ecosystem, Name: test.packageName},
+					[]OSVVulnerability{advisory},
+				); err != nil {
+					t.Fatalf("RecordScan: %v", err)
+				}
 			}
-			if receipt.RulesCreated != 0 {
-				t.Fatalf("RulesCreated = %d, want 0", receipt.RulesCreated)
-			}
+
 			assertCatalogTableCount(t, database, &db.Vulnerability{}, 1)
 			assertCatalogTableCount(t, database, &db.VulnerabilityCheck{}, 1)
 			assertCatalogTableCount(t, database, &db.PackageRule{}, 0)
@@ -783,103 +681,6 @@ func TestAdvisoryCatalogPreservesRulesCreatedBySecurityScannerUsername(t *testin
 	}
 }
 
-func TestAdvisoryCatalogAuthoritativeScanNeverCreatesAutoBlockRules(t *testing.T) {
-	database := newCatalogTestDB(t)
-	if err := database.Create(&db.SecurityPolicy{
-		Ecosystem:        "pypi",
-		AutoBlockEnabled: true,
-		MinCVSSScore:     7,
-	}).Error; err != nil {
-		t.Fatal(err)
-	}
-
-	catalog := newCatalogForTest(t, database, time.Hour)
-	pkg := PackageRef{Ecosystem: "pypi", Name: "authoritative-rules"}
-	first := catalogTestAdvisory("OSV-AUTHORITATIVE-ONE", "PyPI", pkg.Name, 9.1)
-	second := catalogTestAdvisory("OSV-AUTHORITATIVE-TWO", "PyPI", pkg.Name, 8.2)
-	if _, err := catalog.RecordScan(context.Background(), pkg, []OSVVulnerability{first, second}); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := catalog.RecordScan(context.Background(), pkg, []OSVVulnerability{first}); err != nil {
-		t.Fatal(err)
-	}
-	var rules []db.PackageRule
-	if err := database.Where("ecosystem = ? AND package_name = ?", pkg.Ecosystem, pkg.Name).
-		Find(&rules).Error; err != nil {
-		t.Fatal(err)
-	}
-	if len(rules) != 0 {
-		t.Fatalf("rules after 2-to-1 scan = %+v, want none", rules)
-	}
-
-	if _, err := catalog.RecordScan(context.Background(), pkg, nil); err != nil {
-		t.Fatal(err)
-	}
-	assertCatalogTableCount(t, database, &db.PackageRule{}, 0)
-}
-
-func TestAdvisoryCatalogPartialImportNeverCreatesAutoBlockRules(t *testing.T) {
-	database := newCatalogTestDB(t)
-	if err := database.Create(&db.SecurityPolicy{
-		Ecosystem:        "pypi",
-		AutoBlockEnabled: true,
-		MinCVSSScore:     7,
-	}).Error; err != nil {
-		t.Fatal(err)
-	}
-
-	catalog := newCatalogForTest(t, database, time.Hour)
-	pkg := PackageRef{Ecosystem: "pypi", Name: "partial-import-rules"}
-	first := catalogTestAdvisory("OSV-PARTIAL-ONE", "PyPI", pkg.Name, 9.1)
-	second := catalogTestAdvisory("OSV-PARTIAL-TWO", "PyPI", pkg.Name, 8.2)
-	if _, err := catalog.RecordScan(context.Background(), pkg, []OSVVulnerability{first, second}); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := catalog.Import(context.Background(), marshalAdvisories(t, first)); err != nil {
-		t.Fatal(err)
-	}
-	var rules []db.PackageRule
-	if err := database.Where("ecosystem = ? AND package_name = ?", pkg.Ecosystem, pkg.Name).
-		Order("reason ASC").Find(&rules).Error; err != nil {
-		t.Fatal(err)
-	}
-	if len(rules) != 0 {
-		t.Fatalf("rules after partial Import = %+v, want none", rules)
-	}
-}
-
-func TestAdvisoryCatalogCVSSChangesNeverCreateAutoBlockRules(t *testing.T) {
-	database := newCatalogTestDB(t)
-	if err := database.Create(&db.SecurityPolicy{
-		Ecosystem:        "pypi",
-		AutoBlockEnabled: true,
-		MinCVSSScore:     7,
-	}).Error; err != nil {
-		t.Fatal(err)
-	}
-
-	catalog := newCatalogForTest(t, database, time.Hour)
-	pkg := PackageRef{Ecosystem: "pypi", Name: "score-falls"}
-	high := catalogTestAdvisory("OSV-SCORE-FALLS", "PyPI", pkg.Name, 9.1)
-	if _, err := catalog.RecordScan(context.Background(), pkg, []OSVVulnerability{high}); err != nil {
-		t.Fatal(err)
-	}
-
-	low := high
-	low.Modified = high.Modified.Add(time.Hour)
-	low.Severity = []osvSeverity{{Type: "CVSS_V3", Score: "5.0"}}
-	receipt, err := catalog.RecordScan(context.Background(), pkg, []OSVVulnerability{low})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if receipt.RulesCreated != 0 {
-		t.Fatalf("low-score RecordScan = %+v, want no rule changes", receipt)
-	}
-	assertCatalogTableCount(t, database, &db.PackageRule{}, 0)
-}
-
 func TestAdvisoryCatalogImportNeverDeletesPackageRules(t *testing.T) {
 	database := newCatalogTestDB(t)
 	legacyRules := []db.PackageRule{
@@ -916,46 +717,6 @@ func TestAdvisoryCatalogImportNeverDeletesPackageRules(t *testing.T) {
 	assertCatalogTableCount(t, database, &db.PackageRule{}, 2)
 }
 
-func TestAdvisoryCatalogOlderImportDoesNotCreateOrRegressAutoBlockRule(t *testing.T) {
-	database := newCatalogTestDB(t)
-	if err := database.Create(&db.SecurityPolicy{
-		Ecosystem:        "pypi",
-		AutoBlockEnabled: true,
-		MinCVSSScore:     7,
-	}).Error; err != nil {
-		t.Fatal(err)
-	}
-
-	catalog := newCatalogForTest(t, database, time.Hour)
-	newer := catalogTestAdvisory("OSV-OLDER-IMPORT", "PyPI", "older-import", 9.8)
-	newer.Modified = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	newer.Affected[0].Ranges[0].Events[1].Fixed = "3.0.0"
-	if _, err := catalog.Import(context.Background(), marshalAdvisories(t, newer)); err != nil {
-		t.Fatal(err)
-	}
-
-	older := newer
-	older.Modified = time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	older.Severity = []osvSeverity{{Type: "CVSS_V3", Score: "7.1"}}
-	older.Affected[0].Ranges[0].Events[1].Fixed = "1.0.0"
-	receipt, err := catalog.Import(context.Background(), marshalAdvisories(t, older))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if receipt.RulesCreated != 0 {
-		t.Fatalf("older Import = %+v, want no rule change", receipt)
-	}
-
-	assertCatalogTableCount(t, database, &db.PackageRule{}, 0)
-	var stored db.Vulnerability
-	if err := database.Where("osv_id = ?", newer.ID).First(&stored).Error; err != nil {
-		t.Fatal(err)
-	}
-	if !stored.ModifiedAt.Equal(newer.Modified) || stored.CVSSScore != 9.8 {
-		t.Fatalf("advisory regressed after older Import: %+v", stored)
-	}
-}
-
 func TestAdvisoryCatalogSharesSafetyDisabledGateAcrossScanAndImport(t *testing.T) {
 	database := newCatalogTestDB(t)
 	if err := database.Create(&db.SecurityPolicy{
@@ -969,38 +730,28 @@ func TestAdvisoryCatalogSharesSafetyDisabledGateAcrossScanAndImport(t *testing.T
 	advisory := catalogTestAdvisory("OSV-SHARED-GATE", "PyPI", "shared", 9.1)
 	importJSON := mustJSON(t, advisory)
 
-	type result struct {
-		receipt IngestReceipt
-		err     error
-	}
 	start := make(chan struct{})
-	results := make(chan result, 2)
+	results := make(chan error, 2)
 	go func() {
 		<-start
-		receipt, err := catalog.RecordScan(
+		_, err := catalog.RecordScan(
 			context.Background(),
 			PackageRef{Ecosystem: "pypi", Name: "shared"},
 			[]OSVVulnerability{advisory},
 		)
-		results <- result{receipt: receipt, err: err}
+		results <- err
 	}()
 	go func() {
 		<-start
-		receipt, err := catalog.Import(context.Background(), strings.NewReader(string(importJSON)))
-		results <- result{receipt: receipt, err: err}
+		_, err := catalog.Import(context.Background(), strings.NewReader(string(importJSON)))
+		results <- err
 	}()
 	close(start)
 
-	rulesCreated := 0
 	for range 2 {
-		result := <-results
-		if result.err != nil {
-			t.Fatal(result.err)
+		if err := <-results; err != nil {
+			t.Fatal(err)
 		}
-		rulesCreated += result.receipt.RulesCreated
-	}
-	if rulesCreated != 0 {
-		t.Fatalf("concurrent RulesCreated total = %d, want safety-disabled", rulesCreated)
 	}
 	assertCatalogTableCount(t, database, &db.Vulnerability{}, 1)
 	assertCatalogTableCount(t, database, &db.PackageRule{}, 0)

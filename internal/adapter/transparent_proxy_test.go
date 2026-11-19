@@ -1,16 +1,15 @@
-package adapter
+package adapter_test
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"depsilo/internal/cache"
+	"depsilo/internal/adapter"
+	"depsilo/internal/adapter/adaptertest"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
 	"depsilo/internal/upstream"
@@ -35,27 +34,15 @@ func TestTransparentProxyOwnsFetchCacheStreamAndAccessLogPipeline(t *testing.T) 
 	}))
 	t.Cleanup(upstreamServer.Close)
 
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "transparent.db"))
-	if err != nil {
-		t.Fatalf("open database: %v", err)
-	}
-	if err := database.AutoMigrate(&db.CacheEntry{}, &db.AccessLog{}); err != nil {
-		t.Fatalf("migrate database: %v", err)
-	}
-	storage, err := cache.NewLocalStorage(t.TempDir())
-	if err != nil {
-		t.Fatalf("open storage: %v", err)
-	}
-	manager := cache.NewManager(storage, database, cache.NewEventBus(), time.Hour)
-	t.Cleanup(func() { closeTransparentTestManager(t, manager) })
+	manager, database, _ := adaptertest.NewManager(t, time.Hour)
 	pool, err := upstream.NewPool([]config.UpstreamConfig{{Name: "fixture", URL: upstreamServer.URL, Priority: 1}})
 	if err != nil {
 		t.Fatalf("create upstream pool: %v", err)
 	}
-	proxy := NewTransparentProxy("fixture", manager, upstream.NewPassiveRecoverySelector(pool), database)
+	proxy := adapter.NewTransparentProxy("fixture", manager, upstream.NewPassiveRecoverySelector(pool), database)
 	engine := gin.New()
 	engine.GET("/fixture/*path", func(c *gin.Context) {
-		proxy.Serve(c, TransparentPlan{Path: "packages/example.bin", CacheKey: "fixture/packages/example.bin", TTL: time.Hour})
+		proxy.Serve(c, adapter.TransparentPlan{Path: "packages/example.bin", CacheKey: "fixture/packages/example.bin", TTL: time.Hour})
 	})
 
 	for requestNumber := 1; requestNumber <= 2; requestNumber++ {
@@ -119,27 +106,15 @@ func TestTransparentProxyRecordsFailedUpstreamRequest(t *testing.T) {
 	}))
 	t.Cleanup(upstreamServer.Close)
 
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "transparent-error.db"))
-	if err != nil {
-		t.Fatalf("open database: %v", err)
-	}
-	if err := database.AutoMigrate(&db.CacheEntry{}, &db.AccessLog{}); err != nil {
-		t.Fatalf("migrate database: %v", err)
-	}
-	storage, err := cache.NewLocalStorage(t.TempDir())
-	if err != nil {
-		t.Fatalf("open storage: %v", err)
-	}
-	manager := cache.NewManager(storage, database, cache.NewEventBus(), time.Hour)
-	t.Cleanup(func() { closeTransparentTestManager(t, manager) })
+	manager, database, _ := adaptertest.NewManager(t, time.Hour)
 	pool, err := upstream.NewPool([]config.UpstreamConfig{{Name: "broken", URL: upstreamServer.URL, Priority: 1}})
 	if err != nil {
 		t.Fatalf("create upstream pool: %v", err)
 	}
-	proxy := NewTransparentProxy("fixture", manager, upstream.NewPassiveRecoverySelector(pool), database)
+	proxy := adapter.NewTransparentProxy("fixture", manager, upstream.NewPassiveRecoverySelector(pool), database)
 	engine := gin.New()
 	engine.GET("/fixture/*path", func(c *gin.Context) {
-		proxy.Serve(c, TransparentPlan{Path: "packages/missing.bin", CacheKey: "fixture/packages/missing.bin", TTL: time.Hour})
+		proxy.Serve(c, adapter.TransparentPlan{Path: "packages/missing.bin", CacheKey: "fixture/packages/missing.bin", TTL: time.Hour})
 	})
 
 	response := httptest.NewRecorder()
@@ -154,15 +129,6 @@ func TestTransparentProxyRecordsFailedUpstreamRequest(t *testing.T) {
 	}
 	if len(logs) != 1 || logs[0].StatusCode != http.StatusBadGateway || logs[0].Hit || logs[0].Upstream != "broken" {
 		t.Fatalf("access logs = %+v, want one failed miss", logs)
-	}
-}
-
-func closeTransparentTestManager(t *testing.T, manager *cache.Manager) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if err := manager.Close(ctx); err != nil {
-		t.Fatalf("close manager: %v", err)
 	}
 }
 
@@ -195,19 +161,7 @@ func TestTransparentProxyMovesOnOnlyWhereAnotherMirrorMayAnswer(t *testing.T) {
 	}))
 	t.Cleanup(official.Close)
 
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "transparent.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := database.AutoMigrate(&db.CacheEntry{}, &db.AccessLog{}); err != nil {
-		t.Fatal(err)
-	}
-	storage, err := cache.NewLocalStorage(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	manager := cache.NewManager(storage, database, cache.NewEventBus(), time.Hour)
-	t.Cleanup(func() { closeTransparentTestManager(t, manager) })
+	manager, database, _ := adaptertest.NewManager(t, time.Hour)
 	pool, err := upstream.NewPool([]config.UpstreamConfig{
 		{Name: "mirror", URL: mirror.URL, Priority: 1, ProbeMode: "passive"},
 		{Name: "official", URL: official.URL, Priority: 2, ProbeMode: "passive"},
@@ -215,12 +169,12 @@ func TestTransparentProxyMovesOnOnlyWhereAnotherMirrorMayAnswer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	proxy := NewTransparentProxy("apt", manager, upstream.NewPassiveRecoverySelector(pool), database)
+	proxy := adapter.NewTransparentProxy("apt", manager, upstream.NewPassiveRecoverySelector(pool), database)
 	proxy.RetryMissingArtifacts = true
 	engine := gin.New()
 	engine.GET("/apt/*path", func(c *gin.Context) {
 		path := c.Param("path")
-		proxy.Serve(c, TransparentPlan{Path: path, CacheKey: "apt/ubuntu" + path, TTL: time.Hour})
+		proxy.Serve(c, adapter.TransparentPlan{Path: path, CacheKey: "apt/ubuntu" + path, TTL: time.Hour})
 	})
 
 	for _, tc := range []struct {
@@ -269,19 +223,7 @@ func TestTransparentProxyTreatsTheAbsenceOfOptionalContentAsTheAnswer(t *testing
 	}
 	first, second := member(&firstStatus, "first"), member(&secondStatus, "second")
 
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "transparent.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := database.AutoMigrate(&db.CacheEntry{}, &db.AccessLog{}); err != nil {
-		t.Fatal(err)
-	}
-	storage, err := cache.NewLocalStorage(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	manager := cache.NewManager(storage, database, cache.NewEventBus(), time.Hour)
-	t.Cleanup(func() { closeTransparentTestManager(t, manager) })
+	manager, database, _ := adaptertest.NewManager(t, time.Hour)
 	pool, err := upstream.NewPool([]config.UpstreamConfig{
 		{Name: "first", URL: first.URL, Priority: 1, ProbeMode: "passive"},
 		{Name: "second", URL: second.URL, Priority: 2, ProbeMode: "passive"},
@@ -289,14 +231,14 @@ func TestTransparentProxyTreatsTheAbsenceOfOptionalContentAsTheAnswer(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	proxy := NewTransparentProxy("apt", manager, upstream.NewPassiveRecoverySelector(pool), database)
+	proxy := adapter.NewTransparentProxy("apt", manager, upstream.NewPassiveRecoverySelector(pool), database)
 	const ttl = 20 * time.Millisecond
 	engine := gin.New()
 	// InRelease is metadata: unless it is optional a 404 stays on the member
 	// that gave it and a 410 is a gateway error.
 	engine.GET("/:mode/*path", func(c *gin.Context) {
 		mode := c.Param("mode")
-		proxy.Serve(c, TransparentPlan{
+		proxy.Serve(c, adapter.TransparentPlan{
 			Path:             c.Param("path"),
 			CacheKey:         "apt/" + mode + c.Param("path") + "/InRelease",
 			TTL:              ttl,
@@ -399,19 +341,7 @@ func TestTransparentProxyLogsTheAbsenceOfOptionalContentAtDebugLevel(t *testing.
 	}
 	first, second := member(&firstStatus), member(&secondStatus)
 
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "transparent.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := database.AutoMigrate(&db.CacheEntry{}, &db.AccessLog{}); err != nil {
-		t.Fatal(err)
-	}
-	storage, err := cache.NewLocalStorage(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	manager := cache.NewManager(storage, database, cache.NewEventBus(), time.Hour)
-	t.Cleanup(func() { closeTransparentTestManager(t, manager) })
+	manager, database, _ := adaptertest.NewManager(t, time.Hour)
 	pool, err := upstream.NewPool([]config.UpstreamConfig{
 		{Name: "first", URL: first.URL, Priority: 1, ProbeMode: "passive"},
 		{Name: "second", URL: second.URL, Priority: 2, ProbeMode: "passive"},
@@ -419,11 +349,11 @@ func TestTransparentProxyLogsTheAbsenceOfOptionalContentAtDebugLevel(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	proxy := NewTransparentProxy("go", manager, upstream.NewPassiveRecoverySelector(pool), database)
+	proxy := adapter.NewTransparentProxy("go", manager, upstream.NewPassiveRecoverySelector(pool), database)
 	engine := gin.New()
 	engine.GET("/:mode/*path", func(c *gin.Context) {
 		mode := c.Param("mode")
-		proxy.Serve(c, TransparentPlan{
+		proxy.Serve(c, adapter.TransparentPlan{
 			Path:     c.Param("path"),
 			CacheKey: "go/" + mode + c.Param("path"),
 			TTL:      time.Hour,

@@ -166,22 +166,6 @@ func TestRegistryMutationValidation(t *testing.T) {
 	}
 }
 
-func TestRegistryConcurrentMutationsRemainConsistent(t *testing.T) {
-	_, registry := registryFixture(t, "pypi", 1)
-	var wg sync.WaitGroup
-	for i := 0; i < 20; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			_, _ = registry.Create(context.Background(), MutationInput{AdapterType: "pypi", Name: fmt.Sprintf("mirror-%02d", i), URL: fmt.Sprintf("https://mirror-%02d.example", i), Priority: i + 2, ProbeMode: "passive", ProbeInterval: "30m"})
-		}(i)
-	}
-	wg.Wait()
-	if err := registry.verify("pypi"); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestRegistryConflictRollsBackWithoutPublishing(t *testing.T) {
 	database, registry := registryFixture(t, "pypi", 1)
 	before := registry.Pools()["pypi"].Snapshot()

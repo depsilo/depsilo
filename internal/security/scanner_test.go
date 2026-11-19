@@ -120,122 +120,132 @@ func TestScannerIgnoresLegacyCaseFoldedNPMCacheNamespace(t *testing.T) {
 	}
 }
 
-func TestScannerDoesNotRecordFalseCleanForAmbiguousRubyGemsArtifact(t *testing.T) {
-	database := newScannerTestDB(t)
-	key := "rubygems/gems/nokogiri-1.16.5-x86_64-linux.gem"
-	entry := db.CacheEntry{
-		Key:         key,
-		AdapterType: "rubygems",
-		PackageName: packagekey.ExtractName("rubygems", key),
-	}
-	if err := database.Create(&entry).Error; err != nil {
-		t.Fatal(err)
-	}
+func TestScannerDoesNotRecordFalseCleanForAmbiguousIdentity(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		key       string
+		ecosystem string
+		// extractsEmpty pins that the adapter already yields no identity;
+		// otherwise the scanner itself must reject the extracted value.
+		extractsEmpty bool
+	}{
+		{name: "RubyGems platform artifact", key: "rubygems/gems/nokogiri-1.16.5-x86_64-linux.gem", ecosystem: "rubygems"},
+		{name: "PyPI artifact", key: "pypi/files/packages/aa/foo-bar-1.0.zip", ecosystem: "pypi"},
+		{name: "Composer metadata", key: "composer/p2/not-a-package", ecosystem: "composer", extractsEmpty: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			database := newScannerTestDB(t)
+			entry := db.CacheEntry{
+				Key:         test.key,
+				AdapterType: test.ecosystem,
+				PackageName: packagekey.ExtractName(test.ecosystem, test.key),
+			}
+			if test.extractsEmpty && entry.PackageName != "" {
+				t.Fatalf("ambiguous identity = %q, want empty", entry.PackageName)
+			}
+			if err := database.Create(&entry).Error; err != nil {
+				t.Fatal(err)
+			}
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(osvBatchResponse{Results: []osvQueryResponse{{}}})
-	}))
-	t.Cleanup(server.Close)
+			requests := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				requests++
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(osvBatchResponse{Results: []osvQueryResponse{{}}})
+			}))
+			t.Cleanup(server.Close)
 
-	scanner := NewScanner(database, newScannerTestFetcher(t, server), newScannerTestCatalog(t, database))
-	// Cache Manager enqueues this exact adapter-derived identity after the
-	// artifact commit. It must be rejected before a clean OSV receipt can be
-	// persisted; the periodic cache scan below must reject the row as well.
-	if err := scanner.ScanPackage(context.Background(), entry.AdapterType, entry.PackageName); err != nil {
-		t.Fatalf("ScanPackage: %v", err)
-	}
-	if err := scanner.ScanAll(context.Background()); err != nil {
-		t.Fatalf("ScanAll: %v", err)
-	}
+			scanner := NewScanner(database, newScannerTestFetcher(t, server), newScannerTestCatalog(t, database))
+			// Cache Manager enqueues this exact adapter-derived identity after
+			// the artifact commit. It must be rejected (an empty identity is a
+			// no-op) before any OSV request, and the periodic cache walk must
+			// skip the row as well; neither path may persist a clean receipt.
+			if err := scanner.ScanPackage(context.Background(), entry.AdapterType, entry.PackageName); err != nil {
+				t.Fatalf("ScanPackage: %v", err)
+			}
+			if err := scanner.ScanAll(context.Background()); err != nil {
+				t.Fatalf("ScanAll: %v", err)
+			}
+			if requests != 0 {
+				t.Fatalf("ambiguous identity made %d OSV requests, want none", requests)
+			}
 
-	var checks int64
-	if err := database.Model(&db.VulnerabilityCheck{}).
-		Where("ecosystem = ?", "rubygems").
-		Count(&checks).Error; err != nil {
-		t.Fatal(err)
-	}
-	if checks != 0 {
-		t.Fatalf("ambiguous RubyGems artifact produced %d vulnerability checks, want none", checks)
+			var checks int64
+			if err := database.Model(&db.VulnerabilityCheck{}).
+				Where("ecosystem = ?", test.ecosystem).
+				Count(&checks).Error; err != nil {
+				t.Fatal(err)
+			}
+			if checks != 0 {
+				t.Fatalf("ambiguous identity produced %d vulnerability checks, want none", checks)
+			}
+		})
 	}
 }
 
-func TestScannerDoesNotRecordFalseCleanForAmbiguousPyPIArtifact(t *testing.T) {
-	database := newScannerTestDB(t)
-	key := "pypi/files/packages/aa/foo-bar-1.0.zip"
-	entry := db.CacheEntry{
-		Key:         key,
-		AdapterType: "pypi",
-		PackageName: packagekey.ExtractName("pypi", key),
-	}
-	if err := database.Create(&entry).Error; err != nil {
-		t.Fatal(err)
-	}
+func TestScannerScansTrustedMetadataIdentity(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		key          string
+		ecosystem    string
+		osvEcosystem string
+		// wantExtracted, when set, pins the adapter-derived identity before
+		// the scanner normalizes it to wantName.
+		wantExtracted string
+		wantName      string
+	}{
+		{
+			name: "PyPI simple index", key: "pypi/simple/Friendly_Bard/index.html",
+			ecosystem: "pypi", osvEcosystem: "PyPI", wantName: "friendly-bard",
+		},
+		{
+			name: "Composer Packagist metadata", key: "composer/p2/symfony/console.json",
+			ecosystem: "composer", osvEcosystem: "Packagist",
+			wantExtracted: "symfony/console", wantName: "symfony/console",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			database := newScannerTestDB(t)
+			entry := db.CacheEntry{
+				Key:         test.key,
+				AdapterType: test.ecosystem,
+				PackageName: packagekey.ExtractName(test.ecosystem, test.key),
+			}
+			if test.wantExtracted != "" && entry.PackageName != test.wantExtracted {
+				t.Fatalf("trusted identity = %q, want %s", entry.PackageName, test.wantExtracted)
+			}
+			if err := database.Create(&entry).Error; err != nil {
+				t.Fatal(err)
+			}
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(osvBatchResponse{Results: []osvQueryResponse{{}}})
-	}))
-	t.Cleanup(server.Close)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var request osvBatchRequest
+				if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				if len(request.Queries) != 1 || request.Queries[0].Package == nil {
+					t.Fatalf("OSV queries = %+v, want one %s package", request.Queries, test.osvEcosystem)
+				}
+				pkg := request.Queries[0].Package
+				if pkg.Ecosystem != test.osvEcosystem || pkg.Name != test.wantName {
+					t.Fatalf("OSV package = %+v, want %s/%s", pkg, test.osvEcosystem, test.wantName)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(osvBatchResponse{Results: []osvQueryResponse{{}}})
+			}))
+			t.Cleanup(server.Close)
 
-	scanner := NewScanner(database, newScannerTestFetcher(t, server), newScannerTestCatalog(t, database))
-	// Cache Manager enqueues this exact filename-derived value after commit.
-	// Both that immediate path and the later cache walk must reject ambiguity.
-	if err := scanner.ScanPackage(context.Background(), entry.AdapterType, entry.PackageName); err != nil {
-		t.Fatalf("ScanPackage: %v", err)
-	}
-	if err := scanner.ScanAll(context.Background()); err != nil {
-		t.Fatalf("ScanAll: %v", err)
-	}
-
-	var checks int64
-	if err := database.Model(&db.VulnerabilityCheck{}).
-		Where("ecosystem = ?", "pypi").
-		Count(&checks).Error; err != nil {
-		t.Fatal(err)
-	}
-	if checks != 0 {
-		t.Fatalf("ambiguous PyPI artifact produced %d vulnerability checks, want none", checks)
-	}
-}
-
-func TestScannerScansTrustedPyPISimpleIndexIdentity(t *testing.T) {
-	database := newScannerTestDB(t)
-	key := "pypi/simple/Friendly_Bard/index.html"
-	entry := db.CacheEntry{
-		Key:         key,
-		AdapterType: "pypi",
-		PackageName: packagekey.ExtractName("pypi", key),
-	}
-	if err := database.Create(&entry).Error; err != nil {
-		t.Fatal(err)
-	}
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var request osvBatchRequest
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if len(request.Queries) != 1 || request.Queries[0].Package == nil {
-			t.Fatalf("OSV queries = %+v, want one PyPI package", request.Queries)
-		}
-		pkg := request.Queries[0].Package
-		if pkg.Ecosystem != "PyPI" || pkg.Name != "friendly-bard" {
-			t.Fatalf("OSV package = %+v, want PyPI/friendly-bard", pkg)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(osvBatchResponse{Results: []osvQueryResponse{{}}})
-	}))
-	t.Cleanup(server.Close)
-
-	scanner := NewScanner(database, newScannerTestFetcher(t, server), newScannerTestCatalog(t, database))
-	if err := scanner.ScanAll(context.Background()); err != nil {
-		t.Fatalf("ScanAll: %v", err)
-	}
-	var check db.VulnerabilityCheck
-	if err := database.Where("ecosystem = ? AND package_name = ?", "pypi", "friendly-bard").Take(&check).Error; err != nil {
-		t.Fatalf("trusted PyPI vulnerability check: %v", err)
+			scanner := NewScanner(database, newScannerTestFetcher(t, server), newScannerTestCatalog(t, database))
+			if err := scanner.ScanAll(context.Background()); err != nil {
+				t.Fatalf("ScanAll: %v", err)
+			}
+			var check db.VulnerabilityCheck
+			if err := database.Where("ecosystem = ? AND package_name = ?", test.ecosystem, test.wantName).
+				Take(&check).Error; err != nil {
+				t.Fatalf("trusted vulnerability check: %v", err)
+			}
+		})
 	}
 }
 

@@ -75,7 +75,8 @@ func TestWriteStartupSummaryForFirstRun(t *testing.T) {
 		"Portal:\n  http://127.0.0.1:23333",
 		"No administrator yet:\n  Package routes already work. Admin needs an administrator first.\n",
 		"Opened on this machine, Admin creates one without the token below.",
-		"Bootstrap token: bootstrap-token",
+		// The release workflow reads the token from this exact line.
+		"  Bootstrap token: bootstrap-token\n",
 		"Retrieve the current bootstrap token: depsilo setup token\n",
 		"Open http://127.0.0.1:23333/admin to create the administrator.",
 	} {
@@ -91,46 +92,28 @@ func TestWriteStartupSummaryForFirstRun(t *testing.T) {
 	}
 }
 
-// "depsilo setup token" asks port 23333 unless told otherwise. On another port
-// the summary must print the command that reaches this instance.
-func TestWriteStartupSummaryNamesNonDefaultPortInTokenCommand(t *testing.T) {
-	stubRunningInContainer(t, false)
-	var output bytes.Buffer
-	summary := newStartupSummary("0.9.0", "127.0.0.1", 24646, true, "bootstrap-token", true)
-	if err := writeStartupSummary(&output, summary); err != nil {
-		t.Fatal(err)
-	}
-	got := output.String()
-	if !strings.Contains(got, "  Retrieve the current bootstrap token: depsilo setup token --port 24646\n") {
-		t.Errorf("startup summary omitted the port from the token command:\n%s", got)
-	}
-	// The release workflow reads the token from this exact line.
-	if !strings.Contains(got, "  Bootstrap token: bootstrap-token\n") {
-		t.Errorf("startup summary changed the bootstrap token line:\n%s", got)
-	}
-}
-
-// In the container image "depsilo setup token" runs only inside the
-// container, so an operator reading its output on the host is given the
-// docker exec form, with the same flags.
-func TestWriteStartupSummaryGivesTheContainerTokenCommandInAContainer(t *testing.T) {
+// The summary prints the token command that reaches this listener, in the
+// docker exec form inside a container. api.SetupTokenCommand owns the flag
+// rules; these cases prove the summary passes it the listener and the
+// container state.
+func TestWriteStartupSummaryNamesTheTokenCommandThatReachesThisListener(t *testing.T) {
 	for _, test := range []struct {
 		inContainer bool
+		host        string
 		port        int
 		want        string
 	}{
-		{true, 23333, "docker exec <container> depsilo setup token"},
-		{true, 24646, "docker exec <container> depsilo setup token --port 24646"},
-		{false, 23333, "depsilo setup token"},
+		{false, "[::1]", 24646, "depsilo setup token --port 24646 --host ::1"},
+		{true, "0.0.0.0", 24646, "docker exec <container> depsilo setup token --port 24646"},
 	} {
 		stubRunningInContainer(t, test.inContainer)
 		var output bytes.Buffer
-		summary := newStartupSummary("0.9.0", "0.0.0.0", test.port, true, "bootstrap-token", true)
+		summary := newStartupSummary("0.9.0", test.host, test.port, true, "bootstrap-token", true)
 		if err := writeStartupSummary(&output, summary); err != nil {
 			t.Fatal(err)
 		}
 		if want := "  Retrieve the current bootstrap token: " + test.want + "\n"; !strings.Contains(output.String(), want) {
-			t.Errorf("in container %v, port %d: startup summary missing %q:\n%s", test.inContainer, test.port, want, output.String())
+			t.Errorf("in container %v, host %q port %d: startup summary missing %q:\n%s", test.inContainer, test.host, test.port, want, output.String())
 		}
 	}
 }
@@ -142,35 +125,6 @@ func stubRunningInContainer(t *testing.T, inContainer bool) {
 	previous := runningInContainer
 	runningInContainer = func() bool { return inContainer }
 	t.Cleanup(func() { runningInContainer = previous })
-}
-
-// "depsilo setup token" asks 127.0.0.1 unless told otherwise. A listener on
-// the IPv6 loopback or on one specific address is not there, so the summary
-// names the host; a wildcard listener is, and the command stays as it was.
-func TestWriteStartupSummaryNamesHostInTokenCommandOnlyWhenLoopbackMissesIt(t *testing.T) {
-	stubRunningInContainer(t, false)
-	for _, test := range []struct {
-		host string
-		port int
-		want string
-	}{
-		{"::1", 23333, "depsilo setup token --host ::1"},
-		{"[::1]", 24646, "depsilo setup token --port 24646 --host ::1"},
-		{"192.0.2.10", 23333, "depsilo setup token --host 192.0.2.10"},
-		{"0.0.0.0", 23333, "depsilo setup token"},
-		{"::", 23333, "depsilo setup token"},
-		{"", 24646, "depsilo setup token --port 24646"},
-		{"127.0.0.1", 23333, "depsilo setup token"},
-	} {
-		var output bytes.Buffer
-		summary := newStartupSummary("0.9.0", test.host, test.port, true, "bootstrap-token", true)
-		if err := writeStartupSummary(&output, summary); err != nil {
-			t.Fatal(err)
-		}
-		if want := "  Retrieve the current bootstrap token: " + test.want + "\n"; !strings.Contains(output.String(), want) {
-			t.Errorf("host %q port %d: startup summary missing %q:\n%s", test.host, test.port, want, output.String())
-		}
-	}
 }
 
 func TestWriteStartupSummaryExplainsIgnoredAdministratorEnvironment(t *testing.T) {

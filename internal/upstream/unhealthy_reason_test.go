@@ -70,49 +70,42 @@ func TestAllUnhealthyErrorNamesTheSharedEgressReason(t *testing.T) {
 		{"different guard refusals", []string{"198.18.0.65", "100.101.102.103"}, nil},
 		{"one upstream failed for another reason", []string{"198.18.0.65", ""}, nil},
 	} {
-		for _, selector := range []struct {
-			name  string
-			build func(*Pool) Selector
-		}{
+		t.Run(test.name, func(t *testing.T) {
+			pool := unhealthyPool(t)
+			for index, u := range pool.Snapshot() {
+				if test.addresses[index] == "" {
+					u.applyProbe(ProbeResult{Healthy: false, CheckedAt: time.Now(), Err: &StatusError{Code: 503}})
+					continue
+				}
+				refuseByGuard(t, u, test.addresses[index])
+			}
+
 			// An active upstream never enters passive recovery, so this pool
 			// reaches the selector's final error.
-			{"passive recovery", func(pool *Pool) Selector { return NewPassiveRecoverySelector(pool) }},
-		} {
-			t.Run(test.name+"/"+selector.name, func(t *testing.T) {
-				pool := unhealthyPool(t)
-				for index, u := range pool.Snapshot() {
-					if test.addresses[index] == "" {
-						u.applyProbe(ProbeResult{Healthy: false, CheckedAt: time.Now(), Err: &StatusError{Code: 503}})
-						continue
-					}
-					refuseByGuard(t, u, test.addresses[index])
+			_, err := NewPassiveRecoverySelector(pool).Select(context.Background())
+			if err == nil {
+				t.Fatal("selected an upstream from a pool with no healthy member")
+			}
+			message := err.Error()
+			if test.want == nil {
+				if message != plain {
+					t.Fatalf("error = %q, want exactly %q", message, plain)
 				}
-
-				_, err := selector.build(pool).Select(context.Background())
-				if err == nil {
-					t.Fatal("selected an upstream from a pool with no healthy member")
+				return
+			}
+			for _, part := range test.want {
+				if !strings.Contains(message, part) {
+					t.Fatalf("error = %q, want it to contain %q", message, part)
 				}
-				message := err.Error()
-				if test.want == nil {
-					if message != plain {
-						t.Fatalf("error = %q, want exactly %q", message, plain)
-					}
-					return
+			}
+			// The reason is a bounded code: no refused address, range, or
+			// upstream host may reach an anonymous package client.
+			for _, private := range append([]string{"198.18", "198.19", "100.101", "100.64", "192.0.2", "10.0.0", "pypi.example", "mirror.example"}, test.addresses...) {
+				if strings.Contains(message, private) {
+					t.Fatalf("error %q leaks %q", message, private)
 				}
-				for _, part := range test.want {
-					if !strings.Contains(message, part) {
-						t.Fatalf("error = %q, want it to contain %q", message, part)
-					}
-				}
-				// The reason is a bounded code: no refused address, range, or
-				// upstream host may reach an anonymous package client.
-				for _, private := range append([]string{"198.18", "198.19", "100.101", "100.64", "192.0.2", "10.0.0", "pypi.example", "mirror.example"}, test.addresses...) {
-					if strings.Contains(message, private) {
-						t.Fatalf("error %q leaks %q", message, private)
-					}
-				}
-			})
-		}
+			}
+		})
 	}
 }
 
@@ -127,11 +120,8 @@ func TestAllUnhealthyErrorNamesFakeIPAnswersThatNothingCarried(t *testing.T) {
 		Err: &url.Error{Op: "Head", URL: upstreams[0].URL, Err: &fakeIPNotCarriedError{address: netip.MustParseAddr("198.18.0.65")}},
 	})
 	refuseByGuard(t, upstreams[1], "198.18.0.66")
-	for _, selector := range []Selector{NewPassiveRecoverySelector(pool)} {
-		_, err := selector.Select(context.Background())
-		if err == nil || err.Error() != fakeIPUnhealthy {
-			t.Fatalf("error = %v, want %q", err, fakeIPUnhealthy)
-		}
+	if _, err := NewPassiveRecoverySelector(pool).Select(context.Background()); err == nil || err.Error() != fakeIPUnhealthy {
+		t.Fatalf("error = %v, want %q", err, fakeIPUnhealthy)
 	}
 }
 
@@ -159,11 +149,8 @@ func TestAllUnhealthyErrorNamesUniqueLocalFakeIPAnswers(t *testing.T) {
 		}
 		u.applyProbe(ProbeResult{Healthy: false, CheckedAt: time.Now(), Err: &url.Error{Op: "Head", URL: u.URL, Err: err}})
 	}
-	for _, selector := range []Selector{NewPassiveRecoverySelector(pool)} {
-		_, err := selector.Select(context.Background())
-		if err == nil || err.Error() != fakeIPUnhealthy {
-			t.Fatalf("error = %v, want %q", err, fakeIPUnhealthy)
-		}
+	if _, err := NewPassiveRecoverySelector(pool).Select(context.Background()); err == nil || err.Error() != fakeIPUnhealthy {
+		t.Fatalf("error = %v, want %q", err, fakeIPUnhealthy)
 	}
 }
 
@@ -182,31 +169,22 @@ func TestAllUnhealthyErrorNamesAFailureAtTheEgressProxy(t *testing.T) {
 		u.applyProbe(ProbeResult{Healthy: false, CheckedAt: time.Now(), Err: &url.Error{Op: "Head", URL: u.URL, Err: cause}})
 	}
 	unreachable := &net.OpError{Op: "proxyconnect", Net: "tcp", Err: &net.OpError{Op: "dial", Net: "tcp", Err: syscall.ECONNREFUSED}}
-	for _, selector := range []struct {
-		name  string
-		build func(*Pool) Selector
-	}{
-		{"passive recovery", func(pool *Pool) Selector { return NewPassiveRecoverySelector(pool) }},
-	} {
-		t.Run(selector.name, func(t *testing.T) {
-			pool := unhealthyPool(t)
-			upstreams := pool.Snapshot()
-			failAtProxy(upstreams[0], unreachable)
-			failAtProxy(upstreams[1], &proxyConnectError{status: 502})
-			_, err := selector.build(pool).Select(context.Background())
-			if err == nil || err.Error() != want {
-				t.Fatalf("error = %v, want %q", err, want)
-			}
-			if strings.Contains(err.Error(), "outbound guard") || strings.Contains(err.Error(), "502") {
-				t.Fatalf("error %q blames the guard or repeats a status", err)
-			}
+	pool := unhealthyPool(t)
+	upstreams := pool.Snapshot()
+	failAtProxy(upstreams[0], unreachable)
+	failAtProxy(upstreams[1], &proxyConnectError{status: 502})
+	_, err := NewPassiveRecoverySelector(pool).Select(context.Background())
+	if err == nil || err.Error() != want {
+		t.Fatalf("error = %v, want %q", err, want)
+	}
+	if strings.Contains(err.Error(), "outbound guard") || strings.Contains(err.Error(), "502") {
+		t.Fatalf("error %q blames the guard or repeats a status", err)
+	}
 
-			// A guard refusal of the other upstream is a different reason.
-			refuseByGuard(t, upstreams[1], "198.18.0.65")
-			if _, err := selector.build(pool).Select(context.Background()); err == nil || err.Error() != "all upstreams are unhealthy" {
-				t.Fatalf("error with mixed egress reasons = %v, want the plain message", err)
-			}
-		})
+	// A guard refusal of the other upstream is a different reason.
+	refuseByGuard(t, upstreams[1], "198.18.0.65")
+	if _, err := NewPassiveRecoverySelector(pool).Select(context.Background()); err == nil || err.Error() != "all upstreams are unhealthy" {
+		t.Fatalf("error with mixed egress reasons = %v, want the plain message", err)
 	}
 }
 

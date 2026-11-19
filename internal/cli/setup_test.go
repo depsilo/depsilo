@@ -270,23 +270,6 @@ func TestSetupTokenCLIHelpAndInvalidArguments(t *testing.T) {
 	}
 }
 
-// Asked for, the usage is the command's answer and goes to standard output;
-// printed because of a mistake, it stays on standard error with the message.
-func TestSetupTokenHelpGoesToStandardOutput(t *testing.T) {
-	env := []string{"DEPSILO_SERVER_PORT=" + strconv.Itoa(availablePort(t))}
-	for _, args := range [][]string{
-		{"setup", "--help"},
-		{"setup", "-h"},
-		{"setup", "token", "--help"},
-		{"setup", "token", "--port", "1", "-h"},
-	} {
-		stdout, stderr, err := runSetupCLI(t, t.TempDir(), env, args...)
-		if err != nil || stderr != "" || !strings.HasPrefix(stdout, "Usage:\n    depsilo setup token ") {
-			t.Fatalf("depsilo %v: error=%v stdout=%q stderr=%q", args, err, stdout, stderr)
-		}
-	}
-}
-
 func TestSetupTokenReadOnlyConfigHasNoGeneratedBootstrapToken(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)

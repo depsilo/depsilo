@@ -51,6 +51,30 @@ func readBody(t *testing.T, resp *http.Response) string {
 	return string(body)
 }
 
+// assertMissThenHit fetches url twice. Both answers carry wantBody (any body
+// when wantBody is empty), and the second comes from the cache without an
+// upstream request. With wantUpstream the first must reach the upstream.
+func assertMissThenHit(t *testing.T, url, wantBody string, wantUpstream bool) {
+	t.Helper()
+	for attempt := 1; attempt <= 2; attempt++ {
+		before := mockServer.RequestCount()
+		resp := httpGet(t, url)
+		assertStatus(t, resp, http.StatusOK)
+		body := readBody(t, resp)
+		resp.Body.Close()
+		if wantBody != "" && body != wantBody {
+			t.Errorf("request %d: unexpected body: %q", attempt, body)
+		}
+		upstreamRequests := mockServer.RequestCount() - before
+		if attempt == 1 && wantUpstream && upstreamRequests == 0 {
+			t.Error("expected an upstream request on the first fetch")
+		}
+		if attempt == 2 && upstreamRequests != 0 {
+			t.Errorf("expected a cache hit, upstream saw %d new request(s)", upstreamRequests)
+		}
+	}
+}
+
 func getFreePort() int {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

@@ -47,19 +47,8 @@ func TestGo_ModuleMod(t *testing.T) {
 	}
 }
 
-func TestGo_ModuleZip(t *testing.T) {
-	resp := httpGet(t, depsiloURL+"/go/github.com/test/mod/@v/v1.0.0.zip")
-	assertStatus(t, resp, 200)
-}
-
-func TestGo_CacheHit(t *testing.T) {
-	httpGet(t, depsiloURL+"/go/github.com/test/mod/@v/v1.0.0.zip")
-	before := mockServer.RequestCount()
-	resp := httpGet(t, depsiloURL+"/go/github.com/test/mod/@v/v1.0.0.zip")
-	assertStatus(t, resp, 200)
-	if mockServer.RequestCount() != before {
-		t.Error("expected cache hit")
-	}
+func TestGo_ModuleZipMissThenHit(t *testing.T) {
+	assertMissThenHit(t, depsiloURL+"/go/github.com/test/mod/@v/v1.0.0.zip", "", false)
 }
 
 // sumDBClient is the checksum database client of the go command, reading the

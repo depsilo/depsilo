@@ -242,17 +242,6 @@ func loginRequestForSetup(t *testing.T, database *gorm.DB, cfg *config.Config) *
 	return loginTestRequest(router, "127.0.0.1", "operator", "Tr0ub4dor&Correct")
 }
 
-func TestSetupCompleteRequiresBootstrapTokenFromRemotePeer(t *testing.T) {
-	handler, _, root, restarts := newSetupTestHandler(t)
-	recorder := setupRequest(handler, "203.0.113.10:4321", "", validSetupRequest(t, root))
-	if recorder.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
-	}
-	if *restarts != 0 {
-		t.Fatalf("restart count = %d, want 0", *restarts)
-	}
-}
-
 // The 403 must tell a scripted or remote operator what to do next, and it must
 // not reveal whether a token was absent, from an earlier start, or simply wrong.
 func TestSetupCompleteExplainsBootstrapTokenWithoutDistinguishingRejections(t *testing.T) {
@@ -302,23 +291,14 @@ func TestSetupCompleteExplainsBootstrapTokenWithoutDistinguishingRejections(t *t
 		t.Fatalf("restart count = %d, want 0", *restarts)
 	}
 
-	// On a non-default port the bare command would ask another instance.
+	// The message names the command that reaches this listener, in the docker
+	// exec form inside a container. SetupTokenCommand's own tests below hold
+	// the flag rules; this proves the message passes it the listener and the
+	// container state.
 	cfg.Server.Port = 24646
-	recorder := setupRequest(handler, "203.0.113.10:4321", "", validSetupRequest(t, root))
-	if !strings.Contains(recorder.Body.String(), `depsilo setup token --port 24646\"`) {
-		t.Fatalf("rejection on a non-default port = %s", recorder.Body.String())
-	}
-
-	// On a host 127.0.0.1 does not reach it would find no instance.
 	cfg.Server.Host = "::1"
-	recorder = setupRequest(handler, "203.0.113.10:4321", "", validSetupRequest(t, root))
-	if !strings.Contains(recorder.Body.String(), `run \"depsilo setup token --port 24646 --host ::1\"`) {
-		t.Fatalf("rejection on an IPv6 loopback listener = %s", recorder.Body.String())
-	}
-
-	// In a container the command works only through the container runtime.
 	stubRunningInContainer(t, true)
-	recorder = setupRequest(handler, "203.0.113.10:4321", "", validSetupRequest(t, root))
+	recorder := setupRequest(handler, "203.0.113.10:4321", "", validSetupRequest(t, root))
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
@@ -1203,19 +1183,6 @@ func TestSetupCompleteReconnectURLFollowsHowTheRequestArrived(t *testing.T) {
 	}
 }
 
-// A token the operator chose through DEPSILO_BOOTSTRAP_TOKEN stays required
-// even from the server itself.
-func TestSetupCompleteRequiresAPresetTokenOnLoopback(t *testing.T) {
-	handler, _, root, restarts := newSetupTestHandler(t)
-	recorder := setupRequest(handler, "127.0.0.1:4321", "", validSetupRequest(t, root))
-	if recorder.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
-	}
-	if *restarts != 0 {
-		t.Fatalf("restart count = %d, want 0", *restarts)
-	}
-}
-
 func TestSetupCompleteCapsAndSanitizesInvalidRequestBody(t *testing.T) {
 	handler, cfg, _, restarts := newSetupTestHandler(t)
 	secret := "body-secret-must-not-be-echoed"
@@ -1397,18 +1364,6 @@ func TestValidateAndNormalizeSetupRequest(t *testing.T) {
 	}
 }
 
-func TestValidateSetupRejectsDockerNoOp(t *testing.T) {
-	req := config.SetupRequest{Ecosystems: map[string]config.EcosystemSetup{
-		"docker": {Enabled: true},
-	}}
-	req.Server.Port = 23333
-	req.Storage.Path = t.TempDir()
-	issue := validateAndNormalizeSetupRequest(&req)
-	if issue == nil || issue.code != "INVALID_ECOSYSTEM" {
-		t.Fatalf("validation issue = %#v, want INVALID_ECOSYSTEM", issue)
-	}
-}
-
 func TestSetupRecoveryRequiresExistingAdministratorCredentials(t *testing.T) {
 	handler, cfg, root, restarts := newSetupTestHandler(t)
 	if err := CreateInitialAdmin(handler.db, "existing-admin", "Existing&Secure123"); err != nil {
@@ -1587,31 +1542,6 @@ func TestSetupStatusReportsRestartPendingOnlyBetweenCompletionAndRestart(t *test
 	}
 }
 
-func TestSetupStatusDoesNotDiscloseTokenOrConfigPath(t *testing.T) {
-	handler, cfg, _, _ := newSetupTestHandler(t)
-	router := gin.New()
-	router.GET("/setup/status", handler.Status)
-	for _, test := range []struct {
-		remote        string
-		tokenRequired string
-	}{
-		{remote: "127.0.0.1:1234", tokenRequired: "true"},
-		{remote: "203.0.113.10:1234", tokenRequired: "true"},
-	} {
-		req := httptest.NewRequest(http.MethodGet, "/setup/status", nil)
-		req.RemoteAddr = test.remote
-		recorder := httptest.NewRecorder()
-		router.ServeHTTP(recorder, req)
-		body := recorder.Body.String()
-		if !strings.Contains(body, `"token_required":`+test.tokenRequired) {
-			t.Fatalf("status body for %s = %s", test.remote, body)
-		}
-		if strings.Contains(body, cfg.BootstrapToken) || strings.Contains(body, cfg.ConfigPath) {
-			t.Fatalf("status leaked setup secrets: %s", body)
-		}
-	}
-}
-
 func setupRequestWithHeaders(handler *SetupHandler, remoteAddr string, headers map[string]string, body []byte) *httptest.ResponseRecorder {
 	router := gin.New()
 	router.POST("/setup/complete", handler.Complete)
@@ -1651,11 +1581,16 @@ func TestSetupWaivesAGeneratedTokenForADirectLoopbackRequest(t *testing.T) {
 	}
 }
 
+// The token is waived only when it was generated and the request reaches the
+// listener directly from loopback. A token the operator chose through
+// DEPSILO_BOOTSTRAP_TOKEN stays required even from the server itself.
 func TestSetupRequiresAGeneratedTokenFromAnyOtherRequest(t *testing.T) {
 	for name, test := range map[string]struct {
 		peer    string
 		headers map[string]string
+		preset  bool
 	}{
+		"preset token on loopback":        {peer: "127.0.0.1:4321", preset: true},
 		"remote peer":                     {peer: "203.0.113.10:4321"},
 		"container gateway":               {peer: "172.17.0.1:4321"},
 		"loopback behind X-Forwarded-For": {peer: "127.0.0.1:4321", headers: map[string]string{"X-Forwarded-For": "203.0.113.10"}},
@@ -1665,10 +1600,13 @@ func TestSetupRequiresAGeneratedTokenFromAnyOtherRequest(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			handler, cfg, root, restarts := newSetupTestHandler(t)
-			cfg.BootstrapTokenGenerated = true
+			cfg.BootstrapTokenGenerated = !test.preset
 			status := setupRequestWithHeaders(handler, test.peer, test.headers, nil)
 			if !strings.Contains(status.Body.String(), `"token_required":true`) {
 				t.Fatalf("status = %s, want token_required true", status.Body.String())
+			}
+			if strings.Contains(status.Body.String(), cfg.BootstrapToken) || strings.Contains(status.Body.String(), cfg.ConfigPath) {
+				t.Fatalf("status leaked setup secrets: %s", status.Body.String())
 			}
 			recorder := setupRequestWithHeaders(handler, test.peer, test.headers, validSetupRequest(t, root))
 			if recorder.Code != http.StatusForbidden {

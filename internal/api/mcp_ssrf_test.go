@@ -11,155 +11,121 @@ import (
 	"testing"
 )
 
-func TestMCPResourceReadDoesNotFetchRequestHost(t *testing.T) {
-	router, _, readToken := newReadAuthRouter(t)
-
-	var externalCalls atomic.Int32
-	external := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		externalCalls.Add(1)
-		response.Header().Set("Content-Type", "application/json")
-		_, _ = response.Write([]byte(`{"leaked":"external-body-sentinel"}`))
-	}))
-	defer external.Close()
-
-	requestBody := `{"jsonrpc":"2.0","id":1,"method":"resources/read","params":{"uri":"depsilo://discover"}}`
-	request := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(requestBody))
-	request.Host = strings.TrimPrefix(external.URL, "http://")
-	request.Header.Set("Authorization", "Bearer "+readToken)
-	request.Header.Set("Content-Type", "application/json")
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
-
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d; body=%q", response.Code, http.StatusOK, response.Body.String())
-	}
-	if calls := externalCalls.Load(); calls != 0 {
-		t.Fatalf("resources/read made %d outbound request(s) to the request Host", calls)
-	}
-	if strings.Contains(response.Body.String(), "external-body-sentinel") {
-		t.Fatalf("resources/read returned the attacker-controlled response body: %q", response.Body.String())
-	}
-
-	var envelope struct {
+// An MCP read builds its answer in process. It must never fetch the URL the
+// request's Host header names, and nothing such a host serves may reach the
+// response. Each answer still addresses the client by its own origin.
+func TestMCPReadsDoNotFetchRequestHost(t *testing.T) {
+	type mcpContents struct {
 		Result struct {
 			Contents []struct {
 				Text string `json:"text"`
 			} `json:"contents"`
 		} `json:"result"`
 	}
-	if err := json.Unmarshal(response.Body.Bytes(), &envelope); err != nil {
-		t.Fatalf("decode MCP response: %v", err)
-	}
-	if len(envelope.Result.Contents) != 1 {
-		t.Fatalf("resource contents = %#v", envelope.Result.Contents)
-	}
-	var catalog struct {
-		Service string `json:"service"`
-		MCP     struct {
-			URL string `json:"url"`
-		} `json:"mcp"`
-	}
-	if err := json.Unmarshal([]byte(envelope.Result.Contents[0].Text), &catalog); err != nil {
-		t.Fatalf("decode discover resource: %v; text=%q", err, envelope.Result.Contents[0].Text)
-	}
-	if catalog.Service != "depsilo" {
-		t.Fatalf("discover service = %q, want depsilo", catalog.Service)
-	}
-	if want := external.URL + "/mcp"; catalog.MCP.URL != want {
-		t.Fatalf("discover MCP URL = %q, want client-visible %q", catalog.MCP.URL, want)
-	}
-}
+	for _, test := range []struct {
+		name     string
+		body     string
+		sentinel string
+		check    func(t *testing.T, body []byte, externalURL string)
+	}{
+		{
+			name:     "discover resource",
+			body:     `{"jsonrpc":"2.0","id":1,"method":"resources/read","params":{"uri":"depsilo://discover"}}`,
+			sentinel: "external-body-sentinel",
+			check: func(t *testing.T, body []byte, externalURL string) {
+				var envelope mcpContents
+				if err := json.Unmarshal(body, &envelope); err != nil {
+					t.Fatalf("decode MCP response: %v", err)
+				}
+				if len(envelope.Result.Contents) != 1 {
+					t.Fatalf("resource contents = %#v", envelope.Result.Contents)
+				}
+				var catalog struct {
+					Service string `json:"service"`
+					MCP     struct {
+						URL string `json:"url"`
+					} `json:"mcp"`
+				}
+				if err := json.Unmarshal([]byte(envelope.Result.Contents[0].Text), &catalog); err != nil {
+					t.Fatalf("decode discover resource: %v; text=%q", err, envelope.Result.Contents[0].Text)
+				}
+				if catalog.Service != "depsilo" {
+					t.Fatalf("discover service = %q, want depsilo", catalog.Service)
+				}
+				if want := externalURL + "/mcp"; catalog.MCP.URL != want {
+					t.Fatalf("discover MCP URL = %q, want client-visible %q", catalog.MCP.URL, want)
+				}
+			},
+		},
+		{
+			name:     "setup prompt",
+			body:     `{"jsonrpc":"2.0","id":1,"method":"prompts/get","params":{"name":"setup"}}`,
+			sentinel: "external-prompt-sentinel",
+			check: func(t *testing.T, body []byte, externalURL string) {
+				var envelope struct {
+					Result struct {
+						Messages []struct {
+							Content struct {
+								Text string `json:"text"`
+							} `json:"content"`
+						} `json:"messages"`
+					} `json:"result"`
+				}
+				if err := json.Unmarshal(body, &envelope); err != nil {
+					t.Fatalf("decode MCP response: %v", err)
+				}
+				if len(envelope.Result.Messages) != 1 {
+					t.Fatalf("prompt messages = %#v", envelope.Result.Messages)
+				}
+				if prompt := envelope.Result.Messages[0].Content.Text; !strings.Contains(prompt, "Depsilo at "+externalURL) {
+					t.Fatalf("prompt omitted client-visible base URL %q: %q", externalURL, prompt)
+				}
+			},
+		},
+		{
+			name:     "stats resource",
+			body:     `{"jsonrpc":"2.0","id":1,"method":"resources/read","params":{"uri":"depsilo://stats"}}`,
+			sentinel: "external-stats-sentinel",
+			check: func(t *testing.T, body []byte, _ string) {
+				var envelope mcpContents
+				if err := json.Unmarshal(body, &envelope); err != nil {
+					t.Fatalf("decode MCP response: %v", err)
+				}
+				if len(envelope.Result.Contents) != 1 || !strings.Contains(envelope.Result.Contents[0].Text, `"today"`) {
+					t.Fatalf("stats resource contents = %#v", envelope.Result.Contents)
+				}
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			router, _, readToken := newReadAuthRouter(t)
 
-func TestMCPPromptGetDoesNotFetchRequestHost(t *testing.T) {
-	router, _, readToken := newReadAuthRouter(t)
+			var externalCalls atomic.Int32
+			external := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+				externalCalls.Add(1)
+				response.Header().Set("Content-Type", "application/json")
+				_, _ = response.Write([]byte(`{"today":{"leaked":"` + test.sentinel + `"}}`))
+			}))
+			defer external.Close()
 
-	var externalCalls atomic.Int32
-	external := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		externalCalls.Add(1)
-		_, _ = response.Write([]byte("external-prompt-sentinel"))
-	}))
-	defer external.Close()
+			request := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(test.body))
+			request.Host = strings.TrimPrefix(external.URL, "http://")
+			request.Header.Set("Authorization", "Bearer "+readToken)
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
 
-	requestBody := `{"jsonrpc":"2.0","id":1,"method":"prompts/get","params":{"name":"setup"}}`
-	request := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(requestBody))
-	request.Host = strings.TrimPrefix(external.URL, "http://")
-	request.Header.Set("Authorization", "Bearer "+readToken)
-	request.Header.Set("Content-Type", "application/json")
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
-
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d; body=%q", response.Code, http.StatusOK, response.Body.String())
-	}
-	if calls := externalCalls.Load(); calls != 0 {
-		t.Fatalf("prompts/get made %d outbound request(s) to the request Host", calls)
-	}
-
-	var envelope struct {
-		Result struct {
-			Messages []struct {
-				Content struct {
-					Text string `json:"text"`
-				} `json:"content"`
-			} `json:"messages"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal(response.Body.Bytes(), &envelope); err != nil {
-		t.Fatalf("decode MCP response: %v", err)
-	}
-	if len(envelope.Result.Messages) != 1 {
-		t.Fatalf("prompt messages = %#v", envelope.Result.Messages)
-	}
-	prompt := envelope.Result.Messages[0].Content.Text
-	if strings.Contains(prompt, "external-prompt-sentinel") {
-		t.Fatalf("prompts/get returned the attacker-controlled response body: %q", prompt)
-	}
-	if !strings.Contains(prompt, "Depsilo at "+external.URL) {
-		t.Fatalf("prompt omitted client-visible base URL %q: %q", external.URL, prompt)
-	}
-}
-
-func TestMCPStatsResourceDoesNotFetchRequestHost(t *testing.T) {
-	router, _, readToken := newReadAuthRouter(t)
-
-	var externalCalls atomic.Int32
-	external := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		externalCalls.Add(1)
-		response.Header().Set("Content-Type", "application/json")
-		_, _ = response.Write([]byte(`{"today":{"attacker":"external-stats-sentinel"}}`))
-	}))
-	defer external.Close()
-
-	requestBody := `{"jsonrpc":"2.0","id":1,"method":"resources/read","params":{"uri":"depsilo://stats"}}`
-	request := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(requestBody))
-	request.Host = strings.TrimPrefix(external.URL, "http://")
-	request.Header.Set("Authorization", "Bearer "+readToken)
-	request.Header.Set("Content-Type", "application/json")
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
-
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d; body=%q", response.Code, http.StatusOK, response.Body.String())
-	}
-	if calls := externalCalls.Load(); calls != 0 {
-		t.Fatalf("stats resources/read made %d outbound request(s) to the request Host", calls)
-	}
-	if strings.Contains(response.Body.String(), "external-stats-sentinel") {
-		t.Fatalf("stats resources/read returned the attacker-controlled response body: %q", response.Body.String())
-	}
-
-	var envelope struct {
-		Result struct {
-			Contents []struct {
-				Text string `json:"text"`
-			} `json:"contents"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal(response.Body.Bytes(), &envelope); err != nil {
-		t.Fatalf("decode MCP response: %v", err)
-	}
-	if len(envelope.Result.Contents) != 1 || !strings.Contains(envelope.Result.Contents[0].Text, `"today"`) {
-		t.Fatalf("stats resource contents = %#v", envelope.Result.Contents)
+			if response.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d; body=%q", response.Code, http.StatusOK, response.Body.String())
+			}
+			if calls := externalCalls.Load(); calls != 0 {
+				t.Fatalf("made %d outbound request(s) to the request Host", calls)
+			}
+			if strings.Contains(response.Body.String(), test.sentinel) {
+				t.Fatalf("returned the attacker-controlled response body: %q", response.Body.String())
+			}
+			test.check(t, response.Body.Bytes(), external.URL)
+		})
 	}
 }
 

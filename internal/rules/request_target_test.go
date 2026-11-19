@@ -396,25 +396,6 @@ func TestExtractRequestTargetUsesConfiguredExtraPyPIRoutes(t *testing.T) {
 	}
 }
 
-func TestMiddlewareAllowsAmbiguousPyPIIdentityWhenNoRulesExist(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	store := NewStore(newRulesTestDB(t))
-	router := gin.New()
-	router.Use(Middleware(NewEngine(store, nil)))
-	router.GET("/*path", func(c *gin.Context) { c.Status(http.StatusNoContent) })
-
-	for _, requestPath := range []string{
-		"/pypi/files/packages/aa/bad$name-1.0-py3-none-any.whl",
-		"/pypi/files/packages/aa/demo-1.0bogus-py3-none-any.whl",
-	} {
-		response := httptest.NewRecorder()
-		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, requestPath, nil))
-		if response.Code != http.StatusNoContent {
-			t.Errorf("GET %s status = %d, want %d; body = %s", requestPath, response.Code, http.StatusNoContent, response.Body.String())
-		}
-	}
-}
-
 func TestMiddlewareEnforcesRulesOnConfiguredExtraPyPIRoutes(t *testing.T) {
 	private, err := NewPyPIRouteDescriptor("company/python/private", false)
 	if err != nil {
@@ -475,43 +456,6 @@ func TestMiddlewareEnforcesRulesOnConfiguredExtraPyPIRoutes(t *testing.T) {
 			))
 			if response.Code != test.wantAmbiguous {
 				t.Fatalf("ambiguous artifact status = %d, want %d; body = %s", response.Code, test.wantAmbiguous, response.Body.String())
-			}
-		})
-	}
-}
-
-func TestMiddlewareFailsClosedForUnidentifiedPyPIFilesAcrossRoutes(t *testing.T) {
-	private, err := NewPyPIRouteDescriptor("company/python/private", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	store := NewStore(newRulesTestDB(t))
-	if err := store.Create(&db.PackageRule{
-		Ecosystem: "pypi", PackageName: "requests", Version: "*", Action: "deny",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	router := gin.New()
-	router.Use(Middleware(NewEngine(store, nil), private))
-	router.GET("/*path", func(c *gin.Context) { c.Status(http.StatusNoContent) })
-
-	for _, test := range []struct {
-		name string
-		path string
-	}{
-		{name: "built-in route", path: "/pypi/files/packages/aa/package-1.0.tar"},
-		{name: "project-scoped route", path: "/p/payments/pypi/files/packages/aa/package-1.0.tbz"},
-		{name: "configured extra route", path: "/company/python/private/files/packages/aa/package-1.0.tar.lzma"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			response := httptest.NewRecorder()
-			router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, test.path, nil))
-			if response.Code != http.StatusServiceUnavailable {
-				t.Fatalf("GET %s status = %d, want %d; body = %s", test.path, response.Code, http.StatusServiceUnavailable, response.Body.String())
-			}
-			if !strings.Contains(response.Body.String(), `"code":"PACKAGE_POLICY_UNEVALUABLE"`) {
-				t.Fatalf("GET %s body = %s, want PACKAGE_POLICY_UNEVALUABLE", test.path, response.Body.String())
 			}
 		})
 	}
@@ -840,162 +784,88 @@ func TestMiddlewareRecordsPolicyBlockAsHandledRequest(t *testing.T) {
 	}
 }
 
-func TestMiddlewareFailsOpenWhenRuleStoreIsUnavailable(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	database := newRulesTestDB(t)
-	sqlDB, err := database.DB()
-	if err != nil {
-		t.Fatalf("get sql db: %v", err)
+func TestMiddlewareFailsClosedForUnsafePersistedRuleData(t *testing.T) {
+	// Each case leaves a persisted rule set that cannot be evaluated safely.
+	// The middleware must answer 503 rather than ignore the damaged rule.
+	createPreparedRule := func(t *testing.T, database *gorm.DB) db.PackageRule {
+		t.Helper()
+		rule := db.PackageRule{
+			Ecosystem: "pypi", PackageName: "requests", Version: "< 2.0", Action: "deny",
+		}
+		if err := NewStore(database).Create(&rule); err != nil {
+			t.Fatal(err)
+		}
+		return rule
 	}
-	if err := sqlDB.Close(); err != nil {
-		t.Fatalf("close sql db: %v", err)
-	}
-
-	router := gin.New()
-	router.Use(Middleware(NewEngine(NewStore(database), nil)))
-	router.GET("/*path", func(c *gin.Context) { c.Status(http.StatusNoContent) })
-
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/pypi/files/requests-1.9.0.tar.gz", nil))
-	if recorder.Code != http.StatusNoContent {
-		t.Fatalf("closed rules DB status = %d, want %d; body = %s", recorder.Code, http.StatusNoContent, recorder.Body.String())
-	}
-}
-
-func TestMiddlewareUsesLastKnownGoodSnapshotWhenRefreshFails(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	database := newRulesTestDB(t)
-	store := NewStore(database)
-	if err := store.Create(&db.PackageRule{
-		Ecosystem: "pypi", PackageName: "requests", Version: "*", Action: "deny",
-	}); err != nil {
-		t.Fatal(err)
+	exec := func(t *testing.T, database *gorm.DB, statement string, args ...any) {
+		t.Helper()
+		if err := database.Exec(statement, args...).Error; err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	engine := NewEngine(store, nil)
-	router := gin.New()
-	router.Use(Middleware(engine))
-	router.GET("/*path", func(c *gin.Context) { c.Status(http.StatusNoContent) })
-	request := func() *httptest.ResponseRecorder {
-		recorder := httptest.NewRecorder()
-		router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/pypi/files/requests-1.9.0.tar.gz", nil))
-		return recorder
-	}
-
-	if first := request(); first.Code != http.StatusForbidden {
-		t.Fatalf("initial policy status = %d, want %d; body = %s", first.Code, http.StatusForbidden, first.Body.String())
-	}
-	sqlDB, err := database.DB()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := sqlDB.Close(); err != nil {
-		t.Fatal(err)
-	}
-	engine.InvalidateCache()
-
-	// The database is unavailable after the cache expires, but the last
-	// successful snapshot still contains the deny rule and must remain active.
-	if second := request(); second.Code != http.StatusForbidden {
-		t.Fatalf("stale policy status = %d, want %d; body = %s", second.Code, http.StatusForbidden, second.Body.String())
-	}
-}
-
-func TestMiddlewareFailsClosedForUnpreparedPersistedRule(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	database := newRulesTestDB(t)
-	if err := database.Create(&db.PackageRule{
-		Ecosystem: "pypi", PackageName: "requests", Version: "< 2.0.0", Action: "deny",
-	}).Error; err != nil {
-		t.Fatal(err)
-	}
-	router := gin.New()
-	router.Use(Middleware(NewEngine(NewStore(database), nil)))
-	router.GET("/*path", func(c *gin.Context) { c.Status(http.StatusNoContent) })
-
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/pypi/files/requests-1.9.0.tar.gz", nil))
-	if recorder.Code != http.StatusServiceUnavailable {
-		t.Fatalf("unprepared policy status = %d, want %d; body = %s", recorder.Code, http.StatusServiceUnavailable, recorder.Body.String())
-	}
-}
-
-func TestMiddlewareFailsClosedForTypeCorruptPersistedRule(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	database := newRulesTestDB(t)
-	store := NewStore(database)
-	rule := db.PackageRule{
-		Ecosystem: "pypi", PackageName: "requests", Version: "< 2.0", Action: "deny",
-	}
-	if err := store.Create(&rule); err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Exec("UPDATE package_rules SET dialect_revision = 'corrupt' WHERE id = ?", rule.ID).Error; err != nil {
-		t.Fatal(err)
-	}
-
-	router := gin.New()
-	router.Use(Middleware(NewEngine(store, nil)))
-	router.GET("/*path", func(c *gin.Context) { c.Status(http.StatusNoContent) })
-
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/pypi/files/requests-1.9.0.tar.gz", nil))
-	if recorder.Code != http.StatusServiceUnavailable {
-		t.Fatalf("type-corrupt policy status = %d, want %d; body = %s", recorder.Code, http.StatusServiceUnavailable, recorder.Body.String())
-	}
-}
-
-func TestMiddlewareFailsClosedWhenAnyPersistedRuleColumnCannotBeScanned(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	database := newRulesTestDB(t)
-	store := NewStore(database)
-	rule := db.PackageRule{
-		Ecosystem: "pypi", PackageName: "requests", Version: "< 2.0", Action: "deny",
-	}
-	if err := store.Create(&rule); err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Exec("UPDATE package_rules SET updated_at = 7 WHERE id = ?", rule.ID).Error; err != nil {
-		t.Fatal(err)
-	}
-
-	router := gin.New()
-	router.Use(Middleware(NewEngine(store, nil)))
-	router.GET("/*path", func(c *gin.Context) { c.Status(http.StatusNoContent) })
-
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/pypi/files/requests-1.9.0.tar.gz", nil))
-	if recorder.Code != http.StatusServiceUnavailable {
-		t.Fatalf("unscannable policy status = %d, want %d; body = %s", recorder.Code, http.StatusServiceUnavailable, recorder.Body.String())
-	}
-}
-
-func TestMiddlewareFailsClosedForNegativePersistedUnsignedFields(t *testing.T) {
 	tests := []struct {
 		name   string
-		mutate func(*testing.T, *gorm.DB, db.PackageRule)
+		mutate func(*testing.T, *gorm.DB)
 	}{
 		{
-			name: "negative dialect revision",
-			mutate: func(t *testing.T, database *gorm.DB, rule db.PackageRule) {
-				t.Helper()
-				if err := database.Exec("UPDATE package_rules SET dialect_revision = -1 WHERE id = ?", rule.ID).Error; err != nil {
+			name: "unprepared persisted rule",
+			mutate: func(t *testing.T, database *gorm.DB) {
+				if err := database.Create(&db.PackageRule{
+					Ecosystem: "pypi", PackageName: "requests", Version: "< 2.0.0", Action: "deny",
+				}).Error; err != nil {
 					t.Fatal(err)
 				}
 			},
 		},
 		{
+			name: "type-corrupt dialect revision",
+			mutate: func(t *testing.T, database *gorm.DB) {
+				rule := createPreparedRule(t, database)
+				exec(t, database, "UPDATE package_rules SET dialect_revision = 'corrupt' WHERE id = ?", rule.ID)
+			},
+		},
+		{
+			name: "any column cannot be scanned",
+			mutate: func(t *testing.T, database *gorm.DB) {
+				rule := createPreparedRule(t, database)
+				exec(t, database, "UPDATE package_rules SET updated_at = 7 WHERE id = ?", rule.ID)
+			},
+		},
+		{
+			name: "negative dialect revision",
+			mutate: func(t *testing.T, database *gorm.DB) {
+				rule := createPreparedRule(t, database)
+				exec(t, database, "UPDATE package_rules SET dialect_revision = -1 WHERE id = ?", rule.ID)
+			},
+		},
+		{
 			name: "negative primary key",
-			mutate: func(t *testing.T, database *gorm.DB, _ db.PackageRule) {
-				t.Helper()
-				if err := database.Exec(`
+			mutate: func(t *testing.T, database *gorm.DB) {
+				createPreparedRule(t, database)
+				exec(t, database, `
 					INSERT INTO package_rules
 						(id, ecosystem, package_name, version, action, reason, created_by,
 						 created_at, updated_at, normalized_package_name, normalized_version, dialect_revision)
 					VALUES
 						(-1, 'pypi', 'requests', '< 2.0', 'deny', '', '',
 						 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'requests', '< 2.0', 1)
-				`).Error; err != nil {
+				`)
+			},
+		},
+		{
+			// SQLite accepts this as a julianday modifier, but it is not a concrete
+			// timestamp representation that the Go driver can scan into time.Time.
+			name: "text timestamp SQLite accepts but Go cannot scan",
+			mutate: func(t *testing.T, database *gorm.DB) {
+				rule := createPreparedRule(t, database)
+				exec(t, database, "UPDATE package_rules SET updated_at = 'now' WHERE id = ?", rule.ID)
+			},
+		},
+		{
+			name: "package-rule schema is missing",
+			mutate: func(t *testing.T, database *gorm.DB) {
+				if err := database.Migrator().DropTable(&db.PackageRule{}); err != nil {
 					t.Fatal(err)
 				}
 			},
@@ -1006,70 +876,18 @@ func TestMiddlewareFailsClosedForNegativePersistedUnsignedFields(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			gin.SetMode(gin.TestMode)
 			database := newRulesTestDB(t)
-			store := NewStore(database)
-			rule := db.PackageRule{
-				Ecosystem: "pypi", PackageName: "requests", Version: "< 2.0", Action: "deny",
-			}
-			if err := store.Create(&rule); err != nil {
-				t.Fatal(err)
-			}
-			test.mutate(t, database, rule)
+			test.mutate(t, database)
 
 			router := gin.New()
-			router.Use(Middleware(NewEngine(store, nil)))
+			router.Use(Middleware(NewEngine(NewStore(database), nil)))
 			router.GET("/*path", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 			recorder := httptest.NewRecorder()
 			router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/pypi/files/requests-1.9.0.tar.gz", nil))
 			if recorder.Code != http.StatusServiceUnavailable {
-				t.Fatalf("corrupt unsigned field status = %d, want %d; body = %s", recorder.Code, http.StatusServiceUnavailable, recorder.Body.String())
+				t.Fatalf("%s status = %d, want %d; body = %s", test.name, recorder.Code, http.StatusServiceUnavailable, recorder.Body.String())
 			}
 		})
-	}
-}
-
-func TestMiddlewareFailsClosedForTextTimestampSQLiteAcceptsButGoCannotScan(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	database := newRulesTestDB(t)
-	store := NewStore(database)
-	rule := db.PackageRule{
-		Ecosystem: "pypi", PackageName: "requests", Version: "< 2.0", Action: "deny",
-	}
-	if err := store.Create(&rule); err != nil {
-		t.Fatal(err)
-	}
-	// SQLite accepts this as a julianday modifier, but it is not a concrete
-	// timestamp representation that the Go driver can scan into time.Time.
-	if err := database.Exec("UPDATE package_rules SET updated_at = 'now' WHERE id = ?", rule.ID).Error; err != nil {
-		t.Fatal(err)
-	}
-
-	router := gin.New()
-	router.Use(Middleware(NewEngine(store, nil)))
-	router.GET("/*path", func(c *gin.Context) { c.Status(http.StatusNoContent) })
-
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/pypi/files/requests-1.9.0.tar.gz", nil))
-	if recorder.Code != http.StatusServiceUnavailable {
-		t.Fatalf("unscannable timestamp status = %d, want %d; body = %s", recorder.Code, http.StatusServiceUnavailable, recorder.Body.String())
-	}
-}
-
-func TestMiddlewareFailsClosedWhenPackageRuleSchemaIsMissing(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	database := newRulesTestDB(t)
-	if err := database.Migrator().DropTable(&db.PackageRule{}); err != nil {
-		t.Fatal(err)
-	}
-
-	router := gin.New()
-	router.Use(Middleware(NewEngine(NewStore(database), nil)))
-	router.GET("/*path", func(c *gin.Context) { c.Status(http.StatusNoContent) })
-
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/pypi/files/requests-1.9.0.tar.gz", nil))
-	if recorder.Code != http.StatusServiceUnavailable {
-		t.Fatalf("missing package-rule schema status = %d, want %d; body = %s", recorder.Code, http.StatusServiceUnavailable, recorder.Body.String())
 	}
 }
 

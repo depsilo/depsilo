@@ -87,6 +87,13 @@ func TestMCPRouteAnswersUnsupportedMethodsWith405BehindAuthentication(t *testing
 			if allow := authenticated.Header().Get("Allow"); allow != http.MethodPost {
 				t.Fatalf("Allow = %q, want %q", allow, http.MethodPost)
 			}
+			var body struct {
+				Code    string `json:"code"`
+				Message string `json:"message"`
+			}
+			if err := json.Unmarshal(authenticated.Body.Bytes(), &body); err != nil || body.Code != "METHOD_NOT_ALLOWED" || body.Message == "" {
+				t.Fatalf("error body = %q (err %v), want {code, message}", authenticated.Body.String(), err)
+			}
 		})
 	}
 
@@ -117,6 +124,9 @@ func TestDiscoveryFollowsFirstRunSetupState(t *testing.T) {
 		var catalog struct {
 			SetupRequired *bool             `json:"setup_required"`
 			Endpoints     map[string]string `json:"endpoints"`
+			AgentSetup    struct {
+				Summary string `json:"summary"`
+			} `json:"agent_setup"`
 		}
 		discover := serveWired(router, http.MethodGet, "/api/v1/discover", "", "")
 		if err := json.Unmarshal(discover.Body.Bytes(), &catalog); err != nil || discover.Code != http.StatusOK {
@@ -124,6 +134,14 @@ func TestDiscoveryFollowsFirstRunSetupState(t *testing.T) {
 		}
 		if catalog.SetupRequired == nil || *catalog.SetupRequired != pending {
 			t.Fatalf("setup_required = %v, want %t", catalog.SetupRequired, pending)
+		}
+		// The agent guidance is the same either way: package routes serve
+		// before setup.
+		if !strings.Contains(catalog.AgentSetup.Summary, "bootstrap prompt") {
+			t.Fatalf("pending = %t, agent_setup.summary = %q", pending, catalog.AgentSetup.Summary)
+		}
+		if catalog.Endpoints["setup_status"] != "/api/v1/setup/status" {
+			t.Fatalf("endpoints.setup_status = %q", catalog.Endpoints["setup_status"])
 		}
 		// The catalog points at a route that exists.
 		if status := serveWired(router, http.MethodGet, catalog.Endpoints["setup_status"], "", ""); status.Code != http.StatusOK || !strings.Contains(status.Body.String(), "needs_setup") {

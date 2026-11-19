@@ -4,7 +4,6 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 
 	"depsilo/internal/adapter/huggingface"
 )
@@ -28,19 +27,6 @@ func TestIsCommitSHA(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("IsCommitSHA(%q) = %v, want %v", tc.in, got, tc.want)
 		}
-	}
-}
-
-func TestTTLFor(t *testing.T) {
-	sha := "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
-	if got := huggingface.TTLForRef(sha); got != 72*time.Hour {
-		t.Errorf("TTLForRef(SHA) = %v, want 72h", got)
-	}
-	if got := huggingface.TTLForRef("main"); got != 5*time.Minute {
-		t.Errorf("TTLForRef(branch) = %v, want 5m", got)
-	}
-	if got := huggingface.TTLForRef(""); got != 5*time.Minute {
-		t.Errorf("TTLForRef(empty) = %v, want 5m", got)
 	}
 }
 
@@ -229,15 +215,6 @@ func TestCacheKeyPreservesEncodedRevisionAndTreeSubpath(t *testing.T) {
 	}
 	if want := "huggingface/api/models/acme/model/tree/main/coreml/fill-mask"; secondKey != want {
 		t.Fatalf("tree CacheKey = %q, want %q", secondKey, want)
-	}
-}
-
-func TestCacheKey(t *testing.T) {
-	parsed := huggingface.ParseRequestPath("/google/flan-t5-base/resolve/main/config.json")
-	got := huggingface.CacheKey(parsed)
-	want := "huggingface/google/flan-t5-base/resolve/main/config.json"
-	if got != want {
-		t.Errorf("CacheKey = %q, want %q", got, want)
 	}
 }
 

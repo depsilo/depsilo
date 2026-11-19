@@ -1,11 +1,9 @@
 package cargo
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -14,11 +12,9 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"depsilo/internal/adapter"
-	"depsilo/internal/cache"
+	"depsilo/internal/adapter/adaptertest"
 	"depsilo/internal/config"
-	"depsilo/internal/db"
 	"depsilo/internal/quarantine"
-	"depsilo/internal/upstream"
 )
 
 func TestCargoIndexPath(t *testing.T) {
@@ -89,50 +85,12 @@ func cargoTestFixture(t *testing.T, now time.Time) (*httptest.Server, *atomic.In
 
 func newCargoTestHandler(t *testing.T, upstreamURL string, cacheConfig config.CacheConfig) (http.Handler, *quarantine.Checker) {
 	t.Helper()
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "cargo-provenance.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.AutoMigrate(database); err != nil {
-		t.Fatal(err)
-	}
-	storage, err := cache.NewLocalStorage(filepath.Join(t.TempDir(), "cache"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	manager := cache.NewManager(storage, database, cache.NewEventBus(), 72*time.Hour)
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		if err := manager.Close(ctx); err != nil {
-			t.Errorf("close cache manager: %v", err)
-		}
-	})
-	pool, err := upstream.NewPool([]config.UpstreamConfig{{
-		Name: "mock", URL: upstreamURL, Priority: 1, ProbeMode: "passive",
-	}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	handler := New(manager, upstream.NewPassiveRecoverySelector(pool), cacheConfig, database)
+	env := adaptertest.NewProvenanceEnv(t, upstreamURL, "cargo", adaptertest.BoundProvenance)
+	handler := New(env.Manager, env.Selector, cacheConfig, env.DB)
 	handler.SetProvenanceRequired(true)
 	router := gin.New()
 	handler.Register(router.Group("/crates"))
-
-	enabled := true
-	policy, err := quarantine.NewPolicyWithProvenance(quarantine.Config{
-		MinReleaseAgeEnabled: &enabled,
-		MinReleaseAge:        map[string]string{"cargo": "168h"},
-	}, func(ecosystem string) bool { return ecosystem == "cargo" })
-	if err != nil {
-		t.Fatalf("NewPolicyWithProvenance: %v", err)
-	}
-	store := quarantine.NewStore(database)
-	checker, err := quarantine.NewChecker(policy, quarantine.NewLookup(store, nil), store)
-	if err != nil {
-		t.Fatalf("NewChecker: %v", err)
-	}
-	return adapter.NewRequestScope(nil, nil, quarantine.Wrap(checker), nil).Wrap(router), checker
+	return adapter.NewRequestScope(nil, nil, quarantine.Wrap(env.Checker), nil).Wrap(router), env.Checker
 }
 
 func requestCrate(t *testing.T, handler http.Handler, version string) *httptest.ResponseRecorder {

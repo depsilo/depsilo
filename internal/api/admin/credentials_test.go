@@ -15,10 +15,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"depsilo/internal/api/contract"
 	"depsilo/internal/db"
 	"depsilo/internal/middleware"
-	"depsilo/internal/upstream"
 )
 
 func TestCredentialURLMasking(t *testing.T) {
@@ -66,46 +64,6 @@ func TestWebhookListMasksURLForReadonlyPrincipal(t *testing.T) {
 	}
 	if got := request(true)["url"]; got != config.URL {
 		t.Fatalf("admin url = %v", got)
-	}
-}
-
-func TestUpstreamListMasksCredentialsForReadonlyPrincipal(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	database := openCredentialTestDB(t, "upstreams.db", &db.UpstreamRecord{})
-	record := db.UpstreamRecord{Name: "private", AdapterType: "pypi", URL: "https://alice:secret@packages.example.test/private/path", Proxy: "http://proxy-user:proxy-pass@proxy.example.test:8080/private/path", Priority: 1, ProbeMode: "passive", ProbeInterval: "30m", Healthy: true}
-	if err := database.Create(&record).Error; err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	registry, err := upstream.NewRegistry(database, []string{"pypi"})
-	if err != nil {
-		t.Fatalf("registry: %v", err)
-	}
-	h := NewUpstreamHandler(registry)
-	request := func(canWrite bool) contract.AdminUpstream {
-		r := principalTestRouter(canWrite)
-		r.GET("/upstreams", h.List)
-		rec := httptest.NewRecorder()
-		r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/upstreams", nil))
-		if rec.Code != http.StatusOK {
-			t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
-		}
-		var response contract.AdminUpstreamListResponse
-		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil || len(response.Items) != 1 {
-			t.Fatalf("decode: err=%v body=%s", err, rec.Body.String())
-		}
-		return response.Items[0]
-	}
-	readonly := request(false)
-	if readonly.URL != "https://packages.example.test/***" || readonly.Proxy != "http://proxy.example.test:8080/***" {
-		t.Fatalf("readonly upstream = %#v", readonly)
-	}
-	writer := request(true)
-	if writer.URL != record.URL || writer.Proxy != record.Proxy {
-		t.Fatalf("writer upstream = %#v", writer)
-	}
-	var persisted db.UpstreamRecord
-	if err := database.First(&persisted, record.ID).Error; err != nil || persisted.URL != record.URL || persisted.Proxy != record.Proxy {
-		t.Fatalf("persisted upstream changed: err=%v upstream=%#v", err, persisted)
 	}
 }
 

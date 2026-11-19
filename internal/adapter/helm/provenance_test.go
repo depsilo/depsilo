@@ -1,11 +1,9 @@
 package helm
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -15,11 +13,10 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/adapter"
-	"depsilo/internal/cache"
+	"depsilo/internal/adapter/adaptertest"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
 	"depsilo/internal/quarantine"
-	"depsilo/internal/upstream"
 )
 
 const helmTestIndex = `apiVersion: v1
@@ -111,51 +108,12 @@ func helmTestFixture(t *testing.T, now time.Time) (*httptest.Server, *atomic.Int
 
 func newHelmTestHandler(t *testing.T, upstreamURL string, cacheConfig config.CacheConfig) (http.Handler, *gorm.DB) {
 	t.Helper()
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "helm-provenance.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.AutoMigrate(database); err != nil {
-		t.Fatal(err)
-	}
-	storage, err := cache.NewLocalStorage(filepath.Join(t.TempDir(), "cache"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	manager := cache.NewManager(storage, database, cache.NewEventBus(), 72*time.Hour)
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		if err := manager.Close(ctx); err != nil {
-			t.Errorf("close cache manager: %v", err)
-		}
-	})
-	pool, err := upstream.NewPool([]config.UpstreamConfig{{
-		Name: "mock", URL: upstreamURL, Priority: 1, ProbeMode: "passive",
-	}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	handler := New(manager, upstream.NewPassiveRecoverySelector(pool), cacheConfig, database)
+	env := adaptertest.NewProvenanceEnv(t, upstreamURL, "helm", adaptertest.ApproximateProvenance)
+	handler := New(env.Manager, env.Selector, cacheConfig, env.DB)
 	handler.SetProvenanceRequired(true)
 	router := gin.New()
 	handler.Register(router.Group("/helm"))
-
-	enabled := true
-	policy, err := quarantine.NewPolicyWithProvenance(quarantine.Config{
-		MinReleaseAgeEnabled: &enabled,
-		MinReleaseAge:        map[string]string{"helm": "168h"},
-		ApproximateSources:   []string{"helm"},
-	}, nil)
-	if err != nil {
-		t.Fatalf("NewPolicyWithProvenance: %v", err)
-	}
-	store := quarantine.NewStore(database)
-	checker, err := quarantine.NewChecker(policy, quarantine.NewLookup(store, nil), store)
-	if err != nil {
-		t.Fatalf("NewChecker: %v", err)
-	}
-	return adapter.NewRequestScope(nil, nil, quarantine.Wrap(checker), nil).Wrap(router), database
+	return adapter.NewRequestScope(nil, nil, quarantine.Wrap(env.Checker), nil).Wrap(router), env.DB
 }
 
 func requestHelmArtifact(t *testing.T, handler http.Handler, path string) *httptest.ResponseRecorder {

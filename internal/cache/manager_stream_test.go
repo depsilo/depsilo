@@ -844,34 +844,6 @@ func TestManager_StaleMetadataRefreshesBeforeServing(t *testing.T) {
 	}
 }
 
-func TestManager_StaleMetadataFallsBackWhenRefreshFails(t *testing.T) {
-	database := openStreamTestDB(t)
-	storage := newMemStorage()
-	key := "pypi/simple/av/index.html"
-	old := []byte("versions: 17.1.0")
-	storage.data[key] = old
-	if err := database.Create(&db.CacheEntry{Key: key, AdapterType: "pypi", StoragePath: key, ContentType: "text/html", ExpiresAt: time.Now().Add(-time.Minute)}).Error; err != nil {
-		t.Fatal(err)
-	}
-	m := NewManager(storage, database, NewEventBus(), 72*time.Hour)
-	t.Cleanup(func() { closeTestManager(t, m) })
-	result, err := m.Get(context.Background(), key, "pypi", 5*time.Minute,
-		func(context.Context) (io.ReadCloser, string, int64, string, error) {
-			return nil, "", 0, "", errors.New("upstream unavailable")
-		})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer result.Reader.Close()
-	got, err := io.ReadAll(result.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(got, old) {
-		t.Fatalf("fallback = %q, want %q", got, old)
-	}
-}
-
 func TestManager_FreshMetadataOnlyRefreshesWhenForced(t *testing.T) {
 	database := openStreamTestDB(t)
 	storage := newMemStorage()

@@ -1,12 +1,10 @@
 package nuget
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -15,9 +13,8 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"depsilo/internal/adapter"
-	"depsilo/internal/cache"
+	"depsilo/internal/adapter/adaptertest"
 	"depsilo/internal/config"
-	"depsilo/internal/db"
 	"depsilo/internal/quarantine"
 	"depsilo/internal/upstream"
 )
@@ -115,25 +112,7 @@ func TestNuGetFlatContainerGateUsesRegistrationPublishedTime(t *testing.T) {
 	}))
 	t.Cleanup(upstreamServer.Close)
 
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "nuget-provenance.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.AutoMigrate(database); err != nil {
-		t.Fatal(err)
-	}
-	storage, err := cache.NewLocalStorage(filepath.Join(t.TempDir(), "cache"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	manager := cache.NewManager(storage, database, cache.NewEventBus(), 72*time.Hour)
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		if err := manager.Close(ctx); err != nil {
-			t.Errorf("close cache manager: %v", err)
-		}
-	})
+	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
 	pool, err := upstream.NewPool([]config.UpstreamConfig{{
 		Name: "mock", URL: upstreamServer.URL, Priority: 1, ProbeMode: "passive",
 	}})
@@ -223,25 +202,7 @@ func TestNuGetProvenanceMemoizesRegistrationLookups(t *testing.T) {
 	}))
 	t.Cleanup(upstreamServer.Close)
 
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "nuget-memo.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.AutoMigrate(database); err != nil {
-		t.Fatal(err)
-	}
-	storage, err := cache.NewLocalStorage(filepath.Join(t.TempDir(), "cache"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	manager := cache.NewManager(storage, database, cache.NewEventBus(), 72*time.Hour)
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		if err := manager.Close(ctx); err != nil {
-			t.Errorf("close cache manager: %v", err)
-		}
-	})
+	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
 	pool, err := upstream.NewPool([]config.UpstreamConfig{{
 		Name: "mock", URL: upstreamServer.URL, Priority: 1, ProbeMode: "passive",
 	}})

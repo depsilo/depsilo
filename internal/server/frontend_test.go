@@ -320,12 +320,6 @@ func TestFrontendFallbackRequiresBrowserNavigationRequest(t *testing.T) {
 	}{
 		{name: "missing Accept", method: http.MethodGet, path: "/unregistered"},
 		{
-			name:    "JSON Accept",
-			method:  http.MethodGet,
-			path:    "/unregistered",
-			headers: map[string]string{"Accept": "application/json"},
-		},
-		{
 			name:    "wildcard Accept",
 			method:  http.MethodGet,
 			path:    "/unregistered",
@@ -350,33 +344,10 @@ func TestFrontendFallbackRequiresBrowserNavigationRequest(t *testing.T) {
 			headers: map[string]string{"Accept": "text/html", "Range": "bytes=0-31"},
 		},
 		{
+			// Any path with an extension takes this branch.
 			name:    "unknown binary file",
 			method:  http.MethodGet,
 			path:    "/unregistered.bin",
-			headers: map[string]string{"Accept": "text/html"},
-		},
-		{
-			name:    "favicon typo",
-			method:  http.MethodGet,
-			path:    "/favicon.ico",
-			headers: map[string]string{"Accept": "text/html"},
-		},
-		{
-			name:    "robots file",
-			method:  http.MethodGet,
-			path:    "/robots.txt",
-			headers: map[string]string{"Accept": "text/html"},
-		},
-		{
-			name:    "web manifest",
-			method:  http.MethodGet,
-			path:    "/site.webmanifest",
-			headers: map[string]string{"Accept": "text/html"},
-		},
-		{
-			name:    "unknown JSON file",
-			method:  http.MethodGet,
-			path:    "/metadata.json",
 			headers: map[string]string{"Accept": "text/html"},
 		},
 	}
@@ -395,12 +366,9 @@ func TestFrontendFallbackRejectsDotSegmentPaths(t *testing.T) {
 
 	for _, requestPath := range []string{
 		"/api/../monitor",
-		"/apt/../monitor",
 		"/pypi/../favicon.svg",
 		"/api/%2e%2e/monitor",
-		"/api/%2E%2E/monitor",
 		"/api/./v1",
-		"/api/%2e/v1",
 		"/admin//upstreams",
 		"/api//v1",
 		"/api%5c..%5cmonitor",

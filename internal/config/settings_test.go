@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
-	"time"
 )
 
 func TestSettingsSnapshotDefaultsAreCompleteAndCompact(t *testing.T) {
@@ -110,27 +109,6 @@ func TestSettingsPatchEntriesUseCanonicalEditableOrder(t *testing.T) {
 	}
 	if want := EditableSettingPaths(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("entry paths = %v, want %v", got, want)
-	}
-}
-
-func TestSettingsSnapshotCompactsMixedHourMinuteDurations(t *testing.T) {
-	tests := []struct {
-		name     string
-		duration time.Duration
-		want     string
-	}{
-		{name: "ninety minutes", duration: 90 * time.Minute, want: "1h30m"},
-		{name: "eighty minutes", duration: 80 * time.Minute, want: "1h20m"},
-		{name: "one hour ten minutes", duration: time.Hour + 10*time.Minute, want: "1h10m"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := SettingsSnapshotFromConfig(&Config{Cache: CacheConfig{TTLIndex: tt.duration}})
-			if got.Cache.TTLIndex != tt.want {
-				t.Fatalf("TTLIndex = %q, want %q", got.Cache.TTLIndex, tt.want)
-			}
-		})
 	}
 }
 

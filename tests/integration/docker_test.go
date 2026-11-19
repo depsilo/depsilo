@@ -18,35 +18,21 @@ func TestDocker_VersionCheck(t *testing.T) {
 	}
 }
 
-func TestDocker_ManifestFetch(t *testing.T) {
-	before := mockServer.RequestCount()
-	resp := httpGet(t, depsiloURL+"/v2/library/testimg/manifests/latest")
-	assertStatus(t, resp, 200)
-	body := readBody(t, resp)
-	if body == "" {
-		t.Error("empty manifest response")
-	}
-	if !strings.Contains(body, "schemaVersion") {
-		t.Error("manifest response missing schemaVersion")
-	}
-	if mockServer.RequestCount() <= before {
-		t.Error("expected upstream hit on first request")
-	}
-}
-
-func TestDocker_ManifestCacheHit(t *testing.T) {
-	// Ensure cached from previous test
-	httpGet(t, depsiloURL+"/v2/library/testimg/manifests/latest")
-
-	before := mockServer.RequestCount()
-	resp := httpGet(t, depsiloURL+"/v2/library/testimg/manifests/latest")
-	assertStatus(t, resp, 200)
-	body := readBody(t, resp)
-	if !strings.Contains(body, "schemaVersion") {
-		t.Error("manifest response missing schemaVersion on cache hit")
-	}
-	if mockServer.RequestCount() != before {
-		t.Error("expected no upstream request on cache hit")
+func TestDocker_ManifestMissThenHit(t *testing.T) {
+	for attempt := 1; attempt <= 2; attempt++ {
+		before := mockServer.RequestCount()
+		resp := httpGet(t, depsiloURL+"/v2/library/testimg/manifests/latest")
+		assertStatus(t, resp, 200)
+		if body := readBody(t, resp); !strings.Contains(body, "schemaVersion") {
+			t.Errorf("request %d: manifest response missing schemaVersion: %q", attempt, body)
+		}
+		upstreamRequests := mockServer.RequestCount() - before
+		if attempt == 1 && upstreamRequests == 0 {
+			t.Error("expected upstream hit on first request")
+		}
+		if attempt == 2 && upstreamRequests != 0 {
+			t.Error("expected no upstream request on cache hit")
+		}
 	}
 }
 
@@ -59,33 +45,8 @@ func TestDocker_DigestManifest(t *testing.T) {
 	}
 }
 
-func TestDocker_BlobFetch(t *testing.T) {
-	before := mockServer.RequestCount()
-	resp := httpGet(t, depsiloURL+"/v2/library/testimg/blobs/sha256:fakelayer")
-	assertStatus(t, resp, 200)
-	body := readBody(t, resp)
-	if body != "FAKE_DOCKER_BLOB_DATA" {
-		t.Errorf("unexpected blob body: %s", body)
-	}
-	if mockServer.RequestCount() <= before {
-		t.Error("expected upstream hit on first blob request")
-	}
-}
-
-func TestDocker_BlobCacheHit(t *testing.T) {
-	// Ensure cached
-	httpGet(t, depsiloURL+"/v2/library/testimg/blobs/sha256:fakelayer")
-
-	before := mockServer.RequestCount()
-	resp := httpGet(t, depsiloURL+"/v2/library/testimg/blobs/sha256:fakelayer")
-	assertStatus(t, resp, 200)
-	body := readBody(t, resp)
-	if body != "FAKE_DOCKER_BLOB_DATA" {
-		t.Errorf("unexpected blob body on cache hit: %s", body)
-	}
-	if mockServer.RequestCount() != before {
-		t.Error("expected no upstream request on blob cache hit")
-	}
+func TestDocker_BlobMissThenHit(t *testing.T) {
+	assertMissThenHit(t, depsiloURL+"/v2/library/testimg/blobs/sha256:fakelayer", "FAKE_DOCKER_BLOB_DATA", true)
 }
 
 func TestDocker_TagList(t *testing.T) {

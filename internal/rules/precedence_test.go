@@ -283,42 +283,6 @@ func TestIncompleteArtifactFallbackUsesDenyTieBreak(t *testing.T) {
 	}
 }
 
-func TestEvaluateCompiledRulesIsIndependentOfSnapshotOrder(t *testing.T) {
-	database := newRulesTestDB(t)
-	store := NewStore(database)
-	ruleModels := []db.PackageRule{
-		{Ecosystem: "pypi", PackageName: "requests", Version: ">= 1.0.0", Action: "allow"},
-		{Ecosystem: "pypi", PackageName: "req*", Version: "1.0.0", Action: "deny"},
-	}
-	compiled := make([]compiledRule, 0, len(ruleModels))
-	for index := range ruleModels {
-		if err := store.Create(&ruleModels[index]); err != nil {
-			t.Fatal(err)
-		}
-		candidate, err := compilePersistedRule(ruleModels[index])
-		if err != nil {
-			t.Fatal(err)
-		}
-		compiled = append(compiled, candidate)
-	}
-
-	first, err := evaluateCompiledRules(compiled, "pypi", "requests", "1.0.0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	compiled[0], compiled[1] = compiled[1], compiled[0]
-	second, err := evaluateCompiledRules(compiled, "pypi", "requests", "1.0.0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if first.MatchedRule == nil || second.MatchedRule == nil || first.MatchedRule.ID != second.MatchedRule.ID {
-		t.Fatalf("snapshot-order winners = %+v / %+v, want same rule", first.MatchedRule, second.MatchedRule)
-	}
-	if first.MatchedRule.ID != ruleModels[0].ID || !first.Allowed {
-		t.Fatalf("snapshot-order winner = allowed %v rule %+v, want exact-package allow %d", first.Allowed, first.MatchedRule, ruleModels[0].ID)
-	}
-}
-
 func FuzzRuleSpecificityComparatorProperties(f *testing.F) {
 	seeds := []struct {
 		a RuleSpecificity

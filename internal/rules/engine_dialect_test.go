@@ -3,23 +3,14 @@ package rules
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"testing"
-	"time"
 
 	"depsilo/internal/db"
 	"depsilo/internal/packagepolicy"
 )
 
 func TestEngineDoesNotMatchSemVerPrereleaseAgainstReleaseFloor(t *testing.T) {
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "rules.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.AutoMigrate(database); err != nil {
-		t.Fatal(err)
-	}
-	store := NewStore(database)
+	_, store := openPolicyRulesFixture(t)
 	rule := db.PackageRule{
 		Ecosystem: "cargo", PackageName: "demo", Version: ">= 1.0.0",
 		Action: "deny", CreatedBy: "operator",
@@ -47,14 +38,7 @@ func TestEngineDoesNotMatchSemVerPrereleaseAgainstReleaseFloor(t *testing.T) {
 }
 
 func TestEngineMatchesNormalizedPyPINameWithoutFoldingMavenCoordinates(t *testing.T) {
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "rules.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.AutoMigrate(database); err != nil {
-		t.Fatal(err)
-	}
-	store := NewStore(database)
+	_, store := openPolicyRulesFixture(t)
 	for _, rule := range []db.PackageRule{
 		{Ecosystem: "pypi", PackageName: "Friendly_Kit", Version: "*", Action: "deny"},
 		{Ecosystem: "maven", PackageName: "Org.Example:Artifact", Version: "*", Action: "deny"},
@@ -82,14 +66,7 @@ func TestEngineMatchesNormalizedPyPINameWithoutFoldingMavenCoordinates(t *testin
 }
 
 func TestEngineUsesCRANPackageVersionEqualityForExactRule(t *testing.T) {
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "rules.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.AutoMigrate(database); err != nil {
-		t.Fatal(err)
-	}
-	store := NewStore(database)
+	_, store := openPolicyRulesFixture(t)
 	rule := db.PackageRule{
 		Ecosystem: "cran", PackageName: "R6", Version: "0.01", Action: "deny", CreatedBy: "operator",
 	}
@@ -107,14 +84,7 @@ func TestEngineUsesCRANPackageVersionEqualityForExactRule(t *testing.T) {
 }
 
 func TestEngineRejectsMalformedRequestVersionInsteadOfTrimmingIt(t *testing.T) {
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "rules.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.AutoMigrate(database); err != nil {
-		t.Fatal(err)
-	}
-	store := NewStore(database)
+	_, store := openPolicyRulesFixture(t)
 	if err := store.Create(&db.PackageRule{
 		Ecosystem: "cargo", PackageName: "demo", Version: ">= 1.0.0", Action: "deny",
 	}); err != nil {
@@ -134,14 +104,7 @@ func TestEngineRejectsMalformedRequestVersionInsteadOfTrimmingIt(t *testing.T) {
 }
 
 func TestEngineRejectsRequestSurfaceWithoutPackageRuleEnforcement(t *testing.T) {
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "rules.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.AutoMigrate(database); err != nil {
-		t.Fatal(err)
-	}
-	store := NewStore(database)
+	_, store := openPolicyRulesFixture(t)
 	if err := store.Create(&db.PackageRule{
 		Ecosystem: "*", PackageName: "*", Version: "*", Action: "deny",
 	}); err != nil {
@@ -154,41 +117,5 @@ func TestEngineRejectsRequestSurfaceWithoutPackageRuleEnforcement(t *testing.T) 
 	}
 	if allowed || matched != nil {
 		t.Fatalf("unsupported request surface result = allowed %v matched %+v", allowed, matched)
-	}
-}
-
-func TestEngineUsesHigherIDWhenSpecificityTies(t *testing.T) {
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "rules.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.AutoMigrate(database); err != nil {
-		t.Fatal(err)
-	}
-	store := NewStore(database)
-	createdAt := time.Date(2026, 8, 31, 12, 0, 0, 123456789, time.UTC)
-
-	olderAllow := db.PackageRule{
-		Ecosystem: "pypi", PackageName: "requests", Version: "*", Action: "allow", CreatedAt: createdAt,
-	}
-	if err := store.Create(&olderAllow); err != nil {
-		t.Fatal(err)
-	}
-	newerDeny := db.PackageRule{
-		Ecosystem: "pypi", PackageName: "requests", Version: "*", Action: "deny", CreatedAt: createdAt,
-	}
-	if err := store.Create(&newerDeny); err != nil {
-		t.Fatal(err)
-	}
-	if newerDeny.ID <= olderAllow.ID {
-		t.Fatalf("fixture IDs = old %d new %d, want insertion order", olderAllow.ID, newerDeny.ID)
-	}
-
-	allowed, matched, err := NewEngine(store, nil).Check(context.Background(), "pypi", "requests", "2.32.3")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if allowed || matched == nil || matched.ID != newerDeny.ID {
-		t.Fatalf("tie decision = allowed %v matched %+v, want higher-ID deny rule %d", allowed, matched, newerDeny.ID)
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -14,9 +13,8 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"depsilo/internal/adapter"
-	"depsilo/internal/cache"
+	"depsilo/internal/adapter/adaptertest"
 	"depsilo/internal/config"
-	"depsilo/internal/db"
 	"depsilo/internal/upstream"
 )
 
@@ -100,25 +98,7 @@ func newIdentityTestHandler(t *testing.T, upstreamURL string) (*Handler, http.Ha
 // behind the request-scoped policy gate.
 func newPoolTestHandler(t *testing.T, options Options, members ...config.UpstreamConfig) (*Handler, http.Handler, *recordingArtifactChecker, *upstream.Pool) {
 	t.Helper()
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "pypi-identity.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.AutoMigrate(database); err != nil {
-		t.Fatal(err)
-	}
-	storage, err := cache.NewLocalStorage(filepath.Join(t.TempDir(), "cache"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	manager := cache.NewManager(storage, database, cache.NewEventBus(), 72*time.Hour)
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		if err := manager.Close(ctx); err != nil {
-			t.Errorf("close cache manager: %v", err)
-		}
-	})
+	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
 	pool, err := upstream.NewPool(members)
 	if err != nil {
 		t.Fatal(err)

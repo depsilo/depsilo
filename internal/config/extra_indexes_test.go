@@ -6,45 +6,95 @@ import (
 	"testing"
 )
 
-func TestDecodeConfigDocumentRejectsExtraIndexThatClaimsAdminRoute(t *testing.T) {
-	_, err := decodeConfigDocument([]byte(`
-[[extra_indexes]]
-name = "private"
-path = "admin"
-`))
-	if err == nil {
-		t.Fatal("decodeConfigDocument accepted extra_indexes[0].path = admin")
-	}
-	if !strings.Contains(err.Error(), `extra_indexes[0].path "admin" conflicts with reserved route "/admin"`) {
-		t.Fatalf("error = %q, want actionable reserved-route error", err)
-	}
-}
-
-func TestDecodeConfigDocumentRejectsExtraIndexThatClaimsBuiltinEcosystemRoute(t *testing.T) {
-	_, err := decodeConfigDocument([]byte(`
-[[extra_indexes]]
-name = "shadow-pypi"
-path = "pypi"
-`))
-	if err == nil {
-		t.Fatal("decodeConfigDocument accepted extra_indexes[0].path = pypi")
-	}
-	if !strings.Contains(err.Error(), `extra_indexes[0].path "pypi" conflicts with reserved route "/pypi"`) {
-		t.Fatalf("error = %q, want actionable reserved-route error", err)
-	}
-}
-
-func TestDecodeConfigDocumentRejectsEmptyExtraIndexPath(t *testing.T) {
-	_, err := decodeConfigDocument([]byte(`
+func TestDecodeConfigDocumentRejectsInvalidExtraIndexDocuments(t *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		document string
+		wantErr  string
+	}{
+		{
+			name: "empty path",
+			document: `
 [[extra_indexes]]
 name = "private"
 path = " / "
-`))
-	if err == nil {
-		t.Fatal("decodeConfigDocument accepted an empty extra index path")
-	}
-	if !strings.Contains(err.Error(), "extra_indexes[0].path must not be empty") {
-		t.Fatalf("error = %q, want actionable empty-path error", err)
+`,
+			wantErr: "extra_indexes[0].path must not be empty",
+		},
+		{
+			name: "duplicate paths",
+			document: `
+[[extra_indexes]]
+name = "private-a"
+path = "python/private"
+
+[[extra_indexes]]
+name = "private-b"
+path = "/PYTHON/PRIVATE/"
+`,
+			wantErr: `extra_indexes[1].path "PYTHON/PRIVATE" duplicates extra_indexes[0].path`,
+		},
+		{
+			name: "empty name",
+			document: `
+[[extra_indexes]]
+name = " "
+path = "python/private"
+`,
+			wantErr: "extra_indexes[0].name must not be empty",
+		},
+		{
+			// Trimming would silently change the extra index cache identity.
+			name: "name with surrounding whitespace",
+			document: `
+[[extra_indexes]]
+name = " private "
+path = "python/private"
+`,
+			wantErr: "must not contain leading or trailing whitespace",
+		},
+		{
+			name: "oversized name",
+			document: `
+[[extra_indexes]]
+name = ` + strconv.Quote(strings.Repeat("a", maxExtraIndexNameBytes+1)) + `
+path = "python/private"
+`,
+			wantErr: "name must be at most 128 bytes",
+		},
+		{
+			name: "duplicate names",
+			document: `
+[[extra_indexes]]
+name = "Private"
+path = "python/private-a"
+
+[[extra_indexes]]
+name = "private"
+path = "python/private-b"
+`,
+			wantErr: `extra_indexes[1].name "private" duplicates extra_indexes[0].name`,
+		},
+		{
+			name: "unknown kind",
+			document: `
+[[extra_indexes]]
+name = "dynamic"
+kind = "arbitrary"
+path = "python/dynamic"
+`,
+			wantErr: `kind must be "pytorch" when set`,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, err := decodeConfigDocument([]byte(testCase.document))
+			if err == nil {
+				t.Fatalf("decodeConfigDocument accepted %s", testCase.name)
+			}
+			if !strings.Contains(err.Error(), testCase.wantErr) {
+				t.Fatalf("error = %q, want %q", err, testCase.wantErr)
+			}
+		})
 	}
 }
 
@@ -80,26 +130,12 @@ path = ` + strconv.Quote(route) + "\n"
 	}
 }
 
-func TestDecodeConfigDocumentRejectsDuplicateExtraIndexPaths(t *testing.T) {
-	_, err := decodeConfigDocument([]byte(`
-[[extra_indexes]]
-name = "private-a"
-path = "python/private"
-
-[[extra_indexes]]
-name = "private-b"
-path = "/PYTHON/PRIVATE/"
-`))
-	if err == nil {
-		t.Fatal("decodeConfigDocument accepted duplicate extra index paths")
-	}
-	if !strings.Contains(err.Error(), `extra_indexes[1].path "PYTHON/PRIVATE" duplicates extra_indexes[0].path`) {
-		t.Fatalf("error = %q, want actionable duplicate-path error", err)
-	}
-}
-
 func TestDecodeConfigDocumentRejectsReservedExtraIndexRouteTrees(t *testing.T) {
-	for route, reserved := range map[string]string{
+	for route, want := range map[string]string{
+		// A bare reserved segment names the offending field in full.
+		"admin": `extra_indexes[0].path "admin" conflicts with reserved route "/admin"`,
+		"pypi":  `extra_indexes[0].path "pypi" conflicts with reserved route "/pypi"`,
+		// Route trees below a reserved segment are rejected as well.
 		"admin/private": "/admin",
 		"AdMiN/private": "/admin",
 		"pypi/custom":   "/pypi",
@@ -126,7 +162,9 @@ path = ` + strconv.Quote(route) + "\n"
 			if err == nil {
 				t.Fatalf("decodeConfigDocument accepted reserved route tree %q", route)
 			}
-			want := `conflicts with reserved route "` + reserved + `"`
+			if strings.HasPrefix(want, "/") {
+				want = `conflicts with reserved route "` + want + `"`
+			}
 			if !strings.Contains(err.Error(), want) {
 				t.Fatalf("error = %q, want %q", err, want)
 			}
@@ -156,49 +194,6 @@ path = ` + strconv.Quote(route) + "\n"
 				t.Fatalf("decodeConfigDocument rejected available custom route %q: %v", route, err)
 			}
 		})
-	}
-}
-
-func TestDecodeConfigDocumentRejectsEmptyExtraIndexName(t *testing.T) {
-	_, err := decodeConfigDocument([]byte(`
-[[extra_indexes]]
-name = " "
-path = "python/private"
-`))
-	if err == nil {
-		t.Fatal("decodeConfigDocument accepted an empty extra index name")
-	}
-	if !strings.Contains(err.Error(), "extra_indexes[0].name must not be empty") {
-		t.Fatalf("error = %q, want actionable empty-name error", err)
-	}
-}
-
-func TestDecodeConfigDocumentRejectsExtraIndexNameWithSurroundingWhitespace(t *testing.T) {
-	_, err := decodeConfigDocument([]byte(`
-[[extra_indexes]]
-name = " private "
-path = "python/private"
-`))
-	if err == nil {
-		t.Fatal("decodeConfigDocument silently changed an extra index cache identity")
-	}
-	if !strings.Contains(err.Error(), "must not contain leading or trailing whitespace") {
-		t.Fatalf("error = %q, want actionable identity-change error", err)
-	}
-}
-
-func TestDecodeConfigDocumentRejectsOversizedExtraIndexName(t *testing.T) {
-	document := `
-[[extra_indexes]]
-name = ` + strconv.Quote(strings.Repeat("a", maxExtraIndexNameBytes+1)) + `
-path = "python/private"
-`
-	_, err := decodeConfigDocument([]byte(document))
-	if err == nil {
-		t.Fatal("decodeConfigDocument accepted an oversized extra index name")
-	}
-	if !strings.Contains(err.Error(), "name must be at most 128 bytes") {
-		t.Fatalf("error = %q, want actionable name-length error", err)
 	}
 }
 
@@ -240,36 +235,6 @@ path = "python/private"
 				t.Fatalf("error = %q, want actionable name error", err)
 			}
 		})
-	}
-}
-
-func TestDecodeConfigDocumentRejectsDuplicateExtraIndexNames(t *testing.T) {
-	_, err := decodeConfigDocument([]byte(`
-[[extra_indexes]]
-name = "Private"
-path = "python/private-a"
-
-[[extra_indexes]]
-name = "private"
-path = "python/private-b"
-`))
-	if err == nil {
-		t.Fatal("decodeConfigDocument accepted duplicate extra index names")
-	}
-	if !strings.Contains(err.Error(), `extra_indexes[1].name "private" duplicates extra_indexes[0].name`) {
-		t.Fatalf("error = %q, want actionable duplicate-name error", err)
-	}
-}
-
-func TestDecodeConfigDocumentRejectsUnknownExtraIndexKind(t *testing.T) {
-	_, err := decodeConfigDocument([]byte(`
-[[extra_indexes]]
-name = "dynamic"
-kind = "arbitrary"
-path = "python/dynamic"
-`))
-	if err == nil || !strings.Contains(err.Error(), `kind must be "pytorch" when set`) {
-		t.Fatalf("unknown extra-index kind error = %v", err)
 	}
 }
 

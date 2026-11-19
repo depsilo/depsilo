@@ -61,48 +61,6 @@ func (capture *enginePolicyTelemetryCapture) snapshot() (loaded []time.Time, fai
 	return loaded, failures, states
 }
 
-func TestAdapterCheckerUsesLastKnownGoodSnapshotAfterRefreshFailure(t *testing.T) {
-	database, store := openPolicyRulesFixture(t)
-	if err := store.Create(&db.PackageRule{
-		Ecosystem: "npm", PackageName: "fixture", Version: "*", Action: "deny",
-	}); err != nil {
-		t.Fatalf("create rule: %v", err)
-	}
-
-	telemetry := &enginePolicyTelemetryCapture{}
-	engine := NewEngine(store, nil, WithPolicyTelemetry(telemetry))
-	checker := Wrap(engine)
-	first := checker.EvaluatePackageRule(context.Background(), "npm", "fixture", "1.0.0")
-	if first.Outcome != adapter.PackageRuleDeny {
-		t.Fatalf("initial adapter decision = %#v, want deny", first)
-	}
-
-	closePolicyDatabase(t, database)
-	// InvalidateCache is the deterministic public refresh boundary used by
-	// Admin mutations; it models an expired snapshot without an arbitrary
-	// sleep in the regression test.
-	engine.InvalidateCache()
-	stale := checker.EvaluatePackageRule(context.Background(), "npm", "fixture", "1.0.0")
-	if stale.Outcome != adapter.PackageRuleDeny {
-		t.Fatalf("stale adapter decision = %#v, want deny from last-known-good snapshot", stale)
-	}
-
-	status := engine.PolicyStatus()
-	if !status.Degraded || !status.UsingStaleSnapshot {
-		t.Fatalf("stale policy status = %#v, want degraded + stale", status)
-	}
-	if status.LastSuccessfulRefresh.IsZero() || status.SnapshotAgeSeconds < 0 || status.RefreshFailures != 1 {
-		t.Fatalf("stale policy freshness = %#v, want successful timestamp, non-negative age, one failure", status)
-	}
-	loaded, failures, states := telemetry.snapshot()
-	if len(loaded) != 1 || failures != 1 {
-		t.Fatalf("telemetry loaded=%d failures=%d, want 1/1", len(loaded), failures)
-	}
-	if len(states) == 0 || !states[len(states)-1].degraded || !states[len(states)-1].usingStale {
-		t.Fatalf("telemetry states = %#v, want final degraded stale state", states)
-	}
-}
-
 func TestEngineUsesLastKnownGoodSnapshotAfterCacheExpiryAndStoreFailure(t *testing.T) {
 	database, store := openPolicyRulesFixture(t)
 	if err := store.Create(&db.PackageRule{
@@ -218,6 +176,7 @@ func TestEnginePolicyStatusRecoversAfterStoreReturns(t *testing.T) {
 	}
 	telemetry := &enginePolicyTelemetryCapture{}
 	engine := NewEngine(store, nil, WithPolicyTelemetry(telemetry))
+	checker := Wrap(engine)
 	if allowed, _, err := engine.Check(context.Background(), "pypi", "requests", "1.0.0"); err != nil || allowed {
 		t.Fatalf("initial result = allowed %v err %v, want deny", allowed, err)
 	}
@@ -227,13 +186,31 @@ func TestEnginePolicyStatusRecoversAfterStoreReturns(t *testing.T) {
 	}
 
 	closePolicyDatabase(t, database)
+	// InvalidateCache is the deterministic public refresh boundary used by
+	// Admin mutations; it models an expired snapshot without an arbitrary
+	// sleep in the regression test.
 	engine.InvalidateCache()
 	if allowed, _, err := engine.Check(context.Background(), "pypi", "requests", "1.0.0"); err != nil || allowed {
 		t.Fatalf("stale result = allowed %v err %v, want deny", allowed, err)
 	}
+	// The adapter interface must see the same last-known-good deny; the retry
+	// backoff keeps this second read from counting another refresh failure.
+	if stale := checker.EvaluatePackageRule(context.Background(), "pypi", "requests", "1.0.0"); stale.Outcome != adapter.PackageRuleDeny {
+		t.Fatalf("stale adapter decision = %#v, want deny from last-known-good snapshot", stale)
+	}
 	degraded := engine.PolicyStatus()
 	if degraded.Status != "degraded" || !degraded.Degraded || !degraded.UsingStaleSnapshot || degraded.RefreshFailures != 1 {
 		t.Fatalf("degraded policy status = %#v, want one stale failure", degraded)
+	}
+	if degraded.LastSuccessfulRefresh.IsZero() || degraded.SnapshotAgeSeconds < 0 {
+		t.Fatalf("degraded policy freshness = %#v, want successful timestamp and non-negative age", degraded)
+	}
+	loaded, failures, states := telemetry.snapshot()
+	if len(loaded) != 1 || failures != 1 {
+		t.Fatalf("degraded telemetry loaded=%d failures=%d, want 1/1", len(loaded), failures)
+	}
+	if len(states) == 0 || !states[len(states)-1].degraded || !states[len(states)-1].usingStale {
+		t.Fatalf("degraded telemetry states = %#v, want latest degraded stale state", states)
 	}
 
 	reopened, err := db.Open("sqlite", path)
@@ -253,7 +230,7 @@ func TestEnginePolicyStatusRecoversAfterStoreReturns(t *testing.T) {
 	if recovered.RefreshFailures != 1 {
 		t.Fatalf("recovered refresh failures = %d, want monotonic count 1", recovered.RefreshFailures)
 	}
-	loaded, failures, states := telemetry.snapshot()
+	loaded, failures, states = telemetry.snapshot()
 	if len(loaded) != 2 || failures != 1 {
 		t.Fatalf("recovery telemetry loaded=%d failures=%d, want 2/1", len(loaded), failures)
 	}

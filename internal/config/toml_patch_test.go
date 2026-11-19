@@ -8,48 +8,6 @@ import (
 	"testing"
 )
 
-func TestDecodeAndLoadRejectRootLiteralDottedKey(t *testing.T) {
-	document := []byte("\"database.dsn\" = \"./wrong.db\"\n[database]\ndsn = \"./depsilo.db\"\n")
-
-	_, err := decodeConfigDocument(document)
-	if err == nil {
-		t.Fatal("decodeConfigDocument accepted a root literal dotted key")
-	}
-	if !strings.Contains(err.Error(), "database.dsn") || !strings.Contains(err.Error(), "literal dotted") {
-		t.Fatalf("decodeConfigDocument error = %q, want the ambiguous key and an actionable explanation", err)
-	}
-
-	path := filepath.Join(t.TempDir(), "config.toml")
-	if err := os.WriteFile(path, document, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("DEPSILO_CONFIG", path)
-	setTestJWTSecret(t)
-
-	_, err = Load()
-	if err == nil {
-		t.Fatal("Load accepted a root literal dotted key")
-	}
-	if !strings.Contains(err.Error(), "database.dsn") || !strings.Contains(err.Error(), "literal dotted") {
-		t.Fatalf("Load error = %q, want the ambiguous key and an actionable explanation", err)
-	}
-}
-
-func TestDecodeRejectsRootLiteralDottedTable(t *testing.T) {
-	for _, document := range []string{
-		"[\"auth.jwt_secret\"]\nvalue = \"wrong\"\n",
-		"[[\"auth.jwt_secret\"]]\nvalue = \"wrong\"\n",
-	} {
-		_, err := decodeConfigDocument([]byte(document))
-		if err == nil {
-			t.Fatalf("decodeConfigDocument accepted root literal dotted table:\n%s", document)
-		}
-		if !strings.Contains(err.Error(), "auth.jwt_secret") || !strings.Contains(err.Error(), "literal dotted table") {
-			t.Fatalf("decodeConfigDocument error = %q, want the ambiguous table and an actionable explanation", err)
-		}
-	}
-}
-
 func TestDecodeAcceptsCanonicalDottedSyntaxAndCustomLiteralDottedContent(t *testing.T) {
 	document := []byte(`config_version = 1
 database.dsn = "./depsilo.db"
@@ -235,22 +193,27 @@ func TestValidateDocumentRejectsLiteralDottedKeyShapes(t *testing.T) {
 	tests := []struct {
 		name     string
 		document string
+		wantKey  string
 	}{
 		{
 			name:     "basic quoted key",
 			document: "\"database.dsn\" = \"literal\"\ndatabase.dsn = \"canonical\"\n",
+			wantKey:  "database.dsn",
 		},
 		{
 			name:     "single quoted key",
 			document: "'auth.jwt_secret' = \"literal\"\n",
+			wantKey:  "auth.jwt_secret",
 		},
 		{
 			name:     "custom lookalike stays outside extension table",
 			document: "\"custom.feature\" = { enabled = true }\n",
+			wantKey:  "custom.feature",
 		},
 		{
 			name:     "literal dotted component in dotted key",
 			document: "database.\"dsn.shadow\" = \"literal\"\n",
+			wantKey:  "database.dsn.shadow",
 		},
 		{
 			name: "multiline array",
@@ -260,6 +223,7 @@ func TestValidateDocumentRejectsLiteralDottedKeyShapes(t *testing.T) {
 				"]\n" +
 				"database.dsn = \"canonical\"\n" +
 				"server.log_level = \"warn\"\n",
+			wantKey: "database.dsn",
 		},
 		{
 			name: "multiline inline containers",
@@ -269,6 +233,7 @@ func TestValidateDocumentRejectsLiteralDottedKeyShapes(t *testing.T) {
 				"]\n" +
 				"database.dsn = \"canonical\"\n" +
 				"server.log_level = \"warn\"\n",
+			wantKey: "custom.containers",
 		},
 	}
 	for _, tt := range tests {
@@ -277,8 +242,8 @@ func TestValidateDocumentRejectsLiteralDottedKeyShapes(t *testing.T) {
 			if err == nil {
 				t.Fatalf("ValidateDocument accepted literal dotted key:\n%s", tt.document)
 			}
-			if !strings.Contains(err.Error(), "literal dotted key") {
-				t.Fatalf("ValidateDocument error = %q, want actionable literal dotted key error", err)
+			if !strings.Contains(err.Error(), "literal dotted key") || !strings.Contains(err.Error(), tt.wantKey) {
+				t.Fatalf("ValidateDocument error = %q, want actionable literal dotted key error naming %q", err, tt.wantKey)
 			}
 		})
 	}
@@ -286,20 +251,24 @@ func TestValidateDocumentRejectsLiteralDottedKeyShapes(t *testing.T) {
 
 func TestValidateDocumentRejectsLiteralDottedTableBlocks(t *testing.T) {
 	tests := []struct {
-		name  string
-		block string
+		name     string
+		block    string
+		wantName string
 	}{
 		{
-			name:  "standard table and subtable",
-			block: "[\"server.log_level\"]\ncustom = [\n  \"keep\",\n  { nested = [1, 2] },\n]\n[\"server.log_level\".child]\nmore = \"keep too\"\n[cache]\nmax_size_gb = 8\n",
+			name:     "standard table and subtable",
+			block:    "[\"server.log_level\"]\ncustom = [\n  \"keep\",\n  { nested = [1, 2] },\n]\n[\"server.log_level\".child]\nmore = \"keep too\"\n[cache]\nmax_size_gb = 8\n",
+			wantName: "server.log_level",
 		},
 		{
-			name:  "array of tables",
-			block: "[[\"server.log_level\"]]\ncustom = [\n  \"first\",\n  \"entry\",\n]\n[[\"server.log_level\"]]\ncustom = [\n  { name = \"second\" },\n]\n[\"server.log_level\".metadata]\nnote = \"keep\"\n[cache]\nmax_size_gb = 8\n",
+			name:     "array of tables",
+			block:    "[[\"server.log_level\"]]\ncustom = [\n  \"first\",\n  \"entry\",\n]\n[[\"server.log_level\"]]\ncustom = [\n  { name = \"second\" },\n]\n[\"server.log_level\".metadata]\nnote = \"keep\"\n[cache]\nmax_size_gb = 8\n",
+			wantName: "server.log_level",
 		},
 		{
-			name:  "literal dotted component",
-			block: "[auth.\"jwt.secret\"]\nvalue = \"wrong\"\n",
+			name:     "literal dotted component",
+			block:    "[auth.\"jwt.secret\"]\nvalue = \"wrong\"\n",
+			wantName: "auth.jwt.secret",
 		},
 	}
 	for _, tt := range tests {
@@ -308,8 +277,8 @@ func TestValidateDocumentRejectsLiteralDottedTableBlocks(t *testing.T) {
 			if err == nil {
 				t.Fatalf("ValidateDocument accepted literal dotted table:\n%s", tt.block)
 			}
-			if !strings.Contains(err.Error(), "literal dotted table") {
-				t.Fatalf("ValidateDocument error = %q, want actionable literal dotted table error", err)
+			if !strings.Contains(err.Error(), "literal dotted table") || !strings.Contains(err.Error(), tt.wantName) {
+				t.Fatalf("ValidateDocument error = %q, want actionable literal dotted table error naming %q", err, tt.wantName)
 			}
 		})
 	}

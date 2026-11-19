@@ -1,12 +1,10 @@
 package pypi
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -14,34 +12,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"depsilo/internal/cache"
+	"depsilo/internal/adapter/adaptertest"
 	"depsilo/internal/config"
-	"depsilo/internal/db"
 	"depsilo/internal/upstream"
 )
 
 func newTestChannelFamily(t *testing.T, upstreamURL string) (*ChannelFamily, *gin.Engine) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "channels.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.AutoMigrate(database); err != nil {
-		t.Fatal(err)
-	}
-	storage, err := cache.NewLocalStorage(filepath.Join(t.TempDir(), "cache"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	manager := cache.NewManager(storage, database, cache.NewEventBus(), time.Hour)
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		if err := manager.Close(ctx); err != nil {
-			t.Errorf("close cache manager: %v", err)
-		}
-	})
+	manager, database, _ := adaptertest.NewManager(t, time.Hour)
 	pool, err := upstream.NewPool([]config.UpstreamConfig{{
 		Name: "pytorch", URL: upstreamURL, Priority: 1, ProbeMode: "passive",
 	}})

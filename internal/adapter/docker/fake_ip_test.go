@@ -165,61 +165,92 @@ func TestDirectRegistryDialsFakeIPAnswersAtTheirPlaceholders(t *testing.T) {
 	}
 }
 
-// A fake-IP answer counts as public, as through a proxy: a registry that such
-// an answer pinned cannot reach a Bearer realm that answers privately or with
-// loopback, and nothing is sent to the realm.
-func TestFakeIPRegistryWithoutProxyStillRefusesPrivateRealm(t *testing.T) {
-	for _, registryAnswer := range []string{"198.18.0.10", "2001:2::a"} {
-		for _, realmAnswer := range []string{"10.20.30.40", "127.0.0.1"} {
-			t.Run(registryAnswer+"/"+realmAnswer, func(t *testing.T) {
-				server := fakeIPRegistryServer(t)
-				dialer := &routedDialer{direct: server.Listener.Addr().String()}
-				client, err := newRegistryClient("http://registry.example", "", staticIPResolver{
-					"registry.example": dnsAnswer(registryAnswer),
-					"auth.example":     dnsAnswer(realmAnswer),
-				}, dialer.DialContext)
-				if err != nil {
-					t.Fatal(err)
-				}
+// A fake-IP answer counts as public, through a proxy and without one, as a
+// public answer does: a registry that either answer pinned cannot reach a
+// Bearer realm that answers privately or with loopback, and nothing is sent
+// to the realm.
+func TestFakeIPRegistryStillRefusesPrivateRealm(t *testing.T) {
+	for _, route := range []string{"proxied", "direct"} {
+		for _, registryAnswer := range []string{"198.18.0.10", "2001:2::a", "93.184.216.34"} {
+			for _, realmAnswer := range []string{"10.20.30.40", "127.0.0.1"} {
+				t.Run(route+"/"+registryAnswer+"/"+realmAnswer, func(t *testing.T) {
+					dialer := &routedDialer{}
+					var proxy *recordingProxy
+					proxyURL, wantDials, wantReason := "", []string(nil), ""
+					if route == "proxied" {
+						proxy = newRecordingProxy(t, fakeIPRegistry(t))
+						proxyURL, dialer.proxies = proxy.URL, map[string]bool{proxy.address(): true}
+						wantReason = "token fetch failed at http://auth.example: Docker proxy target crossed network scope"
+					} else {
+						dialer.direct = fakeIPRegistryServer(t).Listener.Addr().String()
+						wantDials = []string{net.JoinHostPort(registryAnswer, "80")}
+						wantReason = "token fetch failed at http://auth.example: Docker dial target crossed network scope"
+					}
+					client, err := newRegistryClient("http://registry.example", proxyURL, staticIPResolver{
+						"registry.example": dnsAnswer(registryAnswer),
+						"auth.example":     dnsAnswer(realmAnswer),
+					}, dialer.DialContext)
+					if err != nil {
+						t.Fatal(err)
+					}
 
-				_, err = NewAuthManager().GetToken(
-					context.Background(), client, "http://registry.example", "registry", "operator", "secret",
-					"repository:acme/widget:pull",
-				)
-				if want := "token fetch failed at http://auth.example: Docker dial target crossed network scope"; err == nil || clientReasonOf(err) != want {
-					t.Fatalf("GetToken error = %v, want the 502 reason %q", err, want)
-				}
-				if got, want := dialer.directDials(), []string{net.JoinHostPort(registryAnswer, "80")}; !slices.Equal(got, want) {
-					t.Fatalf("direct dials = %v, want only the registry's placeholder %v", got, want)
-				}
-			})
+					_, err = NewAuthManager().GetToken(
+						context.Background(), client, "http://registry.example", "registry", "operator", "secret",
+						"repository:acme/widget:pull",
+					)
+					if err == nil || clientReasonOf(err) != wantReason {
+						t.Fatalf("GetToken error = %v, want the 502 reason %q", err, wantReason)
+					}
+					if proxy != nil {
+						if got := proxy.requestedHosts(); !slices.Equal(got, []string{"registry.example"}) {
+							t.Fatalf("proxy carried %v, want the registry and not the realm", got)
+						}
+					}
+					if got := dialer.directDials(); !slices.Equal(got, wantDials) {
+						t.Fatalf("direct dials = %v, want %v", got, wantDials)
+					}
+				})
+			}
 		}
 	}
 }
 
-// While the client has not dialed the registry yet, the direct route looks
-// the registry's own answer up to check another host. A fake-IP answer counts
-// as public there too while allow_fake_ip is on, so a public Bearer realm is
-// reached first. With allow_fake_ip off, the registry has no usable scope,
-// and the realm is refused before anything is dialed.
-func TestDirectRegistryLooksUpItsFakeIPAnswerToCheckAnotherHost(t *testing.T) {
+// While the client has not dialed the registry yet, its route looks the
+// registry's own answer up to check another host. A fake-IP answer counts as
+// public there too while allow_fake_ip is on, so a public Bearer realm is
+// reached first, directly or through the registry's own proxy, which a
+// fake-IP answer counts as public by the same rule. With allow_fake_ip off,
+// the registry has no usable scope, and the realm is refused before anything
+// is dialed.
+func TestRegistryLooksUpItsFakeIPAnswerToCheckAnotherHost(t *testing.T) {
 	answers := staticIPResolver{
 		"registry.example": dnsAnswer("198.18.0.10"),
 		"auth.example":     dnsAnswer("93.184.216.34"),
 	}
 	server := fakeIPRegistryServer(t)
 	for _, tt := range []struct {
-		name      string
-		policy    egress.Policy
-		wantErr   string
-		wantDials []string
+		name   string
+		policy egress.Policy
+		// ownProxy gives the registry its own proxy, which then carries
+		// wantProxied.
+		ownProxy    bool
+		wantErr     string
+		wantDials   []string
+		wantProxied []string
 	}{
 		{name: "allow_fake_ip on", wantDials: []string{"93.184.216.34:80"}},
+		{name: "allow_fake_ip on through the registry's own proxy", ownProxy: true, wantProxied: []string{"auth.example"}},
 		{name: "allow_fake_ip off", policy: fakeIPOffPolicy(t, ""), wantErr: "Docker dial target crossed network scope"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			dialer := &routedDialer{direct: server.Listener.Addr().String()}
-			route := registryEgressFor(config.RegistryConfig{URL: "http://registry.example"}, tt.policy)
+			registryConfig := config.RegistryConfig{URL: "http://registry.example"}
+			var proxy *recordingProxy
+			if tt.ownProxy {
+				proxy = newRecordingProxy(t, fakeIPRegistry(t))
+				registryConfig.Proxy, dialer.proxies = proxy.URL, map[string]bool{proxy.address(): true}
+			}
+			route := registryEgressFor(registryConfig, tt.policy)
 			client, err := buildRegistryClient("hub", "http://registry.example", route, answers, dialer.DialContext)
 			if err != nil {
 				t.Fatal(err)
@@ -236,6 +267,11 @@ func TestDirectRegistryLooksUpItsFakeIPAnswerToCheckAnotherHost(t *testing.T) {
 			}
 			if got := dialer.directDials(); !slices.Equal(got, tt.wantDials) {
 				t.Fatalf("direct dials = %v, want %v", got, tt.wantDials)
+			}
+			if proxy != nil {
+				if got := proxy.requestedHosts(); !slices.Equal(got, tt.wantProxied) {
+					t.Fatalf("proxy carried %v, want %v", got, tt.wantProxied)
+				}
 			}
 		})
 	}
@@ -619,68 +655,26 @@ func TestBadGatewayExplainsFakeIPPlaceholdersThatNothingCarried(t *testing.T) {
 	}
 }
 
-// A TUN completes a connection to a placeholder at once, so a placeholder
-// that hangs is cut after a short timeout, egress.FakeIPConnectTimeout, and
-// every placeholder of the answer is tried, IPv4 first, before the refusal.
+// A TUN completes a connection to a placeholder at once, so each dial of a
+// placeholder is cut after a short timeout, egress.FakeIPConnectTimeout.
 // net/http dials apart from the request, whose own deadline does not reach
 // the dial; a request whose deadline ends first keeps that deadline's error.
+// (Every placeholder is tried, IPv4 first:
+// TestBadGatewayExplainsFakeIPPlaceholdersThatNothingCarried.)
 func TestFakeIPPlaceholderDialsAreCutByTheShortTimeout(t *testing.T) {
 	answers := staticIPResolver{"registry.example": dnsAnswer("2001:2::a", "198.18.0.10")}
-	var mu sync.Mutex
-	var attempts []string
-	hanging := func(ctx context.Context, _, address string) (net.Conn, error) {
-		mu.Lock()
-		attempts = append(attempts, address)
-		mu.Unlock()
-		if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 50*time.Millisecond {
-			t.Errorf("dial of %s has deadline %v (set %v), want one within the short timeout", address, deadline, ok)
-		}
-		<-ctx.Done()
-		return nil, ctx.Err()
-	}
-	// The route leaves the timeout to upstream.DialFakeIP's default, which
-	// the second part of this test checks.
-	route := registryEgressFor(config.RegistryConfig{URL: "http://registry.example"}, egress.Policy{})
-	if !route.fakeIP.dial || route.fakeIP.timeout != 0 {
-		t.Fatalf("direct route dials fake-IP %v with timeout %v, want the default timeout", route.fakeIP.dial, route.fakeIP.timeout)
-	}
-	route.fakeIP.timeout = 50 * time.Millisecond
-	client, err := buildRegistryClient("hub", "http://registry.example", route, answers, hanging)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	started := time.Now()
-	_, err = NewAuthManager().GetToken(context.Background(), client, "http://registry.example", "hub", "", "", "repository:acme/widget:pull")
-	if elapsed := time.Since(started); elapsed > 5*time.Second {
-		t.Fatalf("the short timeout cut the dials after %v", elapsed)
-	}
-	if want := "auth discovery failed at http://registry.example: registry.example resolved to 198.18.0.10" + fakeIPNotCarriedReason; err == nil ||
-		clientReasonOf(err) != want {
-		t.Fatalf("GetToken error = %v, want the 502 reason %q", err, want)
-	}
-	if !strings.Contains(err.Error(), "(dial error: context deadline exceeded; context deadline exceeded)") {
-		t.Fatalf("logged error %q lacks the dial errors", err.Error())
-	}
-	mu.Lock()
-	got := slices.Clone(attempts)
-	mu.Unlock()
-	if !slices.Equal(got, []string{"198.18.0.10:80", "[2001:2::a]:80"}) {
-		t.Fatalf("dial attempts = %v, want both placeholders, IPv4 first", got)
-	}
-
-	// Without a shorter timeout, each attempt gets FakeIPConnectTimeout.
+	// Each attempt gets FakeIPConnectTimeout.
 	var deadline time.Time
 	var bounded bool
 	connecting := func(ctx context.Context, _, _ string) (net.Conn, error) {
 		deadline, bounded = ctx.Deadline()
 		return nil, errors.New("refused")
 	}
-	client, err = newRegistryClient("http://registry.example", "", answers, connecting)
+	client, err := newRegistryClient("http://registry.example", "", answers, connecting)
 	if err != nil {
 		t.Fatal(err)
 	}
-	started = time.Now()
+	started := time.Now()
 	response, err := client.Get("http://registry.example/v2/")
 	finished := time.Now()
 	if response != nil {

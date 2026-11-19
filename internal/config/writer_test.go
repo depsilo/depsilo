@@ -206,121 +206,64 @@ func TestWriteConfigPreservesAbsoluteStoragePath(t *testing.T) {
 	}
 }
 
-func TestWriteConfigCommentsDefaultProxyLine(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.toml")
+func TestWriteConfigProxyLine(t *testing.T) {
+	for _, testCase := range []struct {
+		name        string
+		proxy       string
+		wantPresent string
+		wantAbsent  string
+	}{
+		{
+			name:        "default proxy stays commented",
+			wantPresent: "# proxy = \"http://127.0.0.1:7890\"",
+			wantAbsent:  "\nproxy = ",
+		},
+		{
+			name:        "explicit proxy stays active",
+			proxy:       "http://proxy.internal:7890",
+			wantPresent: "\nproxy = \"http://proxy.internal:7890\"",
+			wantAbsent:  "# proxy = \"http://proxy.internal:7890\"",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "config.toml")
 
-	req := SetupRequest{
-		Ecosystems: map[string]EcosystemSetup{
-			"npm": {
-				Enabled: true,
-				Upstreams: []UpstreamSetup{
-					{
-						Name:     "official",
-						URL:      "https://registry.npmjs.org",
-						Priority: 1,
+			req := SetupRequest{
+				Ecosystems: map[string]EcosystemSetup{
+					"npm": {
+						Enabled: true,
+						Upstreams: []UpstreamSetup{
+							{
+								Name:     "official",
+								URL:      "https://registry.npmjs.org",
+								Priority: 1,
+								Proxy:    testCase.proxy,
+							},
+						},
 					},
 				},
-			},
-		},
-	}
-	req.Server.Port = 23333
-	req.Storage.Path = filepath.Join(dir, "cache")
+			}
+			req.Server.Port = 23333
+			req.Storage.Path = filepath.Join(dir, "cache")
 
-	if err := WriteConfig(path, req); err != nil {
-		t.Fatalf("WriteConfig: %v", err)
-	}
+			if err := WriteConfig(path, req); err != nil {
+				t.Fatalf("WriteConfig: %v", err)
+			}
 
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read generated config: %v", err)
-	}
-	configText := string(data)
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read generated config: %v", err)
+			}
+			configText := string(data)
 
-	if strings.Contains(configText, "\nproxy = ") {
-		t.Fatalf("generated config contains active proxy line:\n%s", configText)
-	}
-	if !strings.Contains(configText, "# proxy = \"http://127.0.0.1:7890\"") {
-		t.Fatalf("generated config does not contain commented proxy value:\n%s", configText)
-	}
-}
-
-func TestWriteConfigKeepsExplicitProxyActive(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.toml")
-
-	req := SetupRequest{
-		Ecosystems: map[string]EcosystemSetup{
-			"npm": {
-				Enabled: true,
-				Upstreams: []UpstreamSetup{
-					{
-						Name:     "official",
-						URL:      "https://registry.npmjs.org",
-						Priority: 1,
-						Proxy:    "http://proxy.internal:7890",
-					},
-				},
-			},
-		},
-	}
-	req.Server.Port = 23333
-	req.Storage.Path = filepath.Join(dir, "cache")
-
-	if err := WriteConfig(path, req); err != nil {
-		t.Fatalf("WriteConfig: %v", err)
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read generated config: %v", err)
-	}
-	configText := string(data)
-
-	if !strings.Contains(configText, "\nproxy = \"http://proxy.internal:7890\"") {
-		t.Fatalf("generated config does not contain active explicit proxy:\n%s", configText)
-	}
-	if strings.Contains(configText, "# proxy = \"http://proxy.internal:7890\"") {
-		t.Fatalf("generated config comments explicit proxy:\n%s", configText)
-	}
-}
-
-func TestWriteConfigIncludesAlpineUpstreams(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.toml")
-
-	req := SetupRequest{
-		Ecosystems: map[string]EcosystemSetup{
-			"alpine": {
-				Enabled: true,
-				Upstreams: []UpstreamSetup{
-					{
-						Name:     "official",
-						URL:      "https://dl-cdn.alpinelinux.org/alpine",
-						Priority: 1,
-					},
-				},
-			},
-		},
-	}
-	req.Server.Port = 23333
-	req.Storage.Path = filepath.Join(dir, "cache")
-
-	if err := WriteConfig(path, req); err != nil {
-		t.Fatalf("WriteConfig: %v", err)
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read generated config: %v", err)
-	}
-	configText := string(data)
-
-	if !strings.Contains(configText, "[[alpine.upstreams]]") {
-		t.Fatalf("generated config does not contain Alpine upstream section:\n%s", configText)
-	}
-	if !strings.Contains(configText, "url = \"https://dl-cdn.alpinelinux.org/alpine\"") {
-		t.Fatalf("generated config does not contain Alpine upstream URL:\n%s", configText)
+			if !strings.Contains(configText, testCase.wantPresent) {
+				t.Fatalf("generated config does not contain %q:\n%s", testCase.wantPresent, configText)
+			}
+			if strings.Contains(configText, testCase.wantAbsent) {
+				t.Fatalf("generated config contains %q:\n%s", testCase.wantAbsent, configText)
+			}
+		})
 	}
 }
 
@@ -347,6 +290,12 @@ func TestWriteConfigUsesCanonicalEcosystemOrder(t *testing.T) {
 					Name: "registry", URL: "https://npm.example", Priority: 1,
 				}},
 			},
+			"alpine": {
+				Enabled: true,
+				Upstreams: []UpstreamSetup{{
+					Name: "official", URL: "https://dl-cdn.alpinelinux.org/alpine", Priority: 1,
+				}},
+			},
 		},
 	}
 	req.Server.Port = 23333
@@ -362,9 +311,13 @@ func TestWriteConfigUsesCanonicalEcosystemOrder(t *testing.T) {
 	document := string(data)
 	pypi := strings.Index(document, "[[pypi.upstreams]]")
 	npm := strings.Index(document, "[[npm.upstreams]]")
+	alpine := strings.Index(document, "[[alpine.upstreams]]")
 	helm := strings.Index(document, "[[helm.upstreams]]")
-	if pypi < 0 || npm < 0 || helm < 0 || !(pypi < npm && npm < helm) {
-		t.Fatalf("ecosystem sections are not in canonical order: pypi=%d npm=%d helm=%d\n%s", pypi, npm, helm, document)
+	if pypi < 0 || npm < 0 || alpine < 0 || helm < 0 || !(pypi < npm && npm < alpine && alpine < helm) {
+		t.Fatalf("ecosystem sections are not in canonical order: pypi=%d npm=%d alpine=%d helm=%d\n%s", pypi, npm, alpine, helm, document)
+	}
+	if !strings.Contains(document, "url = \"https://dl-cdn.alpinelinux.org/alpine\"") {
+		t.Fatalf("generated config does not contain Alpine upstream URL:\n%s", document)
 	}
 }
 

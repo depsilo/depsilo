@@ -97,23 +97,13 @@ token_ttl = "1h"
 // password. It is that account's lasting credential, so the console summary
 // must carry it instead of leaving it in one structured log line.
 //
-// The draws are supplied here, so the test cannot meet a token that happens to
-// contain "ops": the first draw does so on purpose, the password policy
-// rejects it, and the start must go on with the second.
+// The draw is supplied so the test knows the password it must find. Redrawing a
+// password the policy rejects is api.EnsureInitialAdmin's, tested there.
 func TestStartServerPrintsGeneratedAdministratorPasswordInSummary(t *testing.T) {
-	const rejected = "k3Zq-OpS-rejected-draw-0123456789-ABCDEFG"
 	const accepted = "k3Zq-accepted-draw-0123456789-ABCDEFGHIJK"
-	draws := []string{rejected, accepted}
 	original := newInitialAdminPassword
 	t.Cleanup(func() { newInitialAdminPassword = original })
-	newInitialAdminPassword = func() (string, error) {
-		if len(draws) == 0 {
-			t.Fatal("drew a third administrator password")
-		}
-		token := draws[0]
-		draws = draws[1:]
-		return token, nil
-	}
+	newInitialAdminPassword = func() (string, error) { return accepted, nil }
 
 	summary, databasePath := startConfiguredServerForSummary(t, "ops", "")
 
@@ -121,8 +111,8 @@ func TestStartServerPrintsGeneratedAdministratorPasswordInSummary(t *testing.T) 
 	if match == nil || !strings.Contains(summary, "Initial administrator:\n  Username: ops\n") {
 		t.Fatalf("startup summary omitted the generated administrator password:\n%s", summary)
 	}
-	if match[1] != accepted || len(draws) != 0 || strings.Contains(summary, rejected) {
-		t.Fatalf("printed password = %q with %d draws left, want the second draw %q:\n%s", match[1], len(draws), accepted, summary)
+	if match[1] != accepted {
+		t.Fatalf("printed password = %q, want the drawn %q:\n%s", match[1], accepted, summary)
 	}
 	database, err := db.Open("sqlite", databasePath)
 	if err != nil {

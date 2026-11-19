@@ -22,21 +22,6 @@ func TestCargo_Index(t *testing.T) {
 	assertStatus(t, resp, 200)
 }
 
-func TestCargo_CrateDownload(t *testing.T) {
-	resp := httpGet(t, depsiloURL+"/crates/api/v1/crates/serde/1.0.0/download")
-	assertStatus(t, resp, 200)
-	body := readBody(t, resp)
-	if body != "FAKE_CRATE" {
-		t.Errorf("unexpected body: %s", body)
-	}
-}
-
-func TestCargo_CacheHit(t *testing.T) {
-	httpGet(t, depsiloURL+"/crates/api/v1/crates/serde/1.0.0/download")
-	before := mockServer.RequestCount()
-	resp := httpGet(t, depsiloURL+"/crates/api/v1/crates/serde/1.0.0/download")
-	assertStatus(t, resp, 200)
-	if mockServer.RequestCount() != before {
-		t.Error("expected cache hit")
-	}
+func TestCargo_CrateMissThenHit(t *testing.T) {
+	assertMissThenHit(t, depsiloURL+"/crates/api/v1/crates/serde/1.0.0/download", "FAKE_CRATE", false)
 }

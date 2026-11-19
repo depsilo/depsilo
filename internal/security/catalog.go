@@ -40,12 +40,11 @@ var (
 // IngestReceipt reports committed work. Callers receive the zero value when
 // an operation fails, even when the failure happens late in its transaction.
 type IngestReceipt struct {
-	Received     int `json:"received"`
-	Advisories   int `json:"advisories"`
-	Packages     int `json:"packages"`
-	Duplicates   int `json:"duplicates"`
-	Skipped      int `json:"skipped"`
-	RulesCreated int `json:"rules_created"`
+	Received   int `json:"received"`
+	Advisories int `json:"advisories"`
+	Packages   int `json:"packages"`
+	Duplicates int `json:"duplicates"`
+	Skipped    int `json:"skipped"`
 }
 
 // AdvisoryCatalog is the transactional write boundary for vulnerability

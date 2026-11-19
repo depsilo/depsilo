@@ -276,16 +276,19 @@ func TestSettingsPutRejectsOversizedBodyBeforeStoreOrDiskMutation(t *testing.T) 
 	}
 }
 
-func TestValidateSettingsJSONRejectsDuplicateKeysAtEveryDepth(t *testing.T) {
-	tests := []string{
+func TestSettingsPutRejectsDuplicateKeysAtEveryDepth(t *testing.T) {
+	router, _, _, store := newTrackedSettingsHandlerFixture(t)
+	for _, body := range []string{
 		`{"server":{"log_level":{"inner":{"key":1,"key":2}}}}`,
 		`{"server":{"log_level":[{"inner":{"key":1,"key":2}}]}}`,
-	}
-	for _, body := range tests {
-		err := validateSettingsJSON([]byte(body))
-		if err == nil || !strings.Contains(err.Error(), "duplicate JSON object key") {
-			t.Fatalf("validateSettingsJSON(%s) error = %v, want duplicate-key error", body, err)
+	} {
+		code, message := settingsErrorResponse(t, performSettingsRequest(router, http.MethodPut, body))
+		if code != "BAD_REQUEST" || !strings.Contains(message, "duplicate JSON object key") {
+			t.Fatalf("PUT %s = %s %q, want the duplicate-key error", body, code, message)
 		}
+	}
+	if store.updateCalls != 0 {
+		t.Fatalf("Store.Update calls = %d, want 0", store.updateCalls)
 	}
 }
 

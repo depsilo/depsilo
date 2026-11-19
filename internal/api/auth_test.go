@@ -47,13 +47,11 @@ func TestValidateInitialAdminCredentials(t *testing.T) {
 		password string
 		wantErr  bool
 	}{
+		// The password rules are credential.CredentialPolicy's, tested there;
+		// "contains username" proves the username reaches the policy.
 		{name: "strong password", username: "operator", password: "Tr0ub4dor&Correct"},
-		{name: "long passphrase", username: "operator", password: "correct horse battery staple"},
-		{name: "short password", username: "operator", password: "S3cure!", wantErr: true},
-		{name: "low diversity", username: "operator", password: "abcdefghijkl", wantErr: true},
 		{name: "contains username", username: "operator", password: "Operator-Is-Safe-123!", wantErr: true},
 		{name: "bad username", username: "../operator", password: "Tr0ub4dor&Correct", wantErr: true},
-		{name: "bcrypt byte limit", username: "operator", password: "密密密密密密密密密密密密密密密密密密密密密密密密密", wantErr: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

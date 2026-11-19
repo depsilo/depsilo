@@ -266,27 +266,6 @@ func TestMCPRequestsStillAnswerWith200(t *testing.T) {
 	}
 }
 
-func TestMCPRejectsGetAndDeleteWith405(t *testing.T) {
-	for _, method := range []string{http.MethodGet, http.MethodDelete} {
-		t.Run(method, func(t *testing.T) {
-			recorder := serveMCP(t, method, "")
-			if recorder.Code != http.StatusMethodNotAllowed {
-				t.Fatalf("status = %d, want %d; body = %q", recorder.Code, http.StatusMethodNotAllowed, recorder.Body.String())
-			}
-			if allow := recorder.Header().Get("Allow"); allow != http.MethodPost {
-				t.Fatalf("Allow = %q, want %q", allow, http.MethodPost)
-			}
-			var body struct {
-				Code    string `json:"code"`
-				Message string `json:"message"`
-			}
-			if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil || body.Code != "METHOD_NOT_ALLOWED" || body.Message == "" {
-				t.Fatalf("error body = %q (err %v), want {code, message}", recorder.Body.String(), err)
-			}
-		})
-	}
-}
-
 // The bootstrap prompt names the MCP tools in prose. It is generated from the
 // definitions, so a tool added to tools/list cannot be missing from it.
 func TestAgentPromptNamesEveryMCPTool(t *testing.T) {

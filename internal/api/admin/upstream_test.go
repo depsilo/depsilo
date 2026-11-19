@@ -176,25 +176,28 @@ func TestUpstreamHandlerExactErrors(t *testing.T) {
 		method, path, body string
 		status             int
 		code               string
+		// message, when set, is the exact message the registry error maps to.
+		message string
 	}{
-		{http.MethodPost, "/upstreams", `{`, 400, "BAD_REQUEST"},
-		{http.MethodDelete, "/upstreams/not-a-number", ``, 400, "BAD_REQUEST"},
-		{http.MethodPost, "/upstreams", `{"adapter_type":"npm","name":"x","url":"https://x.example","priority":1,"probe_mode":"passive","probe_interval":"30m"}`, 409, "ECOSYSTEM_NOT_ACTIVE"},
-		{http.MethodPost, "/upstreams", `{"adapter_type":"pypi","name":"bad","url":"file:///tmp/source","proxy":"","priority":1,"probe_mode":"passive","probe_interval":"30m"}`, 422, "INVALID_UPSTREAM"},
-		{http.MethodPost, "/upstreams", `{"adapter_type":"pypi","name":"source-1","url":"https://duplicate.example","proxy":"","priority":2,"probe_mode":"passive","probe_interval":"30m"}`, 409, "CONFLICT"},
-		{http.MethodPut, "/upstreams/1", `{"adapter_type":"npm","name":"x","url":"https://x.example","proxy":"","priority":1,"probe_mode":"passive","probe_interval":"30m"}`, 422, "IMMUTABLE_ECOSYSTEM"},
-		{http.MethodDelete, "/upstreams/1", ``, 409, "LAST_UPSTREAM"},
-		{http.MethodPut, "/upstreams/999", `{"adapter_type":"pypi","name":"x","url":"https://x.example","proxy":"","priority":1,"probe_mode":"passive","probe_interval":"30m"}`, 404, "NOT_FOUND"},
+		{http.MethodPost, "/upstreams", `{`, 400, "BAD_REQUEST", ""},
+		{http.MethodDelete, "/upstreams/not-a-number", ``, 400, "BAD_REQUEST", ""},
+		{http.MethodPost, "/upstreams", `{"adapter_type":"npm","name":"x","url":"https://x.example","priority":1,"probe_mode":"passive","probe_interval":"30m"}`, 409, "ECOSYSTEM_NOT_ACTIVE", "ecosystem not active"},
+		{http.MethodPost, "/upstreams", `{"adapter_type":"pypi","name":"bad","url":"file:///tmp/source","proxy":"","priority":1,"probe_mode":"passive","probe_interval":"30m"}`, 422, "INVALID_UPSTREAM", "invalid upstream"},
+		{http.MethodPost, "/upstreams", `{"adapter_type":"pypi","name":"source-1","url":"https://duplicate.example","proxy":"","priority":2,"probe_mode":"passive","probe_interval":"30m"}`, 409, "CONFLICT", "upstream conflict"},
+		{http.MethodPut, "/upstreams/1", `{"adapter_type":"npm","name":"x","url":"https://x.example","proxy":"","priority":1,"probe_mode":"passive","probe_interval":"30m"}`, 422, "IMMUTABLE_ECOSYSTEM", "immutable ecosystem"},
+		{http.MethodDelete, "/upstreams/1", ``, 409, "LAST_UPSTREAM", "last upstream"},
+		{http.MethodPut, "/upstreams/999", `{"adapter_type":"pypi","name":"x","url":"https://x.example","proxy":"","priority":1,"probe_mode":"passive","probe_interval":"30m"}`, 404, "NOT_FOUND", "upstream not found"},
 	}
 	for _, tc := range cases {
 		w := performJSON(router, tc.method, tc.path, tc.body)
 		var response struct {
-			Code string `json:"code"`
+			Code    string `json:"code"`
+			Message string `json:"message"`
 		}
 		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 			t.Fatal(err)
 		}
-		if w.Code != tc.status || response.Code != tc.code {
+		if w.Code != tc.status || response.Code != tc.code || (tc.message != "" && response.Message != tc.message) {
 			t.Fatalf("%s %s: status=%d body=%s", tc.method, tc.path, w.Code, w.Body.String())
 		}
 	}
@@ -207,12 +210,8 @@ func TestWriteUpstreamErrorMatrix(t *testing.T) {
 		code    string
 		message string
 	}{
-		{upstream.ErrNotFound, 404, "NOT_FOUND", "upstream not found"},
-		{upstream.ErrConflict, 409, "CONFLICT", "upstream conflict"},
-		{upstream.ErrLastUpstream, 409, "LAST_UPSTREAM", "last upstream"},
-		{upstream.ErrEcosystemNotActive, 409, "ECOSYSTEM_NOT_ACTIVE", "ecosystem not active"},
-		{upstream.ErrImmutableEcosystem, 422, "IMMUTABLE_ECOSYSTEM", "immutable ecosystem"},
-		{upstream.ErrInvalidUpstream, 422, "INVALID_UPSTREAM", "invalid upstream"},
+		// The client errors are pinned through the handler by
+		// TestUpstreamHandlerExactErrors; these two must not leak the path.
 		{fmt.Errorf("%w: reload /srv/private.db", upstream.ErrReconcileFailed), 500, "REGISTRY_RECONCILE_FAILED", "registry reconciliation failed"},
 		{errors.New("database unavailable at /srv/private.db"), 500, "INTERNAL_ERROR", "internal server error"},
 	}
@@ -322,7 +321,7 @@ func TestUpstreamHandlerCheckReturns200ForUnhealthyNetwork(t *testing.T) {
 }
 
 func TestUpstreamHandlerMasksCredentialsForReadonlyResponses(t *testing.T) {
-	_, readonly := upstreamRouterFixtureWithPrincipal(t, 1, false, "http://source-user:source-secret@source.example", "http://proxy-user:proxy-secret@proxy.example:8080")
+	registry, readonly := upstreamRouterFixtureWithPrincipal(t, 1, false, "http://source-user:source-secret@source.example", "http://proxy-user:proxy-secret@proxy.example:8080")
 	w := performJSON(readonly, http.MethodGet, "/upstreams", "")
 	var list contract.AdminUpstreamListResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil {
@@ -330,6 +329,11 @@ func TestUpstreamHandlerMasksCredentialsForReadonlyResponses(t *testing.T) {
 	}
 	if list.Items[0].URL != "http://source.example/***" || list.Items[0].Proxy != "http://proxy.example:8080/***" {
 		t.Fatalf("readonly=%#v", list.Items[0])
+	}
+	// Masking is a view: the stored credentials stay as they were.
+	if stored, err := registry.Get(list.Items[0].ID); err != nil ||
+		stored.URL != "http://source-user:source-secret@source.example" || stored.Proxy != "http://proxy-user:proxy-secret@proxy.example:8080" {
+		t.Fatalf("stored upstream after a readonly list = %#v, err=%v", stored, err)
 	}
 
 	createBody := `{"adapter_type":"pypi","name":"masked","url":"https://alice:secret@masked.example","proxy":"http://bob:secret@proxy.example","priority":2,"probe_mode":"passive","probe_interval":"30m"}`

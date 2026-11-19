@@ -19,14 +19,13 @@ import (
 )
 
 type securityImportTestResponse struct {
-	Code         string `json:"code"`
-	Message      string `json:"message"`
-	Imported     int    `json:"imported"`
-	Received     int    `json:"received"`
-	Packages     int    `json:"packages"`
-	Duplicates   int    `json:"duplicates"`
-	Skipped      int    `json:"skipped"`
-	RulesCreated int    `json:"rules_created"`
+	Code       string `json:"code"`
+	Message    string `json:"message"`
+	Imported   int    `json:"imported"`
+	Received   int    `json:"received"`
+	Packages   int    `json:"packages"`
+	Duplicates int    `json:"duplicates"`
+	Skipped    int    `json:"skipped"`
 }
 
 func newSecurityImportTestDB(t *testing.T) *gorm.DB {
@@ -123,7 +122,7 @@ func TestSecurityImportReturnsCatalogReceipt(t *testing.T) {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 	if response.Imported != 1 || response.Received != 1 || response.Packages != 1 ||
-		response.Duplicates != 0 || response.Skipped != 0 || response.RulesCreated != 0 {
+		response.Duplicates != 0 || response.Skipped != 0 {
 		t.Fatalf("receipt = %+v", response)
 	}
 }

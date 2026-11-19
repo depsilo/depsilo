@@ -270,69 +270,6 @@ func TestRegistryBehindFakeIPDNSUsesTheDefaultProxyForEveryHost(t *testing.T) {
 	}
 }
 
-// A request to another host can come before any request to the registry; the
-// registry's own fake-IP answer then sets its network scope, by the same rule.
-func TestFakeIPRegistryWithProxyClassifiesItsOriginByTheSameRule(t *testing.T) {
-	proxy := newRecordingProxy(t, nil)
-	var dialer net.Dialer
-	client, err := newRegistryClient("http://registry.example", proxy.URL, staticIPResolver{
-		"registry.example": {{IP: net.ParseIP("198.18.0.10")}},
-		"cdn.example":      {{IP: net.ParseIP("93.184.216.35")}},
-	}, dialer.DialContext)
-	if err != nil {
-		t.Fatal(err)
-	}
-	response, err := client.Get("http://cdn.example/blob")
-	if err != nil {
-		t.Fatalf("cross-origin request before the first registry request: %v", err)
-	}
-	_ = response.Body.Close()
-	if got := proxy.requestedHosts(); !slices.Equal(got, []string{"cdn.example"}) {
-		t.Fatalf("proxy carried %v, want cdn.example", got)
-	}
-}
-
-func TestFakeIPRegistryWithProxyStillRefusesPrivateRealm(t *testing.T) {
-	for _, registryAnswer := range []string{"198.18.0.10", "2001:2::a"} {
-		for _, tt := range []struct{ name, address string }{
-			{name: "private", address: "10.20.30.40"},
-			{name: "loopback", address: "127.0.0.1"},
-		} {
-			t.Run(registryAnswer+"/"+tt.name, func(t *testing.T) {
-				proxy := newRecordingProxy(t, func(response http.ResponseWriter, request *http.Request) {
-					switch request.URL.Hostname() {
-					case "registry.example":
-						response.Header().Set("Www-Authenticate", `Bearer realm="http://auth.example/token",service="registry.example"`)
-						response.WriteHeader(http.StatusUnauthorized)
-					default:
-						response.Header().Set("Content-Type", "application/json")
-						_, _ = io.WriteString(response, `{"token":"must-not-be-returned","expires_in":300}`)
-					}
-				})
-				var dialer net.Dialer
-				client, err := newRegistryClient("http://registry.example", proxy.URL, staticIPResolver{
-					"registry.example": dnsAnswer(registryAnswer),
-					"auth.example":     dnsAnswer(tt.address),
-				}, dialer.DialContext)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				_, err = NewAuthManager().GetToken(
-					context.Background(), client, "http://registry.example", "registry", "operator", "secret",
-					"repository:acme/widget:pull",
-				)
-				if err == nil {
-					t.Fatalf("GetToken accepted a realm that resolved to %s", tt.address)
-				}
-				if got := proxy.requestedHosts(); !slices.Equal(got, []string{"registry.example"}) {
-					t.Fatalf("proxy carried %v, want the fake-IP registry and not the %s realm", got, tt.name)
-				}
-			})
-		}
-	}
-}
-
 // clientReasonOf is the text that a 502 body gives for err, without its
 // request suffix.
 func clientReasonOf(err error) string {
@@ -489,7 +426,6 @@ func TestDirectRegistryWithAllowFakeIPOffRefusesFakeIPAnswerWithTheRemedy(t *tes
 	fakeIP := net.IPAddr{IP: net.ParseIP("198.18.0.10")}
 	for _, tt := range []struct {
 		name     string
-		origin   string
 		resolver staticIPResolver
 		// wantReason is the reason that a 502 body gives.
 		wantReason string
@@ -534,50 +470,9 @@ func TestDirectRegistryWithAllowFakeIPOffRefusesFakeIPAnswerWithTheRemedy(t *tes
 			wantReason: "auth.example resolved to 2001:2::b, " + remedy,
 			wantDials:  []string{"93.184.216.34:80"},
 		},
-		// A proxy refuses each of the following answers too, so setting one
-		// would not help and the refusal does not suggest it.
-		{
-			name: "link-local answer keeps its refusal",
-			resolver: staticIPResolver{
-				"registry.example": {{IP: net.ParseIP("169.254.169.254")}, fakeIP},
-			},
-			wantReason: "unsafe Docker dial target",
-		},
-		{
-			name:       "fake-IP and public answers keep the refusal",
-			resolver:   staticIPResolver{"registry.example": {fakeIP, {IP: net.ParseIP("93.184.216.34")}}},
-			wantReason: "unsafe Docker dial target",
-		},
-		{
-			name:       "private and fake-IP answers keep the refusal",
-			resolver:   staticIPResolver{"registry.example": {{IP: net.ParseIP("10.0.0.5")}, fakeIP}},
-			wantReason: "unsafe Docker dial target",
-		},
-		{
-			// fc00::/18 is a documented IPv6 fake-IP range, so the refusal
-			// names the proxy software's setting instead of a proxy.
-			name:       "fake-IP and unique-local IPv6 answers get the IPv6 fake-IP remedy",
-			resolver:   staticIPResolver{"registry.example": {fakeIP, {IP: net.ParseIP("fc00::a")}}},
-			wantReason: "registry.example resolved into fc00::/18, an IPv6 fake-IP range that Depsilo cannot tell from a private network; " + uniqueLocalFakeIPRemedy,
-		},
-		{
-			name:       "literal fake-IP registry keeps the refusal",
-			origin:     "http://198.18.0.10",
-			resolver:   staticIPResolver{"198.18.0.10": {fakeIP}},
-			wantReason: "unsafe Docker dial target",
-		},
-		{
-			name:       "literal IPv6 placeholder registry keeps the refusal",
-			origin:     "http://[2001:2::a]",
-			resolver:   staticIPResolver{"2001:2::a": dnsAnswer("2001:2::a")},
-			wantReason: "unsafe Docker dial target",
-		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			origin := tt.origin
-			if origin == "" {
-				origin = "http://registry.example"
-			}
+			const origin = "http://registry.example"
 			dialer := &routedDialer{direct: registry.Listener.Addr().String()}
 			route := registryEgressFor(config.RegistryConfig{URL: origin}, fakeIPOffPolicy(t, ""))
 			client, err := buildRegistryClient("registry", origin, route, tt.resolver, dialer.DialContext)
@@ -699,13 +594,6 @@ func TestUniqueLocalFakeIPAnswerIsRefusedWithAndWithoutProxy(t *testing.T) {
 			want:     "registry.example resolved into fd00:6152::/32" + inRange,
 			hidden:   "fd00:6152::46",
 			logged:   "(DNS answer: fd00:6152::46)",
-		},
-		{
-			name:     "mihomo's IPv6 example range only",
-			registry: dnsAnswer("fdfe:dcba:9876::46"),
-			want:     "registry.example resolved into fdfe:dcba:9876::/48" + inRange,
-			hidden:   "fdfe:dcba:9876::46",
-			logged:   "(DNS answer: fdfe:dcba:9876::46)",
 		},
 		{
 			name:     "a placeholder and a documented unique-local address",

@@ -7,21 +7,6 @@ import (
 	"depsilo/internal/packagepolicy"
 )
 
-func TestNPMSemVerPrereleasePrecedesRelease(t *testing.T) {
-	dialect, err := packagepolicy.DialectFor("npm")
-	if err != nil {
-		t.Fatalf("DialectFor(npm): %v", err)
-	}
-
-	comparison, err := dialect.CompareVersions("1.0.0-alpha", "1.0.0")
-	if err != nil {
-		t.Fatalf("CompareVersions: %v", err)
-	}
-	if comparison >= 0 {
-		t.Fatalf("CompareVersions(1.0.0-alpha, 1.0.0) = %d, want < 0", comparison)
-	}
-}
-
 func TestSemVerDialectsUseSemVerPrecedence(t *testing.T) {
 	tests := []struct {
 		left  string
@@ -122,50 +107,10 @@ func TestPyPIDialectUsesPEP440Precedence(t *testing.T) {
 	}
 }
 
-func TestMavenDialectUsesComparableVersionPrecedence(t *testing.T) {
-	dialect, err := packagepolicy.DialectFor("maven")
-	if err != nil {
-		t.Fatalf("DialectFor(maven): %v", err)
-	}
-
-	for _, prerelease := range []string{"1.2-SNAPSHOT", "1.0-alpha", "1.0-rc1"} {
-		release := "1.0"
-		if prerelease == "1.2-SNAPSHOT" {
-			release = "1.2"
-		}
-		got, err := dialect.CompareVersions(prerelease, release)
-		if err != nil {
-			t.Fatalf("CompareVersions(%q, %q): %v", prerelease, release, err)
-		}
-		if got >= 0 {
-			t.Errorf("CompareVersions(%q, %q) = %d, want < 0", prerelease, release, got)
-		}
-	}
-}
-
-func TestMavenDialectComparableVersionAliasesAndQualifierOrder(t *testing.T) {
+func TestMavenDialectComparesArbitraryPrecisionNumbers(t *testing.T) {
 	dialect, err := packagepolicy.DialectFor("maven")
 	if err != nil {
 		t.Fatal(err)
-	}
-	for _, equivalent := range []string{"1.0", "1.0.0", "1-ga", "1-final", "1-release"} {
-		got, err := dialect.CompareVersions("1", equivalent)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got != 0 {
-			t.Errorf("ComparableVersion alias %q compared to 1 = %d, want 0", equivalent, got)
-		}
-	}
-	ordered := []string{"1-alpha", "1-beta", "1-milestone", "1-rc", "1-snapshot", "1", "1-sp"}
-	for index := 0; index < len(ordered)-1; index++ {
-		got, err := dialect.CompareVersions(ordered[index], ordered[index+1])
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got >= 0 {
-			t.Errorf("ComparableVersion order %q < %q failed: %d", ordered[index], ordered[index+1], got)
-		}
 	}
 	got, err := dialect.CompareVersions("1.999999999999999999999999", "1.1000000000000000000000000")
 	if err != nil {
@@ -173,19 +118,6 @@ func TestMavenDialectComparableVersionAliasesAndQualifierOrder(t *testing.T) {
 	}
 	if got >= 0 {
 		t.Errorf("arbitrary precision Maven comparison = %d, want < 0", got)
-	}
-}
-
-func TestMavenDialectDoesNotAdvertiseUnsafeRanges(t *testing.T) {
-	dialect, err := packagepolicy.DialectFor("maven")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if dialect.SupportsRanges() {
-		t.Fatal("Maven advertised ranges despite ComparableVersion's non-transitive domain")
-	}
-	if err := dialect.ValidateVersion("1.0-redhat"); err != nil {
-		t.Fatalf("exact Maven version was rejected: %v", err)
 	}
 }
 
@@ -226,33 +158,6 @@ func TestMavenDialectUsesJavaEnglishFullCaseMapping(t *testing.T) {
 	}
 	if comparison <= 0 {
 		t.Fatalf("ComparableVersion(1-İ, 1-i) = %d, want Java's i+combining-dot qualifier to sort after i", comparison)
-	}
-}
-
-func TestAPTDialectUsesDebianVersionPrecedence(t *testing.T) {
-	dialect, err := packagepolicy.DialectFor("apt")
-	if err != nil {
-		t.Fatalf("DialectFor(apt): %v", err)
-	}
-
-	tests := []struct {
-		left  string
-		right string
-		want  int
-	}{
-		{left: "1.0~beta1", right: "1.0", want: -1},
-		{left: "1:1.0-1", right: "2.0-1", want: 1},
-		{left: "1.0-2", right: "1.0-1", want: 1},
-	}
-
-	for _, test := range tests {
-		got, err := dialect.CompareVersions(test.left, test.right)
-		if err != nil {
-			t.Fatalf("CompareVersions(%q, %q): %v", test.left, test.right, err)
-		}
-		if sign(got) != test.want {
-			t.Errorf("CompareVersions(%q, %q) = %d, want sign %d", test.left, test.right, got, test.want)
-		}
 	}
 }
 

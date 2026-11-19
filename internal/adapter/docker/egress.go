@@ -113,9 +113,6 @@ type fakeIPRule struct {
 	// other programs on the machine do, for the TUN of proxy software to
 	// carry. Otherwise it refuses the answer before anything is dialed.
 	dial bool
-	// timeout bounds each connection attempt to a placeholder; zero, as
-	// registryEgressFor leaves it, means egress.FakeIPConnectTimeout.
-	timeout time.Duration
 	// keptDirect marks a registry that no_proxy or a loopback URL keeps off a
 	// configured upstream_proxy, which a remedy cannot suggest; its remedies
 	// ask for real DNS answers instead.
@@ -785,14 +782,14 @@ func (dialer *guardedDialer) DialContext(ctx context.Context, network, address s
 
 // dialPlaceholders dials the placeholders of host's fake-IP answer through
 // upstream.DialFakeIP, as a package Upstream's guarded dialer does, each
-// attempt for at most the rule's timeout. The TUN of proxy software
+// attempt for at most egress.FakeIPConnectTimeout. The TUN of proxy software
 // completes such a connection locally and at once, so when no attempt
 // connects while ctx is live, nothing carries placeholders on this machine,
 // for example because only the system DNS points at the proxy software. The
 // refusal then names the host, the placeholder dialed first and the remedy;
 // the dial errors reach the server log only.
 func (dialer *guardedDialer) dialPlaceholders(ctx context.Context, network, host string, answer []net.IPAddr, port string) (net.Conn, error) {
-	connection, err := upstream.DialFakeIP(ctx, dialer.dialContext, network, port, answer, dialer.fakeIP.timeout)
+	connection, err := upstream.DialFakeIP(ctx, dialer.dialContext, network, port, answer, 0)
 	switch {
 	case err == nil:
 		return connection, nil

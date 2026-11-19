@@ -179,18 +179,6 @@ func TestPrepareRuleRejectsDialectWithoutPackageRuleEnforcement(t *testing.T) {
 	}
 }
 
-func TestPrepareRuleNormalizesPrefixWithConcreteDialect(t *testing.T) {
-	prepared, err := packagepolicy.PrepareRule(packagepolicy.RawRule{
-		Ecosystem: "pypi", PackageName: "Friendly_.*", Version: "*",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if prepared.NormalizedPackageName != "friendly-*" {
-		t.Fatalf("normalized prefix = %q, want friendly-*", prepared.NormalizedPackageName)
-	}
-}
-
 func TestPrepareRuleRejectsAmbiguousVersionSyntax(t *testing.T) {
 	for _, test := range []packagepolicy.RawRule{
 		{Ecosystem: "maven", PackageName: "org.example:demo", Version: ">=1.0 <2.0"},

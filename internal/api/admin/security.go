@@ -325,7 +325,7 @@ func (h *SecurityHandler) ImportData(c *gin.Context) {
 	case err == nil:
 		c.JSON(http.StatusOK, contract.SecurityImportResponse{
 			Imported: receipt.Advisories, Received: receipt.Received, Packages: receipt.Packages,
-			Duplicates: receipt.Duplicates, Skipped: receipt.Skipped, RulesCreated: receipt.RulesCreated,
+			Duplicates: receipt.Duplicates, Skipped: receipt.Skipped,
 		})
 	case errors.Is(err, security.ErrInvalidAdvisoryImport):
 		c.JSON(http.StatusBadRequest, gin.H{

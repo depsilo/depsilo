@@ -8,18 +8,13 @@ import (
 	"depsilo/internal/prompts"
 )
 
-func TestIntegration_SubstitutesMirrorURL(t *testing.T) {
-	out := prompts.Integration("http://depsilo.example:23333")
+// The mirror URL replaces every placeholder, without the trailing slash it
+// was given: the GOPROXY line below would otherwise read ".../23333//go".
+func TestIntegration_RenderedPromptIsTransparent(t *testing.T) {
+	out := prompts.Integration("http://depsilo.example:23333/")
 	if strings.Contains(out, "{{MIRROR_URL}}") {
 		t.Errorf("placeholder still present after rendering")
 	}
-	if !strings.Contains(out, "http://depsilo.example:23333") {
-		t.Errorf("rendered prompt missing baseURL after substitution")
-	}
-}
-
-func TestIntegration_RenderedPromptIsTransparent(t *testing.T) {
-	out := prompts.Integration("http://depsilo.example:23333")
 	mustContain := []string{
 		"You are integrating **Depsilo**",
 		"Routed via Depsilo cache: http://depsilo.example:23333",
@@ -31,17 +26,6 @@ func TestIntegration_RenderedPromptIsTransparent(t *testing.T) {
 		if !strings.Contains(out, s) {
 			t.Errorf("rendered transparent prompt missing %q", s)
 		}
-	}
-}
-
-func TestIntegration_StripsTrailingSlash(t *testing.T) {
-	out := prompts.Integration("http://example.local/")
-	// After trimming, no double-slash should appear right after the URL.
-	if strings.Contains(out, "http://example.local//") {
-		t.Errorf("trailing slash on baseURL leaked into the output (double slash present)")
-	}
-	if !strings.Contains(out, "http://example.local") {
-		t.Errorf("baseURL missing from rendered output")
 	}
 }
 

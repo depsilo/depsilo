@@ -21,48 +21,12 @@ func TestRunAuditRequiresVerifySubcommand(t *testing.T) {
 	}
 }
 
-func TestRunAuditVerifyReadsTheDatabase(t *testing.T) {
-	dir := t.TempDir()
-	databasePath := filepath.Join(dir, "depsilo.db")
-	database, err := db.Open("sqlite", databasePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.AutoMigrate(database); err != nil {
-		t.Fatal(err)
-	}
-	if err := audit.AppendAuditRows(context.Background(), database, []db.AuditLog{
-		{Action: "download", CacheResult: "hit", StatusCode: 200, CreatedAt: time.Now().UTC()},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	configPath := filepath.Join(dir, "config.toml")
-	document := "config_version = 1\n" +
-		"[server]\nhost = \"127.0.0.1\"\nport = 23333\n" +
-		"[database]\ndriver = \"sqlite\"\ndsn = \"" + databasePath + "\"\n" +
-		"[auth]\njwt_secret = \"0123456789abcdef0123456789abcdef\"\n"
-	if err := os.WriteFile(configPath, []byte(document), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("DEPSILO_CONFIG", configPath)
-
-	output := captureStdout(t, func() {
-		if code := runAudit([]string{"verify"}); code != 0 {
-			t.Fatalf("runAudit(verify) = %d, want 0", code)
-		}
-	})
-	if !strings.Contains(output, "audit chain verified") {
-		t.Fatalf("output = %q", output)
-	}
-	if !strings.Contains(output, "chained rows: 1") {
-		t.Fatalf("output = %q", output)
-	}
-}
-
-// The server accepts SQLite connection options after "?" in the DSN; the
-// command must check the file in front of them and open the same database.
-func TestRunAuditVerifyAcceptsADSNWithConnectionOptions(t *testing.T) {
-	dir := t.TempDir()
+// newAuditVerifyInstance creates a database holding one chained audit row and
+// a config.toml whose DSN is the database path followed by dsnSuffix, and
+// points DEPSILO_CONFIG at it.
+func newAuditVerifyInstance(t *testing.T, dsnSuffix string) (dir string) {
+	t.Helper()
+	dir = t.TempDir()
 	databasePath := filepath.Join(dir, "depsilo.db")
 	database, err := db.Open("sqlite", databasePath)
 	if err != nil {
@@ -84,12 +48,32 @@ func TestRunAuditVerifyAcceptsADSNWithConnectionOptions(t *testing.T) {
 	configPath := filepath.Join(dir, "config.toml")
 	document := "config_version = 1\n" +
 		"[server]\nhost = \"127.0.0.1\"\nport = 23333\n" +
-		"[database]\ndriver = \"sqlite\"\ndsn = \"" + filepath.ToSlash(databasePath) + "?_pragma=busy_timeout(5000)\"\n" +
+		"[database]\ndriver = \"sqlite\"\ndsn = \"" + filepath.ToSlash(databasePath) + dsnSuffix + "\"\n" +
 		"[auth]\njwt_secret = \"0123456789abcdef0123456789abcdef\"\n"
 	if err := os.WriteFile(configPath, []byte(document), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("DEPSILO_CONFIG", configPath)
+	return dir
+}
+
+func TestRunAuditVerifyReadsTheDatabase(t *testing.T) {
+	newAuditVerifyInstance(t, "")
+
+	output := captureStdout(t, func() {
+		if code := runAudit([]string{"verify"}); code != 0 {
+			t.Fatalf("runAudit(verify) = %d, want 0", code)
+		}
+	})
+	if !strings.Contains(output, "audit chain verified") || !strings.Contains(output, "chained rows: 1") {
+		t.Fatalf("output = %q", output)
+	}
+}
+
+// The server accepts SQLite connection options after "?" in the DSN; the
+// command must check the file in front of them and open the same database.
+func TestRunAuditVerifyAcceptsADSNWithConnectionOptions(t *testing.T) {
+	dir := newAuditVerifyInstance(t, "?_pragma=busy_timeout(5000)")
 
 	output := captureStdout(t, func() {
 		if code := runAudit([]string{"verify"}); code != 0 {
@@ -120,29 +104,7 @@ func TestRunAuditVerifyAcceptsADSNWithConnectionOptions(t *testing.T) {
 // as empty, in the command's own words, and a padded path names the same
 // database the file check looked at.
 func TestRunAuditVerifyIgnoresSpaceAroundTheDSN(t *testing.T) {
-	dir := t.TempDir()
-	databasePath := filepath.Join(dir, "depsilo.db")
-	database, err := db.Open("sqlite", databasePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.AutoMigrate(database); err != nil {
-		t.Fatal(err)
-	}
-	if pool, err := database.DB(); err != nil {
-		t.Fatal(err)
-	} else if err := pool.Close(); err != nil {
-		t.Fatal(err)
-	}
-	configPath := filepath.Join(dir, "config.toml")
-	document := "config_version = 1\n" +
-		"[server]\nhost = \"127.0.0.1\"\nport = 23333\n" +
-		"[database]\ndriver = \"sqlite\"\ndsn = \"" + filepath.ToSlash(databasePath) + "\"\n" +
-		"[auth]\njwt_secret = \"0123456789abcdef0123456789abcdef\"\n"
-	if err := os.WriteFile(configPath, []byte(document), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("DEPSILO_CONFIG", configPath)
+	dir := newAuditVerifyInstance(t, "")
 
 	for _, dsn := range []string{" ", " :memory: "} {
 		t.Setenv("DEPSILO_DATABASE_DSN", dsn)
@@ -156,7 +118,7 @@ func TestRunAuditVerifyIgnoresSpaceAroundTheDSN(t *testing.T) {
 		}
 	}
 
-	t.Setenv("DEPSILO_DATABASE_DSN", " "+filepath.ToSlash(databasePath)+" ")
+	t.Setenv("DEPSILO_DATABASE_DSN", " "+filepath.ToSlash(filepath.Join(dir, "depsilo.db"))+" ")
 	output := captureStdout(t, func() {
 		if code := runAudit([]string{"verify"}); code != 0 {
 			t.Fatalf("runAudit(verify) with a padded DSN = %d, want 0", code)

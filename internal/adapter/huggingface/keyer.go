@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 )
 
 // commitSHAPattern matches a canonical Git commit SHA: exactly 40
@@ -19,16 +18,6 @@ var commitSHAPattern = regexp.MustCompile(`^[a-f0-9]{40}$`)
 // that we can treat as immutable (long-TTL cache eligible).
 func IsCommitSHA(ref string) bool {
 	return commitSHAPattern.MatchString(ref)
-}
-
-// TTLForRef returns the cache TTL appropriate for a given ref. Commit SHAs
-// are immutable (72h); branch/tag/everything else is mutable (5m) and
-// participates in stale-while-revalidate via cache.Manager.
-func TTLForRef(ref string) time.Duration {
-	if IsCommitSHA(ref) {
-		return 72 * time.Hour
-	}
-	return 5 * time.Minute
 }
 
 // PathKind tags the kind of HuggingFace URL a request maps to. The

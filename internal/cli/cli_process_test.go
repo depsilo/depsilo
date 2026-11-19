@@ -291,50 +291,6 @@ func TestConcurrentDaemonStartsShareOneProcess(t *testing.T) {
 	}
 }
 
-func TestDaemonStartupFailureReturnsNonZeroAndRemovesPID(t *testing.T) {
-	binary := buildDepsiloCLI(t)
-	home := t.TempDir()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("occupy daemon port: %v", err)
-	}
-	defer listener.Close()
-	port := listener.Addr().(*net.TCPAddr).Port
-	env := append(os.Environ(),
-		cliHelperEnv+"=",
-		"HOME="+home,
-		"USERPROFILE="+home,
-		"DEPSILO_CONFIG=",
-		"DEPSILO_SERVER_PORT=",
-		"DEPSILO_BOOTSTRAP_TOKEN=0123456789abcdef01234567",
-	)
-	pidFile := filepath.Join(home, ".local", "share", "depsilo", "depsilo.pid")
-	logPath := filepath.Join(home, ".local", "share", "depsilo", "depsilo.log")
-	defer terminateDaemonFromPIDFile(pidFile)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	start := exec.CommandContext(ctx, binary, "start", "--daemon", "--host", "127.0.0.1", "--port", strconv.Itoa(port))
-	start.Env = env
-	output, runErr := start.CombinedOutput()
-	if ctx.Err() != nil {
-		t.Fatalf("daemon parent did not observe child startup failure: %v; output=%s", ctx.Err(), output)
-	}
-	if runErr == nil {
-		t.Fatalf("daemon startup failure exited successfully; output=%s", output)
-	}
-	if _, err := os.Stat(pidFile); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("failed daemon left PID file behind: %v", err)
-	}
-	logBody, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("read failed daemon log: %v", err)
-	}
-	if !strings.Contains(string(logBody), fmt.Sprintf("Port %d is already in use.", port)) || strings.Contains(string(logBody), "stacktrace") {
-		t.Fatalf("daemon log did not explain the listen failure in one plain line; log=%s", logBody)
-	}
-}
-
 // The reason a daemon died at once used to reach only its startup log; the
 // terminal showed "exit status 1" and a path.
 func TestDaemonStartupFailurePrintsTheDaemonsLastMessage(t *testing.T) {
@@ -387,8 +343,11 @@ func TestDaemonStartupFailurePrintsTheDaemonsLastMessage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read daemon log: %v", err)
 	}
-	if !strings.Contains(string(logBody), lines[0]) {
-		t.Fatalf("the printed message is not a line of the startup log; log=%s", logBody)
+	if !strings.Contains(string(logBody), lines[0]) || strings.Contains(string(logBody), "stacktrace") {
+		t.Fatalf("the printed message is not a plain line of the startup log; log=%s", logBody)
+	}
+	if _, err := os.Stat(pidFile); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("failed daemon left PID file behind: %v", err)
 	}
 	if strings.Contains(stdout.String()+stderr.String()+string(logBody), earlierToken) {
 		t.Fatalf("the failed start repeated an earlier start's log; stdout=%s stderr=%s log=%s", stdout.String(), stderr.String(), logBody)
@@ -416,43 +375,6 @@ func TestDaemonStartupFailurePrintsTheDaemonsLastMessage(t *testing.T) {
 	})
 }
 
-func TestServeStartupFailureReturnsExitCode(t *testing.T) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("occupy serve port: %v", err)
-	}
-	defer listener.Close()
-	port := listener.Addr().(*net.TCPAddr).Port
-	marker := filepath.Join(t.TempDir(), "returned")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestCLIHelperProcess$", "--", "serve",
-		"--host", "127.0.0.1", "--port", strconv.Itoa(port))
-	cmd.Env = append(os.Environ(),
-		cliHelperEnv+"=1",
-		"HOME="+t.TempDir(),
-		"DEPSILO_CONFIG=",
-		"DEPSILO_CLI_RETURN_MARKER="+marker,
-		"DEPSILO_AUTH_JWT_SECRET=0123456789abcdef0123456789abcdef",
-		"DEPSILO_BOOTSTRAP_TOKEN=0123456789abcdef01234567",
-	)
-	output, runErr := cmd.CombinedOutput()
-	if ctx.Err() != nil {
-		t.Fatalf("serve did not exit after startup failure: %v; output=%s", ctx.Err(), output)
-	}
-	if runErr == nil {
-		t.Fatalf("serve startup failure exited successfully; output=%s", output)
-	}
-	returned, err := os.ReadFile(marker)
-	if err != nil {
-		t.Fatalf("RunServe terminated the process instead of returning an exit code: %v; output=%s", err, output)
-	}
-	if string(returned) != "1" {
-		t.Fatalf("RunServe returned %q, want 1; output=%s", returned, output)
-	}
-}
-
 func TestServeExplainsOccupiedPortWithoutStackTrace(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -472,6 +394,7 @@ func TestServeExplainsOccupiedPortWithoutStackTrace(t *testing.T) {
 			wantStatus: `(try "depsilo status")`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			marker := filepath.Join(t.TempDir(), "returned")
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestCLIHelperProcess$", "--", "serve",
@@ -480,6 +403,7 @@ func TestServeExplainsOccupiedPortWithoutStackTrace(t *testing.T) {
 				cliHelperEnv+"=1",
 				"HOME="+t.TempDir(),
 				"DEPSILO_CONFIG=",
+				"DEPSILO_CLI_RETURN_MARKER="+marker,
 				"DEPSILO_PORT=",
 				"DEPSILO_URL="+test.serverURL,
 				"DEPSILO_AUTH_JWT_SECRET=0123456789abcdef0123456789abcdef",
@@ -489,6 +413,11 @@ func TestServeExplainsOccupiedPortWithoutStackTrace(t *testing.T) {
 			var exitErr *exec.ExitError
 			if !errors.As(runErr, &exitErr) || exitErr.ExitCode() != 1 {
 				t.Fatalf("serve on an occupied port: error=%v, want exit code 1; output=%s", runErr, output)
+			}
+			// RunServe returns the exit code instead of ending the process, so
+			// deferred cleanup in its caller still runs.
+			if returned, err := os.ReadFile(marker); err != nil || string(returned) != "1" {
+				t.Fatalf("RunServe returned %q (read error %v), want 1; output=%s", returned, err, output)
 			}
 			want := fmt.Sprintf("Port %d is already in use. Another Depsilo may be running %s, or choose another port with --port.", port, test.wantStatus)
 			explained := 0

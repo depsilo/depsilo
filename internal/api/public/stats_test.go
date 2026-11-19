@@ -52,11 +52,15 @@ func TestStatsPublicUpstreamURLDoesNotExposeCredentials(t *testing.T) {
 	}
 }
 
-func TestAllUpstreamLatencySeriesKeepsSameNamedRecordsIsolatedByID(t *testing.T) {
+// Latency series are keyed by the stable upstream ID, so same-named records,
+// renames and deleted records never merge. Rows without an ID keep an
+// explicit legacy key per name; no series is keyed by a bare name.
+func TestAllUpstreamLatencySeriesUsesStableIDsAndExplicitLegacyKeys(t *testing.T) {
 	database := newStatsTestDB(t)
 	for _, record := range []db.UpstreamRecord{
 		{ID: 11, AdapterType: "pypi", Name: "shared", URL: "https://one.example"},
 		{ID: 22, AdapterType: "npm", Name: "shared", URL: "https://two.example"},
+		{ID: 33, AdapterType: "pypi", Name: "current", URL: "https://current.example"},
 	} {
 		if err := database.Create(&record).Error; err != nil {
 			t.Fatal(err)
@@ -69,8 +73,12 @@ func TestAllUpstreamLatencySeriesKeepsSameNamedRecordsIsolatedByID(t *testing.T)
 		{UpstreamID: 22, Name: "old-two", LatencyMs: 30, Healthy: true, CreatedAt: checkedAt},
 		{UpstreamID: 22, Name: "old-two", LatencyMs: 30, Healthy: true, CreatedAt: checkedAt},
 		{UpstreamID: 22, Name: "old-two", LatencyMs: 30, Healthy: true, CreatedAt: checkedAt},
+		{UpstreamID: 33, Name: "before-rename", LatencyMs: 11, Healthy: true, CreatedAt: checkedAt},
+		{UpstreamID: 44, Name: "deleted", LatencyMs: 22, Healthy: true, CreatedAt: checkedAt},
 		{UpstreamID: 0, Name: "shared", LatencyMs: 50, Healthy: false, CreatedAt: checkedAt},
 		{UpstreamID: 0, Name: "shared", LatencyMs: 50, Healthy: false, CreatedAt: checkedAt},
+		{UpstreamID: 0, Name: "extra-one", LatencyMs: 33, Healthy: true, CreatedAt: checkedAt},
+		{UpstreamID: 0, Name: "extra-two", LatencyMs: 44, Healthy: true, CreatedAt: checkedAt},
 	}
 	if err := database.Create(&logs).Error; err != nil {
 		t.Fatal(err)
@@ -80,7 +88,7 @@ func TestAllUpstreamLatencySeriesKeepsSameNamedRecordsIsolatedByID(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(series) != 3 {
+	if len(series) != 7 {
 		t.Fatalf("series keys=%v", mapKeys(series))
 	}
 	for key, want := range map[string]struct {
@@ -88,9 +96,13 @@ func TestAllUpstreamLatencySeriesKeepsSameNamedRecordsIsolatedByID(t *testing.T)
 		latency  int64
 		healthy  bool
 	}{
-		"11":            {requests: 1, latency: 10, healthy: false},
-		"22":            {requests: 3, latency: 30, healthy: true},
-		"legacy:shared": {requests: 2, latency: 50, healthy: false},
+		"11":               {requests: 1, latency: 10, healthy: false},
+		"22":               {requests: 3, latency: 30, healthy: true},
+		"33":               {requests: 1, latency: 11, healthy: true},
+		"44":               {requests: 1, latency: 22, healthy: true},
+		"legacy:shared":    {requests: 2, latency: 50, healthy: false},
+		"legacy:extra-one": {requests: 1, latency: 33, healthy: true},
+		"legacy:extra-two": {requests: 1, latency: 44, healthy: true},
 	} {
 		points := series[key]
 		if len(points) != latencyBuckets {
@@ -106,43 +118,13 @@ func TestAllUpstreamLatencySeriesKeepsSameNamedRecordsIsolatedByID(t *testing.T)
 			t.Fatalf("series[%q] healthy=%#v want=%t", key, got, want.healthy)
 		}
 	}
-	startBucket := (since.Unix() / int64(latencyIntervalMin*60)) * int64(latencyIntervalMin*60)
-	assertSeriesTimes(t, series["11"], startBucket)
-}
-
-func TestAllUpstreamLatencySeriesUsesStableIDsAndExplicitLegacyKeys(t *testing.T) {
-	database := newStatsTestDB(t)
-	record := db.UpstreamRecord{ID: 33, AdapterType: "pypi", Name: "current", URL: "https://current.example"}
-	if err := database.Create(&record).Error; err != nil {
-		t.Fatal(err)
-	}
-	since := time.Date(2026, time.July, 11, 2, 5, 0, 0, time.UTC)
-	checkedAt := since.Add(time.Minute)
-	logs := []db.UpstreamLatencyLog{
-		{UpstreamID: 33, Name: "before-rename", LatencyMs: 11, Healthy: true, CreatedAt: checkedAt},
-		{UpstreamID: 44, Name: "deleted", LatencyMs: 22, Healthy: true, CreatedAt: checkedAt},
-		{UpstreamID: 0, Name: "extra-one", LatencyMs: 33, Healthy: true, CreatedAt: checkedAt},
-		{UpstreamID: 0, Name: "extra-two", LatencyMs: 44, Healthy: true, CreatedAt: checkedAt},
-	}
-	if err := database.Create(&logs).Error; err != nil {
-		t.Fatal(err)
-	}
-
-	series, err := (&StatsHandler{db: database}).allUpstreamLatencySeries(since)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for key, latency := range map[string]int64{"33": 11, "44": 22, "legacy:extra-one": 33, "legacy:extra-two": 44} {
-		points, ok := series[key]
-		if !ok || len(points) != latencyBuckets || points[0].LatencyMs != latency {
-			t.Fatalf("series[%q]=%#v; keys=%v", key, points, mapKeys(series))
-		}
-	}
-	for _, unstableName := range []string{"current", "before-rename", "deleted", "extra-one", "extra-two"} {
+	for _, unstableName := range []string{"shared", "current", "before-rename", "deleted", "extra-one", "extra-two"} {
 		if _, exists := series[unstableName]; exists {
 			t.Fatalf("name-keyed series %q retained: %v", unstableName, mapKeys(series))
 		}
 	}
+	startBucket := (since.Unix() / int64(latencyIntervalMin*60)) * int64(latencyIntervalMin*60)
+	assertSeriesTimes(t, series["11"], startBucket)
 }
 
 func TestStatsServiceStatusReflectsUpstreamHealth(t *testing.T) {

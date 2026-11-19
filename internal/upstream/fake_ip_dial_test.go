@@ -305,6 +305,13 @@ func TestGuardedDialerRefusesFakeIPLiteralsMixedAndLocalAnswers(t *testing.T) {
 			want: Failure{Code: FailureFakeIP, Address: "fdfe:dcba:9876::20", Range: "fdfe:dcba:9876::/48"}},
 		{name: "allow_fake_ip off", answer: []string{"198.18.0.65"}, policy: fakeIPRefused(t),
 			want: Failure{Code: FailureFakeIP, Address: "198.18.0.65", Range: "198.18.0.0/15"}},
+		// Go's resolver merges A and AAAA answers and sorts them by RFC 6724,
+		// so either family's placeholder can come first; with allow_fake_ip
+		// off, the refusal reads as fake-IP either way.
+		{name: "allow_fake_ip off, IPv6 placeholder first", answer: []string{"2001:2::46", "198.18.0.70"}, policy: fakeIPRefused(t),
+			want: Failure{Code: FailureFakeIP, Address: "2001:2::46", Range: "2001:2::/48"}},
+		{name: "allow_fake_ip off, IPv4 placeholder first", answer: []string{"198.18.0.70", "2001:2::46"}, policy: fakeIPRefused(t),
+			want: Failure{Code: FailureFakeIP, Address: "198.18.0.70", Range: "198.18.0.0/15"}},
 		{name: "TUN address of the proxy software", answer: []string{"198.18.0.1"}, interfaceAddrs: interfacesHolding("127.0.0.1", "198.18.0.1"),
 			want: Failure{Code: FailureReserved, Address: "198.18.0.1"}},
 		{name: "IPv6 TUN address next to a placeholder", answer: []string{"198.18.0.65", "2001:2::1"}, interfaceAddrs: interfacesHolding("2001:2::1"),
@@ -353,23 +360,6 @@ func TestGuardedDialerReportsAFakeIPAnswerThatNothingCarried(t *testing.T) {
 	answers := dnsAnswers(map[string][]string{"pypi.org": {"2001:2::46", "198.18.0.70"}})
 	want := Failure{Code: FailureFakeIP, Address: "198.18.0.70", Range: "198.18.0.0/15"}
 	const fixed = "nothing carried the connection to the fake-IP dial target"
-
-	t.Run("refused placeholders", func(t *testing.T) {
-		var log dialLog
-		dialer := &guardedDialer{
-			origin: mustURL(t, "https://pypi.org"), resolver: answers, dialContext: log.failing, interfaceAddrs: noInterfaceAddresses,
-		}
-		_, err := dialer.DialContext(context.Background(), "tcp", "pypi.org:443")
-		if err == nil || err.Error() != fixed {
-			t.Fatalf("DialContext = %v, want %q", err, fixed)
-		}
-		if got := ClassifyFailure(&url.Error{Op: "Head", URL: "https://pypi.org/", Err: err}); *got != want {
-			t.Fatalf("ClassifyFailure = %+v, want %+v", got, want)
-		}
-		if got := log.addresses(); !slices.Equal(got, []string{"198.18.0.70:443", "[2001:2::46]:443"}) {
-			t.Fatalf("dialed %v, want both placeholders, IPv4 first", got)
-		}
-	})
 
 	// The families are not interleaved as for other answers: every IPv4
 	// placeholder is dialed before an IPv6 one.

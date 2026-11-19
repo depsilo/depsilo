@@ -125,96 +125,76 @@ func TestPypiResolver(t *testing.T) {
 	})
 }
 
-func TestCargoResolver(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/crates/serde" {
-			_, _ = w.Write([]byte(`{"versions":[
+// Each resolver reads the publish time of an exact version from its
+// registry's metadata path. A Composer branch version lives only in the ~dev
+// metadata file, so the main file must not be consulted for it.
+func TestResolversReadPublishTimeFromRegistryMetadata(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		path        string
+		body        string
+		resolver    func(base string) Resolver
+		pkg         string
+		version     string
+		missingVers string // a version the metadata lacks; "" skips the check
+	}{
+		{
+			name: "cargo", path: "/crates/serde",
+			body: `{"versions":[
 				{"num":"1.0.197","created_at":"2026-06-15T12:34:56Z"},
 				{"num":"1.0.196","created_at":"2026-06-01T00:00:00Z"}
-			]}`))
-			return
-		}
-		http.NotFound(w, r)
-	}))
-	defer srv.Close()
-	r := &cargoResolver{client: http.DefaultClient, base: srv.URL}
-
-	got, err := r.Lookup(context.Background(), "serde", "1.0.197")
-	if err != nil {
-		t.Fatalf("Lookup: %v", err)
-	}
-	if !got.Equal(fixedTime) {
-		t.Errorf("got %v, want %v", got, fixedTime)
-	}
-
-	if _, err := r.Lookup(context.Background(), "serde", "99.0.0"); !errors.Is(err, ErrNotFound) {
-		t.Errorf("missing version err = %v, want ErrNotFound", err)
-	}
-}
-
-func TestRubygemsResolver(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/versions/rails.json" {
-			_, _ = w.Write([]byte(`[{"number":"7.1.0","created_at":"2026-06-15T12:34:56Z"}]`))
-			return
-		}
-		http.NotFound(w, r)
-	}))
-	defer srv.Close()
-	r := &rubygemsResolver{client: http.DefaultClient, base: srv.URL}
-
-	got, err := r.Lookup(context.Background(), "rails", "7.1.0")
-	if err != nil {
-		t.Fatalf("Lookup: %v", err)
-	}
-	if !got.Equal(fixedTime) {
-		t.Errorf("got %v, want %v", got, fixedTime)
-	}
-}
-
-func TestComposerResolver(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/p2/symfony/console.json" {
-			_, _ = w.Write([]byte(`{"packages":{"symfony/console":[
+			]}`,
+			resolver: func(base string) Resolver { return &cargoResolver{client: http.DefaultClient, base: base} },
+			pkg:      "serde", version: "1.0.197", missingVers: "99.0.0",
+		},
+		{
+			name: "rubygems", path: "/versions/rails.json",
+			body:     `[{"number":"7.1.0","created_at":"2026-06-15T12:34:56Z"}]`,
+			resolver: func(base string) Resolver { return &rubygemsResolver{client: http.DefaultClient, base: base} },
+			pkg:      "rails", version: "7.1.0",
+		},
+		{
+			name: "composer", path: "/p2/symfony/console.json",
+			body: `{"packages":{"symfony/console":[
 				{"version":"v7.0.0","time":"2026-06-15T12:34:56+00:00"}
-			]}}`))
-			return
-		}
-		http.NotFound(w, r)
-	}))
-	defer srv.Close()
-	r := &composerResolver{client: http.DefaultClient, base: srv.URL}
-
-	got, err := r.Lookup(context.Background(), "symfony/console", "v7.0.0")
-	if err != nil {
-		t.Fatalf("Lookup: %v", err)
-	}
-	if !got.Equal(fixedTime) {
-		t.Errorf("got %v, want %v", got, fixedTime)
-	}
-}
-
-func TestComposerResolver_DevVersion(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Branch versions live ONLY in the ~dev metadata file; the
-		// main file must not be consulted for them.
-		if r.URL.Path == "/p2/symfony/console~dev.json" {
-			_, _ = w.Write([]byte(`{"packages":{"symfony/console":[
+			]}}`,
+			resolver: func(base string) Resolver { return &composerResolver{client: http.DefaultClient, base: base} },
+			pkg:      "symfony/console", version: "v7.0.0",
+		},
+		{
+			name: "composer dev version", path: "/p2/symfony/console~dev.json",
+			body: `{"packages":{"symfony/console":[
 				{"version":"dev-main","time":"2026-06-15T12:34:56+00:00"}
-			]}}`))
-			return
-		}
-		http.NotFound(w, r)
-	}))
-	defer srv.Close()
-	r := &composerResolver{client: http.DefaultClient, base: srv.URL}
+			]}}`,
+			resolver: func(base string) Resolver { return &composerResolver{client: http.DefaultClient, base: base} },
+			pkg:      "symfony/console", version: "dev-main",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == test.path {
+					_, _ = w.Write([]byte(test.body))
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			defer srv.Close()
+			r := test.resolver(srv.URL)
 
-	got, err := r.Lookup(context.Background(), "symfony/console", "dev-main")
-	if err != nil {
-		t.Fatalf("Lookup: %v", err)
-	}
-	if !got.Equal(fixedTime) {
-		t.Errorf("got %v, want %v", got, fixedTime)
+			got, err := r.Lookup(context.Background(), test.pkg, test.version)
+			if err != nil {
+				t.Fatalf("Lookup: %v", err)
+			}
+			if !got.Equal(fixedTime) {
+				t.Errorf("got %v, want %v", got, fixedTime)
+			}
+			if test.missingVers == "" {
+				return
+			}
+			if _, err := r.Lookup(context.Background(), test.pkg, test.missingVers); !errors.Is(err, ErrNotFound) {
+				t.Errorf("missing version err = %v, want ErrNotFound", err)
+			}
+		})
 	}
 }
 

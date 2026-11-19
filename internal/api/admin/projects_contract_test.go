@@ -231,9 +231,9 @@ func TestProjectProxyURLTakesOnlyAnHTTPSchemeFromForwardedProto(t *testing.T) {
 		forwarded string
 		want      string
 	}{
+		// requestorigin.Scheme's own test holds the parsing rules; this case
+		// proves proxy_url takes its scheme from there.
 		{forwarded: "https, http", want: "https://depsilo.example.test/p/ai-platform"},
-		{forwarded: "HTTPS", want: "https://depsilo.example.test/p/ai-platform"},
-		{forwarded: "gopher", want: "http://depsilo.example.test/p/ai-platform"},
 	} {
 		req := httptest.NewRequest(http.MethodGet, "/projects/"+jsonNumber(project.ID), nil)
 		req.Host = "depsilo.example.test"

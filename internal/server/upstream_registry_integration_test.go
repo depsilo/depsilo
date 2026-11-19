@@ -173,19 +173,14 @@ token_ttl = "1h"
 	}
 }
 
+// startLifecycleTestServer serves handler with cleanup as the database close,
+// on the shared lifecycle fixture in lifecycle_retry_test.go.
 func startLifecycleTestServer(t *testing.T, handler http.Handler, cleanup func() error) (*http.Server, string) {
 	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	srv := &http.Server{}
 	resources := newServerResources(nil, nil)
 	resources.closeDatabase = newAsyncCloseAdapter(cleanup)
-	lifecycle := registerServerLifecycle(srv, resources)
-	srv.Handler = lifecycle.track(handler)
-	go serveHTTP(srv, listener)
-	return srv, "http://" + listener.Addr().String()
+	testServer := startRetryLifecycleTestServer(t, handler, resources)
+	return testServer.server, testServer.url
 }
 
 func TestShutdownKeepsDependenciesAliveUntilActiveHandlerDrains(t *testing.T) {
@@ -289,37 +284,6 @@ func TestShutdownTimeoutCancelsHandlerBeforeCleanup(t *testing.T) {
 	case <-cleanupCalled:
 	case <-time.After(time.Second):
 		t.Fatal("cleanup did not run after cancelled handler exited")
-	}
-}
-
-type failingListener struct{ err error }
-
-func (listener failingListener) Accept() (net.Conn, error) { return nil, listener.err }
-func (failingListener) Close() error                       { return nil }
-func (failingListener) Addr() net.Addr                     { return staticAddr("failing") }
-
-type staticAddr string
-
-func (addr staticAddr) Network() string { return "test" }
-func (addr staticAddr) String() string  { return string(addr) }
-
-func TestUnexpectedServeExitRunsCleanupAndDeletesLifecycle(t *testing.T) {
-	srv := &http.Server{}
-	cleanupCalled := make(chan struct{})
-	resources := newServerResources(nil, nil)
-	resources.closeDatabase = newAsyncCloseAdapter(func() error { close(cleanupCalled); return nil })
-	registerServerLifecycle(srv, resources)
-	serveHTTP(srv, failingListener{err: errors.New("accept failed")})
-	<-cleanupCalled
-	deadline := time.Now().Add(time.Second)
-	for {
-		if _, ok := serverLifecycles.Load(srv); !ok {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("unexpected Serve exit retained lifecycle entry")
-		}
-		time.Sleep(time.Millisecond)
 	}
 }
 

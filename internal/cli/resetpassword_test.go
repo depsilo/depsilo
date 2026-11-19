@@ -872,29 +872,14 @@ func TestResetPasswordTakesNoPasswordFromTheCommandLine(t *testing.T) {
 			t.Fatalf("args %q: the rejected password was echoed: %q", args, run.stderr)
 		}
 	}
+	// Asked for, the same usage is the answer on standard output. That help
+	// touches no state is pinned for every command by
+	// TestBinaryDispatchesEveryCommandNamedInHelp.
+	if run := runResetPasswordPiped(t, nil, "admin", "--help"); run.code != 0 || run.stderr != "" ||
+		!strings.HasPrefix(run.stdout, "Usage:\n    depsilo reset-password [--config PATH] [<username>]\n") {
+		t.Fatalf("--help: code=%d stdout=%q stderr=%q", run.code, run.stdout, run.stderr)
+	}
 	assertResetPasswordChangedNothing(t, before, fixture.state(t))
-}
-
-func TestResetPasswordHelpTouchesNoState(t *testing.T) {
-	home := t.TempDir()
-	clearDepsiloEnvironment(t)
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	t.Chdir(t.TempDir())
-
-	for _, args := range [][]string{{"--help"}, {"-h"}, {"admin", "--help"}} {
-		run := runResetPasswordPiped(t, nil, args...)
-		if run.code != 0 || run.stderr != "" || !strings.HasPrefix(run.stdout, "Usage:\n    depsilo reset-password [--config PATH] [<username>]\n") {
-			t.Fatalf("args %q: code=%d stdout=%q stderr=%q", args, run.code, run.stdout, run.stderr)
-		}
-	}
-	entries, err := os.ReadDir(home)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(entries) != 0 {
-		t.Fatalf("--help created state under the home directory: %v", entries)
-	}
 }
 
 // Neither the injected streams nor the process's own standard output (where

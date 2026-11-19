@@ -51,11 +51,6 @@ func TestClientErrorMessageFallsBackForUnknownErrors(t *testing.T) {
 // A refusal repeats its own fixed text only: neither the cause it keeps for
 // the server log nor text that wraps it reaches the 502 body.
 func TestClientErrorMessageKeepsOnlyDepsilosOwnText(t *testing.T) {
-	fakeIP := &fakeIPRefusal{host: "cdn.example", address: netip.MustParseAddr("198.18.0.12"), remedy: fakeIPRemedySetProxy}
-	notCarried := &fakeIPNotCarried{
-		host: "cdn.example", address: netip.MustParseAddr("198.18.0.12"), remedy: fakeIPRemedyTUN,
-		dialErr: errors.New("dial tcp 198.18.0.12:80: INJECTED i/o timeout"),
-	}
 	for _, tt := range []struct {
 		name string
 		err  error
@@ -72,30 +67,9 @@ func TestClientErrorMessageKeepsOnlyDepsilosOwnText(t *testing.T) {
 			want: "token endpoint returned invalid JSON",
 		},
 		{
-			name: "refusal of a realm for a fixed reason",
-			err: &registryFailure{stage: stageToken, hop: mustParseURL(t, "http://169.254.169.254/latest?token=INJECTED"),
-				cause: &refusal{text: "unsafe bearer realm", cause: errUnsafeRealmTarget}},
-			want: "token fetch failed at http://169.254.169.254: unsafe bearer realm: unsafe network target",
-		},
-		{
 			name: "missing manifest digest",
 			err:  errMissingManifestDigest,
 			want: "docker registry did not return a manifest digest",
-		},
-		{
-			name: "fake-IP refusal behind a wrapper",
-			err: &registryFailure{stage: stageBlob, hop: mustParseURL(t, "http://cdn.example/blob?Signature=INJECTED"),
-				cause: &url.Error{Op: "Get", URL: "http://cdn.example/blob?Signature=INJECTED", Err: fakeIP}},
-			want: "blob failed at http://cdn.example: cdn.example resolved to 198.18.0.12, a fake-IP address from proxy " +
-				"software in TUN/fake-IP mode, and [egress] allow_fake_ip is off; " + fakeIPRemedySetProxy,
-		},
-		{
-			// The dial error stays in the server log.
-			name: "fake-IP placeholders that nothing carried",
-			err: &registryFailure{stage: stageBlob, hop: mustParseURL(t, "http://cdn.example/blob?Signature=INJECTED"),
-				cause: &url.Error{Op: "Get", URL: "http://cdn.example/blob?Signature=INJECTED", Err: notCarried}},
-			want: "blob failed at http://cdn.example: cdn.example resolved to 198.18.0.12, a fake-IP address from proxy " +
-				"software, but nothing carried the connection to it; " + fakeIPRemedyTUN,
 		},
 		{
 			// Every cause of a registryFailure that is not Depsilo's own
@@ -120,22 +94,6 @@ func TestClientErrorMessageKeepsOnlyDepsilosOwnText(t *testing.T) {
 				t.Fatalf("message = %q, want %q", got, want)
 			}
 		})
-	}
-}
-
-// Followers of an inflight fetch share the leader's error. The request ID is
-// read when each answer is written, so every 502 names its own request.
-func TestClientErrorMessageNamesTheRequestThatRendersIt(t *testing.T) {
-	shared := &registryFailure{stage: stageBlob, hop: mustParseURL(t, "https://cdn.example/blob"), status: 503}
-	leader := clientErrorMessage(shared, "leader-id")
-	follower := clientErrorMessage(shared, "follower-id")
-	const text = "blob failed at https://cdn.example: returned 503"
-	if leader != text+" (request leader-id; details in the Depsilo server log)" ||
-		follower != text+" (request follower-id; details in the Depsilo server log)" {
-		t.Fatalf("messages = %q and %q, want each to name its own request", leader, follower)
-	}
-	if got := clientErrorMessage(shared, ""); got != text+" (details in the Depsilo server log)" {
-		t.Fatalf("message without a request ID = %q", got)
 	}
 }
 

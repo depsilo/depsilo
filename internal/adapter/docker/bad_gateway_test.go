@@ -136,11 +136,9 @@ func TestBadGatewayMessageNamesOnlyTheStageOriginAndReason(t *testing.T) {
 		name     string
 		path     string
 		registry http.HandlerFunc
-		// hosts are further servers, refused hosts refuse connections, and
-		// fakeIP hosts are answered with a fake-IP address.
+		// hosts are further servers, and refused hosts refuse connections.
 		hosts         map[string]http.HandlerFunc
 		refused       []string
-		fakeIP        []string
 		want          string
 		hidden        []string
 		wantLogged    []string
@@ -159,20 +157,6 @@ func TestBadGatewayMessageNamesOnlyTheStageOriginAndReason(t *testing.T) {
 			hiddenFromLog: []string{"SECRET-SIGNATURE", "K2EXAMPLEKEY", "1763400000"},
 		},
 		{
-			// The placeholder is dialed, and the test's dialer refuses it,
-			// as a network without a TUN would.
-			name: "presigned redirect whose host has only a fake-IP answer that nothing carried",
-			path: blob,
-			registry: redirectTo("http://cdn.example/bucket/blob?X-Amz-Algorithm=AWS4-HMAC-SHA256" +
-				"&X-Amz-Credential=AKIAEXAMPLE%2F20261117%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Signature=SECRET-SIGNATURE"),
-			fakeIP: []string{"cdn.example"},
-			want:   "blob failed at http://cdn.example: cdn.example resolved to 198.18.0.12" + fakeIPNotCarriedReason,
-			hidden: []string{"X-Amz", "AKIAEXAMPLE", "SECRET-SIGNATURE", "/bucket", "unexpected dial", "dial error"},
-			wantLogged: []string{"X-Amz-Credential=REDACTED&X-Amz-Signature=REDACTED",
-				"(dial error: unexpected dial to 198.18.0.12:80)"},
-			hiddenFromLog: []string{"AKIAEXAMPLE", "SECRET-SIGNATURE"},
-		},
-		{
 			name:          "redirect to the metadata service",
 			path:          blob,
 			registry:      redirectTo("http://169.254.169.254/latest/meta-data/iam/security-credentials/?token=METADATA-SECRET"),
@@ -188,15 +172,6 @@ func TestBadGatewayMessageNamesOnlyTheStageOriginAndReason(t *testing.T) {
 			want:          "blob failed at http://169.254.169.254: unsafe Docker redirect target",
 			hidden:        []string{"/latest", "METADATA-SECRET"},
 			hiddenFromLog: []string{"METADATA-SECRET"},
-		},
-		{
-			name:          "redirect whose Location cannot be parsed",
-			path:          blob,
-			registry:      redirectTo("http://cdn.example/%zz?Signature=SECRET-SIGNATURE"),
-			want:          "blob failed at http://registry.example: network",
-			hidden:        []string{"cdn.example", "%zz", "SECRET-SIGNATURE", "Location"},
-			wantLogged:    []string{"failed to parse Location header"},
-			hiddenFromLog: []string{"SECRET-SIGNATURE"},
 		},
 		{
 			// Go quotes a Location it cannot parse, twice, in its error.
@@ -291,14 +266,6 @@ func TestBadGatewayMessageNamesOnlyTheStageOriginAndReason(t *testing.T) {
 			hiddenFromLog: []string{"ACCOUNT-SECRET"},
 		},
 		{
-			name: "ECR access denied for the configured identity",
-			path: manifest,
-			registry: answerWith(http.StatusForbidden,
-				`{"errors":[{"code":"DENIED","message":"User: arn:aws:iam::123456789012:user/x is not authorized"}]}`),
-			want:   "manifest failed at http://registry.example: returned 403 (DENIED)",
-			hidden: []string{"arn:", "123456789012", "not authorized"},
-		},
-		{
 			name: "tag list answered with an HTML error page",
 			path: "/v2/library/widget/tags/list?n=10&last=TAG-CURSOR",
 			registry: answerWith(http.StatusInternalServerError,
@@ -327,9 +294,6 @@ func TestBadGatewayMessageNamesOnlyTheStageOriginAndReason(t *testing.T) {
 				answers[host] = []net.IPAddr{{IP: net.ParseIP(address)}}
 				dialer[address+":80"] = closedAddress(t)
 				next++
-			}
-			for index, host := range tt.fakeIP {
-				answers[host] = []net.IPAddr{{IP: net.ParseIP(fmt.Sprintf("198.18.0.%d", 12+index))}}
 			}
 			core, logs := observer.New(zap.ErrorLevel)
 			t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
@@ -377,16 +341,6 @@ func TestBadGatewayExplainsUniqueLocalFakeIPWithoutItsAddresses(t *testing.T) {
 		hidden  []string
 		logged  string
 	}{
-		{
-			name:    "registry answered from Surge's IPv6 prefix",
-			answers: staticIPResolver{"registry.example": dnsAnswer("fd00:6152::46")},
-			want: "auth discovery failed at http://registry.example: registry.example resolved into fd00:6152::/32, " +
-				"an IPv6 fake-IP range that Depsilo cannot tell from a private network; " +
-				"set the proxy software's IPv6 fake-IP range (fake-ip-range6 or inet6_range) to 2001:2::/48 " +
-				"or turn IPv6 fake-IP off, see docs/deployment.md#upstream-network-egress",
-			hidden: []string{"fd00:6152::46"},
-			logged: "(DNS answer: fd00:6152::46)",
-		},
 		{
 			name: "redirect target answered with a placeholder and another unique-local address",
 			answers: staticIPResolver{
@@ -833,9 +787,9 @@ func tunnelTo(t *testing.T, address string) http.HandlerFunc {
 // real DNS answer; for the registry's own host answered publicly, when the
 // proxy refused CONNECT or answered with such a status, no_proxy. A hint
 // names its host as the 502 body names the origin. A TLS failure, the
-// registry's own proxy, the direct leg and a proxy that cannot be reached
-// give no hint, and no 502 names the proxy, the proxy's text or an address
-// of the answer.
+// registry's own proxy and the direct leg give no hint (a proxy that cannot
+// be reached: TestUnreachableProxyAddressStaysOutOfTheBadGatewayBody), and no
+// 502 names the proxy, the proxy's text or an address of the answer.
 func TestBadGatewayHintsWhyTheDefaultProxyFailed(t *testing.T) {
 	const manifest = "/v2/library/widget/manifests/latest"
 	const blob = "/v2/library/widget/blobs/sha256:4f1e"
@@ -852,11 +806,10 @@ func TestBadGatewayHintsWhyTheDefaultProxyFailed(t *testing.T) {
 	for _, tt := range []struct {
 		name     string
 		registry string
-		// own makes the proxy the registry's own; unreachable replaces the
-		// default proxy with an address that refuses connections.
-		own, unreachable bool
-		answers          staticIPResolver
-		proxy            http.HandlerFunc
+		// own makes the proxy the registry's own.
+		own     bool
+		answers staticIPResolver
+		proxy   http.HandlerFunc
 		// direct serves the direct dials; nil refuses them.
 		direct http.HandlerFunc
 		path   string
@@ -896,22 +849,6 @@ func TestBadGatewayHintsWhyTheDefaultProxyFailed(t *testing.T) {
 			proxy:    gatewayAnswer(http.StatusBadGateway),
 			path:     manifest,
 			want:     "auth discovery failed at http://registry.example: returned 502 through the egress proxy" + noProxyHintFor("registry.example"),
-		},
-		{
-			name:     "503 from the proxy for plain http",
-			registry: "http://registry.example",
-			answers:  publicAnswers,
-			proxy:    gatewayAnswer(http.StatusServiceUnavailable),
-			path:     manifest,
-			want:     "auth discovery failed at http://registry.example: returned 503 through the egress proxy" + noProxyHintFor("registry.example"),
-		},
-		{
-			name:     "504 from the proxy for plain http",
-			registry: "http://registry.home.lan",
-			answers:  fakeIPAnswers,
-			proxy:    gatewayAnswer(http.StatusGatewayTimeout),
-			path:     manifest,
-			want:     "auth discovery failed at http://registry.home.lan: returned 504 through the egress proxy" + fakeIPProxyHintFor("registry.home.lan"),
 		},
 		{
 			name:          "tunnel closed right after CONNECT for a fake-IP answer",
@@ -1024,22 +961,10 @@ func TestBadGatewayHintsWhyTheDefaultProxyFailed(t *testing.T) {
 			path:     manifest,
 			want:     "auth discovery failed at http://harbor.lan: connection_refused",
 		},
-		{
-			name:        "default proxy that cannot be reached",
-			registry:    "https://registry.home.lan",
-			unreachable: true,
-			answers:     fakeIPAnswers,
-			path:        manifest,
-			want:        "auth discovery failed at https://registry.home.lan: connection to the egress proxy failed",
-		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			proxy := newRecordingProxy(t, tt.proxy)
 			proxyURL, proxyAddress := proxy.URL, proxy.address()
-			if tt.unreachable {
-				proxyAddress = closedAddress(t)
-				proxyURL = "http://" + proxyAddress
-			}
 			dialer := &routedDialer{proxies: map[string]bool{proxyAddress: true}, direct: closedAddress(t)}
 			if tt.direct != nil {
 				server := httptest.NewServer(tt.direct)
@@ -1148,14 +1073,12 @@ func TestProxiedLegRefusesAGatewayStatusOnlyForPlainHTTP(t *testing.T) {
 }
 
 // The direct leg's 502 names the host, never the private address it
-// resolved to or the address that a changed answer brought, and never the
-// proxy; the server log keeps the changed answer.
+// resolved to, and never the proxy. (An answer that changed at the dial:
+// TestDirectLegChecksTheAnswerAgainWhenItDials.)
 func TestBadGatewayOfTheDirectLegNamesNoAddress(t *testing.T) {
 	for _, tt := range []struct {
 		name string
 		path string
-		// changed is the host whose answer turns public at its dial.
-		changed string
 		// refused makes the registry refuse connections.
 		refused bool
 		want    string
@@ -1169,20 +1092,6 @@ func TestBadGatewayOfTheDirectLegNamesNoAddress(t *testing.T) {
 			logged:  "connection refused",
 		},
 		{
-			name:    "registry whose answer turned public",
-			path:    "/v2/library/widget/manifests/latest",
-			changed: "harbor.lan",
-			want:    "auth discovery failed at http://harbor.lan: " + directTargetLeftPrivateNetwork,
-			logged:  "harbor.lan resolved to 93.184.216.34",
-		},
-		{
-			name:    "storage redirect whose answer turned public",
-			path:    "/v2/library/widget/blobs/sha256:4f1e",
-			changed: "minio.lan",
-			want:    "blob failed at http://minio.lan: " + directTargetLeftPrivateNetwork,
-			logged:  "minio.lan resolved to 93.184.216.34",
-		},
-		{
 			name:   "storage redirect to a loopback answer",
 			path:   "/v2/library/widget/blobs/sha256:4f1e",
 			want:   "blob failed at http://loopback.lan: Docker proxy target crossed network scope",
@@ -1190,11 +1099,7 @@ func TestBadGatewayOfTheDirectLegNamesNoAddress(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			location := "http://minio.lan/bucket/blob?X-Amz-Signature=SECRET-SIGNATURE"
-			if tt.changed == "" && !tt.refused {
-				location = "http://loopback.lan/bucket/blob"
-			}
-			registry := httptest.NewServer(redirectTo(location))
+			registry := httptest.NewServer(redirectTo("http://loopback.lan/bucket/blob"))
 			t.Cleanup(registry.Close)
 			proxy := newRecordingProxy(t, nil)
 			dialer := &routedDialer{proxies: map[string]bool{proxy.address(): true}, direct: registry.Listener.Addr().String()}
@@ -1205,21 +1110,7 @@ func TestBadGatewayOfTheDirectLegNamesNoAddress(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			answers := map[string]string{"harbor.lan": "192.168.1.20", "minio.lan": "192.168.1.22", "loopback.lan": "127.0.0.1"}
-			var mu sync.Mutex
-			lookups := map[string]int{}
-			resolve := ipResolverFunc(func(_ context.Context, host string) ([]net.IPAddr, error) {
-				mu.Lock()
-				defer mu.Unlock()
-				lookups[host]++
-				if host == tt.changed && lookups[host] > 1 {
-					return dnsAnswer("93.184.216.34"), nil
-				}
-				if address, ok := answers[host]; ok {
-					return dnsAnswer(address), nil
-				}
-				return nil, fmt.Errorf("unexpected DNS lookup for %s", host)
-			})
+			resolve := staticIPResolver{"harbor.lan": dnsAnswer("192.168.1.20"), "loopback.lan": dnsAnswer("127.0.0.1")}
 			core, logs := observer.New(zap.ErrorLevel)
 			t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
 			router, _ := newRoutedDockerRouter(t, config.RegistryConfig{Name: "hub", URL: "http://harbor.lan"}, policy, resolve, dialer.DialContext, false)
@@ -1230,7 +1121,7 @@ func TestBadGatewayOfTheDirectLegNamesNoAddress(t *testing.T) {
 				t.Fatalf("502 message = %q, want %q", message, tt.want+testRequestSuffix)
 			}
 			for _, hidden := range []string{
-				"192.168.1.20", "192.168.1.22", "127.0.0.1", "93.184.216.34", proxy.address(), "proxy-secret", "SECRET-SIGNATURE",
+				"192.168.1.20", "127.0.0.1", proxy.address(), "proxy-secret",
 			} {
 				if strings.Contains(message, hidden) {
 					t.Fatalf("502 message %q contains %q", message, hidden)

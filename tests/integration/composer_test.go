@@ -31,29 +31,10 @@ func TestComposer_MirrorsInjected(t *testing.T) {
 	}
 }
 
-func TestComposer_DistDownload(t *testing.T) {
-	resp := httpGet(t, depsiloURL+"/composer/dist/test/pkg/1.0.0.0/abc.zip")
-	assertStatus(t, resp, 200)
-	body := readBody(t, resp)
-	if body != "FAKE_COMPOSER_DIST" {
-		t.Errorf("unexpected dist body: %q", body)
-	}
-}
-
-func TestComposer_DistCacheHit(t *testing.T) {
-	httpGet(t, depsiloURL+"/composer/dist/test/pkg/1.0.0.0/abc.zip")
-	before := mockServer.RequestCount()
-	resp := httpGet(t, depsiloURL+"/composer/dist/test/pkg/1.0.0.0/abc.zip")
-	assertStatus(t, resp, 200)
-	body := readBody(t, resp)
-	if body != "FAKE_COMPOSER_DIST" {
-		t.Errorf("unexpected dist body on cache hit: %q", body)
-	}
-	// Both the dist blob (long TTL) and the p2 metadata it resolves
-	// through (fresh within its short TTL) must come from cache.
-	if got := mockServer.RequestCount(); got != before {
-		t.Errorf("expected dist cache hit, upstream saw %d new request(s)", got-before)
-	}
+// On the second fetch both the dist blob (long TTL) and the p2 metadata it
+// resolves through (fresh within its short TTL) must come from cache.
+func TestComposer_DistMissThenHit(t *testing.T) {
+	assertMissThenHit(t, depsiloURL+"/composer/dist/test/pkg/1.0.0.0/abc.zip", "FAKE_COMPOSER_DIST", false)
 }
 
 func TestComposer_DistUnknownVersion(t *testing.T) {

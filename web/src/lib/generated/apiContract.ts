@@ -2739,7 +2739,6 @@ export interface SecurityImportResponse {
   packages: number /* int */;
   duplicates: number /* int */;
   skipped: number /* int */;
-  rules_created: number /* int */;
 }
 /**
  * SecurityPolicy is one ecosystem's advisory policy. GET

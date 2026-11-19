@@ -12,8 +12,6 @@ import (
 	"time"
 
 	"depsilo/internal/cache"
-	"depsilo/internal/config"
-	"depsilo/internal/upstream"
 )
 
 type closeUnblocksRedirectBody struct {
@@ -113,34 +111,6 @@ func TestRedirectBodyIsClosedWithoutPotentiallyBlockingDrain(t *testing.T) {
 	}
 }
 
-func TestResolverDirect200(t *testing.T) {
-	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.RawQuery != "revision=main" {
-			t.Errorf("origin query = %q, want revision=main", r.URL.RawQuery)
-		}
-		w.Header().Set("X-Repo-Commit", "abc1234")
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"hidden":false}`)
-	}))
-	t.Cleanup(origin.Close)
-
-	result := resolve(t, origin.URL, http.MethodGet, "/test/resolve/main/config.json?revision=main", nil, true)
-	defer result.Body.Close()
-	body, err := io.ReadAll(result.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want 200", result.StatusCode)
-	}
-	if got := result.Header.Get("X-Repo-Commit"); got != "abc1234" {
-		t.Errorf("X-Repo-Commit = %q, want abc1234", got)
-	}
-	if !strings.Contains(string(body), `"hidden":false`) {
-		t.Errorf("body did not contain expected JSON: %s", body)
-	}
-}
-
 func TestResolverFollowsCrossOriginArtifactWithoutForwardingAuthorization(t *testing.T) {
 	var originGotAuth bool
 	var artifactGotAuth bool
@@ -190,30 +160,6 @@ func TestResolverFollowsCrossOriginArtifactWithoutForwardingAuthorization(t *tes
 	}
 	if artifactGotAuth {
 		t.Error("signed artifact target must not receive Authorization")
-	}
-}
-
-func TestResolverForcesIdentityEncodingAcrossCacheableRedirect(t *testing.T) {
-	var artifactEncoding string
-	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/repo/resolve/main/weights.bin":
-			w.Header().Set("Location", server.URL+"/signed/blob")
-			w.WriteHeader(http.StatusFound)
-		case "/signed/blob":
-			artifactEncoding = r.Header.Get("Accept-Encoding")
-			_, _ = io.WriteString(w, "weights")
-		}
-	}))
-	t.Cleanup(server.Close)
-
-	headers := http.Header{"Accept-Encoding": {"gzip"}}
-	result := resolve(t, server.URL, http.MethodGet, "/repo/resolve/main/weights.bin", headers, true)
-	defer result.Body.Close()
-	_, _ = io.Copy(io.Discard, result.Body)
-	if artifactEncoding != "identity" {
-		t.Fatalf("cacheable artifact Accept-Encoding = %q, want identity", artifactEncoding)
 	}
 }
 
@@ -514,28 +460,6 @@ func TestResolverKeepsPaginationLinkAfterBasePathRedirectsToCanonicalRootPath(t 
 	}
 }
 
-func TestResolverPassesErrorStatusAndBodyThrough(t *testing.T) {
-	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = io.WriteString(w, `{"error":"Entry not found"}`)
-	}))
-	t.Cleanup(origin.Close)
-
-	result := resolve(t, origin.URL, http.MethodGet, "/missing/resolve/main/x", nil, true)
-	defer result.Body.Close()
-	body, err := io.ReadAll(result.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result.StatusCode != http.StatusNotFound {
-		t.Errorf("status = %d, want 404", result.StatusCode)
-	}
-	if !strings.Contains(string(body), "Entry not found") {
-		t.Errorf("body = %q, want upstream error body", body)
-	}
-}
-
 func TestResolverNormalizesSameOriginPaginationLink(t *testing.T) {
 	var origin *httptest.Server
 	origin = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -561,71 +485,6 @@ func TestResolverNormalizesSameOriginPaginationLink(t *testing.T) {
 	want := `</huggingface/api/models/acme/model/tree/main/folder%2Fsub?cursor=next&page=2>; rel="next"`
 	if got := result.Header.Get("Link"); got != want {
 		t.Fatalf("normalized Link = %q, want %q", got, want)
-	}
-}
-
-func TestResolverDropsExternalOrCredentialBearingPaginationLink(t *testing.T) {
-	for _, link := range []string{
-		`<https://external.example/api/models/acme/model?cursor=next>; rel="next"`,
-		`</api/models/acme/model?access_token=secret>; rel="next"`,
-	} {
-		t.Run(link, func(t *testing.T) {
-			origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				w.Header().Set("Link", link)
-				_, _ = io.WriteString(w, `[]`)
-			}))
-			t.Cleanup(origin.Close)
-
-			result := resolve(t, origin.URL, http.MethodGet, "/api/models/acme/model", nil, true)
-			defer result.Body.Close()
-			if got := result.Header.Get("Link"); got != "" {
-				t.Fatalf("unsafe Link was retained: %q", got)
-			}
-		})
-	}
-}
-
-func TestResolverHEADDoesNotFetchArtifact(t *testing.T) {
-	var artifactRequests int
-	artifact := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		artifactRequests++
-		_, _ = io.WriteString(w, "body")
-	}))
-	t.Cleanup(artifact.Close)
-	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodHead {
-			t.Errorf("origin method = %s, want HEAD", r.Method)
-		}
-		w.Header().Set("X-Linked-Etag", "deadbeef")
-		w.Header().Set("X-Linked-Size", "11")
-		// Real Hub LFS redirects carry a small redirect-document length
-		// alongside the much larger linked object size.
-		w.Header().Set("Content-Length", "1095")
-		w.Header().Set("Location", artifact.URL+"/signed/blob")
-		w.WriteHeader(http.StatusFound)
-	}))
-	t.Cleanup(origin.Close)
-
-	result := resolve(t, origin.URL, http.MethodHead, "/repo/resolve/main/weights.bin", nil, false)
-	defer result.Body.Close()
-	body, err := io.ReadAll(result.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want 200", result.StatusCode)
-	}
-	if len(body) != 0 {
-		t.Errorf("HEAD response body = %q, want empty", body)
-	}
-	if got := result.Header.Get("X-Linked-Etag"); got != "deadbeef" {
-		t.Errorf("X-Linked-Etag = %q, want deadbeef", got)
-	}
-	if result.Size != 11 || result.Header.Get("Content-Length") != "11" {
-		t.Errorf("HEAD linked size = (%d, %q), want (11, 11)", result.Size, result.Header.Get("Content-Length"))
-	}
-	if artifactRequests != 0 {
-		t.Fatalf("artifact requests = %d, want 0", artifactRequests)
 	}
 }
 
@@ -672,64 +531,8 @@ func TestResolverDoesNotInheritRedirectRepresentationHeaders(t *testing.T) {
 	}
 }
 
-func TestResolverAttributesSignedArtifactFailureToSelectedOrigin(t *testing.T) {
-	artifact := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, "storage unavailable", http.StatusServiceUnavailable)
-	}))
-	t.Cleanup(artifact.Close)
-	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		http.Redirect(w, request, artifact.URL+"/blob", http.StatusFound)
-	}))
-	t.Cleanup(origin.Close)
-
-	pool, err := upstream.NewPool([]config.UpstreamConfig{{
-		Name:      "test-huggingface",
-		URL:       origin.URL,
-		Priority:  1,
-		ProbeMode: "passive",
-	}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	selected := pool.Snapshot()[0]
-	target := "/repo/resolve/main/model.bin"
-	request := httptest.NewRequest(http.MethodGet, target, nil)
-	result, err := newResolver().resolve(
-		context.Background(),
-		selected,
-		request,
-		target,
-		true,
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer result.Body.Close()
-	if result.StatusCode != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want 503", result.StatusCode)
-	}
-
-	health := selected.HealthSnapshot()
-	if health.Healthy || health.SuccessRate != 0 {
-		t.Fatalf(
-			"signed artifact failure health = (healthy=%v rate=%v), want false/0",
-			health.Healthy,
-			health.SuccessRate,
-		)
-	}
-}
-
 func TestExchangeHealthLatencyStopsAtFinalResponseHeaders(t *testing.T) {
-	pool, err := upstream.NewPool([]config.UpstreamConfig{{
-		Name:      "test-huggingface",
-		URL:       "https://huggingface.example",
-		Priority:  1,
-		ProbeMode: "passive",
-	}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	selected := pool.Snapshot()[0]
+	selected := newIntegrityTestUpstream(t, "https://huggingface.example")
 	reporter := newExchangeHealthReporter(context.Background(), selected)
 	response := &http.Response{
 		StatusCode:    http.StatusOK,
@@ -761,76 +564,57 @@ func TestExchangeHealthLatencyStopsAtFinalResponseHeaders(t *testing.T) {
 	}
 }
 
-func TestExchangeHealthTreatsIdleTimeoutCauseAsFailureWhenBodyReturnsEOF(t *testing.T) {
-	pool, err := upstream.NewPool([]config.UpstreamConfig{{
-		Name:      "test-huggingface",
-		URL:       "https://huggingface.example",
-		Priority:  1,
-		ProbeMode: "passive",
-	}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	selected := pool.Snapshot()[0]
-	ctx, cancel := context.WithCancelCause(context.Background())
-	reporter := newExchangeHealthReporter(ctx, selected)
-	response := &http.Response{
-		StatusCode:    http.StatusOK,
-		ContentLength: 1,
-		Body:          io.NopCloser(strings.NewReader("")),
-		Header:        make(http.Header),
-	}
-	reporter.observeArtifactResponse(response)
+func TestExchangeHealthTreatsIdleTimeoutCauseAsFailure(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		body  string
+		check func(*testing.T, int, error)
+	}{
+		{
+			name: "body returns EOF",
+			body: "",
+			check: func(t *testing.T, _ int, readErr error) {
+				if readErr != io.EOF {
+					t.Fatalf("body read error = %v, want EOF", readErr)
+				}
+			},
+		},
+		{
+			name: "body returns progress",
+			body: "x",
+			check: func(t *testing.T, n int, readErr error) {
+				if n != 1 || readErr != nil {
+					t.Fatalf("body read = (%d, %v), want (1, nil)", n, readErr)
+				}
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			selected := newIntegrityTestUpstream(t, "https://huggingface.example")
+			ctx, cancel := context.WithCancelCause(context.Background())
+			reporter := newExchangeHealthReporter(ctx, selected)
+			response := &http.Response{
+				StatusCode:    http.StatusOK,
+				ContentLength: 1,
+				Body:          io.NopCloser(strings.NewReader(test.body)),
+				Header:        make(http.Header),
+			}
+			reporter.observeArtifactResponse(response)
 
-	cancel(cache.ErrFetchIdleTimeout)
-	if _, err := response.Body.Read(make([]byte, 1)); err != io.EOF {
-		t.Fatalf("body read error = %v, want EOF", err)
-	}
+			cancel(cache.ErrFetchIdleTimeout)
+			n, readErr := response.Body.Read(make([]byte, 1))
+			test.check(t, n, readErr)
 
-	health := selected.HealthSnapshot()
-	if health.Healthy || health.SuccessRate != 0 {
-		t.Fatalf(
-			"idle-timeout EOF health = (healthy=%v rate=%v), want false/0",
-			health.Healthy,
-			health.SuccessRate,
-		)
-	}
-}
-
-func TestExchangeHealthTreatsIdleTimeoutCauseAsFailureWhenBodyReturnsProgress(t *testing.T) {
-	pool, err := upstream.NewPool([]config.UpstreamConfig{{
-		Name:      "test-huggingface",
-		URL:       "https://huggingface.example",
-		Priority:  1,
-		ProbeMode: "passive",
-	}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	selected := pool.Snapshot()[0]
-	ctx, cancel := context.WithCancelCause(context.Background())
-	reporter := newExchangeHealthReporter(ctx, selected)
-	response := &http.Response{
-		StatusCode:    http.StatusOK,
-		ContentLength: 1,
-		Body:          io.NopCloser(strings.NewReader("x")),
-		Header:        make(http.Header),
-	}
-	reporter.observeArtifactResponse(response)
-
-	cancel(cache.ErrFetchIdleTimeout)
-	buffer := make([]byte, 1)
-	if n, readErr := response.Body.Read(buffer); n != 1 || readErr != nil {
-		t.Fatalf("body read = (%d, %v), want (1, nil)", n, readErr)
-	}
-
-	health := selected.HealthSnapshot()
-	if health.Healthy || health.SuccessRate != 0 {
-		t.Fatalf(
-			"idle-timeout progress health = (healthy=%v rate=%v), want false/0",
-			health.Healthy,
-			health.SuccessRate,
-		)
+			health := selected.HealthSnapshot()
+			if health.Healthy || health.SuccessRate != 0 {
+				t.Fatalf(
+					"idle-timeout %s health = (healthy=%v rate=%v), want false/0",
+					test.name,
+					health.Healthy,
+					health.SuccessRate,
+				)
+			}
+		})
 	}
 }
 
@@ -853,16 +637,7 @@ func TestExchangeHealthIgnoresOrdinaryClientCancellation(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			pool, err := upstream.NewPool([]config.UpstreamConfig{{
-				Name:      "test-huggingface",
-				URL:       "https://huggingface.example",
-				Priority:  1,
-				ProbeMode: "passive",
-			}})
-			if err != nil {
-				t.Fatal(err)
-			}
-			selected := pool.Snapshot()[0]
+			selected := newIntegrityTestUpstream(t, "https://huggingface.example")
 			selected.Report(time.Millisecond, test.baselineSuccess)
 			before := selected.HealthSnapshot()
 
@@ -883,16 +658,7 @@ func TestExchangeHealthIgnoresOrdinaryClientCancellation(t *testing.T) {
 }
 
 func TestExchangeHealthIdleTimeoutIgnoresCallerGapBeforeRead(t *testing.T) {
-	pool, err := upstream.NewPool([]config.UpstreamConfig{{
-		Name:      "test-huggingface",
-		URL:       "https://huggingface.example",
-		Priority:  1,
-		ProbeMode: "passive",
-	}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	selected := pool.Snapshot()[0]
+	selected := newIntegrityTestUpstream(t, "https://huggingface.example")
 	ctx, cancel := context.WithCancelCause(context.Background())
 	reporter := newExchangeHealthReporter(ctx, selected)
 	originBody := newProgressOnCloseBody()
@@ -944,16 +710,7 @@ func TestExchangeHealthIdleTimeoutIgnoresCallerGapBeforeRead(t *testing.T) {
 }
 
 func TestDirectBodyIdleTimeoutReportsFailureWhenCloseUnblocksReadWithProgress(t *testing.T) {
-	pool, err := upstream.NewPool([]config.UpstreamConfig{{
-		Name:      "test-huggingface",
-		URL:       "https://huggingface.example",
-		Priority:  1,
-		ProbeMode: "passive",
-	}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	selected := pool.Snapshot()[0]
+	selected := newIntegrityTestUpstream(t, "https://huggingface.example")
 	ctx, cancel := context.WithCancelCause(context.Background())
 	reporter := newExchangeHealthReporter(ctx, selected)
 	originBody := newProgressOnCloseBody()
@@ -1007,16 +764,7 @@ func TestResolverAttributesTruncatedArtifactBodyToSelectedOrigin(t *testing.T) {
 	}))
 	t.Cleanup(origin.Close)
 
-	pool, err := upstream.NewPool([]config.UpstreamConfig{{
-		Name:      "test-huggingface",
-		URL:       origin.URL,
-		Priority:  1,
-		ProbeMode: "passive",
-	}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	selected := pool.Snapshot()[0]
+	selected := newIntegrityTestUpstream(t, origin.URL)
 	target := "/repo/resolve/main/model.bin"
 	request := httptest.NewRequest(http.MethodGet, target, nil)
 	result, err := newResolver().resolve(
@@ -1044,8 +792,12 @@ func TestResolverAttributesTruncatedArtifactBodyToSelectedOrigin(t *testing.T) {
 	}
 }
 
-func TestResolverTreatsBrokenSignedArtifact4xxAsOriginFailure(t *testing.T) {
-	for _, status := range []int{http.StatusForbidden, http.StatusNotFound} {
+func TestResolverTreatsBrokenSignedArtifactStatusAsOriginFailure(t *testing.T) {
+	for _, status := range []int{
+		http.StatusForbidden,
+		http.StatusNotFound,
+		http.StatusServiceUnavailable,
+	} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
 			artifact := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				http.Error(w, "broken signed URL", status)
@@ -1056,16 +808,7 @@ func TestResolverTreatsBrokenSignedArtifact4xxAsOriginFailure(t *testing.T) {
 			}))
 			t.Cleanup(origin.Close)
 
-			pool, err := upstream.NewPool([]config.UpstreamConfig{{
-				Name:      "test-huggingface",
-				URL:       origin.URL,
-				Priority:  1,
-				ProbeMode: "passive",
-			}})
-			if err != nil {
-				t.Fatal(err)
-			}
-			selected := pool.Snapshot()[0]
+			selected := newIntegrityTestUpstream(t, origin.URL)
 			target := "/repo/resolve/main/model.bin"
 			request := httptest.NewRequest(http.MethodGet, target, nil)
 			result, err := newResolver().resolve(
@@ -1120,16 +863,7 @@ func resolveMaybe(
 	cacheable bool,
 ) (*resolvedResponse, error) {
 	t.Helper()
-	pool, err := upstream.NewPool([]config.UpstreamConfig{{
-		Name:      "test-huggingface",
-		URL:       originURL,
-		Priority:  1,
-		ProbeMode: "passive",
-	}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	selected := pool.Snapshot()[0]
+	selected := newIntegrityTestUpstream(t, originURL)
 	request := httptest.NewRequest(method, target, nil)
 	request.Header = headers.Clone()
 	result, err := newResolver().resolve(

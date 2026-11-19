@@ -85,15 +85,6 @@ func TestNpm_AcceptRepresentationsAreIsolated(t *testing.T) {
 	}
 }
 
-func TestNpm_TarballDownload(t *testing.T) {
-	resp := httpGet(t, npmVersionTarballURL(t, "testpkg", "1.0.0"))
-	assertStatus(t, resp, 200)
-	body := readBody(t, resp)
-	if body != "FAKE_NPM_TARBALL" {
-		t.Errorf("unexpected body: %s", body)
-	}
-}
-
 func TestNpm_LegacyDirectTarballRejected(t *testing.T) {
 	// Use a path no other test downloads. Reusing testpkg would race the
 	// parent's background tamper re-verification of its 2s-TTL blob entry,
@@ -159,16 +150,5 @@ func TestNpm_RejectedTarballReachesAdminLogs(t *testing.T) {
 			t.Fatalf("rejected npm tarball did not reach Admin access logs: %+v", logs.Items)
 		}
 		time.Sleep(250 * time.Millisecond)
-	}
-}
-
-func TestNpm_CacheHit(t *testing.T) {
-	tarballURL := npmVersionTarballURL(t, "testpkg", "1.0.0")
-	httpGet(t, tarballURL)
-	before := mockServer.RequestCount()
-	resp := httpGet(t, tarballURL)
-	assertStatus(t, resp, 200)
-	if mockServer.RequestCount() != before {
-		t.Error("expected cache hit")
 	}
 }

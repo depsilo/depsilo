@@ -141,80 +141,44 @@ func TestGetTokenCanceledFollowerDoesNotWaitForSharedDiscovery(t *testing.T) {
 	}
 }
 
-func TestGetTokenRejectsUnsafeRealmBeforeTransport(t *testing.T) {
-	var unsafeRequests atomic.Int64
-	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
-		switch request.URL.Hostname() {
-		case "registry.example":
-			return &http.Response{
-				StatusCode: http.StatusUnauthorized,
-				Header: http.Header{
-					"Www-Authenticate": {`Bearer realm="http://169.254.169.254/latest/meta-data",service="registry.example"`},
-				},
-				Body:    io.NopCloser(strings.NewReader(`{"errors":[{"code":"UNAUTHORIZED"}]}`)),
-				Request: request,
-			}, nil
-		case "169.254.169.254":
-			unsafeRequests.Add(1)
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Header:     http.Header{"Content-Type": {"application/json"}},
-				Body:       io.NopCloser(strings.NewReader(`{"token":"stolen"}`)),
-				Request:    request,
-			}, nil
-		default:
-			return nil, errors.New("unexpected target")
-		}
-	})}
+func TestGetTokenRejectsMetadataRealmBeforeTransport(t *testing.T) {
+	for _, tt := range []struct{ name, realm string }{
+		{name: "link-local metadata", realm: "http://169.254.169.254/latest/meta-data"},
+		{name: "Alibaba Cloud metadata", realm: "https://100.100.100.200/latest/meta-data"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var unsafeRequests atomic.Int64
+			client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				if request.URL.Hostname() == "registry.example" {
+					return &http.Response{
+						StatusCode: http.StatusUnauthorized,
+						Header: http.Header{
+							"Www-Authenticate": {`Bearer realm="` + tt.realm + `",service="registry.example"`},
+						},
+						Body:    io.NopCloser(strings.NewReader(`{"errors":[{"code":"UNAUTHORIZED"}]}`)),
+						Request: request,
+					}, nil
+				}
+				unsafeRequests.Add(1)
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     http.Header{"Content-Type": {"application/json"}},
+					Body:       io.NopCloser(strings.NewReader(`{"token":"stolen"}`)),
+					Request:    request,
+				}, nil
+			})}
 
-	_, err := NewAuthManager().GetToken(
-		context.Background(),
-		client,
-		"https://registry.example",
-		"registry",
-		"operator",
-		"secret",
-		"repository:acme/widget:pull",
-	)
-	if err == nil {
-		t.Fatal("GetToken accepted a link-local Bearer realm")
-	}
-	if got := unsafeRequests.Load(); got != 0 {
-		t.Fatalf("unsafe realm transport requests = %d, want 0", got)
-	}
-}
-
-func TestGetTokenRejectsSpecialPurposeMetadataRealm(t *testing.T) {
-	var unsafeRequests atomic.Int64
-	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
-		if request.URL.Hostname() == "registry.example" {
-			return &http.Response{
-				StatusCode: http.StatusUnauthorized,
-				Header: http.Header{
-					"Www-Authenticate": {`Bearer realm="https://100.100.100.200/latest/meta-data",service="registry.example"`},
-				},
-				Body:    io.NopCloser(strings.NewReader("unauthorized")),
-				Request: request,
-			}, nil
-		}
-		unsafeRequests.Add(1)
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Header:     http.Header{"Content-Type": {"application/json"}},
-			Body:       io.NopCloser(strings.NewReader(`{"token":"stolen"}`)),
-			Request:    request,
-		}, nil
-	})}
-
-	_, err := NewAuthManager().GetToken(
-		context.Background(), client, "https://registry.example", "registry", "operator", "secret",
-		"repository:acme/widget:pull",
-	)
-	if err == nil {
-		t.Fatal("GetToken accepted a special-purpose metadata realm")
-	}
-	if got := unsafeRequests.Load(); got != 0 {
-		t.Fatalf("unsafe realm transport requests = %d, want 0", got)
+			_, err := NewAuthManager().GetToken(
+				context.Background(), client, "https://registry.example", "registry", "operator", "secret",
+				"repository:acme/widget:pull",
+			)
+			if err == nil {
+				t.Fatalf("GetToken accepted a %s Bearer realm", tt.name)
+			}
+			if got := unsafeRequests.Load(); got != 0 {
+				t.Fatalf("unsafe realm transport requests = %d, want 0", got)
+			}
+		})
 	}
 }
 

@@ -170,6 +170,9 @@ func TestManager_ResponseMetadataSurvivesStaleFallback(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer result.Reader.Close()
+	if body, readErr := io.ReadAll(result.Reader); readErr != nil || string(body) != "cached" {
+		t.Fatalf("stale fallback body = %q, %v; want the cached bytes", body, readErr)
+	}
 	if result.Headers.Get("ETag") != `"cached-v1"` || result.Headers.Get("X-Repo-Commit") != "cached-commit" {
 		t.Fatalf("stale headers = %#v", result.Headers)
 	}
@@ -317,46 +320,6 @@ func TestManager_BackgroundAuthoritativeErrorInvalidatesStaleArtifact(t *testing
 	)
 	if !errors.Is(secondErr, offline) || second != nil {
 		t.Fatalf("invalidated cache revived on transient error: result=%+v err=%v", second, secondErr)
-	}
-}
-
-func TestManager_ForcedAuthoritativeErrorStillInvalidatesStaleEntry(t *testing.T) {
-	database := openStreamTestDB(t)
-	storage := newMemStorage()
-	const key = "huggingface/api/models/acme/private-model"
-	storage.data[key] = []byte(`{"public":true}`)
-	if err := database.Create(&db.CacheEntry{
-		Key: key, AdapterType: "huggingface", CacheKind: db.CacheKindMetadata,
-		StoragePath: key, ExpiresAt: time.Now().Add(time.Hour),
-	}).Error; err != nil {
-		t.Fatal(err)
-	}
-	manager := NewManager(storage, database, NewEventBus(), time.Hour)
-	t.Cleanup(func() { closeTestManager(t, manager) })
-
-	revoked := errors.New("repository became private")
-	result, err := manager.Get(
-		WithForceRefresh(context.Background()),
-		key,
-		"huggingface",
-		time.Minute,
-		func(context.Context) (io.ReadCloser, string, int64, string, error) {
-			return nil, "", 0, "hub", &testStalePolicyError{cause: revoked, allow: false}
-		},
-	)
-	if !errors.Is(err, revoked) || result != nil {
-		t.Fatalf("forced authoritative result = %+v, err=%v", result, err)
-	}
-	var rows int64
-	if countErr := database.Model(&db.CacheEntry{}).Where("key = ?", key).Count(&rows).Error; countErr != nil {
-		t.Fatal(countErr)
-	}
-	exists, existsErr := storage.Exists(context.Background(), key)
-	if existsErr != nil {
-		t.Fatal(existsErr)
-	}
-	if rows != 0 || exists {
-		t.Fatalf("forced authoritative refresh left stale state: rows=%d object=%v", rows, exists)
 	}
 }
 
@@ -530,124 +493,176 @@ func TestManager_PassthroughExposesSafeResponseMetadata(t *testing.T) {
 	}
 }
 
-func TestManager_FetchTimeoutHintAppliesToMissAndPassthrough(t *testing.T) {
+// staleArtifactManager seeds an expired artifact, so a Get serves the cached
+// copy and refreshes it in the background.
+func staleArtifactManager(t *testing.T, key, adapterType string) *Manager {
+	t.Helper()
 	database := openStreamTestDB(t)
-	manager := NewManager(newMemStorage(), database, NewEventBus(), time.Hour)
-	t.Cleanup(func() { closeTestManager(t, manager) })
-
-	blockingFetch := func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
-		<-ctx.Done()
-		return nil, "", 0, "upstream", ctx.Err()
-	}
-	for name, call := range map[string]func(context.Context) error{
-		"miss": func(ctx context.Context) error {
-			_, err := manager.Get(ctx, "pypi/files/timeout.whl", "pypi", time.Hour, blockingFetch)
-			return err
-		},
-		"passthrough": func(ctx context.Context) error {
-			_, err := manager.fetchPassthrough(ctx, "pypi/files/timeout.whl", "pypi", time.Hour, blockingFetch)
-			return err
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			start := time.Now()
-			err := call(WithFetchTimeout(context.Background(), 20*time.Millisecond))
-			if !errors.Is(err, context.DeadlineExceeded) {
-				t.Fatalf("error = %v, want context deadline exceeded", err)
-			}
-			if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
-				t.Fatalf("fetch timeout took %v", elapsed)
-			}
-		})
-	}
-}
-
-func TestManager_FetchIdleTimeoutHintAppliesToPassthrough(t *testing.T) {
-	database := openStreamTestDB(t)
-	manager := NewManager(newMemStorage(), database, NewEventBus(), time.Hour)
-	t.Cleanup(func() { closeTestManager(t, manager) })
-	body := newCloseBlockingBody()
-
-	callerCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-	ctx := WithFetchTimeout(callerCtx, 0)
-	ctx = WithFetchIdleTimeout(ctx, 20*time.Millisecond)
-	result, err := manager.fetchPassthrough(ctx, "test-key", "test", time.Hour,
-		func(context.Context) (io.ReadCloser, string, int64, string, error) {
-			return body, "application/octet-stream", -1, "upstream", nil
-		})
-	if err != nil {
+	storage := newMemStorage()
+	storage.data[key] = []byte("cached")
+	if err := database.Create(&db.CacheEntry{
+		Key: key, AdapterType: adapterType, CacheKind: db.CacheKindArtifact,
+		StoragePath: key, ContentType: "application/octet-stream",
+		ExpiresAt: time.Now().Add(-time.Minute),
+	}).Error; err != nil {
 		t.Fatal(err)
 	}
+	manager := NewManager(storage, database, NewEventBus(), time.Hour)
+	t.Cleanup(func() { closeTestManager(t, manager) })
+	return manager
+}
 
-	start := time.Now()
-	_, readErr := io.Copy(io.Discard, result.Reader)
-	closeErr := result.Reader.Close()
-	if err := errors.Join(readErr, closeErr); !errors.Is(err, ErrFetchIdleTimeout) {
-		t.Fatalf("passthrough error = %v, want ErrFetchIdleTimeout", err)
-	}
-	if elapsed := time.Since(start); elapsed > 250*time.Millisecond {
-		t.Fatalf("passthrough lost 20ms idle timeout hint; elapsed %v", elapsed)
-	}
-	select {
-	case <-body.closed:
-	default:
-		t.Fatal("passthrough idle timeout did not close upstream body")
+func freshTestManager(t *testing.T) *Manager {
+	t.Helper()
+	manager := NewManager(newMemStorage(), openStreamTestDB(t), NewEventBus(), time.Hour)
+	t.Cleanup(func() { closeTestManager(t, manager) })
+	return manager
+}
+
+// The caller's fetch timeout bounds the upstream fetch on every path: a miss,
+// a passthrough, a prefetch, and the background refresh of a stale entry.
+func TestManager_FetchTimeoutHintBoundsEveryFetchPath(t *testing.T) {
+	const key = "pypi/files/timeout.whl"
+	fresh := func(t *testing.T) *Manager { return freshTestManager(t) }
+	for _, test := range []struct {
+		name    string
+		manager func(*testing.T) *Manager
+		// run starts the fetch; foreground paths return its error.
+		run        func(*testing.T, *Manager, context.Context, FetchFunc) error
+		background bool
+	}{
+		{name: "miss", manager: fresh, run: func(_ *testing.T, m *Manager, ctx context.Context, fetch FetchFunc) error {
+			_, err := m.Get(ctx, key, "pypi", time.Hour, fetch)
+			return err
+		}},
+		{name: "passthrough", manager: fresh, run: func(_ *testing.T, m *Manager, ctx context.Context, fetch FetchFunc) error {
+			_, err := m.fetchPassthrough(ctx, key, "pypi", time.Hour, fetch)
+			return err
+		}},
+		{name: "prefetch", manager: fresh, run: func(_ *testing.T, m *Manager, ctx context.Context, fetch FetchFunc) error {
+			return m.Prefetch(ctx, key, "pypi", time.Hour, fetch)
+		}},
+		{
+			name:       "background refresh",
+			manager:    func(t *testing.T) *Manager { return staleArtifactManager(t, key, "pypi") },
+			background: true,
+			run: func(t *testing.T, m *Manager, ctx context.Context, fetch FetchFunc) error {
+				result, err := m.Get(ctx, key, "pypi", 2*time.Hour, fetch)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_ = result.Reader.Close()
+				return nil
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			manager := test.manager(t)
+			fetchEnded := make(chan error, 1)
+			fetch := func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
+				<-ctx.Done()
+				fetchEnded <- ctx.Err()
+				return nil, "", 0, "upstream", ctx.Err()
+			}
+			callerCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+			start := time.Now()
+			err := test.run(t, manager, WithFetchTimeout(callerCtx, 20*time.Millisecond), fetch)
+			if !test.background && !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("error = %v, want context deadline exceeded", err)
+			}
+			select {
+			case fetchErr := <-fetchEnded:
+				if !errors.Is(fetchErr, context.DeadlineExceeded) {
+					t.Fatalf("fetch context ended with %v, want the 20ms fetch timeout", fetchErr)
+				}
+			case <-time.After(500 * time.Millisecond):
+				t.Fatal("fetch did not inherit the short fetch timeout")
+			}
+			if elapsed := time.Since(start); elapsed > 250*time.Millisecond {
+				t.Fatalf("fetch timeout took %v, want the 20ms hint", elapsed)
+			}
+		})
 	}
 }
 
-func TestManager_PrefetchPreservesFetchTimeoutHint(t *testing.T) {
-	database := openStreamTestDB(t)
-	manager := NewManager(newMemStorage(), database, NewEventBus(), time.Hour)
-	t.Cleanup(func() { closeTestManager(t, manager) })
-
-	callerCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-	start := time.Now()
-	err := manager.Prefetch(WithFetchTimeout(callerCtx, 20*time.Millisecond),
-		"pypi/files/prefetch-timeout.whl", "pypi", time.Hour,
-		func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
-			<-ctx.Done()
-			return nil, "", 0, "upstream", ctx.Err()
+// The caller's rolling idle timeout cuts a stalled upstream body, and closes
+// it, on every path that reads one: a passthrough, a prefetch, and the
+// background refresh of a stale entry.
+func TestManager_FetchIdleTimeoutHintCutsStalledBodyOnEveryPath(t *testing.T) {
+	const key = "huggingface/models/acme/large/resolve/0123456789abcdef/idle.bin"
+	fresh := func(t *testing.T) *Manager { return freshTestManager(t) }
+	for _, test := range []struct {
+		name    string
+		manager func(*testing.T) *Manager
+		// run starts the fetch; foreground paths return its error.
+		run        func(*testing.T, *Manager, context.Context, FetchFunc) error
+		background bool
+	}{
+		{name: "passthrough", manager: fresh, run: func(t *testing.T, m *Manager, ctx context.Context, fetch FetchFunc) error {
+			result, err := m.fetchPassthrough(ctx, key, "huggingface", time.Hour, fetch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, readErr := io.Copy(io.Discard, result.Reader)
+			return errors.Join(readErr, result.Reader.Close())
+		}},
+		{name: "prefetch", manager: fresh, run: func(_ *testing.T, m *Manager, ctx context.Context, fetch FetchFunc) error {
+			return m.Prefetch(ctx, key, "huggingface", 24*time.Hour, fetch)
+		}},
+		{
+			name:       "background refresh",
+			manager:    func(t *testing.T) *Manager { return staleArtifactManager(t, key, "huggingface") },
+			background: true,
+			run: func(t *testing.T, m *Manager, ctx context.Context, fetch FetchFunc) error {
+				result, err := m.Get(ctx, key, "huggingface", 24*time.Hour, fetch)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_ = result.Reader.Close()
+				return nil
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			manager := test.manager(t)
+			body := newCloseBlockingBody()
+			fetch := func(context.Context) (io.ReadCloser, string, int64, string, error) {
+				return body, "application/octet-stream", -1, "upstream", nil
+			}
+			callerCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+			ctx := WithFetchIdleTimeout(WithFetchTimeout(callerCtx, 0), 20*time.Millisecond)
+			start := time.Now()
+			err := test.run(t, manager, ctx, fetch)
+			if !test.background {
+				if !errors.Is(err, ErrFetchIdleTimeout) {
+					t.Fatalf("error = %v, want ErrFetchIdleTimeout", err)
+				}
+				if elapsed := time.Since(start); elapsed > 250*time.Millisecond {
+					t.Fatalf("lost the 20ms idle timeout hint; elapsed %v", elapsed)
+				}
+				// A foreground path closes the body before it returns.
+				select {
+				case <-body.closed:
+				default:
+					t.Fatal("idle timeout did not close the upstream body")
+				}
+				waitForNoInflight(t, manager)
+				return
+			}
+			select {
+			case <-body.started:
+			case <-time.After(time.Second):
+				t.Fatal("background refresh did not start reading the upstream body")
+			}
+			select {
+			case <-body.closed:
+			case <-time.After(250 * time.Millisecond):
+				t.Fatal("background refresh lost the rolling idle timeout hint")
+			}
 		})
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("prefetch error = %v, want context deadline exceeded", err)
 	}
-	if elapsed := time.Since(start); elapsed > 250*time.Millisecond {
-		t.Fatalf("prefetch lost 20ms fetch timeout hint; elapsed %v", elapsed)
-	}
-}
-
-func TestManager_PrefetchPreservesFetchIdleTimeoutHint(t *testing.T) {
-	database := openStreamTestDB(t)
-	manager := NewManager(newMemStorage(), database, NewEventBus(), time.Hour)
-	t.Cleanup(func() { closeTestManager(t, manager) })
-	body := newCloseBlockingBody()
-
-	callerCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-	ctx := WithFetchTimeout(callerCtx, 0)
-	ctx = WithFetchIdleTimeout(ctx, 20*time.Millisecond)
-	start := time.Now()
-	err := manager.Prefetch(ctx,
-		"huggingface/models/acme/large/resolve/0123456789abcdef/prefetch.bin",
-		"huggingface",
-		24*time.Hour,
-		func(context.Context) (io.ReadCloser, string, int64, string, error) {
-			return body, "application/octet-stream", -1, "upstream", nil
-		})
-	if !errors.Is(err, ErrFetchIdleTimeout) {
-		t.Fatalf("prefetch error = %v, want ErrFetchIdleTimeout", err)
-	}
-	if elapsed := time.Since(start); elapsed > 250*time.Millisecond {
-		t.Fatalf("prefetch lost 20ms idle timeout hint; elapsed %v", elapsed)
-	}
-	select {
-	case <-body.closed:
-	default:
-		t.Fatal("Prefetch idle timeout did not close upstream body")
-	}
-	waitForNoInflight(t, manager)
 }
 
 func TestManager_DefaultFetchTimeoutRemainsTenMinutes(t *testing.T) {
@@ -694,83 +709,6 @@ func TestManager_ZeroFetchTimeoutAddsNoDeadline(t *testing.T) {
 	_, _ = io.Copy(io.Discard, result.Reader)
 	_ = result.Reader.Close()
 	waitForNoInflight(t, manager)
-}
-
-func TestManager_BackgroundRefreshInheritsFetchTimeoutHint(t *testing.T) {
-	database := openStreamTestDB(t)
-	storage := newMemStorage()
-	const key = "pypi/files/stale.whl"
-	storage.data[key] = []byte("cached")
-	if err := database.Create(&db.CacheEntry{
-		Key: key, AdapterType: "pypi", CacheKind: db.CacheKindArtifact,
-		StoragePath: key, ContentType: "application/octet-stream",
-		ExpiresAt: time.Now().Add(-time.Minute),
-	}).Error; err != nil {
-		t.Fatal(err)
-	}
-	manager := NewManager(storage, database, NewEventBus(), time.Hour)
-	t.Cleanup(func() { closeTestManager(t, manager) })
-
-	refreshEnded := make(chan error, 1)
-	ctx := WithFetchTimeout(context.Background(), 20*time.Millisecond)
-	result, err := manager.Get(ctx, key, "pypi", 2*time.Hour,
-		func(fetchCtx context.Context) (io.ReadCloser, string, int64, string, error) {
-			<-fetchCtx.Done()
-			refreshEnded <- fetchCtx.Err()
-			return nil, "", 0, "upstream", fetchCtx.Err()
-		})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = result.Reader.Close()
-
-	select {
-	case err := <-refreshEnded:
-		if !errors.Is(err, context.DeadlineExceeded) {
-			t.Fatalf("background refresh error = %v", err)
-		}
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("background refresh did not inherit short fetch timeout")
-	}
-}
-
-func TestManager_BackgroundRefreshInheritsFetchIdleTimeoutHint(t *testing.T) {
-	database := openStreamTestDB(t)
-	storage := newMemStorage()
-	const key = "huggingface/models/acme/large/resolve/0123456789abcdef/stale.bin"
-	storage.data[key] = []byte("cached")
-	if err := database.Create(&db.CacheEntry{
-		Key: key, AdapterType: "huggingface", CacheKind: db.CacheKindArtifact,
-		StoragePath: key, ContentType: "application/octet-stream",
-		ExpiresAt: time.Now().Add(-time.Minute),
-	}).Error; err != nil {
-		t.Fatal(err)
-	}
-	manager := NewManager(storage, database, NewEventBus(), time.Hour)
-	t.Cleanup(func() { closeTestManager(t, manager) })
-	body := newCloseBlockingBody()
-
-	ctx := WithFetchTimeout(context.Background(), 0)
-	ctx = WithFetchIdleTimeout(ctx, 20*time.Millisecond)
-	result, err := manager.Get(ctx, key, "huggingface", 24*time.Hour,
-		func(context.Context) (io.ReadCloser, string, int64, string, error) {
-			return body, "application/octet-stream", -1, "upstream", nil
-		})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = result.Reader.Close()
-
-	select {
-	case <-body.started:
-	case <-time.After(time.Second):
-		t.Fatal("background refresh did not start reading the upstream body")
-	}
-	select {
-	case <-body.closed:
-	case <-time.After(250 * time.Millisecond):
-		t.Fatal("background refresh lost the rolling idle timeout hint")
-	}
 }
 
 func assertSafeRepresentationHeaders(t *testing.T, headers http.Header) {

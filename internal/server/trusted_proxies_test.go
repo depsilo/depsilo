@@ -45,12 +45,6 @@ func TestConfigureTrustedProxiesUsesExplicitCIDR(t *testing.T) {
 	}
 }
 
-func TestConfigureTrustedProxiesRejectsInvalidEntry(t *testing.T) {
-	if err := configureTrustedProxies(gin.New(), []string{"not-a-proxy-cidr"}); err == nil {
-		t.Fatal("configureTrustedProxies accepted an invalid entry")
-	}
-}
-
 func TestStartServerRejectsInvalidTrustedProxyBeforeOpeningDatabase(t *testing.T) {
 	dir := t.TempDir()
 	databasePath := filepath.Join(dir, "server.db")

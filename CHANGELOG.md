@@ -6,6 +6,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Removed
+- The advisory import response no longer has `rules_created`; it was always
+  `0`, because importing advisories never creates package rules.
 - `compose.v090-compat.yaml` and the deployment guide's procedure for
   migrating the Compose layout shipped in v0.9.0. Upgrade such an install to
   0.15.0 first with that release's guide, or start from a fresh state

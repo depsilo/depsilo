@@ -652,197 +652,136 @@ func TestServeDirectSelectedReplacesCriticallyLatchedPreferredUpstream(t *testin
 	}
 }
 
-func TestHandlerReselectsStalePinRangeAfterTransientMetadataStatus(t *testing.T) {
+func TestHandlerReselectsStalePinRangeAfterBadMetadataHEAD(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	const (
 		commit = "0123456789abcdef0123456789abcdef01234567"
 		body   = "abcdefgh"
 	)
-	var transient atomic.Bool
-	var badRangeGETs atomic.Int64
-	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodHead && transient.Load() {
-			http.Error(w, "temporarily unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		w.Header().Set("X-Repo-Commit", commit)
-		w.Header().Set("X-Linked-Size", strconv.Itoa(len(body)))
-		if r.Method == http.MethodHead {
-			w.Header().Set("Content-Length", strconv.Itoa(len(body)))
-			return
-		}
-		if r.Header.Get("Range") != "" {
-			badRangeGETs.Add(1)
-		}
-		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
-		_, _ = io.WriteString(w, body)
-	}))
-	t.Cleanup(bad.Close)
-
-	var goodGETs atomic.Int64
-	good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Errorf("alternate upstream method = %s, want GET", r.Method)
-			return
-		}
-		goodGETs.Add(1)
-		if got := r.Header.Get("Range"); got != "bytes=0-3" {
-			t.Errorf("alternate upstream Range = %q, want bytes=0-3", got)
-		}
-		w.Header().Set("X-Repo-Commit", commit)
-		w.Header().Set("X-Linked-Size", strconv.Itoa(len(body)))
-		w.Header().Set("Content-Length", "4")
-		w.Header().Set("Content-Range", "bytes 0-3/8")
-		w.WriteHeader(http.StatusPartialContent)
-		_, _ = io.WriteString(w, "abcd")
-	}))
-	t.Cleanup(good.Close)
-
-	handler, _, database := newCachingTestHandler(t, bad.URL)
-	pool, err := upstream.NewPool([]config.UpstreamConfig{
-		{Name: "bad", URL: bad.URL, Priority: 1, ProbeMode: "passive"},
-		{Name: "good", URL: good.URL, Priority: 2, ProbeMode: "passive"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	handler.selector = upstream.NewPassiveRecoverySelector(pool)
-	router := gin.New()
-	handler.Register(router.Group("/huggingface"))
-	path := "/huggingface/acme/model/resolve/main/model.bin"
-
-	warm := httptest.NewRecorder()
-	router.ServeHTTP(warm, httptest.NewRequest(http.MethodGet, path, nil))
-	if warm.Code != http.StatusOK || warm.Body.String() != body {
-		t.Fatalf("warm response = (%d, %q), want (200, %q)", warm.Code, warm.Body.String(), body)
-	}
-	waitForCacheEntry(
-		t,
-		database,
-		"huggingface/acme/model/resolve/"+commit+"/model.bin",
-	)
-	if err := database.Model(&db.HuggingFaceRefPin{}).
-		Where("key = ?", "huggingface/acme/model/ref/main").
-		Update("expires_at", time.Now().UTC().Add(-time.Minute)).Error; err != nil {
-		t.Fatal(err)
-	}
-
-	transient.Store(true)
-	partial := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, path, nil)
-	request.Header.Set("Range", "bytes=0-3")
-	router.ServeHTTP(partial, request)
-
-	if partial.Code != http.StatusPartialContent || partial.Body.String() != "abcd" {
-		t.Fatalf(
-			"transient fallback response = (%d, %q), want (206, abcd)",
-			partial.Code,
-			partial.Body.String(),
-		)
-	}
-	if badRangeGETs.Load() != 0 || goodGETs.Load() != 1 {
-		t.Fatalf(
-			"range GET requests = (bad:%d good:%d), want (0, 1)",
-			badRangeGETs.Load(),
-			goodGETs.Load(),
-		)
-	}
-}
-
-func TestHandlerStalePinRangeFallbackDoesNotReuseIntegrityFailedUpstream(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	const (
-		commit = "0123456789abcdef0123456789abcdef01234567"
-		body   = "abcdefgh"
-	)
-	var corruptMetadata atomic.Bool
-	var badGETs atomic.Int64
-	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Repo-Commit", commit)
-		w.Header().Set("X-Linked-Size", strconv.Itoa(len(body)))
-		if r.Method == http.MethodHead {
-			if corruptMetadata.Load() {
+	for _, test := range []struct {
+		name string
+		// badHEAD answers the bad upstream's metadata HEAD once the pin is stale.
+		badHEAD          func(http.ResponseWriter)
+		wantBadUnhealthy bool
+	}{
+		{
+			name: "transient 503 status",
+			badHEAD: func(w http.ResponseWriter) {
+				http.Error(w, "temporarily unavailable", http.StatusServiceUnavailable)
+			},
+		},
+		{
+			name: "short Content-Length fails integrity",
+			badHEAD: func(w http.ResponseWriter) {
+				w.Header().Set("X-Repo-Commit", commit)
+				w.Header().Set("X-Linked-Size", strconv.Itoa(len(body)))
 				w.Header().Set("Content-Length", strconv.Itoa(len(body)-1))
-			} else {
+			},
+			wantBadUnhealthy: true,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var faulty atomic.Bool
+			var badGETs, badRangeGETs atomic.Int64
+			bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodHead && faulty.Load() {
+					test.badHEAD(w)
+					return
+				}
+				w.Header().Set("X-Repo-Commit", commit)
+				w.Header().Set("X-Linked-Size", strconv.Itoa(len(body)))
+				if r.Method == http.MethodHead {
+					w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+					return
+				}
+				badGETs.Add(1)
+				if r.Header.Get("Range") != "" {
+					badRangeGETs.Add(1)
+					w.Header().Set("Content-Length", "4")
+					w.Header().Set("Content-Range", "bytes 4-7/8")
+					w.WriteHeader(http.StatusPartialContent)
+					_, _ = io.WriteString(w, "efgh")
+					return
+				}
 				w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+				_, _ = io.WriteString(w, body)
+			}))
+			t.Cleanup(bad.Close)
+
+			var goodGETs atomic.Int64
+			good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet {
+					t.Errorf("alternate upstream method = %s, want GET", r.Method)
+					return
+				}
+				goodGETs.Add(1)
+				if got := r.Header.Get("Range"); got != "bytes=0-3" {
+					t.Errorf("alternate upstream Range = %q, want bytes=0-3", got)
+				}
+				w.Header().Set("X-Repo-Commit", commit)
+				w.Header().Set("X-Linked-Size", strconv.Itoa(len(body)))
+				w.Header().Set("Content-Length", "4")
+				w.Header().Set("Content-Range", "bytes 0-3/8")
+				w.WriteHeader(http.StatusPartialContent)
+				_, _ = io.WriteString(w, "abcd")
+			}))
+			t.Cleanup(good.Close)
+
+			handler, _, database := newCachingTestHandler(t, bad.URL)
+			pool, err := upstream.NewPool([]config.UpstreamConfig{
+				{Name: "bad", URL: bad.URL, Priority: 1, ProbeMode: "passive"},
+				{Name: "good", URL: good.URL, Priority: 2, ProbeMode: "passive"},
+			})
+			if err != nil {
+				t.Fatal(err)
 			}
-			return
-		}
-		badGETs.Add(1)
-		if r.Header.Get("Range") != "" {
-			w.Header().Set("Content-Length", "4")
-			w.Header().Set("Content-Range", "bytes 4-7/8")
-			w.WriteHeader(http.StatusPartialContent)
-			_, _ = io.WriteString(w, "efgh")
-			return
-		}
-		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
-		_, _ = io.WriteString(w, body)
-	}))
-	t.Cleanup(bad.Close)
+			handler.selector = upstream.NewPassiveRecoverySelector(pool)
+			router := gin.New()
+			handler.Register(router.Group("/huggingface"))
+			path := "/huggingface/acme/model/resolve/main/model.bin"
 
-	var goodGETs atomic.Int64
-	good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		goodGETs.Add(1)
-		if r.Header.Get("Range") != "bytes=0-3" {
-			t.Errorf("fallback Range = %q, want bytes=0-3", r.Header.Get("Range"))
-		}
-		w.Header().Set("X-Repo-Commit", commit)
-		w.Header().Set("X-Linked-Size", strconv.Itoa(len(body)))
-		w.Header().Set("Content-Length", "4")
-		w.Header().Set("Content-Range", "bytes 0-3/8")
-		w.WriteHeader(http.StatusPartialContent)
-		_, _ = io.WriteString(w, "abcd")
-	}))
-	t.Cleanup(good.Close)
+			warm := httptest.NewRecorder()
+			router.ServeHTTP(warm, httptest.NewRequest(http.MethodGet, path, nil))
+			if warm.Code != http.StatusOK || warm.Body.String() != body {
+				t.Fatalf("warm response = (%d, %q), want (200, %q)", warm.Code, warm.Body.String(), body)
+			}
+			waitForCacheEntry(
+				t,
+				database,
+				"huggingface/acme/model/resolve/"+commit+"/model.bin",
+			)
+			if err := database.Model(&db.HuggingFaceRefPin{}).
+				Where("key = ?", "huggingface/acme/model/ref/main").
+				Update("expires_at", time.Now().UTC().Add(-time.Minute)).Error; err != nil {
+				t.Fatal(err)
+			}
 
-	handler, _, database := newCachingTestHandler(t, bad.URL)
-	pool, err := upstream.NewPool([]config.UpstreamConfig{
-		{Name: "bad", URL: bad.URL, Priority: 1, ProbeMode: "passive"},
-		{Name: "good", URL: good.URL, Priority: 2, ProbeMode: "passive"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	handler.selector = upstream.NewPassiveRecoverySelector(pool)
-	router := gin.New()
-	handler.Register(router.Group("/huggingface"))
-	path := "/huggingface/acme/model/resolve/main/model.bin"
+			faulty.Store(true)
+			partial := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodGet, path, nil)
+			request.Header.Set("Range", "bytes=0-3")
+			router.ServeHTTP(partial, request)
 
-	warm := httptest.NewRecorder()
-	router.ServeHTTP(warm, httptest.NewRequest(http.MethodGet, path, nil))
-	if warm.Code != http.StatusOK || warm.Body.String() != body {
-		t.Fatalf("warm response = (%d, %q)", warm.Code, warm.Body.String())
-	}
-	waitForCacheEntry(
-		t,
-		database,
-		"huggingface/acme/model/resolve/"+commit+"/model.bin",
-	)
-	if err := database.Model(&db.HuggingFaceRefPin{}).
-		Where("key = ?", "huggingface/acme/model/ref/main").
-		Update("expires_at", time.Now().UTC().Add(-time.Minute)).Error; err != nil {
-		t.Fatal(err)
-	}
-
-	corruptMetadata.Store(true)
-	partial := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, path, nil)
-	request.Header.Set("Range", "bytes=0-3")
-	router.ServeHTTP(partial, request)
-
-	if partial.Code != http.StatusPartialContent || partial.Body.String() != "abcd" {
-		t.Fatalf("range fallback = (%d, %q), want (206, abcd)", partial.Code, partial.Body.String())
-	}
-	if badGETs.Load() != 1 || goodGETs.Load() != 1 {
-		t.Fatalf("GET requests = (bad:%d good:%d), want warm bad once and fallback good once", badGETs.Load(), goodGETs.Load())
-	}
-	for _, candidate := range pool.Snapshot() {
-		if candidate.Name == "bad" && candidate.IsHealthy() {
-			t.Fatal("integrity-failed upstream remained healthy")
-		}
+			if partial.Code != http.StatusPartialContent || partial.Body.String() != "abcd" {
+				t.Fatalf("range fallback = (%d, %q), want (206, abcd)", partial.Code, partial.Body.String())
+			}
+			if badGETs.Load() != 1 || badRangeGETs.Load() != 0 || goodGETs.Load() != 1 {
+				t.Fatalf(
+					"GET requests = (bad:%d bad range:%d good:%d), want warm bad once and fallback good once",
+					badGETs.Load(),
+					badRangeGETs.Load(),
+					goodGETs.Load(),
+				)
+			}
+			if test.wantBadUnhealthy {
+				for _, candidate := range pool.Snapshot() {
+					if candidate.Name == "bad" && candidate.IsHealthy() {
+						t.Fatal("integrity-failed upstream remained healthy")
+					}
+				}
+			}
+		})
 	}
 }
 
@@ -1425,6 +1364,9 @@ func TestHandlerHEADSkipsArtifactAndCache(t *testing.T) {
 		}
 		w.Header().Set("X-Linked-Etag", "sha256:model")
 		w.Header().Set("X-Linked-Size", "8")
+		// Real Hub LFS redirects carry a small redirect-document length
+		// alongside the much larger linked object size.
+		w.Header().Set("Content-Length", "1095")
 		w.Header().Set("Location", artifact.URL+"/signed/model")
 		w.WriteHeader(http.StatusFound)
 	}))
@@ -1443,6 +1385,9 @@ func TestHandlerHEADSkipsArtifactAndCache(t *testing.T) {
 		}
 		if got := recorder.Header().Get("X-Linked-Etag"); got != "sha256:model" {
 			t.Fatalf("HEAD X-Linked-Etag = %q", got)
+		}
+		if got := recorder.Header().Get("Content-Length"); got != "8" {
+			t.Fatalf("HEAD Content-Length = %q, want linked size 8, not redirect length", got)
 		}
 	}
 	if got := originRequests.Load(); got != 2 {
@@ -1824,115 +1769,84 @@ func TestHandlerAuthenticatedMutableHEADRedirectsLocallyToCanonicalCommit(t *tes
 	}
 }
 
-func TestHandlerKeepsMutableDownloadAvailableWhenRefPinReadFails(t *testing.T) {
+func TestHandlerKeepsMutableDownloadAvailableWhenRefPinStorageFails(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	const (
 		commit = "0123456789abcdef0123456789abcdef01234567"
 		body   = "canonical model bytes"
 	)
-	var requestsMu sync.Mutex
-	var requests []string
-	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestsMu.Lock()
-		requests = append(requests, r.Method+" "+r.URL.EscapedPath())
-		requestsMu.Unlock()
-		w.Header().Set("X-Repo-Commit", commit)
-		w.Header().Set("Content-Type", "application/octet-stream")
-		if r.Method == http.MethodGet {
-			_, _ = io.WriteString(w, body)
-		}
-	}))
-	t.Cleanup(origin.Close)
+	for _, test := range []struct {
+		name  string
+		fault func(*testing.T, *gorm.DB)
+	}{
+		{
+			name: "read fails",
+			fault: func(t *testing.T, database *gorm.DB) {
+				if err := database.Migrator().DropTable(&db.HuggingFaceRefPin{}); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		{
+			name: "write fails",
+			fault: func(t *testing.T, database *gorm.DB) {
+				if err := database.Exec(`
+					CREATE TRIGGER fail_hugging_face_ref_pin_insert
+					BEFORE INSERT ON hugging_face_ref_pins
+					BEGIN
+						SELECT RAISE(FAIL, 'ref pin storage unavailable');
+					END
+				`).Error; err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var requestsMu sync.Mutex
+			var requests []string
+			origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requestsMu.Lock()
+				requests = append(requests, r.Method+" "+r.URL.EscapedPath())
+				requestsMu.Unlock()
+				w.Header().Set("X-Repo-Commit", commit)
+				w.Header().Set("Content-Type", "application/octet-stream")
+				if r.Method == http.MethodGet {
+					_, _ = io.WriteString(w, body)
+				}
+			}))
+			t.Cleanup(origin.Close)
 
-	handler, _, database := newCachingTestHandler(t, origin.URL)
-	if err := database.Migrator().DropTable(&db.HuggingFaceRefPin{}); err != nil {
-		t.Fatal(err)
-	}
-	router := gin.New()
-	handler.Register(router.Group("/huggingface"))
+			handler, _, database := newCachingTestHandler(t, origin.URL)
+			test.fault(t, database)
+			router := gin.New()
+			handler.Register(router.Group("/huggingface"))
 
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(
-		recorder,
-		httptest.NewRequest(
-			http.MethodGet,
-			"/huggingface/acme/model/resolve/main/model.bin",
-			nil,
-		),
-	)
-	if recorder.Code != http.StatusOK || recorder.Body.String() != body {
-		t.Fatalf("response = (%d, %q), want available canonical body", recorder.Code, recorder.Body.String())
-	}
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(
+				recorder,
+				httptest.NewRequest(
+					http.MethodGet,
+					"/huggingface/acme/model/resolve/main/model.bin",
+					nil,
+				),
+			)
+			if recorder.Code != http.StatusOK || recorder.Body.String() != body {
+				t.Fatalf("response = (%d, %q), want available canonical body", recorder.Code, recorder.Body.String())
+			}
 
-	requestsMu.Lock()
-	gotRequests := append([]string(nil), requests...)
-	requestsMu.Unlock()
-	wantRequests := []string{
-		"HEAD /acme/model/resolve/main/model.bin",
-		"GET /acme/model/resolve/" + commit + "/model.bin",
-	}
-	if strings.Join(gotRequests, "\n") != strings.Join(wantRequests, "\n") {
-		t.Fatalf("upstream requests = %q, want %q", gotRequests, wantRequests)
-	}
-}
-
-func TestHandlerKeepsMutableDownloadAvailableWhenRefPinWriteFails(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	const (
-		commit = "89abcdef0123456789abcdef0123456789abcdef"
-		body   = "canonical bytes after pin write failure"
-	)
-	var requestsMu sync.Mutex
-	var requests []string
-	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestsMu.Lock()
-		requests = append(requests, r.Method+" "+r.URL.EscapedPath())
-		requestsMu.Unlock()
-		w.Header().Set("X-Repo-Commit", commit)
-		w.Header().Set("Content-Type", "application/octet-stream")
-		if r.Method == http.MethodGet {
-			_, _ = io.WriteString(w, body)
-		}
-	}))
-	t.Cleanup(origin.Close)
-
-	handler, _, database := newCachingTestHandler(t, origin.URL)
-	if err := database.Exec(`
-		CREATE TRIGGER fail_hugging_face_ref_pin_insert
-		BEFORE INSERT ON hugging_face_ref_pins
-		BEGIN
-			SELECT RAISE(FAIL, 'ref pin storage unavailable');
-		END
-	`).Error; err != nil {
-		t.Fatal(err)
-	}
-	router := gin.New()
-	handler.Register(router.Group("/huggingface"))
-
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(
-		recorder,
-		httptest.NewRequest(
-			http.MethodGet,
-			"/huggingface/acme/model/resolve/main/model.bin",
-			nil,
-		),
-	)
-	if recorder.Code != http.StatusOK || recorder.Body.String() != body {
-		t.Fatalf("response = (%d, %q), want available canonical body", recorder.Code, recorder.Body.String())
-	}
-
-	requestsMu.Lock()
-	gotRequests := append([]string(nil), requests...)
-	requestsMu.Unlock()
-	wantRequests := []string{
-		"HEAD /acme/model/resolve/main/model.bin",
-		"GET /acme/model/resolve/" + commit + "/model.bin",
-	}
-	if strings.Join(gotRequests, "\n") != strings.Join(wantRequests, "\n") {
-		t.Fatalf("upstream requests = %q, want %q", gotRequests, wantRequests)
+			requestsMu.Lock()
+			gotRequests := append([]string(nil), requests...)
+			requestsMu.Unlock()
+			wantRequests := []string{
+				"HEAD /acme/model/resolve/main/model.bin",
+				"GET /acme/model/resolve/" + commit + "/model.bin",
+			}
+			if strings.Join(gotRequests, "\n") != strings.Join(wantRequests, "\n") {
+				t.Fatalf("upstream requests = %q, want %q", gotRequests, wantRequests)
+			}
+		})
 	}
 }
 

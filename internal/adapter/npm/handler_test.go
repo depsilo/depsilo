@@ -1,12 +1,9 @@
 package npm
 
 import (
-	"context"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -15,51 +12,18 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"depsilo/internal/adapter"
-	"depsilo/internal/cache"
+	"depsilo/internal/adapter/adaptertest"
 	"depsilo/internal/config"
-	"depsilo/internal/db"
 	"depsilo/internal/upstream"
 )
 
-type unavailableSelector struct{}
-
-func (unavailableSelector) Select(context.Context) (*upstream.Upstream, error) {
-	return nil, errors.New("test upstream unavailable")
-}
-
-type auditCapture struct {
-	entries []db.AuditLog
-}
-
-func (capture *auditCapture) Log(entry db.AuditLog) {
-	capture.entries = append(capture.entries, entry)
-}
-
 func TestMetadataUpstreamFailureIsRecordedAsAuditError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "npm-error.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.AutoMigrate(database); err != nil {
-		t.Fatal(err)
-	}
-	storage, err := cache.NewLocalStorage(filepath.Join(t.TempDir(), "cache"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	manager := cache.NewManager(storage, database, cache.NewEventBus(), 72*time.Hour)
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		if err := manager.Close(ctx); err != nil {
-			t.Errorf("close cache manager: %v", err)
-		}
-	})
-	audit := &auditCapture{}
+	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
+	audit := &adaptertest.AuditCapture{}
 	scope := adapter.NewRequestScope(nil, audit, nil, nil)
 
-	handler := New(manager, unavailableSelector{}, config.CacheConfig{TTLIndex: time.Hour}, database, testNPMTarballSigningKey)
+	handler := New(manager, adaptertest.UnavailableSelector{}, config.CacheConfig{TTLIndex: time.Hour}, database, testNPMTarballSigningKey)
 	router := gin.New()
 	handler.Register(router.Group("/npm"))
 	response := httptest.NewRecorder()
@@ -69,10 +33,10 @@ func TestMetadataUpstreamFailureIsRecordedAsAuditError(t *testing.T) {
 	if response.Code != http.StatusBadGateway {
 		t.Fatalf("status = %d, body=%s", response.Code, response.Body.String())
 	}
-	if len(audit.entries) != 1 {
-		t.Fatalf("audit entries = %#v", audit.entries)
+	if len(audit.Entries) != 1 {
+		t.Fatalf("audit entries = %#v", audit.Entries)
 	}
-	entry := audit.entries[0]
+	entry := audit.Entries[0]
 	if entry.Ecosystem != "npm" || entry.PackageName != "is-number" || entry.Action != "metadata" ||
 		entry.CacheResult != "error" || entry.StatusCode != http.StatusBadGateway {
 		t.Fatalf("audit entry = %#v", entry)
@@ -89,25 +53,7 @@ func TestMetadataCacheDoesNotCrossLegacyPackageNameCase(t *testing.T) {
 	}))
 	t.Cleanup(upstreamServer.Close)
 
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "npm-case.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.AutoMigrate(database); err != nil {
-		t.Fatal(err)
-	}
-	storage, err := cache.NewLocalStorage(filepath.Join(t.TempDir(), "cache"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	manager := cache.NewManager(storage, database, cache.NewEventBus(), 72*time.Hour)
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		if err := manager.Close(ctx); err != nil {
-			t.Errorf("close cache manager: %v", err)
-		}
-	})
+	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
 	pool, err := upstream.NewPool([]config.UpstreamConfig{{
 		Name: "mock", URL: upstreamServer.URL, Priority: 1, ProbeMode: "passive",
 	}})
@@ -169,25 +115,7 @@ func TestMetadataAcceptRepresentationsHaveIndependentCaches(t *testing.T) {
 	}))
 	t.Cleanup(upstreamServer.Close)
 
-	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "npm-accept.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.AutoMigrate(database); err != nil {
-		t.Fatal(err)
-	}
-	storage, err := cache.NewLocalStorage(filepath.Join(t.TempDir(), "cache"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	manager := cache.NewManager(storage, database, cache.NewEventBus(), 72*time.Hour)
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		if err := manager.Close(ctx); err != nil {
-			t.Errorf("close cache manager: %v", err)
-		}
-	})
+	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
 	pool, err := upstream.NewPool([]config.UpstreamConfig{{
 		Name: "mock", URL: upstreamServer.URL, Priority: 1, ProbeMode: "passive",
 	}})
