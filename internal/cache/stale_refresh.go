@@ -345,9 +345,16 @@ func (m *Manager) handleBackgroundRefreshError(parentCtx context.Context, key st
 	}
 }
 
-// discardSupersededWrite runs while the caller holds the key mutation gate.
-// It removes both halves of a write that lost the generation race.
+// discardSupersededWrite runs while the caller holds the key mutation gate,
+// after the publish hook refused a write that lost the generation race. That
+// write made nothing visible, so the row and object under key belong to
+// someone else. They are deleted only to retry an invalidation that has not
+// yet removed what it revoked; once a newer write has committed, or either
+// half of the invalidation's delete succeeded, they are left alone.
 func (m *Manager) discardSupersededWrite(ctx context.Context, key string) error {
+	if !m.invalidations.cleanupPending(key) {
+		return nil
+	}
 	deleteResult := m.db.WithContext(ctx).Where("key = ?", key).Delete(&db.CacheEntry{})
 	var dbErr error
 	if deleteResult.Error != nil {

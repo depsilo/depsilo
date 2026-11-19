@@ -326,3 +326,81 @@ func TestManagerInvalidationDuringStreamingWinsOverTheWriter(t *testing.T) {
 		t.Fatalf("Get after invalidation = %+v, err=%v; want the Upstream failure", result, err)
 	}
 }
+
+// unserializedStagedStorage stages each write in memory and switches it into
+// the LocalStorage only after publish, without serializing writers of the same
+// key. Like S3 multipart uploads, a newer write can stage, publish and commit
+// while an older one is still streaming.
+type unserializedStagedStorage struct {
+	*observedLocalStorage
+}
+
+func (s *unserializedStagedStorage) PutStaged(ctx context.Context, key string, r io.Reader, size int64, contentType string, publish func() error) error {
+	staged, err := io.ReadAll(s.observe(r))
+	if err != nil {
+		return err
+	}
+	if err := runPublish(publish); err != nil {
+		return err
+	}
+	return s.LocalStorage.Put(ctx, key, bytes.NewReader(staged), int64(len(staged)), contentType)
+}
+
+func TestManagerSupersededRefreshKeepsANewerCommittedFill(t *testing.T) {
+	const key = "pypi/simple/superseded/index.html"
+	database := openStreamTestDB(t)
+	storage := &unserializedStagedStorage{observedLocalStorage: newObservedLocalStorage(t)}
+	seedLocalEntry(t, storage.LocalStorage, database, db.CacheEntry{
+		Key: key, AdapterType: "pypi", StoragePath: key, CacheKind: db.CacheKindMetadata,
+		ContentType: "text/old", ExpiresAt: time.Now().Add(-time.Minute),
+	}, "old-index")
+	m := NewManager(storage, database, NewEventBus(), 72*time.Hour)
+	m.invalidationTimeout = time.Second
+	t.Cleanup(func() { closeTestManager(t, m) })
+
+	// (1) A background refresh streams its body slowly.
+	slow := newTrickleBody("slow-", "refresh")
+	defer slow.Close()
+	refreshDone := make(chan struct{})
+	go func() {
+		defer close(refreshDone)
+		m.backgroundRefresh(t.Context(), key, "pypi", time.Hour,
+			func(context.Context) (io.ReadCloser, string, int64, string, error) {
+				return slow, "text/slow", -1, "mock", nil
+			})
+	}()
+	storage.waitStreaming(t)
+
+	// (2) An invalidation supersedes it and finishes at once.
+	if err := m.Invalidate(t.Context(), key); err != nil {
+		t.Fatalf("Invalidate during streaming: %v", err)
+	}
+
+	// (3) A new request misses and commits a fill from a fast Upstream.
+	result, got, err := promptGet(t, m, key, func(context.Context) (io.ReadCloser, string, int64, string, error) {
+		return io.NopCloser(bytes.NewReader([]byte("fresh-index"))), "text/fresh", int64(len("fresh-index")), "mock", nil
+	})
+	if err != nil {
+		t.Fatalf("fill after invalidation: %v", err)
+	}
+	if string(got) != "fresh-index" || result.ContentType != "text/fresh" {
+		t.Fatalf("fill = body:%q type:%q", got, result.ContentType)
+	}
+	waitForNoInflight(t, m)
+
+	// (4) The superseded refresh reaches publish and is refused.
+	close(slow.release)
+	select {
+	case <-refreshDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("superseded refresh did not finish")
+	}
+
+	result, got, err = promptGet(t, m, key, unexpectedFetch)
+	if err != nil {
+		t.Fatalf("newer committed fill lost after the superseded refresh: %v", err)
+	}
+	if string(got) != "fresh-index" || result.ContentType != "text/fresh" {
+		t.Fatalf("hit after superseded refresh = body:%q type:%q, want the newer fill", got, result.ContentType)
+	}
+}

@@ -91,6 +91,18 @@ func (r *cacheInvalidationRegistry) markCleanupSafe(key string) {
 	r.settleIdleLocked(key, state)
 }
 
+// cleanupPending reports whether the key's latest invalidation still needs its
+// revoked representation removed: the key is tombstoned, no write has
+// committed since (commitWrite clears the tombstone), and no delete has
+// succeeded yet. A caller holding the key mutation gate may then retry the
+// delete without removing a newer committed entry.
+func (r *cacheInvalidationRegistry) cleanupPending(key string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	state := r.states[key]
+	return state != nil && state.tombstoned && !state.cleanupSafe
+}
+
 func (r *cacheInvalidationRegistry) beginInvalidation(key string) uint64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()

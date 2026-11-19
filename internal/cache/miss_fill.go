@@ -502,8 +502,8 @@ func (m *Manager) releaseInterruptedFill(key string, flight *inflightFetch, ctxE
 }
 
 // releaseSupersededFill runs while the caller holds the key mutation gate. It
-// discards a fill that lost the write-generation race and releases flight
-// with that persistence failure.
+// releases flight with the persistence failure of a fill that lost the
+// write-generation race, retrying only a still-pending invalidation cleanup.
 func (m *Manager) releaseSupersededFill(ctx context.Context, key string, flight *inflightFetch) {
 	cleanupErr := m.discardSupersededWrite(ctx, key)
 	m.releaseInflight(key, flight, &cachePersistenceError{cause: errors.Join(errCacheWriteSuperseded, cleanupErr)})

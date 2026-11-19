@@ -29,8 +29,11 @@ func (m *Manager) newPublishGate(ctx context.Context, key string, generation uin
 }
 
 // acquire is the publish hook handed to storage. A write that an invalidation
-// superseded while it streamed is refused here, with the gate held so the
-// caller can discard it before any newer writer runs.
+// superseded while it streamed is refused here, so it never becomes visible.
+// The gate stays held, but a newer write may already have published and
+// committed under key while this one streamed (S3 does not serialize staged
+// writes of one key), so the caller must not treat the current row and object
+// as its own.
 func (g *publishGate) acquire() error {
 	unlock, err := g.manager.lockMutation(g.ctx, g.key)
 	if err != nil {
