@@ -5,6 +5,63 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+- `[audit] retention_days` (default `90`; `0` keeps rows forever) deletes the
+  oldest audit rows hourly. **An upgraded instance loses audit history older
+  than 90 days on the first sweep unless this is set to `0` first.** Rows an
+  enabled SIEM exporter has not delivered yet are never deleted. The hash chain
+  stays verifiable from a recorded base: the Admin audit page,
+  `GET /api/v1/admin/audit/integrity` (`base_id`, `base_hash`,
+  `base_created_at`, `anchors.pruned`) and `depsilo audit verify` show how far
+  history was pruned, and checkpoints before the base count as pruned, not
+  broken.
+
+### Changed
+- Package request outcomes (cache hit, miss, upstream error, refused request)
+  are no longer written to the hash-chained audit log or forwarded to SIEM
+  exporters; that history lives in the access log. The audit log keeps policy
+  blocks and governance actions. The dashboard's recent downloads and the
+  client connection check read the access log. The audit page no longer
+  offers Hit/Miss filters, and new SIEM exporter filters reject `hit` and
+  `miss`; a stored filter keeps them, but they no longer match. Request rows
+  already in the audit log stay until audit retention removes them.
+- npm, Cargo, Composer, NuGet and PyPI answer an upstream 404 or 410 with
+  404 `NOT_FOUND` or 410 `GONE` instead of 502, so a missing package no longer
+  looks like an outage. These routes also try the next pool member in the same
+  request when one fails with 5xx, 429 or a connection error; a Cargo `.crate`
+  missing on one member is requested from the others.
+- Helm `index.yaml` lists chart URLs on the Upstream's own repository as
+  relative paths, so `helm pull` and `helm install` download charts through
+  Depsilo instead of from the origin. A chart one pool member answers with 404
+  is requested from the other members. Chart URLs on other hosts are left
+  unchanged.
+- NuGet service-index resources under any Upstream's base URL (for example
+  Nexus, BaGet or a mirror) are routed through Depsilo, not only nuget.org's.
+  api.nuget.org resources in an index served by a gateway in front of nuget.org
+  still are. nuget.org search and autocomplete stay pointed at
+  `azuresearch-*.nuget.org`; the old `/nuget/query` mapping reached a path
+  api.nuget.org does not serve.
+- The known-malicious blocklist syncs each ecosystem on its own. A failed
+  download or parse (for example a mirror without Maven) keeps only that
+  ecosystem on its last good data and records the error; the others still
+  refresh. `GET /api/v1/admin/blocklist/status` adds per-ecosystem
+  `ecosystem_sync`, Admin separates failed ecosystems that kept data from those
+  with no data yet, and capability facts report each ecosystem's own freshness.
+
+### Fixed
+- A cache refresh that receives its body slowly from the Upstream no longer
+  blocks other readers of the same key. A request past the stale-serving
+  budget gets the stale copy at once, and a hit on a key being rewritten gets
+  the previously committed version, instead of waiting for the write to finish.
+- SBOM and CRA exports emit valid package URLs. Maven is
+  `pkg:maven/<group>/<artifact>@<version>`, PyPI names are normalized,
+  Composer names are lowercased, Alpine is `pkg:apk/alpine/...`, Hugging Face
+  is `pkg:huggingface/<owner>/<repo>` with a lowercased commit, and every
+  component is percent-encoded.
+- npm prerelease versions such as `1.0.0-beta.1` are no longer cut to
+  `beta.1` in the access log, recent downloads, tamper events and the
+  connection check.
+
 ### Removed
 - The advisory import response no longer has `rules_created`; it was always
   `0`, because importing advisories never creates package rules.
