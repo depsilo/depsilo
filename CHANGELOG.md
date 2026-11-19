@@ -25,11 +25,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   offers Hit/Miss filters, and new SIEM exporter filters reject `hit` and
   `miss`; a stored filter keeps them, but they no longer match. Request rows
   already in the audit log stay until audit retention removes them.
-- npm, Cargo, Composer, NuGet and PyPI answer an upstream 404 or 410 with
-  404 `NOT_FOUND` or 410 `GONE` instead of 502, so a missing package no longer
-  looks like an outage. These routes also try the next pool member in the same
+- Every package route answers an upstream 404 or 410 with 404 `NOT_FOUND` or
+  410 `GONE`. npm, Cargo, Composer, NuGet and PyPI used to answer both with
+  502, and the transparent routes (apt, Alpine, conda, CRAN, Maven, RubyGems,
+  Helm, Go modules and others) answered a 410 with 502, so a missing package
+  looked like an outage; the go command now treats a version proxy.golang.org
+  reports gone as not found and falls back to its next `GOPROXY` entry. npm,
+  Cargo, Composer, NuGet and PyPI also try the next pool member in the same
   request when one fails with 5xx, 429 or a connection error; a Cargo `.crate`
   missing on one member is requested from the others.
+- The MCP `depsilo_recent` tool, given a `request_id`, explains a request a
+  policy refused from its audit-log block (`source: "audit_log"`,
+  `policy_decision: "deny"`) instead of reporting it not found. Other requests
+  report `source: "access_log"` and no longer carry an `audit_events` list.
+- Admin request details drop the related audit events, which allowed requests
+  no longer have: `GET /api/v1/admin/logs/:id` no longer returns
+  `audit_events`, the access-log drawer loses that section and the Overview
+  request dialog loses its Logs tab.
 - Helm `index.yaml` lists chart URLs on the Upstream's own repository as
   relative paths, so `helm pull` and `helm install` download charts through
   Depsilo instead of from the origin. A chart one pool member answers with 404
