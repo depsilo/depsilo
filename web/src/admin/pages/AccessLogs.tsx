@@ -440,13 +440,7 @@ function DiagnosticDetail({ detail, t }: { detail: AccessLogDetail; t: (key: str
     [t('logs.clientIp'), detail.client_ip || '—'],
     [t('logs.cacheKey'), detail.cache_key || '—'],
   ]
-  return <div className="space-y-5">
-    <dl className="grid gap-3 text-[14px]">
-      {facts.map(([label, content]) => <div key={label} className="grid grid-cols-1 sm:grid-cols-[112px_minmax(0,1fr)] gap-3 border-b pb-2" style={{ borderColor: 'var(--border, var(--border))' }}><dt style={{ color: 'var(--muted-foreground)' }}>{label}</dt><dd className="min-w-0 break-words font-mono" style={{ color: 'var(--foreground)' }}>{content}</dd></div>)}
-    </dl>
-    <div>
-      <h3 className="mb-2 text-[12px] font-semibold" style={{ color: 'var(--foreground)' }}>{t('logs.auditEvents')}</h3>
-      {detail.audit_events.length === 0 ? <p className="text-[12px]" style={{ color: 'var(--muted-foreground)' }}>{t('logs.noAuditEvents')}</p> : <ul className="space-y-2">{detail.audit_events.map(event => <li key={event.id} className="rounded border p-2 text-[12px]" style={{ borderColor: 'var(--border, var(--border))' }}><span className="font-mono">{event.action}</span> · {value(event.cache_result)} · {event.status_code || '-'} · {formatTime(event.created_at)}</li>)}</ul>}
-    </div>
-  </div>
+  return <dl className="grid gap-3 text-[14px]">
+    {facts.map(([label, content]) => <div key={label} className="grid grid-cols-1 sm:grid-cols-[112px_minmax(0,1fr)] gap-3 border-b pb-2" style={{ borderColor: 'var(--border, var(--border))' }}><dt style={{ color: 'var(--muted-foreground)' }}>{label}</dt><dd className="min-w-0 break-words font-mono" style={{ color: 'var(--foreground)' }}>{content}</dd></div>)}
+  </dl>
 }

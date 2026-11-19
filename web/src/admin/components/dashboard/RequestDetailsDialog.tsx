@@ -118,30 +118,6 @@ function ChainTab({ detail, t }: { detail: AccessLogDetail; t: TFunction }) {
   )
 }
 
-function LogTab({ detail, t }: { detail: AccessLogDetail; t: TFunction }) {
-  if (!detail.audit_events || detail.audit_events.length === 0) {
-    return <p className="text-[14px]" style={{ color: 'var(--muted-foreground)' }}>{t('overview.noAuditEvents')}</p>
-  }
-  return (
-    <ol className="flex flex-col gap-3">
-      {detail.audit_events.map(event => (
-        <li key={event.id} className="flex min-w-0 flex-col gap-1 rounded-md px-3 py-2" style={{ background: 'var(--muted)' }}>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="neutral">{event.action}</Badge>
-            <span className="font-mono text-[13px]" style={{ color: 'var(--foreground)' }}>
-              {event.package_name}{event.version ? `@${event.version}` : ''}
-            </span>
-            <span className="ml-auto text-[12px]" style={{ color: 'var(--muted-foreground)' }}>{formatTime(event.created_at, 'auto')}</span>
-          </div>
-          <span className="text-[13px]" style={{ color: 'var(--muted-foreground)' }}>
-            {t('overview.auditEventMeta', { ecosystem: event.ecosystem, result: event.cache_result, status: event.status_code })}
-          </span>
-        </li>
-      ))}
-    </ol>
-  )
-}
-
 interface RequestDetailsDialogProps {
   logId: number | null
   onClose: () => void
@@ -180,12 +156,10 @@ export default function RequestDetailsDialog({ logId, onClose }: RequestDetailsD
         <TabsList aria-label={t('overview.requestDetails')} activateOnFocus variant="line">
           <TabsTrigger value="basic">{t('overview.tabBasic')}</TabsTrigger>
           <TabsTrigger value="chain">{t('overview.tabChain')}</TabsTrigger>
-          <TabsTrigger value="logs">{t('overview.tabLogs')}</TabsTrigger>
         </TabsList>
         <div className="min-w-0">
           <TabsContent value="basic"><BasicTab detail={detail} t={t} /></TabsContent>
           <TabsContent value="chain"><ChainTab detail={detail} t={t} /></TabsContent>
-          <TabsContent value="logs"><LogTab detail={detail} t={t} /></TabsContent>
         </div>
       </Tabs>
     )

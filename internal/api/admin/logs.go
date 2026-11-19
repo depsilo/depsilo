@@ -248,22 +248,6 @@ func (h *AccessLogHandler) Detail(c *gin.Context) {
 		RequestID: item.RequestID, CacheResult: normalizedAccessCacheResult(item.CacheResult, item.Hit), CacheReason: item.CacheReason,
 		PolicyDecision: item.PolicyDecision, PolicyReason: item.PolicyReason,
 		DeliveryResult: item.DeliveryResult, DeliveryReason: item.DeliveryReason,
-		AuditEvents: make([]contract.AccessLogAuditEvent, 0),
-	}
-	if item.RequestID != "" {
-		var events []db.AuditLog
-		if err := h.db.WithContext(c.Request.Context()).Where("request_id = ?", item.RequestID).
-			Order("datetime(created_at) ASC").Limit(20).Find(&events).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": "could not read related audit events"})
-			return
-		}
-		for _, event := range events {
-			detail.AuditEvents = append(detail.AuditEvents, contract.AccessLogAuditEvent{
-				ID: event.ID, Ecosystem: event.Ecosystem, PackageName: event.PackageName,
-				Version: event.Version, Action: event.Action, CacheResult: event.CacheResult,
-				StatusCode: event.StatusCode, CreatedAt: event.CreatedAt,
-			})
-		}
 	}
 	c.JSON(http.StatusOK, detail)
 }

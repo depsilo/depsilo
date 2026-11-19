@@ -182,11 +182,8 @@ func TestAccessLogFilterHandlesMalformedValues(t *testing.T) {
 	}
 }
 
-func TestAccessLogDetailReturnsRecordedFactsAndRelatedAudit(t *testing.T) {
+func TestAccessLogDetailReturnsRecordedFacts(t *testing.T) {
 	database := newAccessLogTestDB(t)
-	if err := database.AutoMigrate(&db.AuditLog{}); err != nil {
-		t.Fatalf("migrate audit: %v", err)
-	}
 	created := time.Date(2026, 7, 10, 8, 30, 0, 0, time.UTC)
 	item := db.AccessLog{
 		RequestID: "req-detail-1", AdapterType: "pypi", Method: "GET",
@@ -199,32 +196,22 @@ func TestAccessLogDetailReturnsRecordedFactsAndRelatedAudit(t *testing.T) {
 	if err := database.Create(&item).Error; err != nil {
 		t.Fatalf("seed access log: %v", err)
 	}
-	if err := database.Create(&db.AuditLog{
-		RequestID: "req-detail-1", Ecosystem: "pypi", PackageName: "requests",
-		Version: "2.32.3", Action: "download", CacheResult: "miss", StatusCode: 200,
-		CreatedAt: created,
-	}).Error; err != nil {
-		t.Fatalf("seed audit log: %v", err)
-	}
 	rec := performAccessLogRequest(newAccessLogTestRouter(database), "/logs/"+strconv.Itoa(int(item.ID)))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("detail status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	var body struct {
-		RequestID      string `json:"request_id"`
-		CacheResult    string `json:"cache_result"`
-		PolicyDecision string `json:"policy_decision"`
-		DeliveryResult string `json:"delivery_result"`
-		AuditEvents    []struct {
-			RequestID string `json:"request_id"`
-		} `json:"audit_events"`
-	}
+	var body map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode detail: %v", err)
 	}
-	if body.RequestID != "req-detail-1" || body.CacheResult != "miss" ||
-		body.PolicyDecision != "unknown" || body.DeliveryResult != "unknown" || len(body.AuditEvents) != 1 {
+	if body["request_id"] != "req-detail-1" || body["cache_result"] != "miss" ||
+		body["policy_decision"] != "unknown" || body["delivery_result"] != "unknown" {
 		t.Fatalf("detail facts = %#v", body)
+	}
+	// Request outcomes no longer enter the audit chain and a policy block
+	// writes no access-log row, so the detail carries no related-audit list.
+	if _, ok := body["audit_events"]; ok {
+		t.Fatalf("detail still carries audit_events: %s", rec.Body.String())
 	}
 }
 

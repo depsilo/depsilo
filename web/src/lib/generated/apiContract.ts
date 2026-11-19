@@ -1094,21 +1094,8 @@ export interface AccessLogListResponse {
   ecosystems: EcosystemCount[] | null;
 }
 /**
- * AccessLogAuditEvent is an audit row written for the same request.
- */
-export interface AccessLogAuditEvent {
-  id: number /* uint */;
-  ecosystem: string;
-  package_name: string;
-  version: string;
-  action: string;
-  cache_result: string;
-  status_code: number /* int */;
-  created_at: string;
-}
-/**
  * AccessLogDetail answers GET /admin/logs/:id: the list row plus the request's
- * cache, policy, and delivery decisions and up to 20 related audit events.
+ * cache, policy, and delivery decisions.
  * CacheResult repeats the embedded field so the key keeps its position after
  * request_id on the wire.
  */
@@ -1120,7 +1107,6 @@ export interface AccessLogDetail extends AccessLog {
   policy_reason: string;
   delivery_result: string;
   delivery_reason: string;
-  audit_events: AccessLogAuditEvent[];
 }
 
 //////////

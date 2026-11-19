@@ -34,18 +34,6 @@ const detail: AccessLogDetail = {
   delivery_reason: 'stream_completed',
   upstream_requests: 1,
   upstream_bytes: 2_000_000,
-  audit_events: [
-    {
-      id: 11,
-      ecosystem: 'pypi',
-      package_name: 'requests',
-      version: '2.32.4',
-      action: 'download',
-      cache_result: 'miss',
-      status_code: 200,
-      created_at: '2026-10-03T00:00:00Z',
-    },
-  ],
 }
 
 test('Overview lists the latest client requests independent of the statistics range', async ({ page }) => {
@@ -113,6 +101,9 @@ test('request rows open a centered detail dialog that closes with Escape', async
   const dialog = page.locator('[data-slot="dialog-content"]')
   await expect(dialog.getByText('请求详情')).toBeVisible()
   await expect(dialog).toContainText('req-fixture-1')
+  // A policy block writes no access-log row and request outcomes no longer
+  // enter the audit chain, so the dialog has no related-audit tab.
+  await expect(dialog.getByRole('tab')).toHaveCount(2)
   await expect(page.locator('[data-slot="sheet-content"]')).toHaveCount(0)
 
   const geometry = await dialog.evaluate(element => {

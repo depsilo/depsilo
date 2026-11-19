@@ -52,30 +52,17 @@ type AccessLogListResponse struct {
 	Ecosystems []EcosystemCount `json:"ecosystems" tstype:"EcosystemCount[] | null"`
 }
 
-// AccessLogAuditEvent is an audit row written for the same request.
-type AccessLogAuditEvent struct {
-	ID          uint      `json:"id"`
-	Ecosystem   string    `json:"ecosystem"`
-	PackageName string    `json:"package_name"`
-	Version     string    `json:"version"`
-	Action      string    `json:"action"`
-	CacheResult string    `json:"cache_result"`
-	StatusCode  int       `json:"status_code"`
-	CreatedAt   time.Time `json:"created_at"`
-}
-
 // AccessLogDetail answers GET /admin/logs/:id: the list row plus the request's
-// cache, policy, and delivery decisions and up to 20 related audit events.
+// cache, policy, and delivery decisions.
 // CacheResult repeats the embedded field so the key keeps its position after
 // request_id on the wire.
 type AccessLogDetail struct {
 	AccessLog      `tstype:",extends"`
-	RequestID      string                `json:"request_id"`
-	CacheResult    AccessLogCacheResult  `json:"cache_result"`
-	CacheReason    string                `json:"cache_reason"`
-	PolicyDecision string                `json:"policy_decision"`
-	PolicyReason   string                `json:"policy_reason"`
-	DeliveryResult string                `json:"delivery_result"`
-	DeliveryReason string                `json:"delivery_reason"`
-	AuditEvents    []AccessLogAuditEvent `json:"audit_events"`
+	RequestID      string               `json:"request_id"`
+	CacheResult    AccessLogCacheResult `json:"cache_result"`
+	CacheReason    string               `json:"cache_reason"`
+	PolicyDecision string               `json:"policy_decision"`
+	PolicyReason   string               `json:"policy_reason"`
+	DeliveryResult string               `json:"delivery_result"`
+	DeliveryReason string               `json:"delivery_reason"`
 }

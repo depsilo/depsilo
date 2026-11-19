@@ -202,7 +202,6 @@ test('access log details keep the selected request explainable', async ({ page }
     policy_reason: 'not_recorded',
     delivery_result: 'unknown',
     delivery_reason: 'response_completion_not_recorded',
-    audit_events: [],
   } satisfies AccessLogDetail
   await mockAdminApi(page, {
     'GET /api/v1/admin/logs': populated['GET /api/v1/admin/logs'],
@@ -217,6 +216,7 @@ test('access log details keep the selected request explainable', async ({ page }
   await expect(detailDrawer.getByRole('heading', { name: 'requests', exact: true })).toBeVisible()
   await expect(page.getByText('req-detail-1', { exact: true })).toBeVisible()
   await expect(page.getByText(/未记录|Not recorded/, { exact: true }).first()).toBeVisible()
+  await expect(detailDrawer.getByText(/关联审计事件|Related audit events/)).toHaveCount(0)
   await page.goBack()
   await expect(page).toHaveURL(/\/admin\/logs$/)
 })

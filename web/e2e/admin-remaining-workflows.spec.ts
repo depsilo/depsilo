@@ -59,7 +59,7 @@ test('failed access details offer retry and preserve request identity', async ({
   const log = { id: 17, adapter_type: 'pypi', package_name: 'six', method: 'GET', cache_key: 'pypi/six.whl', hit: true, cache_result: 'hit', upstream: 'official', latency_ms: 1400, status_code: 503, client_ip: '127.0.0.1', bytes_sent: 0, created_at: '2026-10-21T00:00:00Z' }
   await mockAdminApi(page, {
     'GET /api/v1/admin/logs': { items: [log], total: 1, page: 1, page_size: 50 },
-    'GET /api/v1/admin/logs/17': () => available ? { ...log, request_id: 'fixture-17', cache_reason: 'fresh', policy_decision: 'allow', policy_reason: '', delivery_result: 'failed', delivery_reason: 'fixture', audit_events: [] } : { status: 503, body: { message: 'fixture request unavailable' } },
+    'GET /api/v1/admin/logs/17': () => available ? { ...log, request_id: 'fixture-17', cache_reason: 'fresh', policy_decision: 'allow', policy_reason: '', delivery_result: 'failed', delivery_reason: 'fixture' } : { status: 503, body: { message: 'fixture request unavailable' } },
   })
   await page.goto('/admin/logs?detail=17')
   const dialog = page.getByRole('dialog')
@@ -112,7 +112,7 @@ test('a lost signing capability still lets the operator choose an unsigned expor
 })
 
 test('Docker request details do not link into the ordinary upstream CRUD', async ({ page }) => {
-  await mockAdminApi(page, { 'GET /api/v1/admin/logs/17': { id: 17, adapter_type: 'docker', package_name: 'library/alpine', request_id: 'fixture-docker', cache_result: 'hit', cache_key: 'docker/alpine', policy_decision: 'allow', delivery_result: 'completed', created_at: '2026-10-22T00:00:00Z', audit_events: [] } })
+  await mockAdminApi(page, { 'GET /api/v1/admin/logs/17': { id: 17, adapter_type: 'docker', package_name: 'library/alpine', request_id: 'fixture-docker', cache_result: 'hit', cache_key: 'docker/alpine', policy_decision: 'allow', delivery_result: 'completed', created_at: '2026-10-22T00:00:00Z' } })
   await page.goto('/admin/logs?detail=17')
   const dialog = page.getByRole('dialog')
   await expect(dialog.getByText('fixture-docker')).toBeVisible()
