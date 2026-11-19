@@ -563,6 +563,106 @@ func TestEcosystemSyncStatesFallBackToTheRunLevelRecord(t *testing.T) {
 	}
 }
 
+func TestFirstPartialSyncAfterUpgradeKeepsTheRunLevelSuccess(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+	// A database last fully synced by a release without per-ecosystem state.
+	synced := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	if err := store.db.Create(&db.BlocklistSyncState{ID: 1, LastSyncAt: &synced, LastSuccessAt: &synced}).Error; err != nil {
+		t.Fatal(err)
+	}
+	result := SyncResult{Refreshed: map[string]int64{}, Failed: map[string]error{"maven": errors.New("timeout")}}
+	for _, eco := range SyncedEcosystems() {
+		if eco != "maven" {
+			result.Refreshed[eco] = 1
+		}
+	}
+	if err := store.RecordSync(ctx, result, 0); err != nil {
+		t.Fatal(err)
+	}
+	perEcosystem, err := store.EcosystemSyncStates(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if maven := perEcosystem["maven"]; maven.LastSuccessAt == nil || !maven.LastSuccessAt.Equal(synced) || maven.LastError != "timeout" {
+		t.Errorf("maven state = %+v, want the earlier run-level success kept with the new failure", maven)
+	}
+	if npm := perEcosystem["npm"]; npm.LastSuccessAt == nil || !npm.LastSuccessAt.After(synced) || npm.LastError != "" {
+		t.Errorf("npm state = %+v, want refreshed by this run", npm)
+	}
+}
+
+func TestEcosystemAddedAfterPerEcosystemSyncStartsNeverSynced(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+	synced := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	if err := store.db.Create(&db.BlocklistSyncState{ID: 1, LastSyncAt: &synced, LastSuccessAt: &synced}).Error; err != nil {
+		t.Fatal(err)
+	}
+	// A per-ecosystem record written before maven was covered: maven has
+	// never been attempted, so the run-level success must not be lent to it.
+	if err := store.db.Save(&db.ControlPlaneState{Key: ecosystemSyncKey, Value: `{"npm":{"last_success_at":"2026-10-01T00:00:00Z"}}`}).Error; err != nil {
+		t.Fatal(err)
+	}
+	perEcosystem, err := store.EcosystemSyncStates(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if maven := perEcosystem["maven"]; maven.LastSuccessAt != nil || maven.LastError != "" {
+		t.Errorf("maven state = %+v, want never synced", maven)
+	}
+	if err := store.RecordSync(ctx, SyncResult{Refreshed: map[string]int64{}, Failed: map[string]error{"maven": errors.New("HTTP 404")}}, 0); err != nil {
+		t.Fatal(err)
+	}
+	perEcosystem, _ = store.EcosystemSyncStates(ctx)
+	if maven := perEcosystem["maven"]; maven.LastSuccessAt != nil || maven.LastError != "HTTP 404" {
+		t.Errorf("maven state after failing = %+v, want no success and the failure", maven)
+	}
+}
+
+func TestCancelledSyncStillRecordsTheEcosystemsItCommitted(t *testing.T) {
+	archive := buildZip(t, map[string]string{"MAL-2026-1111.json": malAllVersions})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var requests sync.Mutex
+	served := 0
+	// Shutdown arrives while the second ecosystem downloads: the first one
+	// has already replaced its rows.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Lock()
+		served++
+		n := served
+		requests.Unlock()
+		if n > 1 {
+			cancel()
+			<-r.Context().Done()
+			return
+		}
+		w.Header().Set("Content-Type", "application/zip")
+		_, _ = w.Write(archive)
+	}))
+	defer srv.Close()
+
+	store := testStore(t)
+	syncer, err := NewSyncer(store, Config{MirrorURL: srv.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	syncer.runOnce(ctx)
+
+	first := SyncedEcosystems()[0]
+	perEcosystem, err := store.EcosystemSyncStates(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state := perEcosystem[first]; state.LastSuccessAt == nil || state.LastError != "" {
+		t.Errorf("%s state = %+v, want the committed refresh recorded despite the cancellation", first, state)
+	}
+	if st, _ := store.SyncState(context.Background()); st.LastSyncAt == nil || st.LastError == "" {
+		t.Errorf("run state = %+v, want the interrupted attempt recorded", st)
+	}
+}
+
 func TestNewSyncerValidation(t *testing.T) {
 	store := testStore(t)
 	if _, err := NewSyncer(store, Config{SyncInterval: "nonsense"}); err == nil {

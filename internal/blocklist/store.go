@@ -322,41 +322,45 @@ type EcosystemSync struct {
 	LastError     string     `json:"last_error,omitempty"`
 }
 
-// EcosystemSyncStates returns every covered ecosystem's sync outcome. An
-// ecosystem not yet attempted by a per-ecosystem sync (a database last
-// synced by an earlier release, or one never synced) reports the run-level
-// state instead, which is what that release recorded for every ecosystem.
+// EcosystemSyncStates returns every covered ecosystem's sync outcome.
 func (s *Store) EcosystemSyncStates(ctx context.Context) (map[string]EcosystemSync, error) {
 	run, err := s.SyncState(ctx)
 	if err != nil {
 		return nil, err
 	}
-	recorded, err := readEcosystemSync(s.db.WithContext(ctx))
-	if err != nil {
-		return nil, err
-	}
-	out := make(map[string]EcosystemSync, len(SyncedEcosystems()))
-	for _, eco := range SyncedEcosystems() {
-		if state, ok := recorded[eco]; ok {
-			out[eco] = state
-			continue
-		}
-		out[eco] = EcosystemSync{LastSuccessAt: run.LastSuccessAt, LastError: run.LastError}
-	}
-	return out, nil
+	return ecosystemSyncStates(s.db.WithContext(ctx), run)
 }
 
-func readEcosystemSync(tx *gorm.DB) (map[string]EcosystemSync, error) {
+// ecosystemSyncStates reads the per-ecosystem record. A database without
+// one was last synced by an earlier release (or never synced), so every
+// ecosystem reports the run-level state, which is what that release recorded
+// for all of them. Once the record exists, an ecosystem missing from it has
+// never been attempted (it was covered after the record was written) and
+// reports the zero value: never synced.
+func ecosystemSyncStates(tx *gorm.DB, run db.BlocklistSyncState) (map[string]EcosystemSync, error) {
 	var rows []db.ControlPlaneState
 	if err := tx.Where("key = ?", ecosystemSyncKey).Limit(1).Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("read blocklist ecosystem sync state: %w", err)
 	}
-	out := make(map[string]EcosystemSync)
-	if len(rows) == 0 {
-		return out, nil
+	recorded := make(map[string]EcosystemSync)
+	if len(rows) > 0 {
+		if err := json.Unmarshal([]byte(rows[0].Value), &recorded); err != nil {
+			return nil, fmt.Errorf("decode blocklist ecosystem sync state: %w", err)
+		}
 	}
-	if err := json.Unmarshal([]byte(rows[0].Value), &out); err != nil {
-		return nil, fmt.Errorf("decode blocklist ecosystem sync state: %w", err)
+	out := make(map[string]EcosystemSync, len(SyncedEcosystems()))
+	for eco, state := range recorded {
+		out[eco] = state
+	}
+	for _, eco := range SyncedEcosystems() {
+		if _, ok := out[eco]; ok {
+			continue
+		}
+		if len(rows) == 0 {
+			out[eco] = EcosystemSync{LastSuccessAt: run.LastSuccessAt, LastError: run.LastError}
+		} else {
+			out[eco] = EcosystemSync{}
+		}
 	}
 	return out, nil
 }
@@ -374,7 +378,10 @@ func (s *Store) RecordSync(ctx context.Context, result SyncResult, took time.Dur
 		if err := tx.Limit(1).Find(&st, 1).Error; err != nil {
 			return err
 		}
-		perEcosystem, err := readEcosystemSync(tx)
+		// Carry forward what the earlier release recorded before applying
+		// this run, so an ecosystem that fails its first per-ecosystem sync
+		// keeps the success time of the data it still blocks on.
+		perEcosystem, err := ecosystemSyncStates(tx, st)
 		if err != nil {
 			return err
 		}

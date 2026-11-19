@@ -57,6 +57,7 @@ func (h *CapabilityHandler) Summary(c *gin.Context) {
 		}
 	}
 	active = uniqueSorted(active)
+	blocklistStates, blocklistErr := h.blocklistSyncStates(ctx)
 	facts := make([]contract.CapabilityFact, 0, len(active)*6)
 	for _, name := range active {
 		definition, known := ecosystem.Lookup(name)
@@ -66,7 +67,7 @@ func (h *CapabilityHandler) Summary(c *gin.Context) {
 		facts = append(facts,
 			h.proxyFact(name, definition.StandardUpstreams),
 			h.rulesFact(name, definition.RuleEnforcement),
-			h.blocklistFact(ctx, name, definition.MaliciousDataset),
+			h.blocklistFact(name, definition.MaliciousDataset, blocklistStates, blocklistErr),
 			h.securityFact(ctx, name),
 			h.ageFact(name),
 			h.tamperFact(name),
@@ -103,7 +104,16 @@ func (h *CapabilityHandler) rulesFact(name string, supported bool) contract.Capa
 	return f
 }
 
-func (h *CapabilityHandler) blocklistFact(ctx context.Context, name string, supported bool) contract.CapabilityFact {
+// blocklistSyncStates loads every ecosystem's blocklist sync outcome once
+// per summary; nil without a blocklist store.
+func (h *CapabilityHandler) blocklistSyncStates(ctx context.Context) (map[string]blocklist.EcosystemSync, error) {
+	if h.blocklistStore == nil {
+		return nil, nil
+	}
+	return h.blocklistStore.EcosystemSyncStates(ctx)
+}
+
+func (h *CapabilityHandler) blocklistFact(name string, supported bool, states map[string]blocklist.EcosystemSync, statesErr error) contract.CapabilityFact {
 	f := contract.CapabilityFact{Name: "malicious_blocklist", Ecosystem: name, Support: contract.CapabilitySupportUnsupported, Mode: "off", DataStatus: contract.CapabilityDataStatusNeverSynced}
 	if !supported {
 		return f
@@ -117,8 +127,7 @@ func (h *CapabilityHandler) blocklistFact(ctx context.Context, name string, supp
 	if f.Mode == "" {
 		f.Mode = "block"
 	}
-	states, err := h.blocklistStore.EcosystemSyncStates(ctx)
-	if err != nil {
+	if statesErr != nil {
 		f.DataStatus, f.RecentFailure = contract.CapabilityDataStatusError, "sync state unavailable"
 		return f
 	}

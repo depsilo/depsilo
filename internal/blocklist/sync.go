@@ -109,6 +109,10 @@ func (s *Syncer) runOnce(ctx context.Context) {
 	s.runReserved(ctx)
 }
 
+// recordSyncTimeout bounds recording a run's outcome after the run's own
+// context may already be cancelled.
+const recordSyncTimeout = 10 * time.Second
+
 // runReserved executes a sync after the caller has atomically reserved the
 // single in-flight slot.
 func (s *Syncer) runReserved(ctx context.Context) {
@@ -116,7 +120,13 @@ func (s *Syncer) runReserved(ctx context.Context) {
 	start := s.now()
 	result, err := s.SyncOnce(ctx)
 	took := s.now().Sub(start)
-	if recErr := s.store.RecordSync(ctx, result, took); recErr != nil {
+	// Ecosystems commit one at a time, so a run cancelled partway (shutdown)
+	// has already replaced some datasets. Record outside the caller's
+	// cancellation so the sync state always matches the data it describes.
+	recordCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordSyncTimeout)
+	recErr := s.store.RecordSync(recordCtx, result, took)
+	cancel()
+	if recErr != nil {
 		zap.L().Warn("blocklist: record sync state", zap.Error(recErr))
 	}
 	if err != nil {

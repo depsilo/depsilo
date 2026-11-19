@@ -38,9 +38,10 @@ ecosystem's archive cannot be downloaded or parsed, or would empty a
 populated ecosystem, that ecosystem retains its last good data and records
 the error, while every other ecosystem still refreshes. An empty local dataset
 blocks nothing; a failed sync does not shut down the proxy. Admin shows the
-last run in which every ecosystem refreshed, lists the ecosystems that kept
-their last good data, and reports each ecosystem's own freshness in the
-capability summary. Inspect synchronization status in Admin before relying on
+last run in which every ecosystem refreshed, lists the failed ecosystems
+that kept their last good data separately from those that have never
+refreshed and so block nothing, and reports each ecosystem's own freshness in
+the capability summary. Inspect synchronization status in Admin before relying on
 coverage, and configure a reachable mirror or sync proxy where necessary.
 
 PyPI legacy archives and RubyGems platform gems resolve identity through their

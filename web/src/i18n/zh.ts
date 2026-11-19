@@ -1828,6 +1828,7 @@ const zh = {
         never: '从未同步',
         incomplete: '尚未完整同步',
         stale_ecosystems: '沿用上次数据',
+        no_data_ecosystems: '尚无数据',
         coverage: '覆盖生态',
         last_error: '最近错误',
         next_sync: '下次同步',

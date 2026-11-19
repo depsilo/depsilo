@@ -1821,6 +1821,7 @@ const en = {
         never: 'Never synced',
         incomplete: 'Not complete yet',
         stale_ecosystems: 'Kept last good data',
+        no_data_ecosystems: 'No data yet',
         coverage: 'Covered ecosystems',
         last_error: 'Last error',
         next_sync: 'Next sync',

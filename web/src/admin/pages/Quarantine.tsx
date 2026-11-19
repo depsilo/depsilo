@@ -642,8 +642,12 @@ function BlocklistTab() {
   const now = overrideList?.now ? new Date(overrideList.now).getTime() : mountedAt
   const reportedEcosystems = new Set(st?.enabled ? st.ecosystems : [])
   const overrideEcosystems = maliciousBlocklistEcosystems.filter(ecosystem => reportedEcosystems.has(ecosystem.id))
-  // Ecosystems sync independently; a failed one keeps blocking on its last good data.
-  const staleEcosystems = st?.enabled ? st.ecosystems.filter(ecosystem => st.ecosystem_sync?.[ecosystem]?.last_error) : []
+  // Ecosystems sync independently. A failed one keeps blocking on its last
+  // good data only if it ever refreshed; one that never did blocks nothing.
+  const ecosystemSync = st?.enabled ? st.ecosystem_sync ?? {} : {}
+  const failedEcosystems = st?.enabled ? (st.ecosystems ?? []).filter(ecosystem => ecosystemSync[ecosystem]?.last_error) : []
+  const staleEcosystems = failedEcosystems.filter(ecosystem => ecosystemSync[ecosystem]?.last_success_at)
+  const noDataEcosystems = failedEcosystems.filter(ecosystem => !ecosystemSync[ecosystem]?.last_success_at)
 
   return (
     <div className="space-y-5">
@@ -695,6 +699,13 @@ function BlocklistTab() {
           <StatusItem label={t('quarantine.blocklist.stale_ecosystems')}>
             <span className="text-[12px] font-mono" style={{ color: 'var(--warn-text)' }}>
               {staleEcosystems.join(' · ')}
+            </span>
+          </StatusItem>
+        )}
+        {noDataEcosystems.length > 0 && (
+          <StatusItem label={t('quarantine.blocklist.no_data_ecosystems')}>
+            <span className="text-[12px] font-mono" style={{ color: 'var(--danger-text)' }}>
+              {noDataEcosystems.join(' · ')}
             </span>
           </StatusItem>
         )}
