@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"time"
 )
@@ -14,6 +15,31 @@ type Storage interface {
 	Stat(ctx context.Context, key string) (*ObjectMeta, error)
 	List(ctx context.Context, prefix string) ([]ObjectMeta, error)
 	TotalSize(ctx context.Context) (int64, error)
+}
+
+// StagedPublisher is the optional capability that keeps readers of a key's
+// committed object unblocked while its replacement is still arriving.
+// PutStaged consumes r like Put, but into a location that Get, Exists and Stat
+// cannot observe. Once the whole body is stored there it calls publish exactly
+// once, immediately before the atomic switch that makes the new object
+// visible under key, so the caller can take its own lock for that switch.
+// When publish fails, PutStaged makes nothing visible, discards what it
+// staged, and returns an error wrapping the publish error. A Storage without
+// this capability is driven conservatively: publish runs before Put.
+type StagedPublisher interface {
+	PutStaged(ctx context.Context, key string, r io.Reader, size int64, contentType string, publish func() error) error
+}
+
+// runPublish invokes a StagedPublisher publish hook; nil means an ordinary
+// Put with nothing to coordinate.
+func runPublish(publish func() error) error {
+	if publish == nil {
+		return nil
+	}
+	if err := publish(); err != nil {
+		return fmt.Errorf("publish staged object: %w", err)
+	}
+	return nil
 }
 
 // StagingObjectStore is the optional local-storage capability used by

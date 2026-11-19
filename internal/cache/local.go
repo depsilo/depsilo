@@ -294,6 +294,16 @@ func (s *LocalStorage) Get(_ context.Context, key string) (io.ReadCloser, int64,
 }
 
 func (s *LocalStorage) Put(ctx context.Context, key string, r io.Reader, _ int64, _ string) error {
+	return s.put(ctx, key, r, nil)
+}
+
+// PutStaged streams r into the key's private staging file and calls publish
+// just before the rename that replaces the visible object.
+func (s *LocalStorage) PutStaged(ctx context.Context, key string, r io.Reader, _ int64, _ string, publish func() error) error {
+	return s.put(ctx, key, r, publish)
+}
+
+func (s *LocalStorage) put(ctx context.Context, key string, r io.Reader, publish func() error) error {
 	name, err := validateStorageKey(key, false)
 	if err != nil {
 		return err
@@ -361,6 +371,10 @@ func (s *LocalStorage) Put(ctx context.Context, key string, r io.Reader, _ int64
 		return fmt.Errorf("close file: %w", err)
 	}
 
+	if err := runPublish(publish); err != nil {
+		root.Remove(stagingPath)
+		return err
+	}
 	if err := root.Rename(stagingPath, objectName); err != nil {
 		root.Remove(stagingPath)
 		return fmt.Errorf("rename temp file: %w", err)
@@ -690,3 +704,4 @@ func (s *LocalStorage) RemoveStaging(ctx context.Context, key string) (bool, err
 var _ Storage = (*LocalStorage)(nil)
 var _ ReadinessProber = (*LocalStorage)(nil)
 var _ StagingObjectStore = (*LocalStorage)(nil)
+var _ StagedPublisher = (*LocalStorage)(nil)

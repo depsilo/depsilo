@@ -105,6 +105,62 @@ func TestLocalStorageLifecycle(t *testing.T) {
 	}
 }
 
+func TestLocalStoragePutStagedSwitchesObjectOnlyAfterPublish(t *testing.T) {
+	t.Parallel()
+
+	storage, err := NewLocalStorage(filepath.Join(t.TempDir(), "cache"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	const key = "pypi/simple/demo/index.html"
+	if err := storage.Put(ctx, key, strings.NewReader("old"), 3, "text/html"); err != nil {
+		t.Fatal(err)
+	}
+	readObject := func() string {
+		t.Helper()
+		reader, _, err := storage.Get(ctx, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer reader.Close()
+		data, err := io.ReadAll(reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+
+	refused := errors.New("publication refused")
+	var visibleAtPublish string
+	err = storage.PutStaged(ctx, key, strings.NewReader("refused"), 7, "text/html", func() error {
+		visibleAtPublish = readObject()
+		return refused
+	})
+	if !errors.Is(err, refused) {
+		t.Fatalf("PutStaged error = %v, want the publish error", err)
+	}
+	if visibleAtPublish != "old" || readObject() != "old" {
+		t.Fatalf("visible object at/after refused publish = %q/%q, want old", visibleAtPublish, readObject())
+	}
+	staging, err := storage.ListStaging(ctx)
+	if err != nil || len(staging) != 0 {
+		t.Fatalf("staging after refused publish = %+v, %v; want none", staging, err)
+	}
+
+	publishes := 0
+	if err := storage.PutStaged(ctx, key, strings.NewReader("new"), 3, "text/html", func() error {
+		publishes++
+		visibleAtPublish = readObject()
+		return nil
+	}); err != nil {
+		t.Fatalf("PutStaged: %v", err)
+	}
+	if publishes != 1 || visibleAtPublish != "old" || readObject() != "new" {
+		t.Fatalf("publishes=%d visible at publish=%q after=%q; want 1, old, new", publishes, visibleAtPublish, readObject())
+	}
+}
+
 func TestLocalStorageConcurrentPrefixKeysDoNotShareStaging(t *testing.T) {
 	storage, err := NewLocalStorage(filepath.Join(t.TempDir(), "cache"))
 	if err != nil {

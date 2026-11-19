@@ -352,9 +352,11 @@ func (m *Manager) pumpUpstream(
 	}
 }
 
-// storeAndCommit drains the storage pipe into storage.Put and, on success,
-// upserts the CacheEntry row and publishes the cache event. Releases the
-// inflight slot when done so followers can read from cache.
+// storeAndCommit drains the storage pipe into storage and, on success,
+// upserts the CacheEntry row and publishes the cache event. The key mutation
+// gate covers only the publication of object and row, so readers of the
+// previous representation are not held up while the Upstream streams.
+// Releases the inflight slot when done so followers can read from cache.
 func (m *Manager) storeAndCommit(ctx context.Context, state *missStreamState, key, adapterType string, ttl time.Duration, contentType string, declaredSize int64, validators ResponseValidators, headers http.Header, storageR *io.PipeReader, flight *inflightFetch, writeGeneration uint64) {
 	writeFinished := false
 	defer func() {
@@ -362,21 +364,20 @@ func (m *Manager) storeAndCommit(ctx context.Context, state *missStreamState, ke
 			m.invalidations.abortWrite(key)
 		}
 	}()
-	unlock, lockErr := m.lockMutation(ctx, key)
-	if lockErr != nil {
-		m.failStoreLock(ctx, state, key, storageR, flight, lockErr)
+	gate := m.newPublishGate(ctx, key, writeGeneration, nil)
+	defer gate.release()
+
+	cr, putSucceeded, putErr := m.putMissObject(ctx, key, contentType, declaredSize, storageR, gate.acquire)
+	switch {
+	case gate.lockErr != nil:
+		m.failStoreLock(ctx, state, key, storageR, flight, gate.lockErr)
 		return
-	}
-	defer unlock()
-	if !m.invalidations.writeCurrent(key, writeGeneration) {
+	case gate.superseded:
 		_ = storageR.CloseWithError(errCacheWriteSuperseded)
 		state.storageFailed()
 		m.releaseSupersededFill(ctx, key, flight)
 		return
-	}
-
-	cr, putSucceeded, putErr := m.putMissObject(ctx, key, contentType, declaredSize, storageR)
-	if putErr != nil {
+	case putErr != nil:
 		m.failStorePut(ctx, state, key, storageR, flight, putErr, putSucceeded)
 		return
 	}
@@ -408,7 +409,7 @@ func (m *Manager) storeAndCommit(ctx context.Context, state *missStreamState, ke
 }
 
 // failStoreLock detaches the storage consumer and releases flight when the
-// key mutation gate could not be acquired.
+// key mutation gate could not be acquired for publication.
 func (m *Manager) failStoreLock(ctx context.Context, state *missStreamState, key string, storageR *io.PipeReader, flight *inflightFetch, lockErr error) {
 	ctxErr := ctx.Err()
 	cancelCause := context.Cause(ctx)
@@ -420,13 +421,14 @@ func (m *Manager) failStoreLock(ctx context.Context, state *missStreamState, key
 	m.releaseInflight(key, flight, &cachePersistenceError{cause: lockErr})
 }
 
-// putMissObject streams the storage pipe into storage.Put, enforcing the
-// declared size when one is known. It returns the counting reader for the
-// committed size and digest, and whether storage.Put itself succeeded even
-// when the size check then failed.
-func (m *Manager) putMissObject(ctx context.Context, key, contentType string, declaredSize int64, storageR *io.PipeReader) (*countingReader, bool, error) {
+// putMissObject streams the storage pipe into storage, enforcing the declared
+// size when one is known, and runs publish before the object becomes visible.
+// It returns the counting reader for the committed size and digest, and
+// whether the storage write itself succeeded even when the size check then
+// failed.
+func (m *Manager) putMissObject(ctx context.Context, key, contentType string, declaredSize int64, storageR *io.PipeReader, publish func() error) (*countingReader, bool, error) {
 	cr, storageReader, exactReader := newSizedReader(storageR, declaredSize)
-	putErr := m.storage.Put(ctx, key, storageReader, declaredSize, contentType)
+	putErr := m.putPublished(ctx, key, storageReader, declaredSize, contentType, publish)
 	putSucceeded := putErr == nil
 	if putErr == nil && exactReader != nil {
 		putErr = exactReader.validateConsumed()

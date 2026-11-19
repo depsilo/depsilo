@@ -258,22 +258,26 @@ func (m *Manager) extendRefreshedTTL(ctx context.Context, entryID uint, key, ada
 }
 
 // overwriteRefreshedEntry replaces the stored object with the refreshed body
-// and updates its metadata row.
+// and updates its metadata row. The body streams without the key mutation
+// gate; the gate covers the object switch and the row update.
 func (m *Manager) overwriteRefreshedEntry(ctx context.Context, key, adapterType string, ttl time.Duration, writeGeneration uint64, body io.Reader, size int64, contentType string, validators ResponseValidators, headers http.Header) error {
 	cr, refreshReader, exactReader := newSizedReader(body, size)
-	unlock, lockErr := m.lockMutation(ctx, key)
-	if lockErr != nil {
-		return lockErr
-	}
-	defer unlock()
-	if !m.invalidations.writeCurrent(key, writeGeneration) {
+	var entry db.CacheEntry
+	gate := m.newPublishGate(ctx, key, writeGeneration, func() error {
+		current, err := m.refreshEntry(ctx, key)
+		entry = current
+		return err
+	})
+	defer gate.release()
+	putErr := m.putPublished(ctx, key, refreshReader, size, contentType, gate.acquire)
+	switch {
+	case gate.lockErr != nil:
+		return gate.lockErr
+	case gate.superseded:
 		return errors.Join(errCacheWriteSuperseded, m.discardSupersededWrite(ctx, key))
+	case gate.recheckErr != nil:
+		return gate.recheckErr
 	}
-	entry, entryErr := m.refreshEntry(ctx, key)
-	if entryErr != nil {
-		return entryErr
-	}
-	putErr := m.storage.Put(ctx, key, refreshReader, size, contentType)
 	putSucceeded := putErr == nil
 	if putErr == nil && exactReader != nil {
 		putErr = exactReader.validateConsumed()

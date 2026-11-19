@@ -158,12 +158,27 @@ func (s *S3Storage) Put(ctx context.Context, key string, r io.Reader, size int64
 		if _, seekable := r.(io.Seeker); seekable {
 			err = s.putObject(ctx, key, r, size, contentType)
 		} else {
-			err = s.putStream(ctx, key, r, &size, contentType)
+			err = s.putStream(ctx, key, r, &size, contentType, nil)
 		}
 	} else {
-		err = s.putStream(ctx, key, r, nil, contentType)
+		err = s.putStream(ctx, key, r, nil, contentType, nil)
 	}
 	if err != nil {
+		return fmt.Errorf("s3: put object %q: %w", key, err)
+	}
+	return nil
+}
+
+// PutStaged never streams a single PutObject, because S3 makes such an object
+// visible as soon as its request ends. A body up to one part is buffered and
+// sent under publish; a larger body is uploaded as parts that stay invisible
+// until CompleteMultipartUpload, which runs under publish.
+func (s *S3Storage) PutStaged(ctx context.Context, key string, r io.Reader, size int64, contentType string, publish func() error) error {
+	var expectedSize *int64
+	if size >= 0 {
+		expectedSize = &size
+	}
+	if err := s.putStream(ctx, key, r, expectedSize, contentType, publish); err != nil {
 		return fmt.Errorf("s3: put object %q: %w", key, err)
 	}
 	return nil
@@ -186,8 +201,9 @@ func (s *S3Storage) putObject(ctx context.Context, key string, r io.Reader, size
 // rewound. Small streams are buffered once and signed as a normal PutObject;
 // larger streams use signed multipart requests with one part in memory. A
 // non-nil expectedSize additionally makes truncated or overlong producers fail
-// instead of publishing bytes that disagree with cache metadata.
-func (s *S3Storage) putStream(ctx context.Context, key string, r io.Reader, expectedSize *int64, contentType string) (err error) {
+// instead of publishing bytes that disagree with cache metadata. A non-nil
+// publish runs immediately before the request that makes the object visible.
+func (s *S3Storage) putStream(ctx context.Context, key string, r io.Reader, expectedSize *int64, contentType string, publish func() error) (err error) {
 	if expectedSize != nil && *expectedSize <= s3MultipartPartSize {
 		buffer := make([]byte, int(*expectedSize))
 		n, readErr := io.ReadFull(r, buffer)
@@ -197,6 +213,9 @@ func (s *S3Storage) putStream(ctx context.Context, key string, r io.Reader, expe
 		if err := requireUploadEOF(r); err != nil {
 			return err
 		}
+		if err := runPublish(publish); err != nil {
+			return err
+		}
 		return s.putObject(ctx, key, bytes.NewReader(buffer), *expectedSize, contentType)
 	}
 
@@ -204,6 +223,9 @@ func (s *S3Storage) putStream(ctx context.Context, key string, r io.Reader, expe
 	n, readErr := io.ReadFull(r, buffer)
 	if expectedSize == nil {
 		if readErr == io.EOF || readErr == io.ErrUnexpectedEOF {
+			if err := runPublish(publish); err != nil {
+				return err
+			}
 			return s.putObject(ctx, key, bytes.NewReader(buffer[:n]), int64(n), contentType)
 		}
 		if readErr != nil {
@@ -302,6 +324,9 @@ func (s *S3Storage) putStream(ctx context.Context, key string, r io.Reader, expe
 		return fmt.Errorf("read upload stream: %w", readErr)
 	}
 
+	if err := runPublish(publish); err != nil {
+		return err
+	}
 	_, err = s.client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
 		Bucket:   aws.String(s.bucket),
 		Key:      aws.String(key),
@@ -421,3 +446,4 @@ func (s *S3Storage) TotalSize(ctx context.Context) (int64, error) {
 }
 
 var _ ReadinessProber = (*S3Storage)(nil)
+var _ StagedPublisher = (*S3Storage)(nil)
