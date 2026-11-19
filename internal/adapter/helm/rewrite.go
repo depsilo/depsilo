@@ -42,9 +42,10 @@ func helmRewritableBase(base *url.URL) bool {
 		base.Opaque == "" && base.RawQuery == "" && base.Fragment == ""
 }
 
-// helmIndexRewriter is a pull-based line transformer: each Read consumes at
-// most one buffered line of the source, so memory stays bounded by
-// helmRewriteBufferSize whatever the index size.
+// helmIndexRewriter is a pull-based line transformer. It holds at most one
+// buffered line of the source, so memory stays bounded by
+// helmRewriteBufferSize whatever the index size, and each Read fills the
+// caller's buffer with as many lines as are already buffered.
 type helmIndexRewriter struct {
 	source  io.ReadCloser
 	reader  *bufio.Reader
@@ -63,30 +64,63 @@ type helmIndexRewriter struct {
 }
 
 func (r *helmIndexRewriter) Read(p []byte) (int, error) {
-	for len(r.pending) == 0 {
+	n := 0
+	for n < len(p) {
+		if len(r.pending) > 0 {
+			copied := copy(p[n:], r.pending)
+			r.pending = r.pending[copied:]
+			n += copied
+			continue
+		}
 		if r.err != nil {
+			if n > 0 {
+				return n, nil
+			}
 			return 0, r.err
 		}
-		line, err := r.reader.ReadSlice('\n')
-		switch {
-		case errors.Is(err, bufio.ErrBufferFull):
-			if !r.midLine {
-				r.observe(line, false)
-			}
-			r.pending, r.midLine = line, true
-		case r.midLine:
-			r.pending, r.midLine = line, false
-			r.err = err
-		default:
-			if len(line) > 0 {
-				r.pending = r.observe(line, true)
-			}
-			r.err = err
+		// Once something is ready, return it rather than wait on the source
+		// for the next line.
+		if n > 0 && !r.lineBuffered() {
+			break
 		}
+		r.advance()
 	}
-	n := copy(p, r.pending)
-	r.pending = r.pending[n:]
 	return n, nil
+}
+
+// lineBuffered reports whether the next advance can complete without
+// reading the source: a whole line, or a full buffer, is already buffered.
+func (r *helmIndexRewriter) lineBuffered() bool {
+	buffered := r.reader.Buffered()
+	if buffered == 0 {
+		return false
+	}
+	if buffered >= r.reader.Size() {
+		return true
+	}
+	peeked, _ := r.reader.Peek(buffered)
+	return bytes.IndexByte(peeked, '\n') >= 0
+}
+
+// advance reads the next line, or the next piece of an overlong one, into
+// pending.
+func (r *helmIndexRewriter) advance() {
+	line, err := r.reader.ReadSlice('\n')
+	switch {
+	case errors.Is(err, bufio.ErrBufferFull):
+		if !r.midLine {
+			r.observe(line, false)
+		}
+		r.pending, r.midLine = line, true
+	case r.midLine:
+		r.pending, r.midLine = line, false
+		r.err = err
+	default:
+		if len(line) > 0 {
+			r.pending = r.observe(line, true)
+		}
+		r.err = err
+	}
 }
 
 func (r *helmIndexRewriter) Close() error { return r.source.Close() }

@@ -183,3 +183,53 @@ func TestScanHelmIndexResolvesRewrittenURLs(t *testing.T) {
 		t.Fatalf("matches = %+v, want acme-demo@1.0.0", matches)
 	}
 }
+
+// The cache fill pipeline does a client write, a storage enqueue and a timer
+// re-arm per Read, so one Read must carry as many already buffered lines as
+// the caller's buffer holds rather than one line at a time.
+func TestRewriteHelmIndexFillsTheReadBuffer(t *testing.T) {
+	t.Parallel()
+	var index strings.Builder
+	index.WriteString("entries:\n  a:\n")
+	for range 200 {
+		index.WriteString("  - urls:\n    - https://charts.example.com/stable/a-1.tgz\n    version: 1\n")
+	}
+	rewritten := rewriteHelmIndex(io.NopCloser(strings.NewReader(index.String())), "https://charts.example.com/stable")
+	defer rewritten.Close()
+	buffer := make([]byte, 32<<10)
+	n, err := rewritten.Read(buffer)
+	if err != nil {
+		t.Fatalf("first read: %v", err)
+	}
+	if lines := strings.Count(string(buffer[:n]), "\n"); lines < 100 {
+		t.Fatalf("first read returned %d lines (%d bytes), want the buffered index in one read", lines, n)
+	}
+	if !strings.Contains(string(buffer[:n]), "    - a-1.tgz\n") {
+		t.Fatalf("first read was not rewritten: %q", buffer[:n])
+	}
+}
+
+// A line that is not yet complete must not hold back lines already rewritten:
+// the reader returns what it has instead of waiting on the source.
+func TestRewriteHelmIndexDoesNotWaitForAnIncompleteLine(t *testing.T) {
+	t.Parallel()
+	source, writer := io.Pipe()
+	rewritten := rewriteHelmIndex(source, "https://charts.example.com/stable")
+	defer rewritten.Close()
+	go func() {
+		_, _ = writer.Write([]byte("entries:\n  a:\n  - urls:\n    - https://charts.example.com/stable/a-1.tgz\n    vers"))
+	}()
+	var got strings.Builder
+	buffer := make([]byte, 4096)
+	for !strings.Contains(got.String(), "a-1.tgz\n") {
+		n, err := rewritten.Read(buffer)
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		got.Write(buffer[:n])
+	}
+	_ = writer.Close()
+	if got.String() != "entries:\n  a:\n  - urls:\n    - a-1.tgz\n" {
+		t.Fatalf("read %q before the incomplete line", got.String())
+	}
+}
