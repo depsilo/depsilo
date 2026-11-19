@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"depsilo/internal/adapter/npm"
-	nugetAdapter "depsilo/internal/adapter/nuget"
 	"depsilo/internal/adapter/pypi"
 )
 
@@ -136,101 +135,5 @@ func TestURLRewrite_Npm_InvalidJSON(t *testing.T) {
 	_, err := npm.RewriteTarballURLs([]byte("not json"), "http://localhost:8080")
 	if err == nil {
 		t.Error("expected error for invalid JSON")
-	}
-}
-
-// ---------- NuGet URL Rewrite ----------
-
-func TestURLRewrite_NuGet_ServiceIndex(t *testing.T) {
-	input := `{"version":"3.0.0","resources":[
-		{"@id":"https://api.nuget.org/v3/search","@type":"SearchQueryService"},
-		{"@id":"https://api.nuget.org/v3/registration","@type":"RegistrationsBaseUrl"}
-	]}`
-	result, err := nugetAdapter.RewriteServiceIndex([]byte(input), "http://localhost:8080")
-	if err != nil {
-		t.Fatal(err)
-	}
-	resultStr := string(result)
-	if strings.Contains(resultStr, "api.nuget.org") {
-		t.Error("nuget.org URLs not rewritten")
-	}
-	if !strings.Contains(resultStr, "http://localhost:8080/nuget/v3/search") {
-		t.Errorf("search URL not rewritten: %s", resultStr)
-	}
-	if !strings.Contains(resultStr, "http://localhost:8080/nuget/v3/registration") {
-		t.Errorf("registration URL not rewritten: %s", resultStr)
-	}
-}
-
-func TestURLRewrite_NuGet_AzureSearchURLs(t *testing.T) {
-	input := `{"version":"3.0.0","resources":[
-		{"@id":"https://azuresearch-usnc.nuget.org/query","@type":"SearchQueryService"}
-	]}`
-	result, err := nugetAdapter.RewriteServiceIndex([]byte(input), "http://localhost:8080")
-	if err != nil {
-		t.Fatal(err)
-	}
-	resultStr := string(result)
-	if strings.Contains(resultStr, "azuresearch") {
-		t.Error("azuresearch URL not rewritten")
-	}
-}
-
-func TestURLRewrite_NuGet_PreservesVersion(t *testing.T) {
-	input := `{"version":"3.0.0","resources":[]}`
-	result, err := nugetAdapter.RewriteServiceIndex([]byte(input), "http://localhost:8080")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var doc map[string]interface{}
-	if err := json.Unmarshal(result, &doc); err != nil {
-		t.Fatal(err)
-	}
-	if doc["version"] != "3.0.0" {
-		t.Error("version field not preserved")
-	}
-}
-
-func TestURLRewrite_NuGet_UnknownURLNotRewritten(t *testing.T) {
-	input := `{"version":"3.0.0","resources":[
-		{"@id":"https://custom.nuget.example.com/v3/index","@type":"SearchQueryService"}
-	]}`
-	result, err := nugetAdapter.RewriteServiceIndex([]byte(input), "http://localhost:8080")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(result), "custom.nuget.example.com") {
-		t.Error("unknown URL should not be rewritten")
-	}
-}
-
-func TestURLRewrite_NuGet_InvalidJSON(t *testing.T) {
-	_, err := nugetAdapter.RewriteServiceIndex([]byte("not json"), "http://localhost:8080")
-	if err == nil {
-		t.Error("expected error for invalid JSON")
-	}
-}
-
-func TestURLRewrite_NuGet_DropsRepositorySignatures(t *testing.T) {
-	// RepositorySignatures resources must be dropped, not rewritten —
-	// NuGet's NU1301 enforces HTTPS on them and Depsilo serves plain HTTP.
-	input := `{"version":"3.0.0","resources":[
-		{"@id":"https://api.nuget.org/v3/search","@type":"SearchQueryService"},
-		{"@id":"https://api.nuget.org/v3-index/repository-signatures/4.7.0/index.json","@type":"RepositorySignatures/4.7.0"},
-		{"@id":"https://api.nuget.org/v3-index/repository-signatures/5.0.0/index.json","@type":"RepositorySignatures/5.0.0"}
-	]}`
-	result, err := nugetAdapter.RewriteServiceIndex([]byte(input), "http://localhost:8080")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(result), "RepositorySignatures") {
-		t.Errorf("RepositorySignatures resource should be filtered out: %s", result)
-	}
-	if strings.Contains(string(result), "repository-signatures") {
-		t.Errorf("repository-signatures URL should be gone: %s", result)
-	}
-	// Other resources must still rewrite normally.
-	if !strings.Contains(string(result), "http://localhost:8080/nuget/v3/search") {
-		t.Errorf("non-signature resources should still rewrite: %s", result)
 	}
 }

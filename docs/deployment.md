@@ -901,6 +901,15 @@ directory, or with a query keeps its value, and Helm downloads that chart from
 its origin directly. An index cached by an earlier version keeps its absolute
 URLs until it is next refreshed from the Upstream (`[cache] ttl_index`).
 
+**NuGet resources.** Depsilo writes its own address into the service index for
+every resource whose URL is under the URL of the Upstream that served the
+index, path included, so a custom feed (Nexus, BaGet, a mirror) is routed
+like `api.nuget.org`. Other resources keep their URL. On nuget.org that
+includes search and autocomplete, which live on `azuresearch-*.nuget.org`
+and not on `api.nuget.org`: `dotnet package search` and IDE search reach them
+directly, while restore goes through Depsilo. A feed that names its resources
+outside its own URL, as Azure Artifacts does with the feed ID in the path, is
+not routed through Depsilo for those resources.
 
 ### Optional ecosystems
 

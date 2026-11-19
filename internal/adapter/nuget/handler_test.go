@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -114,9 +115,10 @@ func TestServiceIndexURLsTakeOnlyAnHTTPSchemeFromForwardedProto(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
+		origin := "http://" + r.Host
 		_, _ = io.WriteString(w, `{"version":"3.0.0","resources":[`+
-			`{"@id":"https://api.nuget.org/v3-flatcontainer/","@type":"PackageBaseAddress/3.0.0"},`+
-			`{"@id":"https://api.nuget.org/v3/registration5-gz-semver2/","@type":"RegistrationsBaseUrl/3.6.0"}]}`)
+			`{"@id":"`+origin+`/v3-flatcontainer/","@type":"PackageBaseAddress/3.0.0"},`+
+			`{"@id":"`+origin+`/v3/registration5-gz-semver2/","@type":"RegistrationsBaseUrl/3.6.0"}]}`)
 	}))
 	t.Cleanup(upstreamServer.Close)
 	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
@@ -188,4 +190,100 @@ func TestRoutesReportThePoolAnswer(t *testing.T) {
 		adaptertest.CheckPoolAnswers(t, adaptertest.MetadataPoolAnswers, target, `{"versions":[]}`, newPoolNugetRouter)
 	}
 	adaptertest.CheckPoolAnswers(t, adaptertest.MetadataPoolAnswers, "/nuget/v3/index.json", `{"version":"3.0.0","resources":[]}`, newPoolNugetRouter)
+}
+
+// A custom feed (Nexus, BaGet, a mirror) names its resources under its own
+// base URL. The service index must send the client back through Depsilo for
+// them, and those URLs must reach the same feed paths.
+func TestServiceIndexRoutesACustomFeedThroughTheProxy(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var (
+		fetchedMu sync.Mutex
+		fetched   []string
+	)
+	feed := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fetchedMu.Lock()
+		fetched = append(fetched, r.URL.RequestURI())
+		fetchedMu.Unlock()
+		origin := "http://" + r.Host + "/repository/nuget-group"
+		switch r.URL.Path {
+		case "/repository/nuget-group/v3/index.json":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"version":"3.0.0","resources":[`+
+				`{"@id":"`+origin+`/v3/flat/","@type":"PackageBaseAddress/3.0.0"},`+
+				`{"@id":"`+origin+`/v3/search","@type":"SearchQueryService"},`+
+				`{"@id":"https://elsewhere.example/v3/stats","@type":"Foreign"}]}`)
+		case "/repository/nuget-group/v3/flat/demo/index.json":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"versions":["1.0.0"]}`)
+		case "/repository/nuget-group/v3/search":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"totalHits":0,"data":[]}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(feed.Close)
+	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
+	pool, err := upstream.NewPool([]config.UpstreamConfig{{
+		Name: "nexus", URL: feed.URL + "/repository/nuget-group", Priority: 1, ProbeMode: "passive",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := New(manager, upstream.NewPassiveRecoverySelector(pool), config.CacheConfig{TTLIndex: time.Hour, TTLBlob: 72 * time.Hour}, database)
+	router := gin.New()
+	handler.Register(router.Group("/nuget"))
+
+	get := func(target string) *httptest.ResponseRecorder {
+		t.Helper()
+		response := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, target, nil)
+		request.Host = "depsilo.example.test"
+		router.ServeHTTP(response, request)
+		return response
+	}
+	index := get("/nuget/v3/index.json")
+	if index.Code != http.StatusOK {
+		t.Fatalf("service index status = %d, body=%s", index.Code, index.Body.String())
+	}
+	var document struct {
+		Resources []struct {
+			ID   string `json:"@id"`
+			Type string `json:"@type"`
+		} `json:"resources"`
+	}
+	if err := json.Unmarshal(index.Body.Bytes(), &document); err != nil {
+		t.Fatalf("decode service index: %v", err)
+	}
+	ids := map[string]string{}
+	for _, resource := range document.Resources {
+		ids[resource.Type] = resource.ID
+	}
+	for resourceType, want := range map[string]string{
+		"PackageBaseAddress/3.0.0": "http://depsilo.example.test/nuget/v3/flat/",
+		"SearchQueryService":       "http://depsilo.example.test/nuget/v3/search",
+		"Foreign":                  "https://elsewhere.example/v3/stats",
+	} {
+		if got := ids[resourceType]; got != want {
+			t.Errorf("%s @id = %q, want %q", resourceType, got, want)
+		}
+	}
+
+	for _, resource := range []string{ids["PackageBaseAddress/3.0.0"] + "demo/index.json", ids["SearchQueryService"] + "?q=demo"} {
+		target := strings.TrimPrefix(resource, "http://depsilo.example.test")
+		if response := get(target); response.Code != http.StatusOK {
+			t.Fatalf("GET %s status = %d, body=%s", target, response.Code, response.Body.String())
+		}
+	}
+	want := []string{
+		"/repository/nuget-group/v3/index.json",
+		"/repository/nuget-group/v3/flat/demo/index.json",
+		"/repository/nuget-group/v3/search?q=demo",
+	}
+	fetchedMu.Lock()
+	defer fetchedMu.Unlock()
+	if strings.Join(fetched, " ") != strings.Join(want, " ") {
+		t.Fatalf("feed requests = %q, want %q", fetched, want)
+	}
 }

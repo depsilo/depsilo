@@ -108,8 +108,9 @@ func (h *Handler) handleServiceIndex(c *gin.Context) {
 			return nil, "", 0, "", err
 		}
 
-		// Store with placeholder for runtime base URL replacement
-		rewritten, err := RewriteServiceIndex(body, "__BASE_URL__")
+		// Store with placeholder for runtime base URL replacement. Resources
+		// are matched against the member that served this index.
+		rewritten, err := RewriteServiceIndex(body, "__BASE_URL__", ups.URL)
 		if err != nil {
 			return nil, "", 0, "", err
 		}
