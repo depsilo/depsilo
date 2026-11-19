@@ -258,6 +258,15 @@ func ExtractVersion(adapterType, key string) string {
 		parts := strings.Split(key, "/")
 		fname := parts[len(parts)-1]
 		fname = strings.TrimSuffix(fname, ".tgz")
+		// A version may contain hyphens (1.0.0-beta.1). The conventional
+		// <unscoped-name>-<version> prefix separates it exactly.
+		name := ExtractName(adapterType, key)
+		if slash := strings.LastIndexByte(name, '/'); slash >= 0 {
+			name = name[slash+1:]
+		}
+		if version, ok := strings.CutPrefix(fname, name+"-"); ok && name != "" && version != "" {
+			return version
+		}
 		if idx := strings.LastIndex(fname, "-"); idx > 0 {
 			return fname[idx+1:]
 		}

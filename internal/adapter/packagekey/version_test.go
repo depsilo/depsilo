@@ -349,3 +349,24 @@ func TestExtractGoVersionUsesCanonicalIdentity(t *testing.T) {
 		}
 	}
 }
+
+// An npm tarball is named <unscoped-name>-<version>.tgz, and a version may
+// itself contain hyphens. The key carries the package name, so its prefix,
+// not the last hyphen, separates the version.
+func TestExtractNPMTarballVersion(t *testing.T) {
+	cases := []struct{ key, want string }{
+		{"npm-exact-v1/is-number/-/is-number-7.0.0.tgz", "7.0.0"},
+		{"npm-exact-v1/fixture/-/fixture-1.0.0-beta.1.tgz", "1.0.0-beta.1"},
+		{"npm-exact-v1/@scope/pkg/-/pkg-2.0.0-rc.1.tgz", "2.0.0-rc.1"},
+		{"npm-exact-v1/fixture/-/__depsilo_tarball_v1/objects/abc/fixture-3.1.0-next.2.tgz", "3.1.0-next.2"},
+		{"npm/legacy/-/legacy-1.2.3.tgz", "1.2.3"},
+		// A tarball not named after its package keeps the last-hyphen split.
+		{"npm-exact-v1/fixture/-/renamed-4.0.0.tgz", "4.0.0"},
+		{"npm-exact-v1/fixture", ""},
+	}
+	for _, c := range cases {
+		if got := ExtractVersion("npm", c.key); got != c.want {
+			t.Errorf("ExtractVersion(npm, %q) = %q, want %q", c.key, got, c.want)
+		}
+	}
+}
