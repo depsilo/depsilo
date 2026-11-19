@@ -30,10 +30,18 @@ type Handler struct {
 }
 
 func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB) *Handler {
+	proxy := adapter.NewTransparentProxy("helm", cacheMgr, selector, database)
+	// The served index names its charts relative to Depsilo, and a pool may
+	// join different repositories, as the default one does. An index filled
+	// by one member while another was failing stays cached after the other
+	// answers again, and that member does not hold the charts it lists. A
+	// chart one member answers 404 for is therefore asked of the others,
+	// which reaches the member whose index named it, as the absolute URL did.
+	proxy.RetryMissingArtifacts = true
 	return &Handler{
 		cacheMgr:     cacheMgr,
 		selector:     selector,
-		proxy:        adapter.NewTransparentProxy("helm", cacheMgr, selector, database),
+		proxy:        proxy,
 		cfg:          cfg,
 		approximate:  adapter.NewApproximateProvenance(),
 		identityMemo: &helmIdentityMemo{},

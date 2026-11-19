@@ -180,3 +180,70 @@ func TestHelmIdentityLookupFillsTheRewrittenIndex(t *testing.T) {
 		t.Fatalf("upstream index fetches = %d, want the gate's fill to serve the client", got)
 	}
 }
+
+// A pool can join different repositories, as the default Helm pool does. When
+// the primary fails an index fetch, the cached index is the secondary's, whose
+// chart URLs are now relative; once the primary answers again it is selected
+// for the chart and does not have it. The download must reach the member whose
+// index named the chart instead of failing with 404.
+func TestHelmChartFromAFailedOverIndexReachesTheMemberThatListedIt(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var primaryDown atomic.Bool
+	primaryDown.Store(true)
+	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/index.yaml" && primaryDown.Load() {
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		if r.URL.Path == "/index.yaml" {
+			_, _ = io.WriteString(w, "apiVersion: v1\nentries: {}\n")
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(primary.Close)
+	var secondary *httptest.Server
+	secondary = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/index.yaml":
+			_, _ = io.WriteString(w, "apiVersion: v1\nentries:\n  other:\n  - name: other\n    urls:\n"+
+				"    - "+secondary.URL+"/other-2.0.0.tgz\n    version: 2.0.0\n")
+		case "/other-2.0.0.tgz":
+			_, _ = io.WriteString(w, "secondary chart")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(secondary.Close)
+
+	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
+	pool, err := upstream.NewPool([]config.UpstreamConfig{
+		{Name: "primary", URL: primary.URL, Priority: 1, ProbeMode: "passive"},
+		{Name: "secondary", URL: secondary.URL, Priority: 2, ProbeMode: "passive"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := New(manager, upstream.NewPassiveRecoverySelector(pool), config.CacheConfig{TTLIndex: time.Hour, TTLBlob: time.Hour}, database)
+	router := gin.New()
+	handler.Register(router.Group("/helm"))
+
+	index := getHelm(t, router, "/helm/index.yaml")
+	if urls := helmChartURLs(index.Body.String()); index.Code != http.StatusOK || len(urls) != 1 || urls[0] != "other-2.0.0.tgz" {
+		t.Fatalf("failed-over index status=%d urls=%q body=%s", index.Code, urls, index.Body.String())
+	}
+	// The primary recovers while the index is still fresh.
+	primaryDown.Store(false)
+	recovered := pool.Snapshot()[0]
+	for attempt := 0; !recovered.IsHealthy() && attempt < 10; attempt++ {
+		recovered.Report(time.Millisecond, true)
+	}
+	if recovered.Name != "primary" || !recovered.IsHealthy() {
+		t.Fatalf("%s did not recover", recovered.Name)
+	}
+
+	chart := getHelm(t, router, resolveLikeHelm(t, "http://depsilo.test/helm", "other-2.0.0.tgz").RequestURI())
+	if chart.Code != http.StatusOK || chart.Body.String() != "secondary chart" {
+		t.Fatalf("chart from the failed-over index status=%d body=%q", chart.Code, chart.Body.String())
+	}
+}

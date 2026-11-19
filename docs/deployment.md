@@ -896,10 +896,20 @@ directory of the Upstream that served it made relative: from the Upstream
 `https://mirror.azure.cn/kubernetes/charts/nginx-1.2.3.tgz` becomes
 `nginx-1.2.3.tgz`. Helm resolves it against the repository URL given to
 `helm repo add`, so `helm pull` and `helm install` download the chart through
-Depsilo, on a project route too. A chart URL on another host, outside that
-directory, or with a query keeps its value, and Helm downloads that chart from
-its origin directly. An index cached by an earlier version keeps its absolute
-URLs until it is next refreshed from the Upstream (`[cache] ttl_index`).
+Depsilo, on a project route too. Any other chart URL keeps its value, and
+Helm downloads that chart from its origin directly: one that is not a plain
+`http`/`https` URL on the Upstream's own scheme, host and directory (such as
+another host, `http` under an `https` Upstream, or a URL with a query,
+fragment or user information), one written as an escaped quoted string or in a
+flow list spanning several lines, a line over 64 KiB, and every URL of an index
+in JSON form. An index cached by an earlier version keeps its absolute URLs
+until it is next refreshed from the Upstream (`[cache] ttl_index`). A Helm
+pool may join different repositories, as the default one does; the cached
+index is then the one the member that last refreshed it serves, and a chart
+download that one member answers with 404 is asked of the other members, so a
+chart listed by an index filled during a failover still downloads after the
+first member recovers. When two such repositories hold a chart archive of the
+same file name, the first member that has it serves it.
 
 **NuGet resources.** Depsilo writes its own address into the service index for
 every resource whose URL is under the URL of the Upstream that served the

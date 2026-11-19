@@ -58,9 +58,11 @@ type TransparentProxy struct {
 	// RetryMissingArtifacts lets another pool member serve an immutable
 	// artifact that the selected member answers with 404. Enable it only
 	// for ecosystems whose pools mirror one repository and whose clients
-	// verify artifacts against hashes in signed or source-bound metadata.
-	// Metadata itself never moves on a 404: mixing snapshots of different
-	// mirrors would break those consistency checks.
+	// verify artifacts against hashes in signed or source-bound metadata,
+	// or, as for Helm, whose served metadata names artifacts relative to
+	// Depsilo, so that an artifact one member lacks was listed by another
+	// member's metadata. Metadata itself never moves on a 404: mixing
+	// snapshots of different mirrors would break those consistency checks.
 	RetryMissingArtifacts bool
 }
 
