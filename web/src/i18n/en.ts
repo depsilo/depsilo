@@ -1899,7 +1899,7 @@ const en = {
         user_cli_reset: "Password reset from the local CLI",
       },
       title: 'Audit Logs',
-      subtitle: 'Trace package access and control-plane changes, then filter or export them by time, ecosystem, and target.',
+      subtitle: 'Trace policy blocks and control-plane changes, then filter or export them by time, ecosystem, and target.',
       table: 'Audit logs table',
       searchLabel: 'Search audit logs by package',
       timeRange: 'Audit log time range',

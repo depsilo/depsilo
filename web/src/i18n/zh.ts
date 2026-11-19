@@ -1906,7 +1906,7 @@ const zh = {
         user_cli_reset: "本机命令行重置密码",
       },
       title: '审计日志',
-      subtitle: '追溯包访问与管理面变更，并按时间、生态和目标筛选或导出。',
+      subtitle: '追溯策略拦截与管理面变更，并按时间、生态和目标筛选或导出。',
       table: '审计日志表格',
       searchLabel: '按包名搜索审计日志',
       timeRange: '审计日志时间范围',
