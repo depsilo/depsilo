@@ -17,12 +17,12 @@ expected_schema_version=$(
 # upgrade to the candidate. Re-pin these six values after every release
 # (docs/release-verification.md, "Re-pinning the previous-release contract");
 # the freshness check below fails once a newer release exists.
-baseline_tag=v0.14.0
-baseline_commit=ae0eebd3bf3778cf720f9a7a8d57027888d604b8
+baseline_tag=v0.15.0
+baseline_commit=a504676e33a5f599d0c0d7d580800a4c1fd3e0cf
 baseline_compose_sha256=0567568083ce00f53bfaf78738c26f30d94e6ffb32268f4ab54a08b7e909d9db
-baseline_image_index=ghcr.io/depsilo/depsilo@sha256:3d7880d1ba4badfbbb9b3b1166bc00736bcd1237065cc0208d3c89ddfd1ff301
-baseline_image_amd64=ghcr.io/depsilo/depsilo@sha256:ba5c41591a263423499528e07aad30afc200082092f1427fcd6b18e23e1e86c0
-baseline_image_arm64=ghcr.io/depsilo/depsilo@sha256:5a53f44c90bb5f6a1c465f47a6284a49f00b537ebaac179634fd778bf0cdaf20
+baseline_image_index=ghcr.io/depsilo/depsilo@sha256:3041ffa6761dcdd5ffcd0da7e0c78dd8d34c27376a296c7d1c91add1e6c1593c
+baseline_image_amd64=ghcr.io/depsilo/depsilo@sha256:1ffe38ec08f13584e5dd3c0f76c975982e724018fd8759af4cda9dfc884e975e
+baseline_image_arm64=ghcr.io/depsilo/depsilo@sha256:fa9793f62406f5ae848c7781f36d2f94b1777592140fe08c23b3036a37267b6b
 baseline_version=${baseline_tag#v}
 candidate_input=${DEPSILO_UPGRADE_IMAGE:-}
 project="depsilo-previous-release-upgrade-$$"
