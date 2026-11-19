@@ -16,11 +16,21 @@ import (
 
 const maxOnboardingDeliveryCursorLength = 1024
 
-// The two log writers commit independently. A joined delivery is new when
-// either side passed its watermark, even if the other side was read earlier.
-// Fixed upper bounds and a pair key make pagination stable without server
+// onboardingDeliveryCursor is the access-log watermark of an observation.
+// Package request outcomes live in the access log alone, so one monotonic ID
+// orders them; fixed upper bounds make each poll gap-free without server
 // session state. This is an observation cursor, never a client identity.
 type onboardingDeliveryCursor struct {
+	Version     int  `json:"v"`
+	AccessAfter uint `json:"x"`
+}
+
+// legacyOnboardingDeliveryCursor is the version 1 cursor, which paired audit
+// request rows with access rows. A browser session opened before the upgrade
+// continues from its access watermark; a page in progress can replay at most
+// one page of deliveries it already saw, which the browser treats as
+// idempotent.
+type legacyOnboardingDeliveryCursor struct {
 	Version       int  `json:"v"`
 	AuditAfter    uint `json:"a"`
 	AccessAfter   uint `json:"x"`
@@ -36,40 +46,49 @@ func (cursor onboardingDeliveryCursor) encode() string {
 	return base64.RawURLEncoding.EncodeToString(body)
 }
 
+func newOnboardingDeliveryCursor(accessAfter uint) onboardingDeliveryCursor {
+	return onboardingDeliveryCursor{Version: 2, AccessAfter: accessAfter}
+}
+
 func parseOnboardingDeliveryCursor(raw string) (onboardingDeliveryCursor, error) {
-	var cursor onboardingDeliveryCursor
+	var cursor legacyOnboardingDeliveryCursor
 	invalid := errors.New("delivery_after_id must be a valid delivery cursor")
 	if raw == "" || len(raw) > maxOnboardingDeliveryCursorLength {
-		return cursor, invalid
+		return onboardingDeliveryCursor{}, invalid
 	}
 	body, err := base64.RawURLEncoding.DecodeString(raw)
-	if err != nil || json.Unmarshal(body, &cursor) != nil || cursor.Version != 1 {
-		return cursor, invalid
+	if err != nil || json.Unmarshal(body, &cursor) != nil {
+		return onboardingDeliveryCursor{}, invalid
 	}
 	// IDs must fit SQLite's signed integer domain and remain exactly
 	// representable by the browser's existing numeric event IDs.
 	const maxID = 1<<53 - 1
 	for _, id := range []uint{cursor.AuditAfter, cursor.AccessAfter, cursor.AuditThrough, cursor.AccessThrough, cursor.LastAudit, cursor.LastAccess} {
 		if uint64(id) > maxID {
-			return cursor, invalid
+			return onboardingDeliveryCursor{}, invalid
 		}
 	}
-	if cursor.Paging {
-		if cursor.AuditThrough < cursor.AuditAfter || cursor.AccessThrough < cursor.AccessAfter ||
-			cursor.LastAudit == 0 || cursor.LastAccess == 0 ||
-			cursor.LastAudit > cursor.AuditThrough || cursor.LastAccess > cursor.AccessThrough ||
-			(cursor.LastAudit <= cursor.AuditAfter && cursor.LastAccess <= cursor.AccessAfter) {
-			return cursor, invalid
+	switch cursor.Version {
+	case 2:
+		if cursor.AuditAfter != 0 || cursor.Paging || cursor.AuditThrough != 0 || cursor.AccessThrough != 0 ||
+			cursor.LastAudit != 0 || cursor.LastAccess != 0 {
+			return onboardingDeliveryCursor{}, invalid
 		}
-	} else if cursor.AuditThrough != 0 || cursor.AccessThrough != 0 || cursor.LastAudit != 0 || cursor.LastAccess != 0 {
-		return cursor, invalid
+	case 1:
+		if cursor.Paging {
+			if cursor.AuditThrough < cursor.AuditAfter || cursor.AccessThrough < cursor.AccessAfter ||
+				cursor.LastAudit == 0 || cursor.LastAccess == 0 ||
+				cursor.LastAudit > cursor.AuditThrough || cursor.LastAccess > cursor.AccessThrough ||
+				(cursor.LastAudit <= cursor.AuditAfter && cursor.LastAccess <= cursor.AccessAfter) {
+				return onboardingDeliveryCursor{}, invalid
+			}
+		} else if cursor.AuditThrough != 0 || cursor.AccessThrough != 0 || cursor.LastAudit != 0 || cursor.LastAccess != 0 {
+			return onboardingDeliveryCursor{}, invalid
+		}
+	default:
+		return onboardingDeliveryCursor{}, invalid
 	}
-	return cursor, nil
-}
-
-type onboardingDeliveryRow struct {
-	Delivery contract.OnboardingDeliveryEvent `gorm:"embedded"`
-	AuditID  uint
+	return newOnboardingDeliveryCursor(cursor.AccessAfter), nil
 }
 
 func onboardingAccessMaxID(ctx context.Context, database *gorm.DB) (uint, error) {
@@ -79,53 +98,53 @@ func onboardingAccessMaxID(ctx context.Context, database *gorm.DB) (uint, error)
 	return result.MaxID, err
 }
 
-func (h *OnboardingHandler) deliveryPage(ctx context.Context, cursor onboardingDeliveryCursor, startedAt time.Time, auditMax uint) ([]contract.OnboardingDeliveryEvent, string, bool, error) {
-	if !cursor.Paging {
-		accessMax, err := onboardingAccessMaxID(ctx, h.db)
-		if err != nil {
-			return nil, "", false, err
-		}
-		// Retention can remove all rows while an observation is open. Never
-		// move its watermarks backward and replay surviving history.
-		cursor.AuditThrough = max(cursor.AuditAfter, auditMax)
-		cursor.AccessThrough = max(cursor.AccessAfter, accessMax)
+// deliveryPage reads the package requests the access log recorded after the
+// cursor. An access row is written when the response completes, so its
+// request start is the completion time less the latency: a slow request
+// already in flight when onboarding began never looks new. The SQL bound on
+// completion time is the necessary condition; the start test runs here.
+// Request rows an earlier release chained into the audit log are not read,
+// so a session spanning the upgrade never sees one request twice.
+func (h *OnboardingHandler) deliveryPage(ctx context.Context, cursor onboardingDeliveryCursor, startedAt time.Time) ([]contract.OnboardingDeliveryEvent, string, bool, error) {
+	accessMax, err := onboardingAccessMaxID(ctx, h.db)
+	if err != nil {
+		return nil, "", false, err
 	}
+	// Retention can remove all rows while an observation is open. Never move
+	// the watermark backward and replay surviving history.
+	through := max(cursor.AccessAfter, accessMax)
 
-	rows := make([]onboardingDeliveryRow, 0, onboardingEventPageSize+1)
-	query := h.db.WithContext(ctx).Table("audit_logs AS audit").
-		Select(`access.id, audit.id AS audit_id, access.request_id, access.adapter_type AS ecosystem,
-			audit.package_name, audit.version, access.cache_key, access.method,
-			access.delivery_result, access.bytes_sent, access.status_code, access.cache_result AS outcome,
-			audit.created_at`).
-		Joins(`JOIN access_logs AS access ON access.request_id = audit.request_id
-			AND access.adapter_type = audit.ecosystem AND access.package_name = audit.package_name`).
-		Where("audit.request_id <> '' AND audit.package_name <> ''").
-		Where("audit.action IN ?", onboardingAuditActions).
-		Where("audit.created_at >= ?", startedAt.UTC()).
-		Where("audit.id <= ? AND access.id <= ?", cursor.AuditThrough, cursor.AccessThrough).
-		Where("(audit.id > ? OR access.id > ?)", cursor.AuditAfter, cursor.AccessAfter)
-	if cursor.Paging {
-		query = query.Where("(audit.id > ? OR (audit.id = ? AND access.id > ?))",
-			cursor.LastAudit, cursor.LastAudit, cursor.LastAccess)
-	}
-	if err := query.Order("audit.id ASC, access.id ASC").Limit(onboardingEventPageSize + 1).Scan(&rows).Error; err != nil {
+	rows := make([]db.AccessLog, 0, onboardingEventPageSize+1)
+	err = h.db.WithContext(ctx).Model(&db.AccessLog{}).
+		Select("id, request_id, adapter_type, package_name, cache_key, method, delivery_result, bytes_sent, status_code, cache_result, latency_ms, created_at").
+		Where("id > ? AND id <= ?", cursor.AccessAfter, through).
+		Where("request_id <> '' AND package_name <> ''").
+		Where("created_at >= ?", startedAt.UTC()).
+		Order("id ASC").Limit(onboardingEventPageSize + 1).
+		Find(&rows).Error
+	if err != nil {
 		return nil, "", false, err
 	}
 	hasMore := len(rows) > onboardingEventPageSize
+	next := newOnboardingDeliveryCursor(through)
 	if hasMore {
 		rows = rows[:onboardingEventPageSize]
-		cursor.Paging = true
-		cursor.LastAudit = rows[len(rows)-1].AuditID
-		cursor.LastAccess = rows[len(rows)-1].Delivery.ID
-	} else {
-		cursor = onboardingDeliveryCursor{
-			Version: 1, AuditAfter: cursor.AuditThrough, AccessAfter: cursor.AccessThrough,
-		}
+		next.AccessAfter = rows[len(rows)-1].ID
 	}
 	events := make([]contract.OnboardingDeliveryEvent, 0, len(rows))
 	for _, row := range rows {
-		event := row.Delivery
-		event.DependencyKind = accesslog.DependencyRequestKind(event.Ecosystem, event.CacheKey)
+		requestStart := row.CreatedAt.Add(-time.Duration(row.LatencyMs) * time.Millisecond).UTC()
+		if requestStart.Before(startedAt) {
+			continue
+		}
+		event := contract.OnboardingDeliveryEvent{
+			ID: row.ID, RequestID: row.RequestID, Ecosystem: row.AdapterType,
+			PackageName: row.PackageName, Version: accesslog.RecordedVersion(row.AdapterType, row.CacheKey, row.StatusCode),
+			CacheKey: row.CacheKey, Method: row.Method,
+			DependencyKind: accesslog.DependencyRequestKind(row.AdapterType, row.CacheKey),
+			DeliveryResult: row.DeliveryResult, BytesSent: row.BytesSent, StatusCode: row.StatusCode,
+			Outcome: row.CacheResult, CreatedAt: requestStart,
+		}
 		event.SuccessfulArtifactDownload = accesslog.SuccessfulArtifactDownload(accesslog.Event{
 			AdapterType: event.Ecosystem, Method: event.Method, CacheKey: event.CacheKey,
 			DependencyKind: event.DependencyKind, BytesSent: event.BytesSent,
@@ -133,5 +152,5 @@ func (h *OnboardingHandler) deliveryPage(ctx context.Context, cursor onboardingD
 		})
 		events = append(events, event)
 	}
-	return events, cursor.encode(), hasMore, nil
+	return events, next.encode(), hasMore, nil
 }

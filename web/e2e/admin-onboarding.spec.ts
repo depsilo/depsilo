@@ -150,9 +150,10 @@ test('connection verification requires an artifact delivery and a matching cache
       const url = new URL(request.url())
       if (!url.searchParams.has('after_id')) return response({ status: 'not_started' })
       deliveryCursors.push(url.searchParams.get('delivery_after_id') ?? '')
-      if (stage === 0) return response({ status: 'not_started', next_after_id: 11, events: [event(11, 'hit', 200, { action: 'metadata', version: '' })] })
-      return response({ status: 'not_started', next_after_id: 11 + stage, next_delivery_after_id: `delivery-${stage}`,
-        events: [event(11 + stage, stage === 1 ? 'miss' : 'hit')],
+      // Request outcomes arrive from the access log as delivery events only.
+      if (stage === 0) return response({ status: 'not_started', next_delivery_after_id: 'delivery-0',
+        delivery_events: [delivery(100, 'hit', { version: '', cache_key: 'pypi/simple/six/index.html', dependency_kind: 'metadata', successful_artifact_download: false })] })
+      return response({ status: 'not_started', next_delivery_after_id: `delivery-${stage}`,
         delivery_events: [delivery(100 + stage, stage === 1 ? 'miss' : 'hit')],
       })
     },
@@ -464,11 +465,11 @@ for (const outcome of [
   })
 }
 
-test('a cancelled body remains a failed verification despite an audit MISS', async ({ page }) => {
+test('a cancelled body remains a failed verification despite a MISS', async ({ page }) => {
   await setUiPreferences(page, 'dark', 'en')
   await mockAdminApi(page, {
     'GET /api/v1/admin/onboarding/status': (request: Request) => new URL(request.url()).searchParams.has('after_id')
-      ? response({ next_after_id: 11, events: [event(11, 'miss')], delivery_events: [delivery(101, 'miss', { delivery_result: 'cancelled', successful_artifact_download: false })] })
+      ? response({ delivery_events: [delivery(101, 'miss', { delivery_result: 'cancelled', successful_artifact_download: false })] })
       : response(),
   })
   await page.goto('/admin/connect')
@@ -483,9 +484,10 @@ test('a newer successful delivery replaces an earlier failed request diagnostic'
   await mockAdminApi(page, {
     'GET /api/v1/admin/onboarding/status': (request: Request) => {
       if (!new URL(request.url()).searchParams.has('after_id')) return response()
-      return response({ next_after_id: 11,
-        events: recovered ? [] : [event(11, 'error', 502)],
-        delivery_events: recovered ? [delivery(102, 'miss', { request_id: 'request-12', created_at: '2026-08-20T10:00:02Z' })] : [],
+      return response({
+        delivery_events: [recovered
+          ? delivery(102, 'miss', { created_at: '2026-08-20T10:00:02Z' })
+          : delivery(101, 'unknown', { version: '', status_code: 502, bytes_sent: 0, delivery_result: 'unknown', successful_artifact_download: false })],
       })
     },
   })

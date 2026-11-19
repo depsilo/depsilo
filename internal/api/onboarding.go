@@ -29,6 +29,13 @@ const (
 
 var onboardingAuditActions = []string{"metadata", "download"}
 
+// onboardingPolicyBlockResult selects the one package request outcome the
+// audit log still records. Hit, miss, and error outcomes are request history
+// in the access log and arrive as delivery events; request rows an earlier
+// release chained into the audit log are excluded, so a session spanning the
+// upgrade never reports one request from both logs.
+const onboardingPolicyBlockResult = "blocked"
+
 // OnboardingHandler exposes the small instance-local state and event cursor
 // needed by the first-project flow. Request identity stays behind Admin read
 // authentication; the anonymous Portal never receives package history.
@@ -42,11 +49,15 @@ func NewOnboardingHandler(database *gorm.DB) *OnboardingHandler {
 }
 
 // Status starts or advances a client-owned onboarding cursor. The initial
-// request deliberately returns no historical events: its current maximum audit
-// ID and request timestamp form the baseline. Polls then read only package
-// events committed after that ID and created after the supplied session
-// boundary. The timestamp also excludes older events that an async logger
-// happened to flush after the baseline ID was captured.
+// request deliberately returns no historical events: the current maximum
+// audit and access-log IDs and the request timestamp form the baseline. Polls
+// then read only rows committed after those IDs whose request started after
+// the supplied session boundary. The timestamp also excludes older events that
+// an async logger happened to flush after the baseline ID was captured.
+//
+// Events are policy-blocked package requests from the audit log. Every other
+// package request outcome is a delivery event from the access log, read only
+// when the poll carries a delivery cursor.
 func (h *OnboardingHandler) Status(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 
@@ -75,14 +86,12 @@ func (h *OnboardingHandler) Status(c *gin.Context) {
 		// inserted afterward must also have started on or after this boundary.
 		requestStartedAt := h.now().UTC()
 		c.JSON(http.StatusOK, contract.OnboardingStatusResponse{
-			Status:         contract.OnboardingStatus(status),
-			StartedAt:      requestStartedAt,
-			Events:         []contract.OnboardingEvent{},
-			NextAfterID:    maxID,
-			DeliveryEvents: []contract.OnboardingDeliveryEvent{},
-			NextDeliveryAfterID: (onboardingDeliveryCursor{
-				Version: 1, AuditAfter: maxID, AccessAfter: accessMax,
-			}).encode(),
+			Status:              contract.OnboardingStatus(status),
+			StartedAt:           requestStartedAt,
+			Events:              []contract.OnboardingEvent{},
+			NextAfterID:         maxID,
+			DeliveryEvents:      []contract.OnboardingDeliveryEvent{},
+			NextDeliveryAfterID: newOnboardingDeliveryCursor(accessMax).encode(),
 		})
 		return
 	}
@@ -125,6 +134,7 @@ func (h *OnboardingHandler) Status(c *gin.Context) {
 			Where("id > ? AND id <= ?", afterID, maxID).
 			Where("created_at >= ?", sessionStartedAt.UTC()).
 			Where("action IN ?", onboardingAuditActions).
+			Where("cache_result = ?", onboardingPolicyBlockResult).
 			Where("package_name <> ''").
 			Order("id ASC").
 			Limit(onboardingEventPageSize + 1).
@@ -153,7 +163,7 @@ func (h *OnboardingHandler) Status(c *gin.Context) {
 	}
 	if hasDeliveryCursor {
 		response.DeliveryEvents, response.NextDeliveryAfterID, response.DeliveriesHasMore, err =
-			h.deliveryPage(c.Request.Context(), deliveryCursor, sessionStartedAt, maxID)
+			h.deliveryPage(c.Request.Context(), deliveryCursor, sessionStartedAt)
 		if err != nil {
 			writeOnboardingDatabaseError(c)
 			return

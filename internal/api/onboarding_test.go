@@ -80,7 +80,7 @@ func TestOnboardingStatusInitializesCursorWithoutReturningHistory(t *testing.T) 
 	}
 }
 
-func TestOnboardingStatusPollReturnsOnlyNewDependencyEvents(t *testing.T) {
+func TestOnboardingStatusPollReturnsOnlyNewPolicyBlocks(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	startedAt := time.Date(2026, 8, 20, 1, 2, 3, 0, time.UTC)
 	handler, database := newOnboardingTestHandler(t, startedAt)
@@ -108,10 +108,12 @@ func TestOnboardingStatusPollReturnsOnlyNewDependencyEvents(t *testing.T) {
 	if response.HasMore || response.NextAfterID != rows[len(rows)-1].ID {
 		t.Fatalf("cursor did not advance to current max: %#v", response)
 	}
-	if len(response.Events) != 3 {
-		t.Fatalf("events = %#v, want only three dependency events", response.Events)
+	// Hit, miss, and error rows are request rows an earlier release chained
+	// into the audit log; the access log reports those outcomes now.
+	if len(response.Events) != 1 {
+		t.Fatalf("events = %#v, want only the policy block", response.Events)
 	}
-	wantOutcomes := []string{"miss", "blocked", "error"}
+	wantOutcomes := []string{"blocked"}
 	for index, want := range wantOutcomes {
 		if response.Events[index].Outcome != want {
 			t.Errorf("event %d outcome = %q, want %q", index, response.Events[index].Outcome, want)
@@ -143,8 +145,8 @@ func TestOnboardingStatusPaginatesByAuditPrimaryKey(t *testing.T) {
 			Ecosystem:   "npm",
 			PackageName: fmt.Sprintf("package-%d", index),
 			Action:      "download",
-			CacheResult: "miss",
-			StatusCode:  http.StatusOK,
+			CacheResult: "blocked",
+			StatusCode:  http.StatusForbidden,
 			CreatedAt:   startedAt.Add(time.Second),
 		}
 	}

@@ -21,17 +21,15 @@ func onboardingDeliveryPollURL(previous contract.OnboardingStatusResponse) strin
 		"&delivery_after_id=" + url.QueryEscape(previous.NextDeliveryAfterID)
 }
 
-func onboardingDeliveryFixture(requestID string, at time.Time) (db.AuditLog, db.AccessLog) {
-	audit := db.AuditLog{
-		RequestID: requestID, Ecosystem: "npm", PackageName: "fixture", Version: "1.0.0",
-		Action: "download", CacheResult: "miss", StatusCode: 200, BytesSent: 128, CreatedAt: at,
-	}
-	access := db.AccessLog{
+// onboardingDeliveryFixture is one package request the access log recorded:
+// it started at at and completed a second later.
+func onboardingDeliveryFixture(requestID string, at time.Time) db.AccessLog {
+	return db.AccessLog{
 		RequestID: requestID, AdapterType: "npm", PackageName: "fixture", Method: "GET",
-		CacheKey: "npm/fixture/-/fixture-1.0.0.tgz", CacheResult: "miss",
-		StatusCode: 200, BytesSent: 128, DeliveryResult: "completed", CreatedAt: at.Add(time.Second),
+		CacheKey: "npm-exact-v1/fixture/-/fixture-1.0.0.tgz", CacheResult: "miss",
+		StatusCode: 200, BytesSent: 128, LatencyMs: 1000, DeliveryResult: "completed",
+		CreatedAt: at.Add(time.Second),
 	}
-	return audit, access
 }
 
 func TestOnboardingDeliveriesUseCompletedArtifactEvidence(t *testing.T) {
@@ -39,55 +37,56 @@ func TestOnboardingDeliveriesUseCompletedArtifactEvidence(t *testing.T) {
 	handler, database := newOnboardingTestHandler(t, startedAt)
 	baseline := onboardingStatusRequest(t, handler, "/onboarding/status")
 	cases := []struct {
-		name   string
-		change func(*db.AccessLog)
-		want   bool
+		name    string
+		change  func(*db.AccessLog)
+		want    bool
+		version string
 	}{
-		{"download", func(*db.AccessLog) {}, true},
-		{"hit", func(row *db.AccessLog) { row.CacheResult, row.Hit = "hit", true }, true},
-		{"partial response delivered", func(row *db.AccessLog) { row.StatusCode = 206 }, true},
-		{"metadata hit", func(row *db.AccessLog) { row.CacheKey, row.CacheResult = "npm/fixture/metadata.json", "hit" }, false},
-		{"head", func(row *db.AccessLog) { row.Method = "HEAD" }, false},
-		{"interrupted stream", func(row *db.AccessLog) { row.DeliveryResult = "failed" }, false},
-		{"old completion unknown", func(row *db.AccessLog) { row.DeliveryResult = "" }, false},
-		{"zero bytes", func(row *db.AccessLog) { row.BytesSent = 0 }, false},
-		{"http failure", func(row *db.AccessLog) { row.StatusCode = 502 }, false},
-		{"unknown cache outcome", func(row *db.AccessLog) { row.CacheResult = "" }, false},
-		{"empty key", func(row *db.AccessLog) { row.CacheKey = "" }, false},
+		{"download", func(*db.AccessLog) {}, true, "1.0.0"},
+		{"hit", func(row *db.AccessLog) { row.CacheResult, row.Hit = "hit", true }, true, "1.0.0"},
+		{"prerelease", func(row *db.AccessLog) { row.CacheKey = "npm-exact-v1/fixture/-/fixture-1.0.0-beta.1.tgz" }, true, "1.0.0-beta.1"},
+		{"partial response delivered", func(row *db.AccessLog) { row.StatusCode = 206 }, true, "1.0.0"},
+		{"metadata hit", func(row *db.AccessLog) { row.CacheKey, row.CacheResult = "npm-exact-v1/fixture/metadata.json", "hit" }, false, ""},
+		{"head", func(row *db.AccessLog) { row.Method = "HEAD" }, false, "1.0.0"},
+		{"interrupted stream", func(row *db.AccessLog) { row.DeliveryResult = "failed" }, false, "1.0.0"},
+		{"old completion unknown", func(row *db.AccessLog) { row.DeliveryResult = "" }, false, "1.0.0"},
+		{"zero bytes", func(row *db.AccessLog) { row.BytesSent = 0 }, false, "1.0.0"},
+		// A failed response proved no artifact identity: no version.
+		{"http failure", func(row *db.AccessLog) { row.StatusCode = 502 }, false, ""},
+		{"refused", func(row *db.AccessLog) { row.StatusCode = 404 }, false, ""},
+		{"unknown cache outcome", func(row *db.AccessLog) { row.CacheResult = "" }, false, "1.0.0"},
+		{"empty key", func(row *db.AccessLog) { row.CacheKey = "" }, false, ""},
 		{"unknown payload", func(row *db.AccessLog) {
 			row.AdapterType, row.CacheKey = "maven", "maven/org/fixture/1/fixture-1.custom"
-		}, false},
+		}, false, "1"},
 		{"immutable manifest is metadata", func(row *db.AccessLog) {
 			row.AdapterType, row.CacheKey, row.CacheResult = "docker", "docker/hub/manifests/fixture/sha256__abc", "hit"
-		}, false},
+		}, false, "sha256__abc"},
 		{"mutable snapshot is artifact", func(row *db.AccessLog) {
 			row.AdapterType, row.CacheKey = "maven", "maven/org/fixture/1-SNAPSHOT/fixture-1-SNAPSHOT.jar"
-		}, true},
+		}, true, "1-SNAPSHOT"},
 	}
 	for index, test := range cases {
-		audit, access := onboardingDeliveryFixture(fmt.Sprintf("request-%d", index), startedAt.Add(time.Second))
+		access := onboardingDeliveryFixture(fmt.Sprintf("request-%d", index), startedAt.Add(time.Second))
 		test.change(&access)
-		audit.Ecosystem = access.AdapterType
-		if err := database.Create(&audit).Error; err != nil {
-			t.Fatal(err)
-		}
 		if err := database.Create(&access).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
 	response := onboardingStatusRequest(t, handler, onboardingDeliveryPollURL(baseline))
-	if len(response.DeliveryEvents) != len(cases) {
-		t.Fatalf("delivery evidence = %+v", response.DeliveryEvents)
+	if len(response.DeliveryEvents) != len(cases) || len(response.Events) != 0 {
+		t.Fatalf("delivery evidence = %+v, request events = %+v", response.DeliveryEvents, response.Events)
 	}
 	for index, test := range cases {
 		event := response.DeliveryEvents[index]
 		if event.SuccessfulArtifactDownload != test.want {
 			t.Errorf("%s evidence = %+v, want success=%t", test.name, event, test.want)
 		}
+		// created_at is when the request started, not when it completed.
 		if event.RequestID == "" || event.ID == 0 || event.Ecosystem == "" ||
-			event.PackageName != "fixture" || event.Version != "1.0.0" ||
+			event.PackageName != "fixture" || event.Version != test.version ||
 			!event.CreatedAt.Equal(startedAt.Add(time.Second)) {
-			t.Errorf("%s lost correlated request facts: %+v", test.name, event)
+			t.Errorf("%s lost request facts: %+v, want version %q", test.name, event, test.version)
 		}
 	}
 	again := onboardingStatusRequest(t, handler, onboardingDeliveryPollURL(response))
@@ -96,99 +95,84 @@ func TestOnboardingDeliveriesUseCompletedArtifactEvidence(t *testing.T) {
 	}
 }
 
-func TestOnboardingDeliveryCursorObservesEitherCommitOrder(t *testing.T) {
-	for _, auditFirst := range []bool{false, true} {
-		t.Run(fmt.Sprintf("audit_first=%t", auditFirst), func(t *testing.T) {
-			startedAt := time.Now().UTC()
-			handler, database := newOnboardingTestHandler(t, startedAt)
-			baseline := onboardingStatusRequest(t, handler, "/onboarding/status")
-			audit, access := onboardingDeliveryFixture("correlated", startedAt.Add(time.Second))
-			first, second := any(&access), any(&audit)
-			if auditFirst {
-				first, second = &audit, &access
-			}
-			if err := database.Create(first).Error; err != nil {
-				t.Fatal(err)
-			}
-			pending := onboardingStatusRequest(t, handler, onboardingDeliveryPollURL(baseline))
-			if len(pending.DeliveryEvents) != 0 {
-				t.Fatalf("partial evidence proved delivery: %+v", pending)
-			}
-			if err := database.Create(second).Error; err != nil {
-				t.Fatal(err)
-			}
-			complete := onboardingStatusRequest(t, handler, onboardingDeliveryPollURL(pending))
-			if len(complete.DeliveryEvents) != 1 || !complete.DeliveryEvents[0].SuccessfulArtifactDownload {
-				t.Fatalf("late evidence was lost after advancing cursor: %+v", complete)
-			}
-		})
+// Request outcomes come from the access log alone. A request row an earlier
+// release chained into the audit log neither appears as a request event nor
+// pairs with its access row, so a session spanning the upgrade counts each
+// request once.
+func TestOnboardingRequestOutcomesComeOnlyFromTheAccessLog(t *testing.T) {
+	startedAt := time.Now().UTC()
+	handler, database := newOnboardingTestHandler(t, startedAt)
+	baseline := onboardingStatusRequest(t, handler, "/onboarding/status")
+	legacy := db.AuditLog{
+		RequestID: "upgraded", Ecosystem: "npm", PackageName: "fixture", Version: "1.0.0",
+		Action: "download", CacheResult: "miss", StatusCode: 200, CreatedAt: startedAt.Add(time.Second),
+	}
+	if err := database.Create(&legacy).Error; err != nil {
+		t.Fatal(err)
+	}
+	pending := onboardingStatusRequest(t, handler, onboardingDeliveryPollURL(baseline))
+	if len(pending.Events) != 0 || len(pending.DeliveryEvents) != 0 {
+		t.Fatalf("audit request row was read as a request outcome: %+v", pending)
+	}
+	access := onboardingDeliveryFixture("upgraded", startedAt.Add(time.Second))
+	if err := database.Create(&access).Error; err != nil {
+		t.Fatal(err)
+	}
+	complete := onboardingStatusRequest(t, handler, onboardingDeliveryPollURL(pending))
+	if len(complete.Events) != 0 || len(complete.DeliveryEvents) != 1 || !complete.DeliveryEvents[0].SuccessfulArtifactDownload {
+		t.Fatalf("access row was not the one request outcome: %+v", complete)
 	}
 }
 
-func TestOnboardingDeliveryRequiresNewCorrelatedRequestStart(t *testing.T) {
+func TestOnboardingDeliveryRequiresNewRequestStart(t *testing.T) {
 	startedAt := time.Now().UTC()
 	handler, database := newOnboardingTestHandler(t, startedAt)
-	oldAudit, oldAccess := onboardingDeliveryFixture("historical", startedAt.Add(-time.Minute))
-	if err := database.Create(&oldAudit).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Create(&oldAccess).Error; err != nil {
+	historical := onboardingDeliveryFixture("historical", startedAt.Add(-time.Minute))
+	if err := database.Create(&historical).Error; err != nil {
 		t.Fatal(err)
 	}
 	baseline := onboardingStatusRequest(t, handler, "/onboarding/status")
 	for index, test := range []struct {
 		name   string
-		change func(*db.AuditLog, *db.AccessLog)
+		change func(*db.AccessLog)
 	}{
-		{"in flight before baseline", func(audit *db.AuditLog, access *db.AccessLog) {
-			audit.CreatedAt = startedAt.Add(-time.Nanosecond)
+		{"in flight before baseline", func(access *db.AccessLog) {
 			access.CreatedAt = startedAt.Add(time.Second)
+			access.LatencyMs = 1001
 		}},
-		{"uncorrelated old rows", func(audit *db.AuditLog, access *db.AccessLog) {
-			audit.RequestID, access.RequestID = "", ""
+		{"completed before baseline", func(access *db.AccessLog) {
+			access.CreatedAt, access.LatencyMs = startedAt.Add(-time.Millisecond), 0
 		}},
-		{"different ecosystem", func(_ *db.AuditLog, access *db.AccessLog) { access.AdapterType = "pypi" }},
-		{"different package", func(_ *db.AuditLog, access *db.AccessLog) { access.PackageName = "different" }},
-		{"operator event", func(audit *db.AuditLog, _ *db.AccessLog) { audit.Action = "login" }},
+		{"uncorrelated row", func(access *db.AccessLog) { access.RequestID = "" }},
+		{"no package", func(access *db.AccessLog) { access.PackageName = "" }},
 	} {
-		audit, access := onboardingDeliveryFixture(fmt.Sprintf("rejected-%d", index), startedAt.Add(time.Second))
-		test.change(&audit, &access)
-		if err := database.Create(&audit).Error; err != nil {
-			t.Fatal(err)
-		}
+		access := onboardingDeliveryFixture(fmt.Sprintf("rejected-%d", index), startedAt.Add(time.Second))
+		test.change(&access)
 		if err := database.Create(&access).Error; err != nil {
-			t.Fatal(err)
+			t.Fatalf("%s: %v", test.name, err)
 		}
 	}
 	response := onboardingStatusRequest(t, handler, onboardingDeliveryPollURL(baseline))
 	if len(response.DeliveryEvents) != 0 {
 		t.Fatalf("non-session evidence = %+v", response.DeliveryEvents)
 	}
-	// Existing consumers keep their audit cursor semantics and do not opt in
-	// to a delivery scan by merely reading the new response fields.
-	legacy := onboardingStatusRequest(t, handler, onboardingPollURL(baseline.NextAfterID, baseline.StartedAt))
-	if len(legacy.Events) == 0 || len(legacy.DeliveryEvents) != 0 || legacy.NextDeliveryAfterID != "" {
-		t.Fatalf("legacy polling contract changed: %+v", legacy)
+	// A poll without a delivery cursor does not opt in to a delivery scan.
+	current := onboardingDeliveryFixture("current", startedAt.Add(time.Second))
+	if err := database.Create(&current).Error; err != nil {
+		t.Fatal(err)
+	}
+	withoutCursor := onboardingStatusRequest(t, handler, onboardingPollURL(baseline.NextAfterID, baseline.StartedAt))
+	if len(withoutCursor.DeliveryEvents) != 0 || withoutCursor.NextDeliveryAfterID != "" {
+		t.Fatalf("poll without a delivery cursor scanned deliveries: %+v", withoutCursor)
 	}
 }
 
-func TestOnboardingDeliveryPagesKeepLateAssociations(t *testing.T) {
+func TestOnboardingDeliveryPagesByAccessPrimaryKey(t *testing.T) {
 	startedAt := time.Now().UTC()
 	handler, database := newOnboardingTestHandler(t, startedAt)
 	baseline := onboardingStatusRequest(t, handler, "/onboarding/status")
-	lateAudit, earlyAccess := onboardingDeliveryFixture("late-audit", startedAt.Add(time.Second))
-	earlyAudit, lateAccess := onboardingDeliveryFixture("late-access", startedAt.Add(time.Second))
-	if err := database.Create(&earlyAccess).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Create(&earlyAudit).Error; err != nil {
-		t.Fatal(err)
-	}
 	for index := 0; index <= onboardingEventPageSize; index++ {
-		audit, access := onboardingDeliveryFixture(fmt.Sprintf("page-%d", index), startedAt.Add(time.Second))
-		if err := database.Create(&audit).Error; err != nil {
-			t.Fatal(err)
-		}
+		access := onboardingDeliveryFixture(fmt.Sprintf("page-%d", index), startedAt.Add(time.Second))
 		if err := database.Create(&access).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -197,29 +181,47 @@ func TestOnboardingDeliveryPagesKeepLateAssociations(t *testing.T) {
 	if len(first.DeliveryEvents) != onboardingEventPageSize || !first.DeliveriesHasMore {
 		t.Fatalf("first delivery page = %+v", first)
 	}
-	// Both directions arrive after the first page took its upper bounds.
-	if err := database.Create(&lateAudit).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Create(&lateAccess).Error; err != nil {
+	late := onboardingDeliveryFixture("late", startedAt.Add(time.Second))
+	if err := database.Create(&late).Error; err != nil {
 		t.Fatal(err)
 	}
 	second := onboardingStatusRequest(t, handler, onboardingDeliveryPollURL(first))
-	if len(second.DeliveryEvents) != 1 || second.DeliveriesHasMore {
-		t.Fatalf("second page escaped its snapshot: %+v", second)
+	if len(second.DeliveryEvents) != 2 || second.DeliveriesHasMore {
+		t.Fatalf("second page = %+v, want the page remainder and the late request", second)
 	}
 	third := onboardingStatusRequest(t, handler, onboardingDeliveryPollURL(second))
-	if len(third.DeliveryEvents) != 2 || third.DeliveriesHasMore {
-		t.Fatalf("late paired evidence disappeared: %+v", third)
+	if len(third.DeliveryEvents) != 0 || third.DeliveriesHasMore {
+		t.Fatalf("third page replayed deliveries: %+v", third)
 	}
 	seen := map[uint]bool{}
-	for _, page := range []contract.OnboardingStatusResponse{first, second, third} {
+	for _, page := range []contract.OnboardingStatusResponse{first, second} {
 		for _, event := range page.DeliveryEvents {
 			if seen[event.ID] {
 				t.Errorf("duplicate access ID %d", event.ID)
 			}
 			seen[event.ID] = true
 		}
+	}
+}
+
+// A browser session opened before the upgrade holds a version 1 cursor that
+// paired audit and access rows. Its access watermark continues the session.
+func TestOnboardingDeliveryContinuesFromVersionOneCursor(t *testing.T) {
+	startedAt := time.Now().UTC()
+	handler, database := newOnboardingTestHandler(t, startedAt)
+	seen := onboardingDeliveryFixture("seen", startedAt.Add(time.Second))
+	if err := database.Create(&seen).Error; err != nil {
+		t.Fatal(err)
+	}
+	fresh := onboardingDeliveryFixture("fresh", startedAt.Add(time.Second))
+	if err := database.Create(&fresh).Error; err != nil {
+		t.Fatal(err)
+	}
+	legacy := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf(`{"v":1,"a":7,"x":%d}`, seen.ID)))
+	target := onboardingPollURL(0, startedAt) + "&delivery_after_id=" + url.QueryEscape(legacy)
+	response := onboardingStatusRequest(t, handler, target)
+	if len(response.DeliveryEvents) != 1 || response.DeliveryEvents[0].RequestID != "fresh" {
+		t.Fatalf("version 1 cursor did not continue from its access watermark: %+v", response)
 	}
 }
 
@@ -230,7 +232,8 @@ func TestOnboardingDeliveryRejectsMalformedOrUnboundedCursors(t *testing.T) {
 	router.GET("/onboarding/status", handler.Status)
 	tokens := []string{"", "not-base64!", strings.Repeat("a", maxOnboardingDeliveryCursorLength+1)}
 	for _, raw := range []string{
-		`{}`, `{"v":2,"a":0,"x":0}`, `{"v":1,"a":-1,"x":0}`,
+		`{}`, `{"v":3,"x":0}`, `{"v":2,"a":1,"x":0}`, `{"v":2,"x":0,"p":true}`,
+		`{"v":2,"x":9007199254740992}`, `{"v":1,"a":-1,"x":0}`,
 		`{"v":1,"a":0.5,"x":0}`, `{"v":1,"a":9007199254740992,"x":0}`,
 		`{"v":1,"a":0,"x":0,"p":true}`,
 		`{"v":1,"a":4,"x":0,"p":true,"at":3,"xt":1,"la":3,"lx":1}`,

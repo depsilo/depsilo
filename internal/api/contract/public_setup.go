@@ -42,8 +42,9 @@ const (
 	OnboardingStatusSkipped    OnboardingStatus = "skipped"
 )
 
-// OnboardingEvent is one package request observed since onboarding began.
-// Outcome is the audit cache result.
+// OnboardingEvent is one policy-blocked package request observed since
+// onboarding began, read from the audit log; Outcome is "blocked". Every other
+// request outcome is an OnboardingDeliveryEvent.
 type OnboardingEvent struct {
 	ID          uint      `json:"id"`
 	RequestID   string    `json:"request_id"`
@@ -56,8 +57,10 @@ type OnboardingEvent struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-// OnboardingDeliveryEvent is one delivered response joined to its package
-// request, with whether it counts as a successful artifact download.
+// OnboardingDeliveryEvent is one package request the access log recorded,
+// with whether it counts as a successful artifact download. CreatedAt is when
+// the request started; Version is derived from the cache key and is empty for
+// a refused or failed response.
 type OnboardingDeliveryEvent struct {
 	ID                         uint      `json:"id"`
 	RequestID                  string    `json:"request_id"`

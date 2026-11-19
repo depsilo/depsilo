@@ -23,7 +23,9 @@ export interface OnboardingSession extends OnboardingScope {
   afterId: number
   /** Opaque backend cursor; empty only when delivery evidence is unsupported. */
   deliveryAfterId: string
-  firstRequest?: OnboardingEvent
+  /** Earliest request seen: a policy block or any access-log request. */
+  firstRequest?: OnboardingRequestFields
+  /** Latest policy block; other request outcomes arrive as deliveries. */
   latestRequest?: OnboardingEvent
   latestDelivery?: OnboardingDeliveryEvent
   successfulDownload?: OnboardingDeliveryEvent
@@ -135,6 +137,11 @@ export function advanceOnboardingSession(
     .filter((event): event is OnboardingDeliveryEvent => event !== undefined)
     .sort((left, right) => Date.parse(left.created_at) - Date.parse(right.created_at) || left.id - right.id)
     .at(-1)
+  // Policy blocks and access-log requests are separate streams with separate
+  // IDs, so the first arrival is ordered by request start.
+  const firstRequest = session.firstRequest ?? [...events, ...deliveries]
+    .sort((left, right) => Date.parse(left.created_at) - Date.parse(right.created_at) || left.id - right.id)
+    .at(0)
   const latestRequest = [session.latestRequest, ...events]
     .filter((event): event is OnboardingEvent => event !== undefined)
     .sort((left, right) => Date.parse(left.created_at) - Date.parse(right.created_at) || left.id - right.id)
@@ -143,7 +150,7 @@ export function advanceOnboardingSession(
     ...session,
     afterId: response.next_after_id,
     deliveryAfterId: validDeliveryCursor(response.next_delivery_after_id) ? response.next_delivery_after_id : session.deliveryAfterId,
-    firstRequest: session.firstRequest ?? events[0],
+    firstRequest,
     latestRequest,
     latestDelivery,
     successfulDownload,
@@ -159,12 +166,10 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
         !validTimestamp(candidate.startedAt) || !validID(candidate.afterId) ||
         (candidate.deliveryAfterId !== '' && !validDeliveryCursor(candidate.deliveryAfterId))) return null
     const session = candidate as unknown as OnboardingSession
-    for (const event of [session.firstRequest, session.latestRequest]) {
-      if (event !== undefined && (!validEvent(event) || !withinSession(event, session, true) || event.id > session.afterId)) return null
-    }
-    if (session.firstRequest && !session.latestRequest) return null
+    if (session.firstRequest !== undefined && (!validEvent(session.firstRequest) || !withinSession(session.firstRequest, session, true))) return null
+    if (session.latestRequest !== undefined && (!validEvent(session.latestRequest) ||
+        !withinSession(session.latestRequest, session, true) || session.latestRequest.id > session.afterId)) return null
     if (session.latestRequest && !session.firstRequest) return null
-    if (session.firstRequest && session.latestRequest && Date.parse(session.latestRequest.created_at) < Date.parse(session.firstRequest.created_at)) return null
     if (session.latestDelivery !== undefined && (!validDelivery(session.latestDelivery) ||
         !withinSession(session.latestDelivery, session, true) || !validDeliveryCursor(session.deliveryAfterId))) return null
     for (const event of [session.successfulDownload, session.firstCacheHit]) {

@@ -119,6 +119,22 @@ describe('scoped connection evidence', () => {
     expect(next.deliveryAfterId).toBe('opaque-next')
   })
 
+  it('records arrival from an access-log request when no policy block was seen', () => {
+    const later = delivery({ id: 502, created_at: '2026-08-20T00:00:05Z' })
+    const metadata = delivery({ id: 503, dependency_kind: 'metadata', version: '', successful_artifact_download: false, created_at: '2026-08-20T00:00:02Z' })
+    const next = advanceOnboardingSession(startOnboardingSession(baseline, scope), poll({ delivery_events: [later, metadata] }))
+    expect(next.firstRequest).toEqual(metadata)
+    expect(next.latestRequest).toBeUndefined()
+    expect(next.successfulDownload).toEqual(later)
+    expect(parseOnboardingSession(JSON.stringify(next))).toEqual(next)
+
+    const blocked = request({ id: 51, outcome: 'blocked', status_code: 403, created_at: '2026-08-20T00:00:01Z' })
+    const second = advanceOnboardingSession(next, poll({ next_after_id: 60, events: [blocked] }))
+    expect(second.firstRequest).toEqual(metadata)
+    expect(second.latestRequest).toEqual(blocked)
+    expect(parseOnboardingSession(JSON.stringify(second))).toEqual(second)
+  })
+
   it('requires a successful HIT of the same artifact after a successful download', () => {
     const miss = delivery()
     const wrongArtifactHit = delivery({ id: 502, outcome: 'hit', cache_key: 'pypi/six-1.17.0.tar.gz' })
