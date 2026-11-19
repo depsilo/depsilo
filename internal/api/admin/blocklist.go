@@ -79,11 +79,20 @@ func (h *BlocklistHandler) Status(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
 		return
 	}
+	ecosystemStates, err := h.store.EcosystemSyncStates(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
+		return
+	}
+	ecosystemSync := make(map[string]contract.BlocklistEcosystemSync, len(ecosystemStates))
+	for eco, state := range ecosystemStates {
+		ecosystemSync[eco] = contract.BlocklistEcosystemSync{LastSuccessAt: state.LastSuccessAt, LastError: state.LastError}
+	}
 	resp := contract.BlocklistStatus{
 		Enabled: true, Mode: h.mode,
 		LastSyncAt: st.LastSyncAt, LastSuccessAt: st.LastSuccessAt, LastError: st.LastError,
 		DurationMs: st.DurationMs, EntryCount: total, PerEcosystem: perEco,
-		Ecosystems: blocklist.SyncedEcosystems(),
+		Ecosystems: blocklist.SyncedEcosystems(), EcosystemSync: ecosystemSync,
 	}
 	if h.syncer != nil {
 		running := h.syncer.Running()

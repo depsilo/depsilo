@@ -593,9 +593,9 @@ apt      = "0"
 # mode controls the response to a known-malicious match:
 #   block (default) — refuse the request with 451 MALICIOUS_BLOCKED
 #   warn            — serve the request and record malware_warned
-# Enabled by default; sync failures degrade (last good data keeps
-# blocking, an empty local store blocks nothing) and never break the
-# proxy itself.
+# Enabled by default; sync failures degrade per ecosystem (a failed
+# ecosystem's last good data keeps blocking while the others refresh, an
+# empty local store blocks nothing) and never break the proxy itself.
 [supply_chain.blocklist]
 enabled       = true
 sync_interval = "6h"

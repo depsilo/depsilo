@@ -33,11 +33,15 @@ skipped; this is not a promise to enforce every OSV range or cover every
 ecosystem.
 
 A fresh instance has no malicious-package coverage until the first successful
-sync imports data. Later synchronization failures retain the last good data
-for the affected ecosystem. An empty local dataset blocks nothing; a failed
-sync does not shut down the proxy. Inspect synchronization status in Admin
-before relying on coverage, and configure a reachable mirror or sync proxy
-where necessary.
+sync imports data. Each ecosystem synchronizes independently: when one
+ecosystem's archive cannot be downloaded or parsed, or would empty a
+populated ecosystem, that ecosystem retains its last good data and records
+the error, while every other ecosystem still refreshes. An empty local dataset
+blocks nothing; a failed sync does not shut down the proxy. Admin shows the
+last run in which every ecosystem refreshed, lists the ecosystems that kept
+their last good data, and reports each ecosystem's own freshness in the
+capability summary. Inspect synchronization status in Admin before relying on
+coverage, and configure a reachable mirror or sync proxy where necessary.
 
 PyPI legacy archives and RubyGems platform gems resolve identity through their
 registry indexes. When the dataset covers that ecosystem, an artifact whose

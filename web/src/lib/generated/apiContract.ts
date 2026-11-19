@@ -2447,6 +2447,12 @@ export interface QuarantineRevokeResponse {
  * blocklist is enabled. A disabled blocklist answers BlocklistDisabled
  * instead. Running and SyncIntervalSeconds are present when a syncer runs;
  * NextSyncAt also needs a previous sync.
+ * Ecosystems sync independently. LastSyncAt is the latest attempt.
+ * LastSuccessAt is the latest run in which every covered ecosystem
+ * refreshed, and LastError is empty only when the latest run refreshed every
+ * ecosystem; otherwise it names each failed ecosystem. EcosystemSync carries
+ * each ecosystem's own outcome: a failed ecosystem keeps blocking on the data
+ * of its own LastSuccessAt.
  */
 export interface BlocklistStatus {
   enabled: boolean;
@@ -2458,9 +2464,19 @@ export interface BlocklistStatus {
   entry_count: number /* int64 */;
   per_ecosystem: { [key: string]: number /* int64 */};
   ecosystems: string[];
+  ecosystem_sync?: { [key: string]: BlocklistEcosystemSync};
   running?: boolean;
   sync_interval_seconds?: number /* int64 */;
   next_sync_at?: string;
+}
+/**
+ * BlocklistEcosystemSync is one covered ecosystem's own sync outcome.
+ * LastError is empty when its latest attempt refreshed it; LastSuccessAt is
+ * null until it has refreshed once.
+ */
+export interface BlocklistEcosystemSync {
+  last_success_at: string | null;
+  last_error: string;
 }
 /**
  * BlocklistDisabled answers the blocklist read endpoints when

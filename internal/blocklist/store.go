@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -309,23 +310,105 @@ func (s *Store) SyncState(ctx context.Context) (db.BlocklistSyncState, error) {
 	return st, err
 }
 
-// RecordSync persists the outcome of a sync attempt. Failures keep
-// LastSuccessAt/EntryCount from the previous good run.
-func (s *Store) RecordSync(ctx context.Context, syncErr error, entryCount int64, took time.Duration) error {
-	st, err := s.SyncState(ctx)
+// ecosystemSyncKey names the control-plane row holding each ecosystem's own
+// sync outcome as JSON, alongside the run-level blocklist_sync_state row.
+const ecosystemSyncKey = "blocklist_ecosystem_sync"
+
+// EcosystemSync is one ecosystem's own sync outcome. A failed attempt
+// records LastError and keeps LastSuccessAt, because that ecosystem keeps
+// blocking on the data it last imported.
+type EcosystemSync struct {
+	LastSuccessAt *time.Time `json:"last_success_at,omitempty"`
+	LastError     string     `json:"last_error,omitempty"`
+}
+
+// EcosystemSyncStates returns every covered ecosystem's sync outcome. An
+// ecosystem not yet attempted by a per-ecosystem sync (a database last
+// synced by an earlier release, or one never synced) reports the run-level
+// state instead, which is what that release recorded for every ecosystem.
+func (s *Store) EcosystemSyncStates(ctx context.Context) (map[string]EcosystemSync, error) {
+	run, err := s.SyncState(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	now := s.now()
-	st.ID = 1
-	st.LastSyncAt = &now
-	st.DurationMs = took.Milliseconds()
-	if syncErr != nil {
-		st.LastError = syncErr.Error()
-	} else {
-		st.LastError = ""
-		st.LastSuccessAt = &now
-		st.EntryCount = entryCount
+	recorded, err := readEcosystemSync(s.db.WithContext(ctx))
+	if err != nil {
+		return nil, err
 	}
-	return s.db.WithContext(ctx).Save(&st).Error
+	out := make(map[string]EcosystemSync, len(SyncedEcosystems()))
+	for _, eco := range SyncedEcosystems() {
+		if state, ok := recorded[eco]; ok {
+			out[eco] = state
+			continue
+		}
+		out[eco] = EcosystemSync{LastSuccessAt: run.LastSuccessAt, LastError: run.LastError}
+	}
+	return out, nil
+}
+
+func readEcosystemSync(tx *gorm.DB) (map[string]EcosystemSync, error) {
+	var rows []db.ControlPlaneState
+	if err := tx.Where("key = ?", ecosystemSyncKey).Limit(1).Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("read blocklist ecosystem sync state: %w", err)
+	}
+	out := make(map[string]EcosystemSync)
+	if len(rows) == 0 {
+		return out, nil
+	}
+	if err := json.Unmarshal([]byte(rows[0].Value), &out); err != nil {
+		return nil, fmt.Errorf("decode blocklist ecosystem sync state: %w", err)
+	}
+	return out, nil
+}
+
+// RecordSync persists the outcome of a sync run. Each ecosystem's own
+// state is updated from the result. The run-level row keeps its original
+// meaning for existing readers: LastSyncAt is the attempt, LastError is
+// empty only when every ecosystem refreshed (otherwise it names each failed
+// ecosystem), and LastSuccessAt/EntryCount move only when every covered
+// ecosystem refreshed in the same run, so they never claim a fresher
+// dataset than the stalest ecosystem holds.
+func (s *Store) RecordSync(ctx context.Context, result SyncResult, took time.Duration) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var st db.BlocklistSyncState
+		if err := tx.Limit(1).Find(&st, 1).Error; err != nil {
+			return err
+		}
+		perEcosystem, err := readEcosystemSync(tx)
+		if err != nil {
+			return err
+		}
+		now := s.now()
+		for eco := range result.Refreshed {
+			perEcosystem[eco] = EcosystemSync{LastSuccessAt: &now}
+		}
+		for eco, failure := range result.Failed {
+			state := perEcosystem[eco]
+			state.LastError = failure.Error()
+			perEcosystem[eco] = state
+		}
+		encoded, err := json.Marshal(perEcosystem)
+		if err != nil {
+			return err
+		}
+		if err := tx.Save(&db.ControlPlaneState{Key: ecosystemSyncKey, Value: string(encoded)}).Error; err != nil {
+			return fmt.Errorf("record blocklist ecosystem sync state: %w", err)
+		}
+
+		st.ID = 1
+		st.LastSyncAt = &now
+		st.DurationMs = took.Milliseconds()
+		if len(result.Failed) > 0 {
+			failures := make([]string, 0, len(result.Failed))
+			for _, eco := range sortedKeys(result.Failed) {
+				failures = append(failures, eco+": "+result.Failed[eco].Error())
+			}
+			st.LastError = strings.Join(failures, "; ")
+		} else {
+			st.LastError = ""
+			st.LastSuccessAt = &now
+			st.EntryCount = result.Imported()
+		}
+		return tx.Save(&st).Error
+	})
 }

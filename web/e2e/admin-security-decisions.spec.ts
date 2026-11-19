@@ -151,3 +151,21 @@ test('mobile rule review preserves filters, complete reasons, and explicit delet
   await confirmation.getByRole('button', { name: '删除', exact: true }).click()
   await expect.poll(() => deleted).toBe(true)
 })
+
+test('malware blocklist names the ecosystems that kept their last good data after a partial sync', async ({ page }) => {
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/blocklist/status': {
+      enabled: true, mode: 'block', entry_count: 5, ecosystems: ['npm', 'maven'],
+      last_sync_at: '2026-10-21T00:00:00Z', last_success_at: null, last_error: 'maven: fetch Maven/all.zip: HTTP 404',
+      ecosystem_sync: {
+        npm: { last_success_at: '2026-10-21T00:00:00Z', last_error: '' },
+        maven: { last_success_at: null, last_error: 'fetch Maven/all.zip: HTTP 404' },
+      },
+    },
+  })
+  await page.goto('/admin/quarantine?tab=blocklist')
+  await expect(page.getByText('尚未完整同步')).toBeVisible()
+  await expect(page.getByText('沿用上次数据')).toBeVisible()
+  await expect(page.getByText('maven', { exact: true })).toBeVisible()
+  await expect(page.getByText('maven: fetch Maven/all.zip: HTTP 404')).toBeVisible()
+})

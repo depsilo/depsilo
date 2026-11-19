@@ -53,11 +53,12 @@ type MalwareOverride struct {
 
 func (MalwareOverride) TableName() string { return "malware_override" }
 
-// BlocklistSyncState is a single-row record of the last sync attempt,
-// powering the admin status card and the degrade-on-failure posture:
-// a failed sync updates LastSyncAt/LastError but leaves the imported
-// rows (and LastSuccessAt) untouched, so blocking continues on the
-// last good dataset.
+// BlocklistSyncState is a single-row record of the last sync run,
+// powering the admin status card. Ecosystems sync independently: a run
+// with any failed ecosystem updates LastSyncAt/LastError but leaves
+// LastSuccessAt untouched, and each failed ecosystem keeps its imported
+// rows. Each ecosystem's own outcome lives in control_plane_state under
+// blocklist_ecosystem_sync.
 type BlocklistSyncState struct {
 	ID            uint       `gorm:"primarykey" json:"id"` // always 1
 	LastSyncAt    *time.Time `json:"last_sync_at"`

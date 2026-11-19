@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -81,8 +82,9 @@ func NewSyncer(store *Store, cfg Config) (*Syncer, error) {
 }
 
 // Start blocks until ctx is done, running one sync immediately and
-// then one per interval. Failures degrade: they're logged and recorded
-// in the sync-state row, and blocking continues on the last good data.
+// then one per interval. Failures degrade per ecosystem: they're logged
+// and recorded in the sync state, and each failed ecosystem keeps
+// blocking on its last good data.
 func (s *Syncer) Start(ctx context.Context) {
 	s.runOnce(ctx)
 	ticker := time.NewTicker(s.interval)
@@ -112,18 +114,19 @@ func (s *Syncer) runOnce(ctx context.Context) {
 func (s *Syncer) runReserved(ctx context.Context) {
 	defer s.running.Store(false)
 	start := s.now()
-	count, err := s.SyncOnce(ctx)
+	result, err := s.SyncOnce(ctx)
 	took := s.now().Sub(start)
-	if recErr := s.store.RecordSync(ctx, err, count, took); recErr != nil {
+	if recErr := s.store.RecordSync(ctx, result, took); recErr != nil {
 		zap.L().Warn("blocklist: record sync state", zap.Error(recErr))
 	}
 	if err != nil {
-		zap.L().Warn("blocklist: sync failed — continuing on last good dataset",
+		zap.L().Warn("blocklist: sync failed for some ecosystems — they continue on their last good data",
+			zap.Strings("failed", sortedKeys(result.Failed)), zap.Strings("refreshed", sortedKeys(result.Refreshed)),
 			zap.Error(err), zap.Duration("took", took))
 		return
 	}
 	zap.L().Info("blocklist: sync complete",
-		zap.Int64("entries", count), zap.Duration("took", took))
+		zap.Int64("entries", result.Imported()), zap.Duration("took", took))
 }
 
 // TryStartSync reserves the single in-flight slot before submitting the work.
@@ -150,15 +153,50 @@ func (s *Syncer) Running() bool { return s.running.Load() }
 // Interval exposes the configured refresh period (admin status).
 func (s *Syncer) Interval() time.Duration { return s.interval }
 
-// SyncOnce refreshes every covered ecosystem and returns the total
-// imported row count. Two-phase on purpose: EVERY archive downloads
-// and parses before ANY database write, so a mid-run network failure
-// can't leave half the ecosystems on new data and half on old — the
-// "stays on the last good dataset" guarantee holds atomically per run
-// (v0.8.0 review finding).
-func (s *Syncer) SyncOnce(ctx context.Context) (int64, error) {
-	// Phase 1: fetch + parse everything.
-	fetched := make(map[string][]db.MaliciousPackage, len(SyncedEcosystems()))
+// SyncResult reports one sync run ecosystem by ecosystem. An ecosystem
+// appears in exactly one of the two maps.
+type SyncResult struct {
+	// Refreshed holds the row count committed for each ecosystem whose
+	// dataset was replaced.
+	Refreshed map[string]int64
+	// Failed holds why each remaining ecosystem kept its last good data.
+	Failed map[string]error
+}
+
+// Imported is the number of rows committed by the refreshed ecosystems.
+func (r SyncResult) Imported() int64 {
+	var total int64
+	for _, n := range r.Refreshed {
+		total += n
+	}
+	return total
+}
+
+// Err joins the per-ecosystem failures in stable ecosystem order, or
+// returns nil when every covered ecosystem refreshed.
+func (r SyncResult) Err() error {
+	if len(r.Failed) == 0 {
+		return nil
+	}
+	errs := make([]error, 0, len(r.Failed))
+	for _, eco := range sortedKeys(r.Failed) {
+		errs = append(errs, fmt.Errorf("%s: %w", eco, r.Failed[eco]))
+	}
+	return errors.Join(errs...)
+}
+
+// SyncOnce refreshes every covered ecosystem independently. Each ecosystem
+// downloads, parses and commits on its own: a failure (unreachable archive,
+// a mirror that lacks one ecosystem, a store error, or the zero-wipe guard)
+// leaves that ecosystem on its last good data while the others still
+// refresh. The error is SyncResult.Err: nil only when every ecosystem
+// refreshed.
+func (s *Syncer) SyncOnce(ctx context.Context) (SyncResult, error) {
+	ecosystems := SyncedEcosystems()
+	result := SyncResult{
+		Refreshed: make(map[string]int64, len(ecosystems)),
+		Failed:    make(map[string]error),
+	}
 	// The dataset always carries some advisories the importer cannot use, so
 	// a warning per advisory repeats on every sync and buries the rest of the
 	// log. Report them once per sync; the individual advisories are logged at
@@ -171,42 +209,46 @@ func (s *Syncer) SyncOnce(ctx context.Context) (int64, error) {
 				zap.Int("count", skipped), zap.Any("by_ecosystem", skippedByEcosystem))
 		}
 	}()
-	for _, eco := range SyncedEcosystems() {
+
+	// The zero-wipe guard compares each archive with what the store held
+	// before this run. Without that baseline no ecosystem can be guarded,
+	// so none is replaced.
+	existing, _, err := s.store.EntryCounts(ctx)
+	if err != nil {
+		for _, eco := range ecosystems {
+			result.Failed[eco] = fmt.Errorf("entry counts: %w", err)
+		}
+		return result, result.Err()
+	}
+
+	for _, eco := range ecosystems {
+		// Fetch and commit one ecosystem at a time, so only one parsed
+		// archive is held in memory.
 		rows, malformed, err := s.fetchEcosystem(ctx, eco)
 		if malformed > 0 {
 			skipped += malformed
 			skippedByEcosystem[eco] = malformed
 		}
 		if err != nil {
-			return 0, fmt.Errorf("%s: %w", eco, err)
+			result.Failed[eco] = err
+			continue
 		}
-		fetched[eco] = rows
-	}
-
-	// Zero-wipe guard: a 200 response with a valid zip that contains
-	// no MAL advisories (misrouted mirror, generic file server) must
-	// not silently erase an ecosystem that had entries — that would
-	// turn malware blocking off with a green sync (v0.8.0 review
-	// finding). Ecosystems that were already empty may stay empty.
-	existing, _, err := s.store.EntryCounts(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("entry counts: %w", err)
-	}
-	for _, eco := range SyncedEcosystems() {
-		if len(fetched[eco]) == 0 && existing[eco] > 0 {
-			return 0, fmt.Errorf("%s: archive contained zero MAL advisories but the store holds %d — refusing to wipe (check mirror_url)", eco, existing[eco])
+		// Zero-wipe guard: a 200 response with a valid zip that contains
+		// no MAL advisories (misrouted mirror, generic file server) must
+		// not silently erase an ecosystem that had entries — that would
+		// turn malware blocking off with a green sync (v0.8.0 review
+		// finding). Ecosystems that were already empty may stay empty.
+		if len(rows) == 0 && existing[eco] > 0 {
+			result.Failed[eco] = fmt.Errorf("archive contained zero MAL advisories but the store holds %d — refusing to wipe (check mirror_url)", existing[eco])
+			continue
 		}
-	}
-
-	// Phase 2: commit.
-	var total int64
-	for _, eco := range SyncedEcosystems() {
-		if err := s.store.ReplaceEcosystem(ctx, eco, fetched[eco]); err != nil {
-			return 0, fmt.Errorf("%s: store: %w", eco, err)
+		if err := s.store.ReplaceEcosystem(ctx, eco, rows); err != nil {
+			result.Failed[eco] = fmt.Errorf("store: %w", err)
+			continue
 		}
-		total += int64(len(fetched[eco]))
+		result.Refreshed[eco] = int64(len(rows))
 	}
-	return total, nil
+	return result, result.Err()
 }
 
 // fetchEcosystem downloads {mirror}/{OSVName}/all.zip to a temp file
@@ -276,6 +318,15 @@ func (s *Syncer) fetchEcosystem(ctx context.Context, eco string) ([]db.Malicious
 		rows = append(rows, entryRows...)
 	}
 	return rows, malformed, nil
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func baseName(p string) string {

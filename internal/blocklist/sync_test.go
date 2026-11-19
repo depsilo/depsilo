@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 
 	"depsilo/internal/asyncruntime"
+	"depsilo/internal/db"
 )
 
 func TestParseAdvisoryNormalizesExplicitVersionsWithDialect(t *testing.T) {
@@ -213,15 +215,15 @@ func TestSyncOnce(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	count, err := syncer.SyncOnce(ctx)
+	result, err := syncer.SyncOnce(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// The same archive is served for every ecosystem, but each import
 	// keeps only its own ecosystem's affected sections — the two npm
 	// advisories land exactly once, under npm.
-	if count != 2 {
-		t.Fatalf("imported %d rows, want 2", count)
+	if count := result.Imported(); count != 2 || result.Refreshed["npm"] != 2 {
+		t.Fatalf("imported %d rows (%v), want 2 under npm", count, result.Refreshed)
 	}
 
 	t.Run("GHSA entries are never imported", func(t *testing.T) {
@@ -253,18 +255,26 @@ func TestSyncOnce(t *testing.T) {
 	})
 
 	t.Run("sync state records success", func(t *testing.T) {
+		// SyncOnce alone doesn't record state (runOnce does) — record
+		// explicitly the way runOnce would, then read back.
+		if err := store.RecordSync(ctx, result, 0); err != nil {
+			t.Fatal(err)
+		}
 		st, err := store.SyncState(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
-		// SyncOnce alone doesn't record state (runOnce does) — record
-		// explicitly the way runOnce would, then read back.
-		if err := store.RecordSync(ctx, nil, count, 0); err != nil {
-			t.Fatal(err)
-		}
-		st, _ = store.SyncState(ctx)
 		if st.LastSuccessAt == nil || st.EntryCount != 2 || st.LastError != "" {
 			t.Errorf("unexpected state: %+v", st)
+		}
+		perEcosystem, err := store.EcosystemSyncStates(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, eco := range SyncedEcosystems() {
+			if state := perEcosystem[eco]; state.LastSuccessAt == nil || state.LastError != "" {
+				t.Errorf("%s state = %+v, want fresh", eco, state)
+			}
 		}
 	})
 }
@@ -337,6 +347,162 @@ func TestSyncOnceStaysQuietWithoutMalformedAdvisories(t *testing.T) {
 	}
 }
 
+// osvMirror serves a per-ecosystem archive by OSV name; an ecosystem with
+// a status code set answers that status instead.
+type osvMirror struct {
+	mu       sync.Mutex
+	archives map[string][]byte
+	statuses map[string]int
+}
+
+func (m *osvMirror) set(osvName string, archive []byte, status int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.archives[osvName], m.statuses[osvName] = archive, status
+}
+
+func newOSVMirror(t *testing.T, fallback []byte) (*osvMirror, *httptest.Server) {
+	t.Helper()
+	mirror := &osvMirror{archives: map[string][]byte{}, statuses: map[string]int{}}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		osvName, ok := strings.CutSuffix(strings.TrimPrefix(r.URL.Path, "/"), "/all.zip")
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		mirror.mu.Lock()
+		archive, status := mirror.archives[osvName], mirror.statuses[osvName]
+		mirror.mu.Unlock()
+		if status != 0 && status != http.StatusOK {
+			w.WriteHeader(status)
+			return
+		}
+		if archive == nil {
+			archive = fallback
+		}
+		w.Header().Set("Content-Type", "application/zip")
+		_, _ = w.Write(archive)
+	}))
+	t.Cleanup(srv.Close)
+	return mirror, srv
+}
+
+// steppingClock hands out strictly increasing times so a test can tell
+// which run recorded a timestamp.
+func steppingClock() func() time.Time {
+	var mu sync.Mutex
+	current := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	return func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		current = current.Add(time.Minute)
+		return current
+	}
+}
+
+const malMaven = `{
+	"id": "MAL-2026-7777",
+	"summary": "malicious maven artifact",
+	"modified": "2026-07-01T00:00:00Z",
+	"affected": [{
+		"package": {"ecosystem": "Maven", "name": "com.evil:stealer"},
+		"ranges": [{"type": "ECOSYSTEM", "events": [{"introduced": "0"}]}]
+	}]
+}`
+
+const malNPMNew = `{
+	"id": "MAL-2026-8888",
+	"summary": "newly published npm malware",
+	"modified": "2026-07-05T00:00:00Z",
+	"affected": [{
+		"package": {"ecosystem": "npm", "name": "fresh-evil"},
+		"ranges": [{"type": "SEMVER", "events": [{"introduced": "0"}]}]
+	}]
+}`
+
+const malMavenNew = `{
+	"id": "MAL-2026-9999",
+	"summary": "newly published maven malware",
+	"modified": "2026-07-05T00:00:00Z",
+	"affected": [{
+		"package": {"ecosystem": "Maven", "name": "com.evil:fresh"},
+		"ranges": [{"type": "ECOSYSTEM", "events": [{"introduced": "0"}]}]
+	}]
+}`
+
+func TestSyncOneFailingEcosystemDoesNotHoldBackTheOthers(t *testing.T) {
+	first := buildZip(t, map[string]string{"MAL-2026-1111.json": malAllVersions, "MAL-2026-7777.json": malMaven})
+	mirror, srv := newOSVMirror(t, first)
+
+	store := testStore(t)
+	store.now = steppingClock()
+	syncer, err := NewSyncer(store, Config{MirrorURL: srv.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	syncer.runOnce(ctx)
+	firstRun, _ := store.SyncState(ctx)
+	if firstRun.LastSuccessAt == nil || firstRun.LastError != "" {
+		t.Fatalf("first run state = %+v, want success", firstRun)
+	}
+
+	// The mirror loses Maven; npm publishes a new advisory.
+	mirror.set("Maven", nil, http.StatusInternalServerError)
+	mirror.set("npm", buildZip(t, map[string]string{"MAL-2026-1111.json": malAllVersions, "MAL-2026-8888.json": malNPMNew}), http.StatusOK)
+
+	result, err := syncer.SyncOnce(ctx)
+	if err == nil || !strings.Contains(err.Error(), "maven: fetch") {
+		t.Fatalf("SyncOnce error = %v, want the maven failure", err)
+	}
+	if len(result.Failed) != 1 || result.Failed["maven"] == nil {
+		t.Fatalf("failed = %v, want only maven", result.Failed)
+	}
+	if result.Refreshed["npm"] != 2 || len(result.Refreshed) != len(SyncedEcosystems())-1 {
+		t.Fatalf("refreshed = %v, want every other ecosystem", result.Refreshed)
+	}
+	if m, _, _ := store.Check(ctx, "npm", "fresh-evil", "1.0.0"); m == nil {
+		t.Error("npm did not refresh because maven failed")
+	}
+	if m, _, _ := store.Check(ctx, "maven", "com.evil:stealer", "1.0.0"); m == nil {
+		t.Error("maven lost its last good data")
+	}
+
+	if err := store.RecordSync(ctx, result, 0); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := store.SyncState(ctx)
+	if !strings.HasPrefix(st.LastError, "maven: fetch ") || strings.Contains(st.LastError, "npm") {
+		t.Errorf("run-level error = %q, want only the maven failure", st.LastError)
+	}
+	if st.LastSuccessAt == nil || !st.LastSuccessAt.Equal(*firstRun.LastSuccessAt) || !st.LastSyncAt.After(*firstRun.LastSyncAt) {
+		t.Errorf("partial run state = %+v, want the attempt recorded and the full-success time kept", st)
+	}
+	perEcosystem, err := store.EcosystemSyncStates(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	maven, npm := perEcosystem["maven"], perEcosystem["npm"]
+	if maven.LastSuccessAt == nil || !maven.LastSuccessAt.Equal(*firstRun.LastSuccessAt) || !strings.Contains(maven.LastError, "HTTP 500") {
+		t.Errorf("maven state = %+v, want the first success kept and the failure recorded", maven)
+	}
+	if npm.LastSuccessAt == nil || !npm.LastSuccessAt.Equal(*st.LastSyncAt) || npm.LastError != "" {
+		t.Errorf("npm state = %+v, want refreshed by the second run", npm)
+	}
+
+	// Maven recovers: the run-level success moves and every error clears.
+	mirror.set("Maven", nil, http.StatusOK)
+	syncer.runOnce(ctx)
+	st, _ = store.SyncState(ctx)
+	if st.LastError != "" || !st.LastSuccessAt.Equal(*st.LastSyncAt) {
+		t.Errorf("recovered state = %+v, want a full success", st)
+	}
+	perEcosystem, _ = store.EcosystemSyncStates(ctx)
+	if perEcosystem["maven"].LastError != "" {
+		t.Errorf("maven error survived recovery: %+v", perEcosystem["maven"])
+	}
+}
+
 func TestSyncFailureKeepsLastGoodData(t *testing.T) {
 	archive := buildZip(t, map[string]string{"MAL-2026-1111.json": malAllVersions})
 	srv := newMockOSV(t, archive)
@@ -347,21 +513,19 @@ func TestSyncFailureKeepsLastGoodData(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	count, err := syncer.SyncOnce(ctx)
-	if err != nil || count != 1 {
-		t.Fatalf("first sync: count=%d err=%v", count, err)
-	}
-	if err := store.RecordSync(ctx, nil, count, 0); err != nil {
-		t.Fatal(err)
+	syncer.runOnce(ctx)
+	good, _ := store.SyncState(ctx)
+	if good.LastSuccessAt == nil || good.EntryCount != 1 || good.LastError != "" {
+		t.Fatalf("first sync state = %+v", good)
 	}
 
-	// Mirror goes away — the next sync fails, data must survive.
+	// Mirror goes away — every ecosystem fails, data must survive.
 	srv.Close()
-	_, syncErr := syncer.SyncOnce(ctx)
-	if syncErr == nil {
-		t.Fatal("sync against a dead mirror should fail")
+	result, syncErr := syncer.SyncOnce(ctx)
+	if syncErr == nil || len(result.Refreshed) != 0 || len(result.Failed) != len(SyncedEcosystems()) {
+		t.Fatalf("dead mirror: refreshed=%v failed=%v err=%v, want every ecosystem failed", result.Refreshed, result.Failed, syncErr)
 	}
-	if err := store.RecordSync(ctx, syncErr, 0, 0); err != nil {
+	if err := store.RecordSync(ctx, result, 0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -369,8 +533,33 @@ func TestSyncFailureKeepsLastGoodData(t *testing.T) {
 		t.Error("last good dataset lost after failed sync")
 	}
 	st, _ := store.SyncState(ctx)
-	if st.LastSuccessAt == nil || st.EntryCount != 1 {
+	if st.LastSuccessAt == nil || st.EntryCount != 1 || st.LastError == "" {
 		t.Errorf("success state clobbered by failure: %+v", st)
+	}
+	perEcosystem, _ := store.EcosystemSyncStates(ctx)
+	for _, eco := range SyncedEcosystems() {
+		if state := perEcosystem[eco]; state.LastSuccessAt == nil || state.LastError == "" || !strings.Contains(st.LastError, eco+": ") {
+			t.Errorf("%s state = %+v (run error %q), want last success kept and failure recorded", eco, state, st.LastError)
+		}
+	}
+}
+
+func TestEcosystemSyncStatesFallBackToTheRunLevelRecord(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+	// A database last synced by a release without per-ecosystem state.
+	synced := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	if err := store.db.Create(&db.BlocklistSyncState{ID: 1, LastSyncAt: &synced, LastSuccessAt: &synced, LastError: "maven: HTTP 404"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	perEcosystem, err := store.EcosystemSyncStates(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, eco := range SyncedEcosystems() {
+		if state := perEcosystem[eco]; state.LastSuccessAt == nil || !state.LastSuccessAt.Equal(synced) || state.LastError != "maven: HTTP 404" {
+			t.Errorf("%s state = %+v, want the run-level record", eco, state)
+		}
 	}
 }
 
@@ -440,13 +629,13 @@ func TestSync_ReviewRegressions(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	count, err := syncer.SyncOnce(ctx)
+	result, err := syncer.SyncOnce(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Only the genuine all-versions advisory imports; withdrawn and
 	// both bounded-range shapes are skipped.
-	if count != 1 {
+	if count := result.Imported(); count != 1 {
 		t.Fatalf("imported %d rows, want 1", count)
 	}
 	if m, _, _ := store.Check(ctx, "npm", "vindicated-pkg", "1.0.0"); m != nil {
@@ -464,15 +653,9 @@ func TestSync_ReviewRegressions(t *testing.T) {
 }
 
 func TestSync_ZeroWipeGuard(t *testing.T) {
-	good := buildZip(t, map[string]string{"MAL-2026-1111.json": malAllVersions})
+	good := buildZip(t, map[string]string{"MAL-2026-1111.json": malAllVersions, "MAL-2026-7777.json": malMaven})
 	empty := buildZip(t, map[string]string{"GHSA-not-mal.json": ghsaEntry})
-
-	current := good
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/zip")
-		_, _ = w.Write(current)
-	}))
-	defer srv.Close()
+	mirror, srv := newOSVMirror(t, good)
 
 	store := testStore(t)
 	syncer, err := NewSyncer(store, Config{MirrorURL: srv.URL})
@@ -484,13 +667,22 @@ func TestSync_ZeroWipeGuard(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// A mirror that starts serving MAL-free archives must not wipe.
-	current = empty
-	if _, err := syncer.SyncOnce(ctx); err == nil {
-		t.Fatal("zero-entry archive over a populated store must fail the sync")
+	// A mirror that starts serving a MAL-free npm archive must not wipe
+	// npm, and must not hold back an ecosystem whose archive is fine.
+	mirror.set("npm", empty, http.StatusOK)
+	mirror.set("Maven", buildZip(t, map[string]string{"MAL-2026-7777.json": malMaven, "MAL-2026-9999.json": malMavenNew}), http.StatusOK)
+	result, err := syncer.SyncOnce(ctx)
+	if err == nil || result.Failed["npm"] == nil || !strings.Contains(result.Failed["npm"].Error(), "refusing to wipe") {
+		t.Fatalf("zero-entry npm archive over a populated store: failed=%v err=%v", result.Failed, err)
+	}
+	if len(result.Failed) != 1 || result.Refreshed["maven"] != 2 {
+		t.Fatalf("refreshed=%v failed=%v, want only npm held back", result.Refreshed, result.Failed)
 	}
 	if m, _, _ := store.Check(ctx, "npm", "Evil-Pkg", "1.0.0"); m == nil {
 		t.Error("populated ecosystem was wiped by an empty archive")
+	}
+	if m, _, _ := store.Check(ctx, "maven", "com.evil:fresh", "1.0.0"); m == nil {
+		t.Error("maven did not refresh because npm hit the zero-wipe guard")
 	}
 }
 

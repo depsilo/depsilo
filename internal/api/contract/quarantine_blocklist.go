@@ -6,19 +6,35 @@ import "time"
 // blocklist is enabled. A disabled blocklist answers BlocklistDisabled
 // instead. Running and SyncIntervalSeconds are present when a syncer runs;
 // NextSyncAt also needs a previous sync.
+//
+// Ecosystems sync independently. LastSyncAt is the latest attempt.
+// LastSuccessAt is the latest run in which every covered ecosystem
+// refreshed, and LastError is empty only when the latest run refreshed every
+// ecosystem; otherwise it names each failed ecosystem. EcosystemSync carries
+// each ecosystem's own outcome: a failed ecosystem keeps blocking on the data
+// of its own LastSuccessAt.
 type BlocklistStatus struct {
-	Enabled             bool             `json:"enabled"`
-	Mode                string           `json:"mode"`
-	LastSyncAt          *time.Time       `json:"last_sync_at" tstype:"string | null,required"`
-	LastSuccessAt       *time.Time       `json:"last_success_at" tstype:"string | null,required"`
-	LastError           string           `json:"last_error"`
-	DurationMs          int64            `json:"duration_ms"`
-	EntryCount          int64            `json:"entry_count"`
-	PerEcosystem        map[string]int64 `json:"per_ecosystem"`
-	Ecosystems          []string         `json:"ecosystems"`
-	Running             *bool            `json:"running,omitempty"`
-	SyncIntervalSeconds *int64           `json:"sync_interval_seconds,omitempty"`
-	NextSyncAt          *time.Time       `json:"next_sync_at,omitempty"`
+	Enabled             bool                              `json:"enabled"`
+	Mode                string                            `json:"mode"`
+	LastSyncAt          *time.Time                        `json:"last_sync_at" tstype:"string | null,required"`
+	LastSuccessAt       *time.Time                        `json:"last_success_at" tstype:"string | null,required"`
+	LastError           string                            `json:"last_error"`
+	DurationMs          int64                             `json:"duration_ms"`
+	EntryCount          int64                             `json:"entry_count"`
+	PerEcosystem        map[string]int64                  `json:"per_ecosystem"`
+	Ecosystems          []string                          `json:"ecosystems"`
+	EcosystemSync       map[string]BlocklistEcosystemSync `json:"ecosystem_sync,omitempty"`
+	Running             *bool                             `json:"running,omitempty"`
+	SyncIntervalSeconds *int64                            `json:"sync_interval_seconds,omitempty"`
+	NextSyncAt          *time.Time                        `json:"next_sync_at,omitempty"`
+}
+
+// BlocklistEcosystemSync is one covered ecosystem's own sync outcome.
+// LastError is empty when its latest attempt refreshed it; LastSuccessAt is
+// null until it has refreshed once.
+type BlocklistEcosystemSync struct {
+	LastSuccessAt *time.Time `json:"last_success_at" tstype:"string | null,required"`
+	LastError     string     `json:"last_error"`
 }
 
 // BlocklistDisabled answers the blocklist read endpoints when

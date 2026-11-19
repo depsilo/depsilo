@@ -117,11 +117,14 @@ func (h *CapabilityHandler) blocklistFact(ctx context.Context, name string, supp
 	if f.Mode == "" {
 		f.Mode = "block"
 	}
-	st, err := h.blocklistStore.SyncState(ctx)
+	states, err := h.blocklistStore.EcosystemSyncStates(ctx)
 	if err != nil {
 		f.DataStatus, f.RecentFailure = contract.CapabilityDataStatusError, "sync state unavailable"
 		return f
 	}
+	// Ecosystems sync independently: this fact reflects only this
+	// ecosystem's own last refresh and failure.
+	st := states[blocklist.CanonicalEcosystem(name)]
 	f.LastSuccessAt = timePointerPtr(st.LastSuccessAt)
 	f.RecentFailure = st.LastError
 	if st.LastSuccessAt == nil {
