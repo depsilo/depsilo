@@ -14,7 +14,9 @@ import (
 
 	"go.uber.org/zap"
 
+	"depsilo/internal/adapter"
 	"depsilo/internal/packagepolicy"
+	"depsilo/internal/upstream"
 )
 
 // errRegistrationUnavailable marks registration metadata that cannot prove a
@@ -228,7 +230,9 @@ func (h *Handler) cachedUpstreamFetch(ctx context.Context, cacheKey, upstreamPat
 		if err != nil {
 			return nil, "", 0, "", err
 		}
-		fetchResult, err := ups.Fetch(ctx, upstreamPath)
+		fetchResult, ups, err := adapter.FetchFromPool(ctx, h.selector, ups, false, func(member *upstream.Upstream) (*upstream.FetchResult, error) {
+			return member.Fetch(ctx, upstreamPath)
+		})
 		if err != nil {
 			return nil, "", 0, "", err
 		}

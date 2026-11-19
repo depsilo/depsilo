@@ -95,9 +95,10 @@ func (h *Handler) handleServiceIndex(c *gin.Context) {
 		if err != nil {
 			return nil, "", 0, "", err
 		}
-		zap.L().Info("fetching nuget service index from upstream", zap.String("upstream", ups.Name))
-
-		fetchResult, err := ups.Fetch(ctx, "/v3/index.json")
+		fetchResult, ups, err := adapter.FetchFromPool(ctx, h.selector, ups, false, func(member *upstream.Upstream) (*upstream.FetchResult, error) {
+			zap.L().Info("fetching nuget service index from upstream", zap.String("upstream", member.Name))
+			return member.Fetch(ctx, "/v3/index.json")
+		})
 		if err != nil {
 			return nil, "", 0, "", err
 		}
@@ -118,8 +119,7 @@ func (h *Handler) handleServiceIndex(c *gin.Context) {
 
 	if err != nil {
 		zap.L().Error("failed to fetch nuget service index", zap.Error(err))
-		adapter.LogAccess(c.Request.Context(), h.db, "nuget", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		h.answerUpstreamFailure(c, cacheKey, start, err)
 		return
 	}
 	defer result.Reader.Close()
@@ -160,8 +160,14 @@ func (h *Handler) handlePassthrough(c *gin.Context, path string) {
 		if err != nil {
 			return nil, "", 0, "", err
 		}
-		zap.L().Info("fetching from nuget upstream", zap.String("path", path), zap.String("upstream", ups.Name))
-		fetchResult, err := ups.Fetch(ctx, upstreamPath)
+		// No path moves on a 404: registration and flat-container indexes
+		// must not mix mirror snapshots, and a .nupkg is not bound to a hash
+		// in that metadata the way artifacts that may move on are (see
+		// adapter.TransparentProxy.RetryMissingArtifacts).
+		fetchResult, ups, err := adapter.FetchFromPool(ctx, h.selector, ups, false, func(member *upstream.Upstream) (*upstream.FetchResult, error) {
+			zap.L().Info("fetching from nuget upstream", zap.String("path", path), zap.String("upstream", member.Name))
+			return member.Fetch(ctx, upstreamPath)
+		})
 		if err != nil {
 			return nil, "", 0, "", err
 		}
@@ -170,8 +176,7 @@ func (h *Handler) handlePassthrough(c *gin.Context, path string) {
 
 	if err != nil {
 		zap.L().Error("failed to fetch nuget resource", zap.String("path", path), zap.Error(err))
-		adapter.LogAccess(c.Request.Context(), h.db, "nuget", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		h.answerUpstreamFailure(c, cacheKey, start, err)
 		return
 	}
 	defer result.Reader.Close()
@@ -191,6 +196,14 @@ func (h *Handler) handlePassthrough(c *gin.Context, path string) {
 	}
 
 	adapter.LogAccessDelivery(c.Request.Context(), h.db, "nuget", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written, copyErr)
+}
+
+// answerUpstreamFailure answers and records a request the pool could not
+// serve.
+func (h *Handler) answerUpstreamFailure(c *gin.Context, cacheKey string, start time.Time, err error) {
+	status, code := adapter.UpstreamFailureStatus(err)
+	adapter.LogAccess(c.Request.Context(), h.db, "nuget", c.Request.Method, cacheKey, false, "", time.Since(start), status, c.ClientIP(), 0)
+	c.JSON(status, gin.H{"code": code, "message": err.Error()})
 }
 
 func getBaseURL(c *gin.Context) string {

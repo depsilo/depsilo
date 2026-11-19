@@ -168,3 +168,24 @@ func TestServiceIndexURLsTakeOnlyAnHTTPSchemeFromForwardedProto(t *testing.T) {
 		}
 	}
 }
+
+func newPoolNugetRouter(t *testing.T, selector upstream.Selector) http.Handler {
+	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
+	handler := New(manager, selector, config.CacheConfig{TTLIndex: time.Hour, TTLBlob: 72 * time.Hour}, database)
+	router := gin.New()
+	handler.Register(router.Group("/nuget"))
+	return router
+}
+
+// NuGet reads a 404 as "not on this source" and moves on to the next package
+// source; a 502 fails the whole restore.
+func TestRoutesReportThePoolAnswer(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, target := range []string{
+		"/nuget/v3-flatcontainer/newtonsoft.json/index.json",
+		"/nuget/v3-flatcontainer/newtonsoft.json/13.0.3/newtonsoft.json.13.0.3.nupkg",
+	} {
+		adaptertest.CheckPoolAnswers(t, adaptertest.MetadataPoolAnswers, target, `{"versions":[]}`, newPoolNugetRouter)
+	}
+	adaptertest.CheckPoolAnswers(t, adaptertest.MetadataPoolAnswers, "/nuget/v3/index.json", `{"version":"3.0.0","resources":[]}`, newPoolNugetRouter)
+}
