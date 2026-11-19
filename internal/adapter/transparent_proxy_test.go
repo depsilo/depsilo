@@ -2,8 +2,11 @@ package adapter_test
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -399,5 +402,71 @@ func TestTransparentProxyLogsTheAbsenceOfOptionalContentAtDebugLevel(t *testing.
 				t.Fatalf("absence logged with a stack trace: %s", failures[0].Stack)
 			}
 		})
+	}
+}
+
+// A plan's Rewrite sees the member that actually served the body, the cache
+// stores the rewritten bytes, and Open hands a protocol reader the same
+// entry a client request is served from.
+func TestTransparentProxyRewriteStoresTheServingMembersRepresentation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var fallbackHits atomic.Int64
+	broken := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(broken.Close)
+	fallback := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fallbackHits.Add(1)
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("ETag", `"index-v1"`)
+		_, _ = w.Write([]byte("chart at " + "http://" + r.Host + "/c.tgz\n"))
+	}))
+	t.Cleanup(fallback.Close)
+
+	manager, database, _ := adaptertest.NewManager(t, time.Hour)
+	pool, err := upstream.NewPool([]config.UpstreamConfig{
+		{Name: "broken", URL: broken.URL, Priority: 1, ProbeMode: "passive"},
+		{Name: "fallback", URL: fallback.URL, Priority: 2, ProbeMode: "passive"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxy := adapter.NewTransparentProxy("fixture", manager, upstream.NewPassiveRecoverySelector(pool), database)
+	var servedBy []string
+	plan := adapter.TransparentPlan{
+		Path: "index.txt", CacheKey: "fixture/index.txt", TTL: time.Hour,
+		Rewrite: func(body io.ReadCloser, served *upstream.Upstream) io.ReadCloser {
+			servedBy = append(servedBy, served.Name)
+			return struct {
+				io.Reader
+				io.Closer
+			}{io.MultiReader(strings.NewReader("rewritten from "+served.URL+": "), body), body}
+		},
+	}
+	engine := gin.New()
+	engine.GET("/fixture/index.txt", func(c *gin.Context) { proxy.Serve(c, plan) })
+
+	want := "rewritten from " + fallback.URL + ": chart at " + fallback.URL + "/c.tgz\n"
+	for requestNumber := 1; requestNumber <= 2; requestNumber++ {
+		response := httptest.NewRecorder()
+		engine.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/fixture/index.txt", nil))
+		if response.Code != http.StatusOK || response.Body.String() != want {
+			t.Fatalf("request %d response = %d %q, want %q", requestNumber, response.Code, response.Body.String(), want)
+		}
+		if length := response.Header().Get("Content-Length"); length != "" && length != strconv.Itoa(len(want)) {
+			t.Fatalf("request %d Content-Length = %s for a %d byte body", requestNumber, length, len(want))
+		}
+	}
+	opened, err := proxy.Open(t.Context(), plan)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	body, err := io.ReadAll(opened.Reader)
+	_ = opened.Reader.Close()
+	if err != nil || string(body) != want || !opened.Hit {
+		t.Fatalf("Open = hit %v %q (%v), want the cached %q", opened.Hit, body, err, want)
+	}
+	if len(servedBy) != 1 || servedBy[0] != "fallback" || fallbackHits.Load() != 1 {
+		t.Fatalf("rewrites = %q, fallback fetches = %d; want one fill by the member that served", servedBy, fallbackHits.Load())
 	}
 }

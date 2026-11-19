@@ -13,8 +13,6 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-
-	"depsilo/internal/upstream"
 )
 
 // errHelmIndexUnavailable marks chart downloads whose identity or timestamp
@@ -81,7 +79,7 @@ func (h *Handler) resolveChartIdentity(ctx context.Context, artifactPath string)
 		h.identityMemo.mu.Unlock()
 	}
 
-	identity, err := h.lookupChartIdentity(ctx, selected, artifactPath)
+	identity, err := h.lookupChartIdentity(ctx, artifactPath)
 	if err != nil {
 		zap.L().Warn("helm chart identity unavailable; the age gate will fail closed",
 			zap.String("path", artifactPath),
@@ -109,21 +107,14 @@ func (h *Handler) resolveChartIdentity(ctx context.Context, artifactPath string)
 	return identity, err
 }
 
-func (h *Handler) lookupChartIdentity(ctx context.Context, selected *upstream.Upstream, artifactPath string) (helmChartIdentity, error) {
+func (h *Handler) lookupChartIdentity(ctx context.Context, artifactPath string) (helmChartIdentity, error) {
 	trimmed := strings.TrimPrefix(artifactPath, "/")
 	base := path.Base(trimmed)
 	if base == "" || base == ".tgz" || !strings.HasSuffix(base, ".tgz") {
 		return helmChartIdentity{}, fmt.Errorf("%w: %s is not a chart archive", errHelmIndexUnavailable, artifactPath)
 	}
 
-	const indexPath = "index.yaml"
-	result, err := h.cacheMgr.Get(ctx, CacheKey(indexPath), "helm", h.cfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
-		fetched, err := selected.Fetch(ctx, "/"+indexPath)
-		if err != nil {
-			return nil, "", 0, "", err
-		}
-		return fetched.Body, fetched.ContentType, fetched.Size, selected.Name, nil
-	})
+	result, err := h.proxy.Open(ctx, h.plan("index.yaml"))
 	if err != nil {
 		return helmChartIdentity{}, fmt.Errorf("%w: index.yaml unavailable: %v", errHelmIndexUnavailable, err)
 	}

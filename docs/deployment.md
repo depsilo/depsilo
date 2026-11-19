@@ -889,6 +889,19 @@ Upstreams that the setup page proposes, `goproxy.cn` answers `200` and
 `sum.golang.org` is reachable, set `GOSUMDB=sum.golang.google.cn` on the
 client.
 
+**Helm chart URLs.** A repository's `index.yaml` usually lists each chart as
+an absolute URL. Depsilo serves the index with every chart URL under the
+directory of the Upstream that served it made relative: from the Upstream
+`https://mirror.azure.cn/kubernetes/charts`, the chart URL
+`https://mirror.azure.cn/kubernetes/charts/nginx-1.2.3.tgz` becomes
+`nginx-1.2.3.tgz`. Helm resolves it against the repository URL given to
+`helm repo add`, so `helm pull` and `helm install` download the chart through
+Depsilo, on a project route too. A chart URL on another host, outside that
+directory, or with a query keeps its value, and Helm downloads that chart from
+its origin directly. An index cached by an earlier version keeps its absolute
+URLs until it is next refreshed from the Upstream (`[cache] ttl_index`).
+
+
 ### Optional ecosystems
 
 Docker Registry and Hugging Face have client instructions but are not activated

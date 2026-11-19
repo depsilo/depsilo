@@ -40,6 +40,12 @@ type TransparentPlan struct {
 	// client that reads 404 as "not offered here" must not be handed a
 	// gateway error where no member could be asked.
 	PresenceIsAnswer bool
+	// Rewrite, when set, replaces a fetched body before the cache stores it,
+	// given the pool member that served it, so hits and misses return the
+	// same rewritten representation. It must stream rather than buffer the
+	// body, and the returned reader owns closing body. The stored size is
+	// then whatever the rewritten stream yields.
+	Rewrite func(body io.ReadCloser, served *upstream.Upstream) io.ReadCloser
 }
 
 // TransparentProxy hides the common select/cache/fetch/stream/log pipeline
@@ -101,11 +107,11 @@ func NewTransparentProxy(adapterType string, manager *cache.Manager, selector up
 	}
 }
 
-// Serve executes one transparent proxy request. The caller must validate the
-// path and apply protocol policy before crossing this seam.
-func (proxy *TransparentProxy) Serve(c *gin.Context, plan TransparentPlan) {
-	start := time.Now()
-	result, err := proxy.cache.Get(c.Request.Context(), plan.CacheKey, proxy.adapterType, plan.TTL, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
+// Open returns the plan's content through the cache, filling a miss exactly
+// as Serve does. A protocol that reads the content itself uses it so the
+// entry it fills is the one Serve would have stored.
+func (proxy *TransparentProxy) Open(ctx context.Context, plan TransparentPlan) (*cache.GetResult, error) {
+	return proxy.cache.Get(ctx, plan.CacheKey, proxy.adapterType, plan.TTL, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
 		selected, err := proxy.selector.Select(ctx)
 		if err != nil {
 			return nil, "", 0, "", err
@@ -130,9 +136,20 @@ func (proxy *TransparentProxy) Serve(c *gin.Context, plan TransparentPlan) {
 			absent := plan.Optional && missing && !otherAnswer
 			return nil, "", 0, "", &transparentUpstreamError{name: served.Name, cause: err, revoked: revoked, absent: absent}
 		}
-		body := cache.WithResponseValidators(fetched.Body, fetched.ETag, fetched.LastModified)
-		return body, fetched.ContentType, fetched.Size, served.Name, nil
+		body, size := fetched.Body, fetched.Size
+		if plan.Rewrite != nil {
+			body, size = plan.Rewrite(body, served), -1
+		}
+		body = cache.WithResponseValidators(body, fetched.ETag, fetched.LastModified)
+		return body, fetched.ContentType, size, served.Name, nil
 	})
+}
+
+// Serve executes one transparent proxy request. The caller must validate the
+// path and apply protocol policy before crossing this seam.
+func (proxy *TransparentProxy) Serve(c *gin.Context, plan TransparentPlan) {
+	start := time.Now()
+	result, err := proxy.Open(c.Request.Context(), plan)
 	if err != nil {
 		upstreamName := ""
 		var upstreamFailure *transparentUpstreamError

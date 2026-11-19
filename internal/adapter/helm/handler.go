@@ -1,7 +1,9 @@
 package helm
 
 import (
+	"io"
 	"net/http"
+	pathpkg "path"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -82,13 +84,29 @@ func (h *Handler) handleRequest(c *gin.Context) {
 		}
 	}
 
-	cacheKey := CacheKey(path)
+	h.proxy.Serve(c, h.plan(path))
+}
 
+// plan is the single description of how a repository path is fetched and
+// cached. Serving a request and resolving a chart identity both go through
+// it, so an index entry holds the same rewritten representation whichever of
+// them filled it.
+func (h *Handler) plan(path string) adapter.TransparentPlan {
 	// .tgz chart files get long TTL, everything else (index.yaml, etc.) short
 	ttl := h.cfg.TTLIndex
 	if strings.HasSuffix(path, ".tgz") {
 		ttl = h.cfg.TTLBlob
 	}
-
-	h.proxy.Serve(c, adapter.TransparentPlan{Path: path, CacheKey: cacheKey, TTL: ttl})
+	plan := adapter.TransparentPlan{Path: path, CacheKey: CacheKey(path), TTL: ttl}
+	if pathpkg.Base(path) == "index.yaml" {
+		directory := pathpkg.Dir(path)
+		plan.Rewrite = func(body io.ReadCloser, served *upstream.Upstream) io.ReadCloser {
+			repoURL := served.URL
+			if directory != "." {
+				repoURL = strings.TrimRight(repoURL, "/") + "/" + directory
+			}
+			return rewriteHelmIndex(body, repoURL)
+		}
+	}
+	return plan
 }
