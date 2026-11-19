@@ -40,6 +40,8 @@ func TestFormatPURLFollowsTheTypeDefinitions(t *testing.T) {
 		{"docker", "library/nginx", "1.25", "pkg:docker/library/nginx@1.25"},
 		{"docker", "smartentry/debian", "sha256:dc437cc87d10", "pkg:docker/smartentry/debian@sha256:dc437cc87d10"},
 		{"huggingface", "distilbert/distilbert-base-uncased", "043235d6088ecd3dd5fb5ca3592b6913fd516027", "pkg:huggingface/distilbert/distilbert-base-uncased@043235d6088ecd3dd5fb5ca3592b6913fd516027"},
+		// The huggingface version is a commit hash the type lowercases.
+		{"huggingface", "distilbert/distilbert-base-uncased", "043235D6088ECD3DD5FB5CA3592B6913FD516027", "pkg:huggingface/distilbert/distilbert-base-uncased@043235d6088ecd3dd5fb5ca3592b6913fd516027"},
 		{"helm", "nginx", "15.0.0", "pkg:helm/nginx@15.0.0"},
 		// Characters outside the permitted set are percent-encoded.
 		{"cargo", "name with space", "1.0", "pkg:cargo/name%20with%20space@1.0"},

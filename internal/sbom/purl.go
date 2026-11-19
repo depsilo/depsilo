@@ -58,10 +58,12 @@ func FormatPURL(ecosystem, packageName, version string) string {
 		namespace, name = splitLast(packageName)
 	case "huggingface":
 		// The huggingface type names a model repository as
-		// <owner>/<repository>. Datasets and owner-less legacy repositories
-		// have no defined form and stay generic.
+		// <owner>/<repository> and lowercases its commit-hash version.
+		// Datasets and owner-less legacy repositories have no defined form
+		// and stay generic.
 		if owner, repository, found := strings.Cut(packageName, "/"); found && owner != "datasets" && !strings.Contains(repository, "/") {
 			purlType, namespace, name = "huggingface", owner, repository
+			version = strings.ToLower(version)
 		} else {
 			namespace, name = splitLast(packageName)
 		}
