@@ -110,3 +110,25 @@ func TestPackagesJSONURLsTakeOnlyAnHTTPSchemeFromForwardedProto(t *testing.T) {
 		}
 	}
 }
+
+func newPoolComposerRouter(t *testing.T, selector upstream.Selector) http.Handler {
+	manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
+	handler := New(manager, selector, config.CacheConfig{TTLIndex: time.Hour, TTLBlob: 72 * time.Hour}, database)
+	router := gin.New()
+	handler.Register(router.Group("/composer"))
+	return router
+}
+
+// Composer reads a 404 for package metadata as "no such package"; a 502 makes
+// it report a repository outage instead.
+func TestMetadataReportsThePoolAnswer(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	adaptertest.CheckPoolAnswers(t, adaptertest.MetadataPoolAnswers, "/composer/p2/monolog/monolog.json", `{"packages":{}}`, newPoolComposerRouter)
+	adaptertest.CheckPoolAnswers(t, adaptertest.MetadataPoolAnswers, "/composer/packages.json", `{"packages":[]}`, newPoolComposerRouter)
+}
+
+// A dist for a package whose metadata the pool reports missing is missing too.
+func TestDistOfAMissingPackageIsNotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	adaptertest.CheckPoolAnswers(t, adaptertest.MetadataPoolAnswers[:1], "/composer/dist/monolog/monolog/3.8.1.0/abcdef.zip", `{"packages":{}}`, newPoolComposerRouter)
+}

@@ -66,11 +66,12 @@ func (h *Handler) handlePackagesJSON(c *gin.Context) {
 			return nil, "", 0, "", err
 		}
 
-		zap.L().Info("fetching composer packages.json from upstream",
-			zap.String("upstream", ups.Name),
-		)
-
-		fetchResult, err := ups.Fetch(ctx, "/packages.json")
+		fetchResult, ups, err := adapter.FetchFromPool(ctx, h.selector, ups, false, func(member *upstream.Upstream) (*upstream.FetchResult, error) {
+			zap.L().Info("fetching composer packages.json from upstream",
+				zap.String("upstream", member.Name),
+			)
+			return member.Fetch(ctx, "/packages.json")
+		})
 		if err != nil {
 			return nil, "", 0, "", err
 		}
@@ -93,8 +94,7 @@ func (h *Handler) handlePackagesJSON(c *gin.Context) {
 
 	if err != nil {
 		zap.L().Error("failed to fetch composer packages.json", zap.Error(err))
-		adapter.LogAccess(c.Request.Context(), h.db, "composer", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		h.answerUpstreamFailure(c, cacheKey, start, err)
 		return
 	}
 	defer result.Reader.Close()
@@ -133,8 +133,7 @@ func (h *Handler) handleDist(c *gin.Context, path string) {
 	entry, err := h.resolveDistEntryMemoized(c.Request.Context(), vendor, pkg, versionNorm, reference)
 	if err != nil {
 		zap.L().Error("failed to resolve composer dist metadata", zap.String("package", fullName), zap.Error(err))
-		adapter.LogAccess(c.Request.Context(), h.db, "composer", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		h.answerUpstreamFailure(c, cacheKey, start, err)
 		return
 	}
 	if entry == nil || entry.Dist.URL == "" {
@@ -204,8 +203,7 @@ func (h *Handler) handleDist(c *gin.Context, path string) {
 
 	if err != nil {
 		zap.L().Error("failed to fetch composer dist", zap.String("package", fullName), zap.Error(err))
-		adapter.LogAccess(c.Request.Context(), h.db, "composer", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		h.answerUpstreamFailure(c, cacheKey, start, err)
 		return
 	}
 	defer result.Reader.Close()
@@ -270,7 +268,9 @@ func (h *Handler) fetchMetadataDoc(ctx context.Context, vendor, pkg string, dev 
 		if err != nil {
 			return nil, "", 0, "", err
 		}
-		fetchResult, err := ups.Fetch(ctx, "/"+metaPath)
+		fetchResult, ups, err := adapter.FetchFromPool(ctx, h.selector, ups, false, func(member *upstream.Upstream) (*upstream.FetchResult, error) {
+			return member.Fetch(ctx, "/"+metaPath)
+		})
 		if err != nil {
 			return nil, "", 0, "", err
 		}
@@ -294,12 +294,15 @@ func (h *Handler) proxyPassthrough(c *gin.Context, path string, ttl time.Duratio
 			return nil, "", 0, "", err
 		}
 
-		zap.L().Info("fetching from composer upstream",
-			zap.String("path", path),
-			zap.String("upstream", ups.Name),
-		)
-
-		fetchResult, err := ups.Fetch(ctx, "/"+path)
+		// Passthrough paths are metadata: one member's 404 is the pool's
+		// answer, and one request never mixes snapshots of different mirrors.
+		fetchResult, ups, err := adapter.FetchFromPool(ctx, h.selector, ups, false, func(member *upstream.Upstream) (*upstream.FetchResult, error) {
+			zap.L().Info("fetching from composer upstream",
+				zap.String("path", path),
+				zap.String("upstream", member.Name),
+			)
+			return member.Fetch(ctx, "/"+path)
+		})
 		if err != nil {
 			return nil, "", 0, "", err
 		}
@@ -309,8 +312,7 @@ func (h *Handler) proxyPassthrough(c *gin.Context, path string, ttl time.Duratio
 
 	if err != nil {
 		zap.L().Error("failed to fetch composer resource", zap.String("path", path), zap.Error(err))
-		adapter.LogAccess(c.Request.Context(), h.db, "composer", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		h.answerUpstreamFailure(c, cacheKey, start, err)
 		return
 	}
 	defer result.Reader.Close()
@@ -330,6 +332,14 @@ func (h *Handler) proxyPassthrough(c *gin.Context, path string, ttl time.Duratio
 	}
 
 	adapter.LogAccessDelivery(c.Request.Context(), h.db, "composer", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written, copyErr)
+}
+
+// answerUpstreamFailure answers and records a request the pool could not
+// serve.
+func (h *Handler) answerUpstreamFailure(c *gin.Context, cacheKey string, start time.Time, err error) {
+	status, code := adapter.UpstreamFailureStatus(err)
+	adapter.LogAccess(c.Request.Context(), h.db, "composer", c.Request.Method, cacheKey, false, "", time.Since(start), status, c.ClientIP(), 0)
+	c.JSON(status, gin.H{"code": code, "message": err.Error()})
 }
 
 func getBaseURL(c *gin.Context) string {
