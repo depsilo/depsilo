@@ -230,3 +230,18 @@ func TestInstallV1AcceptRetainsV090MetadataCacheKey(t *testing.T) {
 		})
 	}
 }
+
+// A package the registry does not have must reach the npm client as 404, the
+// answer it reports as "not found", and an unavailable pool member must not
+// fail the install while another member can answer.
+func TestMetadataReportsThePoolAnswer(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	adaptertest.CheckPoolAnswers(t, adaptertest.MetadataPoolAnswers, "/npm/is-number", `{"name":"is-number","versions":{}}`,
+		func(t *testing.T, selector upstream.Selector) http.Handler {
+			manager, database, _ := adaptertest.NewManager(t, 72*time.Hour)
+			handler := New(manager, selector, config.CacheConfig{TTLIndex: time.Hour}, database, testNPMTarballSigningKey)
+			router := gin.New()
+			handler.Register(router.Group("/npm"))
+			return router
+		})
+}

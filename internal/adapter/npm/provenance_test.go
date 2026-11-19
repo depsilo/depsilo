@@ -1011,6 +1011,78 @@ func TestSignedTarballDoesNotFailOverToAnotherUpstream(t *testing.T) {
 	}
 }
 
+// A tarball its metadata source no longer has is missing, not an outage: the
+// npm client is told so, and the request stays bound to that source.
+func TestSignedTarballMissingAtItsSourceIsNotFound(t *testing.T) {
+	var source *httptest.Server
+	source = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/fixture" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"name":"fixture","versions":{"1.0.0":{"dist":{"tarball":"`+source.URL+`/fixture/-/gone.tgz"}}}}`)
+			return
+		}
+		http.NotFound(w, request)
+	}))
+	t.Cleanup(source.Close)
+	other := &adaptertest.Origin{Status: http.StatusOK, Body: "other"}
+	otherServer := httptest.NewServer(other)
+	t.Cleanup(otherServer.Close)
+
+	router := newNPMProvenanceRouterFactory(t, []config.UpstreamConfig{
+		{Name: "source", URL: source.URL, Priority: 1, ProbeMode: "passive"},
+		{Name: "other", URL: otherServer.URL, Priority: 2, ProbeMode: "passive"},
+	})(deterministicTarballSigner(t, 0x7c))
+	response := requestURLPath(t, router, requestNPMMetadataTarballURL(t, router))
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("missing tarball status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertNPMErrorFieldRepeatsMessage(t, response, "NOT_FOUND")
+	if other.Requests() != 0 {
+		t.Fatalf("missing tarball was asked of another upstream %d times", other.Requests())
+	}
+}
+
+// A packument served by another member after the preferred one failed binds
+// its tarballs to that member, so the tarball comes from the source whose
+// metadata the client verified.
+func TestPackumentFailoverBindsTarballsToTheServingMember(t *testing.T) {
+	failing := &adaptertest.Origin{Status: http.StatusInternalServerError}
+	failingServer := httptest.NewServer(failing)
+	t.Cleanup(failingServer.Close)
+	var serving *httptest.Server
+	serving = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/fixture":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"name":"fixture","versions":{"1.0.0":{"dist":{"tarball":"`+serving.URL+`/fixture/-/fixture-1.0.0.tgz"}}}}`)
+		case "/fixture/-/fixture-1.0.0.tgz":
+			_, _ = io.WriteString(w, "serving-member")
+		default:
+			http.NotFound(w, request)
+		}
+	}))
+	t.Cleanup(serving.Close)
+
+	router := newNPMProvenanceRouterFactory(t, []config.UpstreamConfig{
+		{Name: "failing", URL: failingServer.URL, Priority: 1, ProbeMode: "passive"},
+		{Name: "serving", URL: serving.URL, Priority: 2, ProbeMode: "passive"},
+	})(deterministicTarballSigner(t, 0x7d))
+	signedURL := requestNPMMetadataTarballURL(t, router)
+	requestsBefore := failing.Requests()
+	response := requestURLPath(t, router, signedURL)
+
+	if response.Code != http.StatusOK || response.Body.String() != "serving-member" {
+		t.Fatalf("tarball status=%d body=%s", response.Code, response.Body.String())
+	}
+	if requestsBefore == 0 {
+		t.Fatal("the preferred member was never asked for the packument")
+	}
+	if failing.Requests() != requestsBefore {
+		t.Fatalf("tarball was asked of the failing member: requests %d -> %d", requestsBefore, failing.Requests())
+	}
+}
+
 // assertNPMErrorFieldRepeatsMessage checks the registry "error" field, the
 // only part of an error body the npm client prints.
 func assertNPMErrorFieldRepeatsMessage(t *testing.T, response *httptest.ResponseRecorder, wantCode string) {

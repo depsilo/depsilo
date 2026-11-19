@@ -106,13 +106,16 @@ func (h *Handler) proxyMetadata(c *gin.Context, fullName, cacheKey, upstreamPath
 			return nil, "", 0, "", err
 		}
 
-		zap.L().Info("fetching npm metadata from upstream",
-			zap.String("package", fullName),
-			zap.String("upstream", ups.Name),
-		)
-
-		fetchResult, err := ups.FetchWithHeaders(ctx, upstreamPath, map[string]string{
-			"Accept": acceptHeader,
+		// A packument never moves on a 404: one member's answer that the
+		// package does not exist is the pool's answer.
+		fetchResult, ups, err := adapter.FetchFromPool(ctx, h.selector, ups, false, func(member *upstream.Upstream) (*upstream.FetchResult, error) {
+			zap.L().Info("fetching npm metadata from upstream",
+				zap.String("package", fullName),
+				zap.String("upstream", member.Name),
+			)
+			return member.FetchWithHeaders(ctx, upstreamPath, map[string]string{
+				"Accept": acceptHeader,
+			})
 		})
 		if err != nil {
 			return nil, "", 0, "", err
@@ -146,14 +149,14 @@ func (h *Handler) proxyMetadata(c *gin.Context, fullName, cacheKey, upstreamPath
 
 	if err != nil {
 		zap.L().Error("failed to get npm metadata", zap.String("package", fullName), zap.Error(err))
-		adapter.LogAccess(c.Request.Context(), h.db, "npm", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
-		code := "UPSTREAM_UNAVAILABLE"
+		status, code := adapter.UpstreamFailureStatus(err)
 		message := err.Error()
 		if errors.Is(err, errInvalidPackumentProvenance) {
-			code = "UPSTREAM_INVALID_METADATA"
+			status, code = http.StatusBadGateway, "UPSTREAM_INVALID_METADATA"
 			message = "npm metadata could not be verified"
 		}
-		c.JSON(http.StatusBadGateway, errorBody(code, message))
+		adapter.LogAccess(c.Request.Context(), h.db, "npm", c.Request.Method, cacheKey, false, "", time.Since(start), status, c.ClientIP(), 0)
+		c.JSON(status, errorBody(code, message))
 		return
 	}
 	defer result.Reader.Close()
@@ -317,8 +320,9 @@ func (h *Handler) proxyTarball(
 
 	if err != nil {
 		zap.L().Error("failed to get npm tarball", zap.String("package", claims.Package), zap.Error(err))
-		adapter.LogAccess(c.Request.Context(), h.db, "npm", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
-		c.JSON(http.StatusBadGateway, errorBody("UPSTREAM_UNAVAILABLE", err.Error()))
+		status, code := adapter.UpstreamFailureStatus(err)
+		adapter.LogAccess(c.Request.Context(), h.db, "npm", c.Request.Method, cacheKey, false, "", time.Since(start), status, c.ClientIP(), 0)
+		c.JSON(status, errorBody(code, err.Error()))
 		return
 	}
 	defer result.Reader.Close()

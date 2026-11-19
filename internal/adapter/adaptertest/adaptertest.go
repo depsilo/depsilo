@@ -2,19 +2,26 @@
 // tests import it; the depsilo binary does not link it.
 //
 // It imports no package adapter, so an adapter's in-package tests can use it.
-// It does import quarantine, which imports the top-level adapter package, so
-// tests of that package use it from the external adapter_test package.
+// It does import the top-level adapter package, so tests of that package use
+// it from the external adapter_test package.
 package adaptertest
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"gorm.io/gorm"
 
+	"depsilo/internal/adapter"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
@@ -127,5 +134,117 @@ func NewProvenanceEnv(t testing.TB, upstreamURL, ecosystem string, provenance Pr
 		Selector: upstream.NewPassiveRecoverySelector(pool),
 		DB:       database,
 		Checker:  checker,
+	}
+}
+
+// Origin is an upstream origin that answers every request with Status, and
+// with Body when Status is 200. It counts the requests it receives.
+type Origin struct {
+	Status   int
+	Body     string
+	requests atomic.Int32
+}
+
+// ServeHTTP answers the request.
+func (origin *Origin) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+	origin.requests.Add(1)
+	if origin.Status != http.StatusOK {
+		w.WriteHeader(origin.Status)
+		return
+	}
+	_, _ = io.WriteString(w, origin.Body)
+}
+
+// Requests returns how many requests the origin received.
+func (origin *Origin) Requests() int32 { return origin.requests.Load() }
+
+// NewPoolSelector returns a passive selector over one Upstream per origin,
+// named member-1, member-2, ... and preferred in the order given.
+func NewPoolSelector(t testing.TB, origins ...http.Handler) *upstream.PassiveRecoverySelector {
+	t.Helper()
+	configs := make([]config.UpstreamConfig, 0, len(origins))
+	for index, origin := range origins {
+		server := httptest.NewServer(origin)
+		t.Cleanup(server.Close)
+		configs = append(configs, config.UpstreamConfig{
+			Name: fmt.Sprintf("member-%d", index+1), URL: server.URL, Priority: index + 1, ProbeMode: "passive",
+		})
+	}
+	pool, err := upstream.NewPool(configs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return upstream.NewPassiveRecoverySelector(pool)
+}
+
+// PoolAnswer is one way a two-member pool can answer a package route, and
+// what the client and the access record must see for it.
+type PoolAnswer struct {
+	Name string
+	// First and Second are the statuses the preferred and the other member
+	// answer with.
+	First, Second int
+	// Status is what the client receives; Code is the error body's code,
+	// empty for a success.
+	Status int
+	Code   string
+	// SecondAsked says whether the request reaches the second member.
+	SecondAsked bool
+}
+
+// MetadataPoolAnswers are the answers for content that never moves on a 404:
+// one request must not mix snapshots of different mirrors, so a member's 404
+// or 410 is the pool's answer, while an unavailable member is passed over.
+var MetadataPoolAnswers = []PoolAnswer{
+	{Name: "missing", First: http.StatusNotFound, Second: http.StatusOK, Status: http.StatusNotFound, Code: "NOT_FOUND"},
+	{Name: "gone", First: http.StatusGone, Second: http.StatusOK, Status: http.StatusGone, Code: "GONE"},
+	{Name: "failing member", First: http.StatusInternalServerError, Second: http.StatusOK, Status: http.StatusOK, SecondAsked: true},
+	{Name: "rate-limited member", First: http.StatusTooManyRequests, Second: http.StatusOK, Status: http.StatusOK, SecondAsked: true},
+	{Name: "failing pool", First: http.StatusInternalServerError, Second: http.StatusServiceUnavailable, Status: http.StatusBadGateway, Code: "UPSTREAM_UNAVAILABLE", SecondAsked: true},
+	{Name: "forbidden", First: http.StatusForbidden, Second: http.StatusOK, Status: http.StatusBadGateway, Code: "UPSTREAM_UNAVAILABLE"},
+}
+
+// CheckPoolAnswers requests target from the router build returns once per
+// answer, each time over a fresh two-member pool whose members serve body,
+// and checks the response status and code, the status the access record
+// carries, and whether the second member was asked.
+func CheckPoolAnswers(
+	t *testing.T,
+	answers []PoolAnswer,
+	target, body string,
+	build func(t *testing.T, selector upstream.Selector) http.Handler,
+) {
+	t.Helper()
+	for _, answer := range answers {
+		t.Run(answer.Name, func(t *testing.T) {
+			first := &Origin{Status: answer.First, Body: body}
+			second := &Origin{Status: answer.Second, Body: body}
+			audit := &AuditCapture{}
+			handler := adapter.NewRequestScope(nil, audit, nil, nil).Wrap(build(t, NewPoolSelector(t, first, second)))
+
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, target, nil))
+
+			if response.Code != answer.Status {
+				t.Fatalf("GET %s status = %d, want %d; body=%s", target, response.Code, answer.Status, response.Body.String())
+			}
+			if answer.Code != "" {
+				var failure struct {
+					Code string `json:"code"`
+				}
+				if err := json.Unmarshal(response.Body.Bytes(), &failure); err != nil || failure.Code != answer.Code {
+					t.Fatalf("GET %s error body = %s, want code %s", target, response.Body.String(), answer.Code)
+				}
+			}
+			if asked := second.Requests() > 0; asked != answer.SecondAsked {
+				t.Fatalf("second member asked = %v, want %v", asked, answer.SecondAsked)
+			}
+			if len(audit.Entries) == 0 {
+				t.Fatalf("GET %s left no access record", target)
+			}
+			if recorded := audit.Entries[len(audit.Entries)-1].StatusCode; recorded != answer.Status {
+				t.Fatalf("access record status = %d, want %d", recorded, answer.Status)
+			}
+		})
 	}
 }

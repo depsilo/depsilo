@@ -317,8 +317,8 @@ func TestCascadeConcurrentRequestsShareParentFill(t *testing.T) {
 }
 
 // A bound upstream reaches its origin itself while the parent cannot serve,
-// unless direct_fallback is off; then only a separate direct upstream, which
-// selection uses after the failed exchange, serves.
+// unless direct_fallback is off; then only a separate direct upstream serves,
+// which the same request asks once the parent's exchange fails.
 func TestCascadeDirectFallback(t *testing.T) {
 	for _, test := range []struct {
 		name           string
@@ -329,7 +329,7 @@ func TestCascadeDirectFallback(t *testing.T) {
 	}{
 		{name: "fallback on", directFallback: true, want: [2]int{http.StatusOK, http.StatusOK}, wantOrigin: 1},
 		{name: "fallback off", directFallback: false, want: [2]int{http.StatusBadGateway, http.StatusBadGateway}, wantOrigin: 0},
-		{name: "fallback off with a direct upstream", directFallback: false, directRow: true, want: [2]int{http.StatusBadGateway, http.StatusOK}, wantOrigin: 1},
+		{name: "fallback off with a direct upstream", directFallback: false, directRow: true, want: [2]int{http.StatusOK, http.StatusOK}, wantOrigin: 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var originRequests, parentRequests atomic.Int64
