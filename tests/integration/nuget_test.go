@@ -11,12 +11,15 @@ func TestNuGet_ServiceIndex(t *testing.T) {
 	resp := httpGet(t, depsiloURL+"/nuget/v3/index.json")
 	assertStatus(t, resp, 200)
 	body := readBody(t, resp)
-	// @id fields under the Upstream's base should be rewritten
-	if strings.Contains(body, mockServer.URL()) {
+	// @id fields under the Upstream's base, and api.nuget.org ones from a
+	// verbatim nuget.org index, should be rewritten
+	if strings.Contains(body, mockServer.URL()) || strings.Contains(body, "api.nuget.org") {
 		t.Errorf("upstream @id not rewritten: %s", body)
 	}
-	if !strings.Contains(body, depsiloURL+"/nuget/v3/search") {
-		t.Errorf("local URL not found in service index: %s", body)
+	for _, want := range []string{depsiloURL + "/nuget/v3/search", depsiloURL + "/nuget/v3/registration"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("local URL %s not found in service index: %s", want, body)
+		}
 	}
 }
 

@@ -82,9 +82,39 @@ func TestRewriteServiceIndexFollowsACustomFeedBase(t *testing.T) {
 		"OtherFeed":                  "https://nexus.example.com/repository/other/v3/flat/",
 		"OtherScheme":                "http://nexus.example.com/repository/nuget-group/v3/flat/",
 		"DotSegments":                "https://nexus.example.com/repository/nuget-group/../other/",
-		// Without the hard-coded host list, nuget.org is just another origin.
-		"NugetOrg": "https://api.nuget.org/v3-flatcontainer/",
+		// An api.nuget.org resource outside the Upstream base is read as a
+		// verbatim nuget.org index and fetched from the Upstream.
+		"NugetOrg": "http://localhost:8080/nuget/v3-flatcontainer/",
 		"Relative": "v3/relative/",
+	} {
+		if got := ids[resourceType]; got != want {
+			t.Errorf("%s @id = %q, want %q", resourceType, got, want)
+		}
+	}
+}
+
+// A reverse proxy or caching gateway in front of api.nuget.org serves
+// nuget.org's service index unchanged, so its resources name api.nuget.org.
+// They must still go through Depsilo, which fetches them from the gateway at
+// the same path; in a restricted network the client cannot reach
+// api.nuget.org itself. Search stays on azuresearch-*.nuget.org, which no
+// Upstream path serves.
+func TestRewriteServiceIndexRoutesAVerbatimNugetOrgIndexThroughTheUpstream(t *testing.T) {
+	t.Parallel()
+	const verbatim = `{"version":"3.0.0","resources":[
+		{"@id":"https://api.nuget.org/v3-flatcontainer/","@type":"PackageBaseAddress/3.0.0"},
+		{"@id":"https://API.nuget.org:443/v3/registration5-gz-semver2/","@type":"RegistrationsBaseUrl/3.6.0"},
+		{"@id":"https://api.nuget.org/v3/../escape/","@type":"DotSegments"},
+		{"@id":"http://api.nuget.org/v3-flatcontainer/","@type":"PlainHTTP"},
+		{"@id":"https://azuresearch-usnc.nuget.org/query","@type":"SearchQueryService"}
+	]}`
+	ids := rewrittenIDs(t, verbatim, "https://nuget-gateway.corp.example/nuget/")
+	for resourceType, want := range map[string]string{
+		"PackageBaseAddress/3.0.0":   "http://localhost:8080/nuget/v3-flatcontainer/",
+		"RegistrationsBaseUrl/3.6.0": "http://localhost:8080/nuget/v3/registration5-gz-semver2/",
+		"DotSegments":                "https://api.nuget.org/v3/../escape/",
+		"PlainHTTP":                  "http://api.nuget.org/v3-flatcontainer/",
+		"SearchQueryService":         "https://azuresearch-usnc.nuget.org/query",
 	} {
 		if got := ids[resourceType]; got != want {
 			t.Errorf("%s @id = %q, want %q", resourceType, got, want)

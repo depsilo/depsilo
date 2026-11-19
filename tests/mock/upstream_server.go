@@ -335,9 +335,10 @@ func (m *MockUpstream) RegisterComposer() {
 func (m *MockUpstream) RegisterNuGet() {
 	m.mux.HandleFunc("/v3/index.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		// Resources name the feed's own origin, as nuget.org and custom
-		// feeds do, so the proxy maps them back onto this Upstream.
-		fmt.Fprintf(w, `{"version":"3.0.0","resources":[{"@id":"http://%[1]s/v3/search","@type":"SearchQueryService"},{"@id":"http://%[1]s/v3/registration","@type":"RegistrationsBaseUrl"}]}`, r.Host)
+		// One resource names the feed's own origin, as custom feeds do; the
+		// other names api.nuget.org, as a gateway serving nuget.org's index
+		// unchanged does. The proxy maps both back onto this Upstream.
+		fmt.Fprintf(w, `{"version":"3.0.0","resources":[{"@id":"http://%s/v3/search","@type":"SearchQueryService"},{"@id":"https://api.nuget.org/v3/registration","@type":"RegistrationsBaseUrl"}]}`, r.Host)
 	})
 	m.mux.HandleFunc("/v3/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

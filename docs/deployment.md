@@ -914,7 +914,11 @@ same file name, the first member that has it serves it.
 **NuGet resources.** Depsilo writes its own address into the service index for
 every resource whose URL is under the URL of the Upstream that served the
 index, path included, so a custom feed (Nexus, BaGet, a mirror) is routed
-like `api.nuget.org`. Other resources keep their URL. On nuget.org that
+like `api.nuget.org`. A resource on `https://api.nuget.org` is routed the
+same way, by its path, when the Upstream is another host: such an Upstream is
+taken to serve nuget.org's index unchanged, as a reverse proxy or caching
+gateway in front of `api.nuget.org` does, and to serve those resources at the
+same paths. Other resources keep their URL. On nuget.org that
 includes search and autocomplete, which live on `azuresearch-*.nuget.org`
 and not on `api.nuget.org`: `dotnet package search` and IDE search reach them
 directly, while restore goes through Depsilo. A feed that names its resources

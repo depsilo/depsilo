@@ -7,11 +7,20 @@ import (
 	"strings"
 )
 
+// nugetOrgAPI is the origin of nuget.org's package resources.
+var nugetOrgAPI = &url.URL{Scheme: "https", Host: "api.nuget.org"}
+
 // RewriteServiceIndex rewrites the NuGet V3 service index JSON so every
 // resource the serving Upstream hosts is reached through Depsilo. An @id
 // under upstreamURL, the Upstream's configured base URL including its path,
 // becomes baseURL + "/nuget" + the rest of its path, which handlePassthrough
 // maps back onto the same Upstream URL.
+//
+// An @id on https://api.nuget.org that is not under the Upstream base is
+// mapped the same way, by its path: an Upstream that serves nuget.org's index
+// unchanged, such as a reverse proxy or caching gateway in front of
+// api.nuget.org, serves those resources at the same paths, and a client in a
+// restricted network cannot reach api.nuget.org itself.
 //
 // An @id on any other origin is left as it is: Depsilo fetches only paths
 // under the Upstream's base, so pointing such a resource at Depsilo would
@@ -54,7 +63,11 @@ func RewriteServiceIndex(data []byte, baseURL, upstreamURL string) ([]byte, erro
 		}
 		if id, ok := rMap["@id"].(string); ok {
 			// e.g. "https://api.nuget.org/v3-flatcontainer/" -> "<base>/nuget/v3-flatcontainer/"
-			if suffix, under := upstreamResourceSuffix(upstreamBase, id); under {
+			suffix, under := upstreamResourceSuffix(upstreamBase, id)
+			if !under {
+				suffix, under = upstreamResourceSuffix(nugetOrgAPI, id)
+			}
+			if under {
 				rMap["@id"] = baseURL + "/nuget" + suffix
 			}
 		}
