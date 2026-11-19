@@ -5,6 +5,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-19
+
 ### Added
 - Cascade pairing. On a parent, **Admin → Upstreams → Cascade → Be a parent**
   (or `depsilo cascade pair --url <address>`) turns cascade on, generates the
@@ -22,46 +24,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   `fallback_count`; the Cascade tab shows them. Relay errors now carry
   `X-Depsilo-Relay-Error`, and a request with `X-Depsilo-Relay-Probe` checks
   the token without fetching.
-
-### Changed
-- Cascade settings take effect without a restart. Saving the cascade section
-  in Admin, pairing, and joining switch the relay endpoint and the parents at
-  once; `pending_restart` is reported only while a `DEPSILO_CASCADE_*`
-  variable overrides the file. The relay route always exists and answers 404
-  while cascade is off, and every instance now records a cascade instance ID
-  at its first start.
-
-## [0.15.1] - 2026-11-19
-
-### Changed
-- First-run setup is needed only for Admin. The Portal, its client guide,
-  `GET /api/v1/agent-prompt`, and `depsilo init-agent` work before setup
-  (the prompt used to be a "setup pending" notice, and `init-agent` exited
-  `1`); the setup page opens at `/admin` instead of in front of every page.
-  `setup_required` in discover still reports that no administrator exists.
-  `depsilo doctor` reports pending setup as an informational
-  `Administrator` check instead of a failed `Initial setup` check, and
-  `depsilo status` prints `Admin:   no administrator yet; ...`. The startup
-  summary's `First-time setup:` block is now `No administrator yet:` and ends
-  with `Open <portal>/admin to create the administrator.`
-- Setup on the server itself needs no bootstrap token: a request that comes
-  directly from a loopback address with no forwarding header is accepted
-  without it, and `GET /api/v1/setup/status` answers `token_required: false`
-  to it. A token set through `DEPSILO_BOOTSTRAP_TOKEN` stays required for
-  everyone, and requests through a container's published port still need
-  the token.
-- Package routes work before first-run setup. An instance without
-  `config.toml` serves every ecosystem the setup page offers, from the
-  Upstreams the page proposes (regional mirrors first, then the official
-  registry); previously every package route answered 404 until setup.
-  Finishing setup replaces those Upstreams with the ones in the form on the
-  next start. A database that already holds Upstreams keeps them. The setup
-  page's defaults now come from the server's catalog
-  (`internal/ecosystem/defaults.go`), so the two cannot drift.
-
-## [0.15.0] - 2026-11-18
-
-### Added
 - `depsilo reset-password [--config PATH] [<username>]` sets a local
   account's password in the SQLite database. Stop Depsilo first: it refuses
   while a server uses the database. It reads a no-echo prompt (twice) or one
@@ -115,6 +77,36 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   did; `config.example.toml` shows the key commented out.
 
 ### Changed
+- Cascade settings take effect without a restart. Saving the cascade section
+  in Admin, pairing, and joining switch the relay endpoint and the parents at
+  once; `pending_restart` is reported only while a `DEPSILO_CASCADE_*`
+  variable overrides the file. The relay route always exists and answers 404
+  while cascade is off, and every instance now records a cascade instance ID
+  at its first start.
+- First-run setup is needed only for Admin. The Portal, its client guide,
+  `GET /api/v1/agent-prompt`, and `depsilo init-agent` work before setup
+  (the prompt used to be a "setup pending" notice, and `init-agent` exited
+  `1`); the setup page opens at `/admin` instead of in front of every page.
+  `setup_required` in discover still reports that no administrator exists.
+  `depsilo doctor` reports pending setup as an informational
+  `Administrator` check instead of a failed `Initial setup` check, and
+  `depsilo status` prints `Admin:   no administrator yet; ...`. The startup
+  summary's `First-time setup:` block is now `No administrator yet:` and ends
+  with `Open <portal>/admin to create the administrator.`
+- Setup on the server itself needs no bootstrap token: a request that comes
+  directly from a loopback address with no forwarding header is accepted
+  without it, and `GET /api/v1/setup/status` answers `token_required: false`
+  to it. A token set through `DEPSILO_BOOTSTRAP_TOKEN` stays required for
+  everyone, and requests through a container's published port still need
+  the token.
+- Package routes work before first-run setup. An instance without
+  `config.toml` serves every ecosystem the setup page offers, from the
+  Upstreams the page proposes (regional mirrors first, then the official
+  registry); previously every package route answered 404 until setup.
+  Finishing setup replaces those Upstreams with the ones in the form on the
+  next start. A database that already holds Upstreams keeps them. The setup
+  page's defaults now come from the server's catalog
+  (`internal/ecosystem/defaults.go`), so the two cannot drift.
 - The Portal and Admin appearance follows the system light or dark setting
   until you pick Light or Dark; it used to start dark. Earlier builds saved
   that dark default on every visit, so a browser that has opened Depsilo
