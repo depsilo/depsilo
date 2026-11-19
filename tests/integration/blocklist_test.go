@@ -94,24 +94,42 @@ func TestBlocklist_CleanPackageStillServes(t *testing.T) {
 	}
 }
 
-func TestBlocklist_AdminStatusReportsSync(t *testing.T) {
+type blocklistSyncStatus struct {
+	Enabled       bool             `json:"enabled"`
+	Mode          string           `json:"mode"`
+	EntryCount    int64            `json:"entry_count"`
+	LastSuccessAt *time.Time       `json:"last_success_at"`
+	PerEcosystem  map[string]int64 `json:"per_ecosystem"`
+	LastError     string           `json:"last_error"`
+	Running       *bool            `json:"running"`
+}
+
+func readBlocklistSyncStatus(t *testing.T) blocklistSyncStatus {
+	t.Helper()
 	resp := adminGet(t, depsiloURL+"/api/v1/admin/blocklist/status")
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status endpoint = %d", resp.StatusCode)
 	}
-	var st struct {
-		Enabled       bool             `json:"enabled"`
-		Mode          string           `json:"mode"`
-		EntryCount    int64            `json:"entry_count"`
-		LastSuccessAt *time.Time       `json:"last_success_at"`
-		PerEcosystem  map[string]int64 `json:"per_ecosystem"`
-	}
+	var st blocklistSyncStatus
 	if err := json.NewDecoder(resp.Body).Decode(&st); err != nil {
 		t.Fatal(err)
 	}
+	return st
+}
+
+func TestBlocklist_AdminStatusReportsSync(t *testing.T) {
+	// Each ecosystem commits its data as soon as it is fetched, and the run
+	// is recorded after the last one, so blocking can begin (which is all
+	// fetchBlocked waits for) before the first run's success is recorded.
+	st := readBlocklistSyncStatus(t)
+	deadline := time.Now().Add(15 * time.Second)
+	for st.LastSuccessAt == nil && time.Now().Before(deadline) {
+		time.Sleep(200 * time.Millisecond)
+		st = readBlocklistSyncStatus(t)
+	}
 	if !st.Enabled || st.LastSuccessAt == nil {
-		t.Errorf("unexpected sync state: %+v", st)
+		t.Errorf("unexpected sync state: %+v (running=%v)", st, st.Running != nil && *st.Running)
 	}
 	if st.Mode != "block" {
 		t.Errorf("mode = %q, want %q", st.Mode, "block")
